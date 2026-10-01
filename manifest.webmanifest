@@ -1,0 +1,13 @@
+{
+  "name": "Centro de Negócios",
+  "short_name": "Centro",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#e9e5dc",
+  "theme_color": "#e9e5dc",
+  "description": "Painel operacional para sites, SEO, CRM, leads, caixa, credenciais e documentos.",
+  "icons": [
+    {"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
+  ]
+}
