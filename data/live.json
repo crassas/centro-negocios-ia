@@ -1,5 +1,115 @@
 {
-  "generatedAt": null,
-  "sites": [],
-  "note": "A primeira leitura automática ainda não terminou."
+  "generatedAt": "2026-10-01T14:25:19.925Z",
+  "source": "github-actions",
+  "sites": [
+    {
+      "id": "pentehouse",
+      "name": "Pentehouse",
+      "url": "https://pentehouse.pt/",
+      "checkedAt": "2026-10-01T14:25:19.925Z",
+      "online": true,
+      "status": 200,
+      "responseTimeMs": 305,
+      "finalUrl": "https://pentehouse.pt/",
+      "title": "Pentehouse | Barbearia no Marquês, Porto",
+      "description": "Pentehouse é uma barbearia no Marquês, Porto, na Rua da Constituição 656, Loja 20. Cortes, barba, preços, barbeiros e marcações online.",
+      "h1Count": 1,
+      "firstH1": "PENTEHOUSE BARBEARIA · MARQUÊS — PORTO",
+      "canonical": "https://pentehouse.pt/",
+      "robotsMeta": "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+      "schemaCount": 2,
+      "sitemapUrls": 8,
+      "checks": {
+        "title": true,
+        "description": true,
+        "h1": true,
+        "canonical": true,
+        "robots": true,
+        "sitemap": true,
+        "schema": true
+      },
+      "issues": [],
+      "contentHash": "035203f5965104804230107acef99c4ba993bc9c4cec19f0f679175caf7543ab",
+      "changed": null,
+      "changedAt": null,
+      "robotsStatus": 200,
+      "sitemapStatus": 200
+    },
+    {
+      "id": "best-pizza",
+      "name": "Best Pizza & Kebab",
+      "url": "https://bestpizzaandkebab.pt/",
+      "checkedAt": "2026-10-01T14:25:19.925Z",
+      "online": true,
+      "status": 200,
+      "responseTimeMs": 217,
+      "finalUrl": "https://bestpizzaandkebab.pt/",
+      "title": "Kebab no Porto | São Roque da Lameira, Campanhã | Best Pizza &amp; Kebab",
+      "description": "Kebab no Porto em São Roque da Lameira, Campanhã. Doner, durum, falafel, pizza, takeaway e entrega. Rua de São Roque da Lameira 2346.",
+      "h1Count": 0,
+      "firstH1": "",
+      "canonical": "https://bestpizzaandkebab.pt/",
+      "robotsMeta": "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+      "schemaCount": 1,
+      "sitemapUrls": 5,
+      "checks": {
+        "title": true,
+        "description": true,
+        "h1": false,
+        "canonical": true,
+        "robots": true,
+        "sitemap": true,
+        "schema": true
+      },
+      "issues": [
+        {
+          "level": "warn",
+          "message": "Nenhum H1 detectado na homepage."
+        }
+      ],
+      "contentHash": "d729eea975ee8bb841a10600f24b67f463137ab4cfa486d17d33989579753668",
+      "changed": null,
+      "changedAt": null,
+      "robotsStatus": 200,
+      "sitemapStatus": 200
+    },
+    {
+      "id": "dois-irmaos",
+      "name": "Restaurante 2 Irmãos",
+      "url": "https://restaurantedoisirmaos.pt/",
+      "checkedAt": "2026-10-01T14:25:19.925Z",
+      "online": true,
+      "status": 200,
+      "responseTimeMs": 371,
+      "finalUrl": "https://restaurantedoisirmaos.pt/",
+      "title": "Restaurante 2 Irmãos | Comida Caseira em São Roque, Porto",
+      "description": "Comida caseira portuguesa na Rua de São Roque da Lameira, Porto. Restaurante 2 Irmãos — “Os Miúdos do Aleixo” — com pratos de tacho, francesinha, tripas e bacalhau.",
+      "h1Count": 0,
+      "firstH1": "",
+      "canonical": "https://restaurantedoisirmaos.pt/",
+      "robotsMeta": "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1",
+      "schemaCount": 1,
+      "sitemapUrls": 10,
+      "checks": {
+        "title": true,
+        "description": true,
+        "h1": false,
+        "canonical": true,
+        "robots": true,
+        "sitemap": true,
+        "schema": true
+      },
+      "issues": [
+        {
+          "level": "warn",
+          "message": "Nenhum H1 detectado na homepage."
+        }
+      ],
+      "contentHash": "13809a5dcb050b9148660c6842f6cb355223e70fde2c725b5966f213a95118e2",
+      "changed": null,
+      "changedAt": null,
+      "robotsStatus": 200,
+      "sitemapStatus": 200
+    }
+  ]
 }
