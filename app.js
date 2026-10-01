@@ -59,6 +59,21 @@ function seedCRMDefaults(){
   if(changed)localStorage.setItem(STORE_KEY,JSON.stringify(state));
 }
 
+function seedLeadDefaults(){
+  const id='lead_lavandaria_20261001';
+  const exists=state.leads.some(lead=>lead&&lead.id===id);
+  if(exists)return;
+  state.leads.push({
+    id,
+    name:'Lavandaria — nome por confirmar',
+    url:'',
+    contact:'Cliente confirmado. Site a iniciar. Valor combinado: 25 € pelo trabalho + 1,23 € de domínio inicial; renovação anual indicada em cerca de 32,90 € (confirmar antes da compra).',
+    status:'Fechado',
+    createdAt:'2026-10-01T18:19:00.000Z'
+  });
+  localStorage.setItem(STORE_KEY,JSON.stringify(state));
+}
+
 function $(id){return document.getElementById(id);}
 function esc(value){return String(value==null?'':value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function safeUrl(value){
@@ -350,5 +365,5 @@ function setupPWA(){
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
-  seedCRMDefaults();setupEvents();setupPWA();$('finance-date').value=new Date().toISOString().slice(0,10);renderLeads();renderFinance();renderGsc();setupVaultState();renderSystem();loadLive();
+  seedCRMDefaults();seedLeadDefaults();setupEvents();setupPWA();$('finance-date').value=new Date().toISOString().slice(0,10);renderLeads();renderFinance();renderGsc();setupVaultState();renderSystem();loadLive();
 });
