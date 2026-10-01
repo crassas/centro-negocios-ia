@@ -1,0 +1,37 @@
+name: Monitor real dos sites
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+  push:
+    branches: ["main"]
+    paths:
+      - "data/sites.json"
+      - "scripts/monitor.mjs"
+      - ".github/workflows/monitor.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Verificar sites reais
+        run: node scripts/monitor.mjs
+      - name: Guardar snapshot
+        run: |
+          if git diff --quiet -- data/live.json; then
+            echo "Sem alterações no snapshot."
+            exit 0
+          fi
+          git config user.name "centro-ia-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/live.json
+          git commit -m "Atualizar monitorização real dos sites"
+          git push

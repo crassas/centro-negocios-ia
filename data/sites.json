@@ -1,0 +1,23 @@
+[
+  {
+    "id": "pentehouse",
+    "name": "Pentehouse",
+    "url": "https://pentehouse.pt/",
+    "area": "Marquês / Constituição",
+    "repo": "https://github.com/crassas/pente_houselanding"
+  },
+  {
+    "id": "best-pizza",
+    "name": "Best Pizza & Kebab",
+    "url": "https://bestpizzaandkebab.pt/",
+    "area": "Campanhã / São Roque",
+    "repo": "https://github.com/crassas/best-pizza-kebab"
+  },
+  {
+    "id": "dois-irmaos",
+    "name": "Restaurante 2 Irmãos",
+    "url": "https://restaurantedoisirmaos.pt/",
+    "area": "Campanhã / São Roque",
+    "repo": "https://github.com/crassas/restaurante-2-irmaos"
+  }
+]
