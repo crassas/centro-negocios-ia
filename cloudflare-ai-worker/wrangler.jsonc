@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "centro-negocios-ai",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "ai": {
+    "binding": "AI"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
