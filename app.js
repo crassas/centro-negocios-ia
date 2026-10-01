@@ -34,6 +34,22 @@ function normalizeState(value){
   };
 }
 function saveState(){localStorage.setItem(STORE_KEY,JSON.stringify(state));renderLocalSummary();}
+function seedCRMDefaults(){
+  const defaults={
+    pentehouse:{stage:'Activo',note:'Acompanhar ranking Marquês / Constituição e rever posições locais.'},
+    'best-pizza':{stage:'Activo',note:'Acompanhar ranking Campanhã / São Roque e validar menu, pesquisa e experiência mobile.'},
+    'dois-irmaos':{stage:'Activo',note:'Acompanhar ranking Campanhã / São Roque e consolidar presença local e ficha Google.'}
+  };
+  let changed=false;
+  for(const [id,value] of Object.entries(defaults)){
+    if(!state.clients[id]){
+      state.clients[id]=value;
+      changed=true;
+    }
+  }
+  if(changed)localStorage.setItem(STORE_KEY,JSON.stringify(state));
+}
+
 function $(id){return document.getElementById(id);}
 function esc(value){return String(value==null?'':value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function safeUrl(value){
@@ -325,5 +341,5 @@ function setupPWA(){
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
-  setupEvents();setupPWA();$('finance-date').value=new Date().toISOString().slice(0,10);renderLeads();renderFinance();renderGsc();setupVaultState();renderSystem();loadLive();
+  seedCRMDefaults();setupEvents();setupPWA();$('finance-date').value=new Date().toISOString().slice(0,10);renderLeads();renderFinance();renderGsc();setupVaultState();renderSystem();loadLive();
 });
