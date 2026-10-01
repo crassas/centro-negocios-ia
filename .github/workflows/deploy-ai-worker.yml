@@ -18,6 +18,8 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
     steps:
       - name: Verificar credenciais Cloudflare
         id: cloudflare
@@ -45,6 +47,20 @@ jobs:
         if: steps.cloudflare.outputs.ready == 'true'
         working-directory: cloudflare-ai-worker
         run: npx --yes wrangler@latest deploy
+
+      - name: Sincronizar Telegram
+        if: steps.cloudflare.outputs.ready == 'true'
+        working-directory: cloudflare-ai-worker
+        shell: bash
+        run: |
+          if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+            node -e "require('fs').writeFileSync('/tmp/telegram-secrets.json', JSON.stringify({TELEGRAM_BOT_TOKEN:process.env.TELEGRAM_BOT_TOKEN,TELEGRAM_CHAT_ID:process.env.TELEGRAM_CHAT_ID}))"
+            npx --yes wrangler@latest secret bulk /tmp/telegram-secrets.json
+            rm -f /tmp/telegram-secrets.json
+            echo "Telegram sincronizado com o Worker."
+          else
+            echo "Telegram ainda sem credenciais; integração fica preparada mas inactiva."
+          fi
 
       - name: Testar Worker e Workers AI
         if: steps.cloudflare.outputs.ready == 'true'
