@@ -4,7 +4,7 @@ const VAULT_KEY='centro_negocios_vault_v1';
 const APP_VERSION=3;
 const VAULT_LOCK_MS=5*60*1000;
 const EXTRA_PROJECTS=[
-  {id:'engomadoria',name:'Engomadoria — nome por confirmar',area:'Nome e morada por confirmar',url:''}
+  {id:'engomadoria',name:'Engomadoria Beatriz',area:'Morada por confirmar',url:''}
 ];
 
 let sites=[];
@@ -42,7 +42,7 @@ function seedCRMDefaults(){
     pentehouse:{stage:'Activo',note:'Acompanhar ranking Marquês / Constituição e rever posições locais.'},
     'best-pizza':{stage:'Activo',note:'Acompanhar ranking Campanhã / São Roque e validar menu, pesquisa e experiência mobile.'},
     'dois-irmaos':{stage:'Activo',note:'Acompanhar ranking Campanhã / São Roque e consolidar presença local e ficha Google.'},
-    engomadoria:{stage:'Activo',note:'Pedir nome e morada. Iniciar construção do site. Valor combinado: 25 €. Lavandaria separada: possível segundo trabalho de +25 € se avançar.'}
+    engomadoria:{stage:'Activo',note:'Negócio fechado. Recolher a folha da cliente, morada, contacto, horário, serviços, preços e fotografias. Iniciar construção do site da Engomadoria Beatriz. Valor do trabalho: 25 € + custo real do domínio pago pela cliente. Lavandaria separada: possível segundo trabalho de +25 € se avançar.'}
   };
   let changed=false;
   for(const [id,value] of Object.entries(defaults)){
@@ -68,9 +68,9 @@ function seedLeadDefaults(){
   const legacyId='lead_lavandaria_20261001';
   const data={
     id,
-    name:'Engomadoria — nome por confirmar',
+    name:'Engomadoria Beatriz',
     url:'',
-    contact:'Cliente confirmado. Site a iniciar. Valor combinado: 25 € pelo trabalho + 1,23 € de domínio inicial; renovação anual indicada em cerca de 32,90 € (confirmar antes da compra). Lavandaria é um negócio separado e pode avançar depois como segundo site por +25 €.',
+    contact:'Cliente confirmado e negócio fechado. Site da Engomadoria Beatriz a iniciar. Valor do trabalho: 25 € + custo real do domínio pago pela cliente. A morada e restantes dados serão confirmados a partir da folha entregue pela cliente. Lavandaria é um negócio separado e pode avançar depois como segundo site por +25 €.',
     status:'Fechado',
     createdAt:'2026-10-01T18:19:00.000Z'
   };
