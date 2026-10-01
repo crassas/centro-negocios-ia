@@ -3,6 +3,9 @@ const LEGACY_KEY='centro_ia_real_v2';
 const VAULT_KEY='centro_negocios_vault_v1';
 const APP_VERSION=3;
 const VAULT_LOCK_MS=5*60*1000;
+const EXTRA_PROJECTS=[
+  {id:'engomadoria',name:'Engomadoria — nome por confirmar',area:'Nome e morada por confirmar',url:''}
+];
 
 let sites=[];
 let live={generatedAt:null,sites:[]};
@@ -38,7 +41,8 @@ function seedCRMDefaults(){
   const defaults={
     pentehouse:{stage:'Activo',note:'Acompanhar ranking Marquês / Constituição e rever posições locais.'},
     'best-pizza':{stage:'Activo',note:'Acompanhar ranking Campanhã / São Roque e validar menu, pesquisa e experiência mobile.'},
-    'dois-irmaos':{stage:'Activo',note:'Acompanhar ranking Campanhã / São Roque e consolidar presença local e ficha Google.'}
+    'dois-irmaos':{stage:'Activo',note:'Acompanhar ranking Campanhã / São Roque e consolidar presença local e ficha Google.'},
+    engomadoria:{stage:'Activo',note:'Pedir nome e morada. Iniciar construção do site. Valor combinado: 25 €. Lavandaria separada: possível segundo trabalho de +25 € se avançar.'}
   };
   let changed=false;
   for(const [id,value] of Object.entries(defaults)){
@@ -60,17 +64,20 @@ function seedCRMDefaults(){
 }
 
 function seedLeadDefaults(){
-  const id='lead_lavandaria_20261001';
-  const exists=state.leads.some(lead=>lead&&lead.id===id);
-  if(exists)return;
-  state.leads.push({
+  const id='lead_engomadoria_20261001';
+  const legacyId='lead_lavandaria_20261001';
+  const data={
     id,
-    name:'Lavandaria — nome por confirmar',
+    name:'Engomadoria — nome por confirmar',
     url:'',
-    contact:'Cliente confirmado. Site a iniciar. Valor combinado: 25 € pelo trabalho + 1,23 € de domínio inicial; renovação anual indicada em cerca de 32,90 € (confirmar antes da compra).',
+    contact:'Cliente confirmado. Site a iniciar. Valor combinado: 25 € pelo trabalho + 1,23 € de domínio inicial; renovação anual indicada em cerca de 32,90 € (confirmar antes da compra). Lavandaria é um negócio separado e pode avançar depois como segundo site por +25 €.',
     status:'Fechado',
     createdAt:'2026-10-01T18:19:00.000Z'
-  });
+  };
+  let lead=state.leads.find(item=>item&&(item.id===id||item.id===legacyId));
+  if(lead)Object.assign(lead,data);
+  else state.leads.push(data);
+  state.leads=state.leads.filter((item,index,list)=>item&&item.id!==id||list.findIndex(x=>x&&x.id===id)===index);
   localStorage.setItem(STORE_KEY,JSON.stringify(state));
 }
 
@@ -96,6 +103,8 @@ function fmtNum(value,digits=0){
 function fmtMoney(value){return new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'}).format(Number(value)||0);}
 function humanMs(value){return value==null?'—':fmtNum(value,0)+' ms';}
 function siteResult(id){return (live.sites||[]).find(x=>x.id===id);}
+function allProjects(){return [...sites,...EXTRA_PROJECTS];}
+function projectById(id){return allProjects().find(project=>project.id===id);}
 function uid(prefix='id'){return prefix+'_'+Date.now().toString(36)+'_'+crypto.getRandomValues(new Uint32Array(1))[0].toString(36);}
 function toast(message){
   const el=$('toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2400);
@@ -203,10 +212,12 @@ function renderConnections(){
 
 function renderCRM(){
   const grid=$('crm-grid');
-  if(!sites.length){grid.innerHTML='<div class="empty">Sem projectos configurados.</div>';return;}
-  grid.innerHTML=sites.map(s=>{
+  const projects=allProjects();
+  if(!projects.length){grid.innerHTML='<div class="empty">Sem projectos configurados.</div>';return;}
+  grid.innerHTML=projects.map(s=>{
     const c=state.clients[s.id]||{stage:'Activo',note:''};
-    return '<article class="crm-card" data-client="'+esc(s.id)+'"><h3>'+esc(s.name)+'</h3><a href="'+esc(s.url)+'" target="_blank" rel="noreferrer">'+esc(s.area||s.url)+'</a>'+
+    const location=s.url?'<a href="'+esc(s.url)+'" target="_blank" rel="noreferrer">'+esc(s.area||s.url)+'</a>':'<span class="section-meta">'+esc(s.area||'Sem morada')+'</span>';
+    return '<article class="crm-card" data-client="'+esc(s.id)+'"><h3>'+esc(s.name)+'</h3>'+location+
       '<div class="field"><label>Estado</label><select class="client-stage">'+['Activo','Prospecção','Pausado','Concluído'].map(v=>'<option '+(c.stage===v?'selected':'')+'>'+v+'</option>').join('')+'</select></div>'+
       '<div class="field"><label>Próxima acção</label><textarea class="client-note" placeholder="Ex.: rever Search Console sexta-feira">'+esc(c.note||'')+'</textarea></div></article>';
   }).join('');
@@ -264,14 +275,15 @@ function renderFinance(){
   const tbody=$('finance-table');
   if(!state.transactions.length){tbody.innerHTML='<tr><td colspan="7" class="empty-cell">Sem movimentos registados.</td></tr>';renderLocalSummary();return;}
   tbody.innerHTML=state.transactions.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||'').localeCompare(a.createdAt||'')).map(row=>{
-    const idx=state.transactions.indexOf(row);const project=sites.find(s=>s.id===row.projectId);
+    const idx=state.transactions.indexOf(row);const project=projectById(row.projectId);
     return '<tr><td>'+esc(fmtDateOnly(row.date))+'</td><td>'+(row.type==='income'?'Entrada':'Saída')+'</td><td>'+esc(row.category)+'</td><td>'+esc(project?project.name:'—')+'</td><td>'+esc(row.description||'—')+'</td><td class="'+(row.type==='income'?'row-income':'row-expense')+'">'+(row.type==='income'?'+':'−')+fmtMoney(Math.abs(row.amount))+'</td><td><button class="danger-btn" data-remove-finance="'+idx+'" title="Eliminar">×</button></td></tr>';
   }).join('');
   tbody.querySelectorAll('[data-remove-finance]').forEach(btn=>btn.addEventListener('click',()=>{if(confirm('Eliminar este movimento?')){state.transactions.splice(Number(btn.dataset.removeFinance),1);saveState();renderFinance();}}));renderLocalSummary();
 }
 function fillProjectSelects(){
-  const options='<option value="">Sem projecto</option>'+sites.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join('');
-  ['finance-project','vault-project'].forEach(id=>{const el=$(id);if(el&&el.dataset.ready!==String(sites.length)){const current=el.value;el.innerHTML=options;el.value=current;el.dataset.ready=String(sites.length);}});
+  const projects=allProjects();
+  const options='<option value="">Sem projecto</option>'+projects.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join('');
+  ['finance-project','vault-project'].forEach(id=>{const el=$(id);if(el&&el.dataset.ready!==String(projects.length)){const current=el.value;el.innerHTML=options;el.value=current;el.dataset.ready=String(projects.length);}});
 }
 
 function download(name,content,type='text/plain;charset=utf-8'){
@@ -330,7 +342,7 @@ async function persistVault(){if(!vaultSession||!vaultPassphrase)return;await wr
 function renderVault(){
   if(!vaultSession)return;$('vault-count').textContent=vaultSession.length+' credencia'+(vaultSession.length===1?'l':'is');const box=$('vault-list');
   if(!vaultSession.length){box.innerHTML='<div class="empty">Cofre vazio.</div>';return;}
-  box.innerHTML=vaultSession.map(item=>{const project=sites.find(s=>s.id===item.projectId);return '<article class="vault-item" data-vault-id="'+esc(item.id)+'"><div><small>Serviço</small><b>'+esc(item.label)+'</b><span>'+esc(project?project.name:'Sem projecto')+'</span></div><div><small>Utilizador</small><span>'+esc(item.user||'—')+'</span></div><div><small>Segredo</small><div class="vault-secret-row"><span class="vault-secret">••••••••••</span><button class="vault-mini" data-vault-reveal="'+esc(item.id)+'" type="button">ver</button><button class="vault-mini" data-vault-copy="'+esc(item.id)+'" type="button">copiar</button></div></div><div class="vault-actions">'+(safeUrl(item.url)?'<a class="vault-mini" href="'+esc(safeUrl(item.url))+'" target="_blank" rel="noreferrer">abrir</a>':'')+'<button class="vault-mini" data-vault-delete="'+esc(item.id)+'" type="button">×</button></div></article>';}).join('');
+  box.innerHTML=vaultSession.map(item=>{const project=projectById(item.projectId);return '<article class="vault-item" data-vault-id="'+esc(item.id)+'"><div><small>Serviço</small><b>'+esc(item.label)+'</b><span>'+esc(project?project.name:'Sem projecto')+'</span></div><div><small>Utilizador</small><span>'+esc(item.user||'—')+'</span></div><div><small>Segredo</small><div class="vault-secret-row"><span class="vault-secret">••••••••••</span><button class="vault-mini" data-vault-reveal="'+esc(item.id)+'" type="button">ver</button><button class="vault-mini" data-vault-copy="'+esc(item.id)+'" type="button">copiar</button></div></div><div class="vault-actions">'+(safeUrl(item.url)?'<a class="vault-mini" href="'+esc(safeUrl(item.url))+'" target="_blank" rel="noreferrer">abrir</a>':'')+'<button class="vault-mini" data-vault-delete="'+esc(item.id)+'" type="button">×</button></div></article>';}).join('');
   box.querySelectorAll('[data-vault-reveal]').forEach(btn=>btn.addEventListener('click',()=>{const item=vaultSession.find(x=>x.id===btn.dataset.vaultReveal);const row=btn.closest('.vault-item').querySelector('.vault-secret');const shown=row.dataset.shown==='1';row.textContent=shown?'••••••••••':item.secret;row.dataset.shown=shown?'0':'1';btn.textContent=shown?'ver':'ocultar';scheduleVaultLock();}));
   box.querySelectorAll('[data-vault-copy]').forEach(btn=>btn.addEventListener('click',async()=>{const item=vaultSession.find(x=>x.id===btn.dataset.vaultCopy);await navigator.clipboard.writeText(item.secret);scheduleVaultLock();toast('Segredo copiado.');}));
   box.querySelectorAll('[data-vault-delete]').forEach(btn=>btn.addEventListener('click',async()=>{if(!confirm('Eliminar esta credencial?'))return;vaultSession=vaultSession.filter(x=>x.id!==btn.dataset.vaultDelete);await persistVault();renderVault();toast('Credencial eliminada.');}));
