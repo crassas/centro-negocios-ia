@@ -2,6 +2,7 @@ const STORE_KEY='centro_negocios_v3';
 const LEGACY_KEY='centro_ia_real_v2';
 const VAULT_KEY='centro_negocios_vault_v1';
 const AI_ENDPOINT_KEY='centro_negocios_ai_endpoint_v1';
+const AI_DEFAULT_ENDPOINT='https://centro-negocios-ai.travisthejarvis.workers.dev';
 const APP_VERSION=3;
 const VAULT_LOCK_MS=5*60*1000;
 const EXTRA_PROJECTS=[
@@ -359,7 +360,7 @@ function normalizeAIEndpoint(value){
     return url.href.replace(/\/+$/,'');
   }catch{return '';}
 }
-function getAIEndpoint(){return normalizeAIEndpoint(localStorage.getItem(AI_ENDPOINT_KEY)||'');}
+function getAIEndpoint(){return normalizeAIEndpoint(localStorage.getItem(AI_ENDPOINT_KEY)||AI_DEFAULT_ENDPOINT);}
 function renderAIStatus(){
   if(!$('ai-status'))return;
   const endpoint=getAIEndpoint();
