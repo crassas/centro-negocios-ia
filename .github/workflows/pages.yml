@@ -23,6 +23,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Verificar JavaScript
+        run: |
+          node --check app.js
+          node --check scripts/monitor.mjs
+          node -e "JSON.parse(require('fs').readFileSync('data/sites.json','utf8')); JSON.parse(require('fs').readFileSync('manifest.webmanifest','utf8'));"
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
