@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#e9e5dc">
+  <meta name="theme-color" content="#0b0d0f">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="format-detection" content="telephone=no">
-  <meta name="description" content="Centro de operação para monitorização de sites, SEO, CRM, leads, caixa, credenciais e documentos.">
-  <title>Centro de Negócios</title>
+  <meta name="description" content="Centro de comando para sites, CRM, prospecção, caixa e inteligência operacional.">
+  <title>Centro de Negócios · Command</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
@@ -17,267 +17,287 @@
   <script src="./app.js" defer></script>
 </head>
 <body>
-<div class="app-shell">
-  <aside class="sidebar">
-    <div class="brand"><span class="brand-mark">C</span><div><strong>Centro</strong><small>Negócios</small></div></div>
-    <div class="monitor-pill" id="monitor-pill"><i></i><span id="monitor-label">A ler monitor</span></div>
-    <nav class="nav" aria-label="Navegação principal">
-      <a class="active" href="#visao">Visão geral</a>
-      <a href="#assistente">Assistente IA</a>
-      <a href="#sites">Sites</a>
-      <a href="#seo">Search Console</a>
-      <a href="#crm">CRM</a>
-      <a href="#leads">Leads</a>
-      <a href="#caixa">Caixa</a>
-      <a href="#cofre">Cofre</a>
-      <a href="#ocr">Documentos</a>
-      <a href="#relatorios">Backup</a>
-      <a href="#sistema">Sistema</a>
+<div class="shell">
+  <aside class="rail" aria-label="Navegação principal">
+    <div class="rail-brand">
+      <div class="brand-core">CN</div>
+      <div><strong>CENTRO</strong><span>COMMAND // 01</span></div>
+    </div>
+
+    <div class="rail-health" id="monitor-pill"><i></i><span id="monitor-label">A sincronizar</span></div>
+
+    <nav class="command-nav nav">
+      <a class="active" href="#visao" data-panel-target="visao"><b>01</b><span>Comando</span></a>
+      <a href="#assistente" data-panel-target="assistente"><b>02</b><span>IA</span></a>
+      <a href="#radar" data-panel-target="radar"><b>03</b><span>Radar</span></a>
+      <a href="#sites" data-panel-target="sites"><b>04</b><span>Sites</span></a>
+      <a href="#crm" data-panel-target="crm"><b>05</b><span>CRM</span></a>
+      <a href="#leads" data-panel-target="leads"><b>06</b><span>Leads</span></a>
+      <a href="#caixa" data-panel-target="caixa"><b>07</b><span>Caixa</span></a>
+      <a href="#seo" data-panel-target="seo"><b>08</b><span>Search</span></a>
+      <a href="#cofre" data-panel-target="cofre"><b>09</b><span>Cofre</span></a>
+      <a href="#ferramentas" data-panel-target="ferramentas"><b>10</b><span>Sistema</span></a>
     </nav>
-    <div class="sidebar-bottom">
-      <div class="storage-status"><span>Dados privados</span><b>neste dispositivo</b></div>
-      <span class="version">v1.0 · operação real</span>
+
+    <div class="rail-foot">
+      <span>LOCAL-FIRST</span>
+      <b>v2 · AGENT CORE</b>
     </div>
   </aside>
 
-  <main>
-    <header id="visao" class="topbar">
-      <div>
-        <span class="eyebrow">Painel operacional</span>
-        <h1>Centro de Negócios</h1>
-        <p class="sub" id="headline-status">A carregar estado dos projectos.</p>
+  <main class="workspace">
+    <header class="command-bar">
+      <div class="command-location">
+        <span class="pulse-dot"></span>
+        <div><small>ÁREA ACTIVA</small><b id="active-panel-name">COMANDO</b></div>
       </div>
-      <div class="controls">
-        <button class="btn" id="refresh-btn" type="button">Recarregar leitura</button>
-        <button class="btn" id="install-btn" type="button" hidden>Instalar app</button>
-        <button class="btn primary" id="backup-top-btn" type="button">Criar backup</button>
+      <div class="command-bar-actions">
+        <button class="icon-btn" id="nav-home" type="button" title="Voltar ao comando">⌂</button>
+        <button class="icon-btn" id="refresh-btn" type="button" title="Actualizar dados">↻</button>
+        <button class="icon-btn" id="install-btn" type="button" hidden title="Instalar aplicação">↓</button>
+        <button class="icon-btn" id="backup-top-btn" type="button" title="Criar backup">◫</button>
       </div>
     </header>
 
-    <section class="status-strip" aria-label="Estado das fontes de dados">
-      <div><span>Monitor</span><b>automático · 15 min</b></div>
-      <div><span>Ranking Google</span><b>Search Console importado</b></div>
-      <div><span>CRM e caixa</span><b>armazenamento local</b></div>
-      <div><span>Credenciais</span><b>AES-GCM cifrado</b></div>
-    </section>
-
-    <section class="kpis" aria-label="Resumo">
-      <article class="kpi"><div class="value" id="kpi-online">—</div><div class="label">Sites online</div><div class="delta" id="kpi-online-note">A verificar</div></article>
-      <article class="kpi"><div class="value" id="kpi-issues">—</div><div class="label">Alertas técnicos</div><div class="delta" id="kpi-issues-note">A verificar</div></article>
-      <article class="kpi"><div class="value" id="kpi-leads">0</div><div class="label">Leads abertos</div><div class="delta" id="kpi-leads-note">Pipeline local</div></article>
-      <article class="kpi"><div class="value money" id="kpi-balance">0,00 €</div><div class="label">Saldo registado</div><div class="delta" id="kpi-balance-note">Entradas − saídas</div></article>
-    </section>
-
-    <section class="section ai-section" id="assistente">
-      <div class="section-head">
-        <div><span class="eyebrow">Cloudflare Workers AI</span><h2>Assistente IA</h2></div>
-        <span class="local-tag" id="ai-status">por ligar</span>
-      </div>
-      <div class="ai-grid">
-        <div class="ai-workspace">
-          <div class="ai-quick">
-            <button type="button" data-ai-question="O que tenho de fazer agora? Ordena as prioridades pelos projectos." class="ai-chip">Prioridades</button>
-            <button type="button" data-ai-question="Analisa os alertas técnicos e diz-me o que merece atenção." class="ai-chip">Alertas SEO</button>
-            <button type="button" data-ai-question="Analisa o CRM e os leads. Diz-me qual é a próxima acção útil em cada negócio." class="ai-chip">CRM e leads</button>
-            <button type="button" data-ai-question="Procura conexões invisíveis entre os projectos e oportunidades locais que eu possa estar a ignorar." class="ai-chip">Conexões invisíveis</button>
+    <div class="panel-stage">
+      <section class="panel-view is-active" id="visao" data-panel="visao">
+        <div class="command-hero">
+          <div class="hero-copy">
+            <span class="sys-label">OPERATIONAL INTELLIGENCE</span>
+            <h1>CENTRO<span>//</span>NEGÓCIOS</h1>
+            <p id="headline-status">A carregar estado dos projectos.</p>
           </div>
-          <textarea id="ai-question" class="ai-question" placeholder="Ex.: O que devo fazer hoje na Engomadoria Beatriz?"></textarea>
-          <div class="ai-actions">
-            <button class="btn primary" id="ai-ask-btn" type="button">Analisar com IA</button>
-            <button class="btn" id="ai-clear-btn" type="button">Limpar</button>
-          </div>
-          <div id="ai-answer" class="ai-answer" aria-live="polite">
-            <div class="empty">Liga o Worker da Cloudflare uma vez. Depois podes perguntar sobre sites, CRM, leads, caixa e Search Console.</div>
+          <div class="core-status">
+            <div class="core-orbit"><span>AI</span></div>
+            <div><small>NÚCLEO</small><b>ONLINE</b><span>Cloudflare Workers AI</span></div>
           </div>
         </div>
-        <aside class="ai-config">
-          <span class="eyebrow">Ligação</span>
-          <label for="ai-endpoint">URL do Worker Cloudflare</label>
-          <input id="ai-endpoint" type="url" inputmode="url" placeholder="https://centro-negocios-ai....workers.dev">
-          <div class="ai-config-actions">
-            <button class="btn" id="ai-save-endpoint" type="button">Guardar</button>
-            <button class="btn" id="ai-test-endpoint" type="button">Testar</button>
-          </div>
-          <p>O assistente recebe apenas dados operacionais necessários. O conteúdo do Cofre nunca é enviado à IA.</p>
-          <div class="ai-model"><span>Modelo preparado</span><b>Llama 3.2 3B · Workers AI</b></div>
-        </aside>
-      </div>
-    </section>
 
-    <section class="section" id="sites">
-      <div class="section-head">
-        <div><span class="eyebrow">Monitor técnico</span><h2>Sites em produção</h2></div>
-        <div class="section-meta" id="audit-meta">Sem leitura</div>
-      </div>
-      <div id="site-grid" class="site-grid"><div class="empty">A obter a última auditoria.</div></div>
-    </section>
+        <div class="command-actions">
+          <button data-ai-question="O que tenho de fazer agora? Dá-me apenas as 3 prioridades mais importantes, com acção concreta." data-open-ai="1">
+            <span>01</span><b>PLANO DE AGORA</b><small>3 acções prioritárias</small>
+          </button>
+          <button data-ai-question="Procura oportunidades de prospecção nos dados actuais e diz-me onde devo olhar a seguir." data-open-ai="1">
+            <span>02</span><b>CAÇAR OPORTUNIDADES</b><small>Radar comercial</small>
+          </button>
+          <button data-ai-question="Faz um relatório executivo curto do estado de todos os projectos, riscos e próximos passos." data-open-ai="1">
+            <span>03</span><b>RELATÓRIO</b><small>Estado da operação</small>
+          </button>
+          <button data-panel-target="assistente" data-focus-decisions="1">
+            <span>04</span><b>DECISÕES PENDENTES</b><small><strong id="decision-count">0</strong> aguardam confirmação</small>
+          </button>
+        </div>
 
-    <div class="two-col">
-      <section class="section">
-        <div class="section-head"><div><span class="eyebrow">Prioridade</span><h2>Alertas</h2></div></div>
-        <div id="alerts-list" class="stack"><div class="empty">A analisar.</div></div>
+        <div class="kpis" aria-label="Resumo">
+          <article class="kpi"><span class="kpi-code">NET</span><div class="value" id="kpi-online">—</div><div class="label">Sites online</div><div class="delta" id="kpi-online-note">A verificar</div></article>
+          <article class="kpi"><span class="kpi-code">SYS</span><div class="value" id="kpi-issues">—</div><div class="label">Alertas técnicos</div><div class="delta" id="kpi-issues-note">A verificar</div></article>
+          <article class="kpi"><span class="kpi-code">CRM</span><div class="value" id="kpi-leads">0</div><div class="label">Leads abertos</div><div class="delta" id="kpi-leads-note">Pipeline local</div></article>
+          <article class="kpi"><span class="kpi-code">EUR</span><div class="value money" id="kpi-balance">0,00 €</div><div class="label">Saldo registado</div><div class="delta" id="kpi-balance-note">Entradas − saídas</div></article>
+        </div>
+
+        <div class="overview-grid">
+          <article class="module">
+            <div class="module-head"><div><span class="sys-label">PRIORIDADE</span><h2>Alertas</h2></div><button data-panel-target="sites" class="mini-link">VER SITES →</button></div>
+            <div id="alerts-list" class="stack"><div class="empty">A analisar.</div></div>
+          </article>
+          <article class="module">
+            <div class="module-head"><div><span class="sys-label">CROSS-SIGNAL</span><h2>Conexões invisíveis</h2></div></div>
+            <div id="connections-list" class="stack"><div class="empty">A cruzar sinais técnicos.</div></div>
+          </article>
+        </div>
+
+        <div class="status-strip" aria-label="Estado das fontes">
+          <div><span>MONITOR</span><b>15 MIN</b></div>
+          <div><span>WORKERS AI</span><b>ACTIVO</b></div>
+          <div><span>CRM / CAIXA</span><b>LOCAL</b></div>
+          <div><span>COFRE</span><b>AES-256</b></div>
+        </div>
       </section>
-      <section class="section">
-        <div class="section-head"><div><span class="eyebrow">Cruzamento</span><h2>Conexões invisíveis</h2></div></div>
-        <div id="connections-list" class="stack"><div class="empty">A cruzar sinais técnicos.</div></div>
+
+      <section class="panel-view" id="assistente" data-panel="assistente">
+        <div class="panel-title">
+          <div><span class="sys-label">AGENT CORE</span><h1>INTELIGÊNCIA OPERACIONAL</h1><p>Fala pouco. O Centro analisa, propõe e espera pela tua confirmação.</p></div>
+          <span class="status-tag" id="ai-status">a ligar</span>
+        </div>
+
+        <div class="ai-command">
+          <div class="ai-command-head"><span>COMMAND INPUT</span><small>Ctrl + Enter para executar</small></div>
+          <div class="ai-input-row">
+            <button class="voice-key" id="ai-voice-btn" type="button" title="Ditar">◉</button>
+            <textarea id="ai-question" class="ai-question" rows="2" placeholder="Diz o que queres. Ex.: vê tudo e diz-me só o que precisa da minha atenção."></textarea>
+            <button class="execute-key" id="ai-ask-btn" type="button">EXECUTAR</button>
+          </div>
+          <div class="ai-quick">
+            <button type="button" data-ai-question="O que precisa da minha atenção agora? Só o essencial." class="ai-chip">AGORA</button>
+            <button type="button" data-ai-question="Analisa todos os projectos e cria propostas de próximas acções que eu possa confirmar." class="ai-chip">PROPOR ACÇÕES</button>
+            <button type="button" data-ai-question="Procura sinais para futuras prospecções e propõe oportunidades concretas." class="ai-chip">PROSPECÇÃO</button>
+            <button type="button" data-ai-question="Faz um relatório executivo curto, com factos, riscos e próximos passos." class="ai-chip">RELATÓRIO</button>
+            <button type="button" data-ai-question="Procura conexões invisíveis entre sites, CRM, leads e Search Console." class="ai-chip">CONEXÕES</button>
+            <button class="ai-chip subtle" id="ai-clear-btn" type="button">LIMPAR</button>
+          </div>
+        </div>
+
+        <div class="ai-layout">
+          <article class="module ai-output-module">
+            <div class="module-head"><div><span class="sys-label">RESPOSTA</span><h2>Núcleo IA</h2></div><span class="signal">LIVE</span></div>
+            <div id="ai-answer" class="ai-answer" aria-live="polite"><div class="empty">Pronto para analisar a operação.</div></div>
+          </article>
+
+          <article class="module decision-module" id="decisions">
+            <div class="module-head"><div><span class="sys-label">HUMAN-IN-THE-LOOP</span><h2>Decisões pendentes</h2></div><span class="counter" id="decision-count-secondary">0</span></div>
+            <div id="decision-list" class="decision-list"><div class="empty">Nenhuma decisão pendente.</div></div>
+          </article>
+        </div>
+
+        <details class="connection-drawer">
+          <summary>Ligação técnica da IA</summary>
+          <div class="ai-config">
+            <label for="ai-endpoint">Worker Cloudflare</label>
+            <input id="ai-endpoint" type="url" inputmode="url" placeholder="https://...workers.dev">
+            <div class="ai-config-actions"><button class="btn" id="ai-save-endpoint" type="button">Guardar</button><button class="btn" id="ai-test-endpoint" type="button">Testar</button></div>
+            <div class="ai-model"><span>MODELO</span><b>Llama 3.2 3B · Workers AI</b></div>
+          </div>
+        </details>
+      </section>
+
+      <section class="panel-view" id="radar" data-panel="radar">
+        <div class="panel-title">
+          <div><span class="sys-label">PROSPECTION RADAR</span><h1>RADAR DE OPORTUNIDADES</h1><p>Guarda sinais rápidos agora. A IA organiza-os para prospecção futura.</p></div>
+          <span class="status-tag"><b id="opportunity-count">0</b> SINAIS</span>
+        </div>
+
+        <div class="capture-console">
+          <button class="voice-key" id="prospect-voice-btn" type="button" title="Ditar observação">◉</button>
+          <input id="prospect-capture" placeholder="Ex.: lavandaria da Rua X sem site, falei com a dona, parece interessada">
+          <button id="prospect-analyse" class="execute-key" type="button">ANALISAR</button>
+        </div>
+
+        <div class="radar-grid">
+          <article class="module">
+            <div class="module-head"><div><span class="sys-label">MEMÓRIA COMERCIAL</span><h2>Oportunidades guardadas</h2></div></div>
+            <div id="opportunity-list" class="opportunity-list"><div class="empty">Ainda não há sinais guardados.</div></div>
+          </article>
+          <article class="module telegram-module">
+            <div class="module-head"><div><span class="sys-label">REMOTE CONTROL</span><h2>Telegram</h2></div><span class="status-tag" id="telegram-status">POR LIGAR</span></div>
+            <div class="telegram-core">
+              <div class="telegram-symbol">T</div>
+              <p>Canal preparado para pedidos, relatórios e confirmações fora da aplicação.</p>
+              <button id="telegram-check-btn" class="btn" type="button">Verificar ligação</button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel-view" id="sites" data-panel="sites">
+        <div class="panel-title"><div><span class="sys-label">NETWORK OBSERVATORY</span><h1>SITES EM PRODUÇÃO</h1></div><div class="section-meta" id="audit-meta">Sem leitura</div></div>
+        <div id="site-grid" class="site-grid"><div class="empty">A obter a última auditoria.</div></div>
+      </section>
+
+      <section class="panel-view" id="crm" data-panel="crm">
+        <div class="panel-title"><div><span class="sys-label">PROJECT MEMORY</span><h1>CRM</h1><p>Estado real e próxima acção de cada projecto.</p></div><span class="status-tag">AUTO-SAVE</span></div>
+        <div id="crm-grid" class="crm-grid"></div>
+      </section>
+
+      <section class="panel-view" id="leads" data-panel="leads">
+        <div class="panel-title"><div><span class="sys-label">COMMERCIAL PIPELINE</span><h1>LEADS</h1></div><span class="status-tag" id="lead-count">0 registos</span></div>
+        <form id="lead-form" class="lead-form">
+          <input id="lead-name" required placeholder="Negócio">
+          <input id="lead-url" placeholder="Website / Maps">
+          <input id="lead-contact" placeholder="Contacto ou nota">
+          <select id="lead-status" aria-label="Estado"><option>Novo</option><option>Contactado</option><option>Interessado</option><option>Proposta</option><option>Fechado</option><option>Perdido</option></select>
+          <button class="btn primary" type="submit">Adicionar</button>
+        </form>
+        <div class="table-wrap"><table><thead><tr><th>Negócio</th><th>Ligação</th><th>Contacto</th><th>Estado</th><th>Data</th><th></th></tr></thead><tbody id="lead-table"><tr><td colspan="6" class="empty-cell">Sem leads registados.</td></tr></tbody></table></div>
+      </section>
+
+      <section class="panel-view" id="caixa" data-panel="caixa">
+        <div class="panel-title"><div><span class="sys-label">FINANCE LEDGER</span><h1>CAIXA</h1></div><span class="section-meta" id="finance-period">Total registado</span></div>
+        <div class="finance-summary"><div><span>ENTRADAS</span><b id="finance-income">0,00 €</b></div><div><span>SAÍDAS</span><b id="finance-expense">0,00 €</b></div><div><span>SALDO</span><b id="finance-balance">0,00 €</b></div></div>
+        <form id="finance-form" class="finance-form">
+          <input id="finance-date" type="date" required>
+          <select id="finance-type"><option value="income">Entrada</option><option value="expense">Saída</option></select>
+          <input id="finance-amount" type="number" min="0" step="0.01" required placeholder="Valor €">
+          <input id="finance-category" required placeholder="Categoria">
+          <select id="finance-project"><option value="">Sem projecto</option></select>
+          <input id="finance-description" placeholder="Descrição">
+          <button class="btn primary" type="submit">Registar</button>
+        </form>
+        <div class="table-wrap"><table><thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Projecto</th><th>Descrição</th><th>Valor</th><th></th></tr></thead><tbody id="finance-table"><tr><td colspan="7" class="empty-cell">Sem movimentos registados.</td></tr></tbody></table></div>
+      </section>
+
+      <section class="panel-view" id="seo" data-panel="seo">
+        <div class="panel-title"><div><span class="sys-label">GOOGLE SEARCH CONSOLE</span><h1>SEARCH INTELLIGENCE</h1></div><button class="btn ghost" id="clear-gsc-btn" type="button">Remover importação</button></div>
+        <div class="upload-row">
+          <label class="drop compact"><input id="gsc-input" type="file" accept=".csv,text/csv"><strong>IMPORTAR CSV</strong><span id="gsc-file-label">Nenhum ficheiro carregado</span></label>
+          <div class="mini-kpis"><div><b id="gsc-clicks">—</b><span>Cliques</span></div><div><b id="gsc-impressions">—</b><span>Impressões</span></div><div><b id="gsc-ctr">—</b><span>CTR</span></div><div><b id="gsc-position">—</b><span>Posição média</span></div></div>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Consulta</th><th>Cliques</th><th>Impressões</th><th>CTR</th><th>Posição</th></tr></thead><tbody id="gsc-table"><tr><td colspan="5" class="empty-cell">Importa a tabela de desempenho do Search Console.</td></tr></tbody></table></div>
+      </section>
+
+      <section class="panel-view" id="cofre" data-panel="cofre">
+        <div class="panel-title"><div><span class="sys-label">ENCRYPTED VAULT</span><h1>COFRE</h1></div><span class="status-tag" id="vault-state-tag">BLOQUEADO</span></div>
+        <div id="vault-locked" class="vault-locked">
+          <div><strong id="vault-lock-title">Abrir cofre</strong><p id="vault-lock-copy">A palavra-passe mestra não é guardada.</p></div>
+          <div class="vault-unlock-form"><input id="vault-passphrase" type="password" autocomplete="current-password" placeholder="Palavra-passe mestra"><input id="vault-confirm" type="password" autocomplete="new-password" placeholder="Confirmar palavra-passe" hidden><button class="btn primary" id="vault-unlock-btn" type="button">Abrir cofre</button></div>
+          <div class="form-error" id="vault-error" role="status"></div>
+        </div>
+        <div id="vault-open" hidden>
+          <div class="vault-toolbar"><div><b id="vault-count">0 credenciais</b><span>Bloqueio automático após 5 minutos.</span></div><button class="btn" id="vault-lock-btn" type="button">Bloquear</button></div>
+          <form id="vault-form" class="vault-form"><select id="vault-project"><option value="">Sem projecto</option></select><input id="vault-label" required placeholder="Serviço"><input id="vault-user" placeholder="Utilizador / email"><input id="vault-secret" type="password" required autocomplete="new-password" placeholder="Palavra-passe / chave"><input id="vault-url" placeholder="URL"><input id="vault-note" placeholder="Nota"><button class="btn primary" type="submit">Guardar</button></form>
+          <div id="vault-list" class="vault-list"></div>
+        </div>
+      </section>
+
+      <section class="panel-view" id="ferramentas" data-panel="ferramentas">
+        <div class="panel-title"><div><span class="sys-label">TOOLS / SYSTEM</span><h1>FERRAMENTAS</h1></div></div>
+
+        <div class="tools-grid">
+          <article class="module">
+            <div class="module-head"><div><span class="sys-label">DOCUMENT READER</span><h2>OCR</h2></div></div>
+            <div class="ocr-grid">
+              <label class="drop"><input id="ocr-input" type="file" accept="image/*"><strong>ESCOLHER IMAGEM</strong><span>Recibo, factura, menu ou documento</span></label>
+              <div class="ocr-panel"><div class="progress-line"><span id="ocr-status">Sem imagem.</span><b id="ocr-progress"></b></div><textarea id="ocr-output" placeholder="Texto reconhecido"></textarea><button class="btn" id="copy-ocr-btn" type="button">Copiar texto</button></div>
+            </div>
+          </article>
+
+          <article class="module">
+            <div class="module-head"><div><span class="sys-label">PORTABILITY</span><h2>Backup</h2></div></div>
+            <div class="report-actions">
+              <button class="action-card" id="download-json" type="button"><b>Relatório JSON</b><span>Dados operacionais.</span></button>
+              <button class="action-card" id="download-csv" type="button"><b>Sites CSV</b><span>Última auditoria.</span></button>
+              <button class="action-card" id="print-report" type="button"><b>Guardar PDF</b><span>Impressão do navegador.</span></button>
+              <button class="action-card" id="export-backup" type="button"><b>Backup completo</b><span>Inclui cofre cifrado.</span></button>
+              <label class="action-card file-card"><input id="import-backup" type="file" accept="application/json,.json"><b>Restaurar backup</b><span>Substitui dados locais.</span></label>
+              <button class="action-card danger-card" id="clear-local" type="button"><b>Apagar dados locais</b><span>Acção destrutiva.</span></button>
+            </div>
+          </article>
+
+          <article class="module">
+            <div class="module-head"><div><span class="sys-label">DIAGNOSTICS</span><h2>Sistema</h2></div></div>
+            <div class="system-grid">
+              <article><span>Auditoria</span><b id="sys-monitor">A verificar</b></article>
+              <article><span>Persistência</span><b id="sys-storage">A verificar</b></article>
+              <article><span>Cofre</span><b id="sys-vault">A verificar</b></article>
+              <article><span>Search Console</span><b id="sys-gsc">Sem importação</b></article>
+              <article><span>OCR</span><b id="sys-ocr">A verificar</b></article>
+              <article><span>PWA</span><b id="sys-pwa">A verificar</b></article>
+            </div>
+          </article>
+        </div>
       </section>
     </div>
-
-    <section class="section" id="seo">
-      <div class="section-head">
-        <div><span class="eyebrow">Google Search Console</span><h2>Consultas e posições</h2></div>
-        <button class="btn ghost" id="clear-gsc-btn" type="button">Remover importação</button>
-      </div>
-      <div class="upload-row">
-        <label class="drop compact">
-          <input id="gsc-input" type="file" accept=".csv,text/csv">
-          <strong>Importar CSV</strong>
-          <span id="gsc-file-label">Nenhum ficheiro carregado</span>
-        </label>
-        <div class="mini-kpis">
-          <div><b id="gsc-clicks">—</b><span>Cliques</span></div>
-          <div><b id="gsc-impressions">—</b><span>Impressões</span></div>
-          <div><b id="gsc-ctr">—</b><span>CTR</span></div>
-          <div><b id="gsc-position">—</b><span>Posição média</span></div>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Consulta</th><th>Cliques</th><th>Impressões</th><th>CTR</th><th>Posição</th></tr></thead>
-          <tbody id="gsc-table"><tr><td colspan="5" class="empty-cell">Importa a tabela de desempenho do Search Console.</td></tr></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="section" id="crm">
-      <div class="section-head"><div><span class="eyebrow">Projectos</span><h2>CRM</h2></div><span class="local-tag">gravação automática</span></div>
-      <div id="crm-grid" class="crm-grid"></div>
-    </section>
-
-    <section class="section" id="leads">
-      <div class="section-head"><div><span class="eyebrow">Comercial</span><h2>Leads</h2></div><span class="section-meta" id="lead-count">0 registos</span></div>
-      <form id="lead-form" class="lead-form">
-        <input id="lead-name" required placeholder="Negócio">
-        <input id="lead-url" placeholder="Website / Maps">
-        <input id="lead-contact" placeholder="Contacto ou nota">
-        <select id="lead-status" aria-label="Estado"><option>Novo</option><option>Contactado</option><option>Interessado</option><option>Proposta</option><option>Fechado</option><option>Perdido</option></select>
-        <button class="btn primary" type="submit">Adicionar</button>
-      </form>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Negócio</th><th>Ligação</th><th>Contacto</th><th>Estado</th><th>Data</th><th></th></tr></thead>
-          <tbody id="lead-table"><tr><td colspan="6" class="empty-cell">Sem leads registados.</td></tr></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="section" id="caixa">
-      <div class="section-head"><div><span class="eyebrow">Financeiro</span><h2>Caixa</h2></div><span class="section-meta" id="finance-period">Total registado</span></div>
-      <div class="finance-summary">
-        <div><span>Entradas</span><b id="finance-income">0,00 €</b></div>
-        <div><span>Saídas</span><b id="finance-expense">0,00 €</b></div>
-        <div><span>Saldo</span><b id="finance-balance">0,00 €</b></div>
-      </div>
-      <form id="finance-form" class="finance-form">
-        <input id="finance-date" type="date" required>
-        <select id="finance-type"><option value="income">Entrada</option><option value="expense">Saída</option></select>
-        <input id="finance-amount" type="number" min="0" step="0.01" required placeholder="Valor €">
-        <input id="finance-category" required placeholder="Categoria">
-        <select id="finance-project"><option value="">Sem projecto</option></select>
-        <input id="finance-description" placeholder="Descrição">
-        <button class="btn primary" type="submit">Registar</button>
-      </form>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Projecto</th><th>Descrição</th><th>Valor</th><th></th></tr></thead>
-          <tbody id="finance-table"><tr><td colspan="7" class="empty-cell">Sem movimentos registados.</td></tr></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="section" id="cofre">
-      <div class="section-head"><div><span class="eyebrow">Credenciais</span><h2>Cofre cifrado</h2></div><span class="local-tag" id="vault-state-tag">bloqueado</span></div>
-      <div id="vault-locked" class="vault-locked">
-        <div>
-          <strong id="vault-lock-title">Abrir cofre</strong>
-          <p id="vault-lock-copy">A palavra-passe mestra não é guardada. Sem ela, o conteúdo não pode ser recuperado.</p>
-        </div>
-        <div class="vault-unlock-form">
-          <input id="vault-passphrase" type="password" autocomplete="current-password" placeholder="Palavra-passe mestra">
-          <input id="vault-confirm" type="password" autocomplete="new-password" placeholder="Confirmar palavra-passe" hidden>
-          <button class="btn primary" id="vault-unlock-btn" type="button">Abrir cofre</button>
-        </div>
-        <div class="form-error" id="vault-error" role="status"></div>
-      </div>
-      <div id="vault-open" hidden>
-        <div class="vault-toolbar">
-          <div><b id="vault-count">0 credenciais</b><span>Bloqueio automático após 5 minutos.</span></div>
-          <button class="btn" id="vault-lock-btn" type="button">Bloquear</button>
-        </div>
-        <form id="vault-form" class="vault-form">
-          <select id="vault-project"><option value="">Sem projecto</option></select>
-          <input id="vault-label" required placeholder="Serviço (ex.: Cloudflare)">
-          <input id="vault-user" placeholder="Utilizador / email">
-          <input id="vault-secret" type="password" required autocomplete="new-password" placeholder="Palavra-passe / chave">
-          <input id="vault-url" placeholder="URL">
-          <input id="vault-note" placeholder="Nota">
-          <button class="btn primary" type="submit">Guardar</button>
-        </form>
-        <div id="vault-list" class="vault-list"></div>
-      </div>
-    </section>
-
-    <section class="section" id="ocr">
-      <div class="section-head"><div><span class="eyebrow">Leitura de documentos</span><h2>OCR</h2></div><span class="local-tag">processamento no navegador</span></div>
-      <div class="ocr-grid">
-        <label class="drop">
-          <input id="ocr-input" type="file" accept="image/*">
-          <strong>Escolher imagem</strong>
-          <span>Recibo, factura, menu ou documento fotografado</span>
-        </label>
-        <div class="ocr-panel">
-          <div class="progress-line"><span id="ocr-status">Sem imagem.</span><b id="ocr-progress"></b></div>
-          <textarea id="ocr-output" placeholder="O texto reconhecido aparece aqui."></textarea>
-          <button class="btn" id="copy-ocr-btn" type="button">Copiar texto</button>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="relatorios">
-      <div class="section-head"><div><span class="eyebrow">Portabilidade</span><h2>Relatórios e backup</h2></div></div>
-      <div class="report-actions">
-        <button class="action-card" id="download-json" type="button"><b>Relatório JSON</b><span>Monitor, CRM, leads, caixa e Search Console.</span></button>
-        <button class="action-card" id="download-csv" type="button"><b>Sites CSV</b><span>Estado técnico da última auditoria.</span></button>
-        <button class="action-card" id="print-report" type="button"><b>Guardar PDF</b><span>Abre a impressão do navegador.</span></button>
-        <button class="action-card" id="export-backup" type="button"><b>Backup completo</b><span>Dados locais + cofre ainda cifrado.</span></button>
-        <label class="action-card file-card"><input id="import-backup" type="file" accept="application/json,.json"><b>Restaurar backup</b><span>Substitui os dados locais deste dispositivo.</span></label>
-        <button class="action-card danger-card" id="clear-local" type="button"><b>Apagar dados locais</b><span>CRM, leads, caixa, Search Console e cofre.</span></button>
-      </div>
-    </section>
-
-    <section class="section" id="sistema">
-      <div class="section-head"><div><span class="eyebrow">Diagnóstico</span><h2>Estado do sistema</h2></div></div>
-      <div class="system-grid">
-        <article><span>Auditoria técnica</span><b id="sys-monitor">A verificar</b></article>
-        <article><span>Persistência local</span><b id="sys-storage">A verificar</b></article>
-        <article><span>Cofre cifrado</span><b id="sys-vault">A verificar</b></article>
-        <article><span>Search Console</span><b id="sys-gsc">Sem importação</b></article>
-        <article><span>OCR</span><b id="sys-ocr">A verificar</b></article>
-        <article><span>Modo instalável</span><b id="sys-pwa">A verificar</b></article>
-      </div>
-      <div class="usage-grid">
-        <article><b>1 · Sites</b><p>O monitor audita HTTP, tempo de resposta, title, description, H1, canonical, robots, sitemap e schema.</p></article>
-        <article><b>2 · Search Console</b><p>Importa o CSV de desempenho para trabalhar com cliques, impressões, CTR e posição reais.</p></article>
-        <article><b>3 · Comercial</b><p>Regista leads, actualiza o estado e mantém a próxima acção de cada projecto no CRM.</p></article>
-        <article><b>4 · Caixa</b><p>Regista entradas e saídas. O saldo é calculado apenas a partir dos movimentos gravados.</p></article>
-        <article><b>5 · Cofre</b><p>Usa uma palavra-passe mestra forte. O conteúdo fica cifrado antes de ser guardado no dispositivo.</p></article>
-        <article><b>6 · Backup</b><p>Exporta um backup antes de mudares de equipamento ou limpares os dados do navegador.</p></article>
-      </div>
-    </section>
-
-    <footer>Centro de Negócios · sem métricas simuladas</footer>
   </main>
 </div>
+
+<nav class="mobile-dock" aria-label="Navegação móvel">
+  <button class="active" data-panel-target="visao"><b>⌂</b><span>Comando</span></button>
+  <button data-panel-target="assistente"><b>AI</b><span>IA</span></button>
+  <button data-panel-target="radar"><b>◎</b><span>Radar</span></button>
+  <button data-panel-target="crm"><b>▦</b><span>CRM</span></button>
+  <button data-panel-target="sites"><b>◫</b><span>Sites</span></button>
+</nav>
+
+<button class="return-command" id="return-top" type="button" title="Voltar ao comando">⌃</button>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>
