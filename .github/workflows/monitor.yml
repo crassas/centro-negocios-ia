@@ -1,9 +1,9 @@
-name: Monitor real dos sites
+name: Auditoria dos sites
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 * * * *"
+    - cron: "*/15 * * * *"
   push:
     branches: ["main"]
     paths:
@@ -16,41 +16,45 @@ permissions:
   pages: write
   id-token: write
 
+concurrency:
+  group: "site-audit"
+  cancel-in-progress: false
+
 jobs:
-  monitor-and-deploy:
+  audit-and-deploy:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+      - name: Node
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
-
-      - name: Verificar sites reais
+      - name: Executar auditoria
         run: node scripts/monitor.mjs
-
-      - name: Guardar snapshot no repositório
+      - name: Guardar leitura
         run: |
           if git diff --quiet -- data/live.json; then
-            echo "Sem alterações no snapshot."
+            echo "Snapshot sem diferenças."
           else
-            git config user.name "centro-ia-bot"
+            git config user.name "centro-negocios-bot"
             git config user.email "actions@users.noreply.github.com"
             git add data/live.json
-            git commit -m "Atualizar monitorização real dos sites"
-            git push
+            git commit -m "Atualizar auditoria dos sites"
+            git pull --rebase origin main
+            git push origin HEAD:main
           fi
-
-      - name: Configurar GitHub Pages
+      - name: Configurar Pages
         uses: actions/configure-pages@v5
-
-      - name: Preparar site para publicação
+      - name: Preparar publicação
         uses: actions/upload-pages-artifact@v4
         with:
           path: "."
-
-      - name: Publicar snapshot actualizado
+      - name: Publicar
         id: deployment
         uses: actions/deploy-pages@v4
