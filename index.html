@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Centro de Negócios IA</title>
+  <meta name="description" content="Protótipo operacional para SEO, vigilância, leads, CRM, OCR e relatórios." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f4f1ea;--paper:#fffdf8;--ink:#171713;--muted:#6f6a60;--line:#ded8cc;
+      --accent:#0e6f60;--accent-soft:#dcece8;--warn:#b87318;--danger:#9f3c30;--shadow:0 12px 30px rgba(33,29,22,.07);
+      --radius:18px;
+    }
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--ink)}
+    button,input{font:inherit}a{color:inherit;text-decoration:none}
+    .app{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
+    .sidebar{position:sticky;top:0;height:100vh;padding:26px 18px;border-right:1px solid var(--line);background:#ebe7de}
+    .brand{font-weight:800;letter-spacing:-.04em;font-size:22px;margin:4px 10px 26px}.brand span{color:var(--accent)}
+    .nav{display:grid;gap:7px}.nav a{padding:11px 12px;border-radius:11px;color:#3d3a34;font-weight:600;font-size:14px}.nav a:hover,.nav a.active{background:var(--paper);box-shadow:0 1px 0 rgba(0,0,0,.03)}
+    .sidebar-foot{position:absolute;bottom:20px;left:18px;right:18px;padding:14px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+    main{padding:28px 30px 60px;max-width:1500px;width:100%;margin:0 auto}.topbar{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:24px}.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:700}.topbar h1{margin:5px 0 0;font-size:34px;letter-spacing:-.05em}.controls{display:flex;gap:9px}.btn{border:1px solid var(--line);background:var(--paper);padding:10px 13px;border-radius:11px;font-weight:700;cursor:pointer}.btn.primary{background:var(--ink);color:white;border-color:var(--ink)}
+    .notice{padding:12px 14px;border:1px solid #d5c7a8;background:#fff8e8;border-radius:12px;color:#705322;font-size:13px;margin-bottom:18px}
+    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}.kpi,.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}.kpi{padding:18px}.kpi .value{font-size:30px;font-weight:800;letter-spacing:-.04em}.kpi .label{font-size:12px;color:var(--muted);margin-top:5px}.delta{font-size:12px;margin-top:10px;font-weight:700}.up{color:var(--accent)}.flat{color:var(--warn)}
+    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}.card{padding:18px}.span-8{grid-column:span 8}.span-4{grid-column:span 4}.span-12{grid-column:span 12}.span-6{grid-column:span 6}.section-title{display:flex;justify-content:space-between;gap:12px;align-items:end;margin-bottom:13px}.section-title h2{font-size:18px;letter-spacing:-.025em;margin:0}.section-title p{margin:0;color:var(--muted);font-size:12px}
+    .modules{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.module{border:1px solid var(--line);border-radius:14px;padding:14px;background:#fbfaf6}.module-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.module h3{font-size:14px;margin:0}.pill{font-size:10px;font-weight:800;padding:5px 8px;border-radius:999px;background:var(--accent-soft);color:#0b6154}.module p{font-size:12px;color:var(--muted);line-height:1.5;margin:10px 0 0}.metric{font-size:24px;font-weight:800;margin-top:15px}
+    .clients{display:grid;gap:10px}.client{display:grid;grid-template-columns:1fr auto;gap:12px;padding:13px;border:1px solid var(--line);border-radius:13px;background:#fbfaf7}.client strong{font-size:13px}.client small{display:block;color:var(--muted);margin-top:4px}.score{font-weight:800;font-size:18px}.score span{display:block;font-size:9px;color:var(--muted);font-weight:600;text-align:right}
+    table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:11px 10px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:700}.tag{display:inline-block;padding:4px 7px;border-radius:8px;background:#efede7;font-weight:700;font-size:10px}.tag.good{background:var(--accent-soft);color:#0b6154}.tag.alert{background:#f9e5df;color:var(--danger)}
+    .connections{display:grid;grid-template-columns:1fr 1fr;gap:10px}.signal{padding:14px;border-radius:13px;border:1px dashed #b9b2a5;background:#faf8f2}.signal b{display:block;font-size:13px;margin-bottom:6px}.signal p{margin:0;color:var(--muted);font-size:12px;line-height:1.5}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap}.chip{border:1px solid var(--line);background:#fbfaf6;padding:7px 9px;border-radius:999px;font-size:11px;font-weight:700;cursor:pointer}.chip.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+    .ocr{display:grid;grid-template-columns:1fr 1fr;gap:12px}.drop{border:1px dashed #aaa294;border-radius:14px;padding:26px;text-align:center;background:#fbfaf6}.drop strong{display:block;font-size:13px}.drop small{display:block;color:var(--muted);margin-top:7px}.extract{padding:14px;background:#1e1f1b;color:#e7e8e1;border-radius:14px;font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap}
+    footer{margin-top:18px;color:var(--muted);font-size:11px;text-align:center}
+    @media(max-width:1050px){.kpis{grid-template-columns:repeat(2,1fr)}.span-8,.span-4,.span-6{grid-column:span 12}.modules{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:760px){.app{grid-template-columns:1fr}.sidebar{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:14px}.brand{margin:0 0 12px}.nav{display:flex;overflow:auto}.nav a{white-space:nowrap}.sidebar-foot{display:none}main{padding:20px 14px 45px}.topbar{align-items:flex-start;flex-direction:column}.topbar h1{font-size:29px}.kpis{grid-template-columns:1fr 1fr}.modules{grid-template-columns:1fr}.connections,.ocr{grid-template-columns:1fr}.controls{width:100%}.btn{flex:1}.card{padding:15px}}
+  </style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">Centro <span>IA</span></div>
+    <nav class="nav">
+      <a class="active" href="#visao">Visão Geral</a><a href="#seo">SEO</a><a href="#vigilancia">Vigilância</a><a href="#crm">Leads / CRM</a><a href="#ocr">Documentos / OCR</a><a href="#relatorios">Relatórios</a><a href="#clientes">Clientes</a><a href="#definicoes">Definições</a>
+    </nav>
+    <div class="sidebar-foot">Protótipo local · dados de demonstração</div>
+  </aside>
+  <main>
+    <section id="visao" class="topbar">
+      <div><div class="eyebrow">Painel operacional</div><h1>Centro de Negócios IA</h1></div>
+      <div class="controls"><button class="btn" onclick="simulateSync()">Sincronizar</button><button class="btn primary" onclick="newAction()">Nova acção</button></div>
+    </section>
+    <div class="notice">Todos os dados abaixo são de demonstração. A primeira versão serve para validar o fluxo e o visual antes de ligar OpenSEO, changedetection.io, Scrapling, CRM e OCR.</div>
+    <section class="kpis">
+      <div class="kpi"><div class="value">3</div><div class="label">Negócios activos</div><div class="delta up">estrutura pronta</div></div>
+      <div class="kpi"><div class="value">18</div><div class="label">Sinais observados</div><div class="delta up">+4 esta semana</div></div>
+      <div class="kpi"><div class="value">7</div><div class="label">Acções prioritárias</div><div class="delta flat">2 críticas</div></div>
+      <div class="kpi"><div class="value">6</div><div class="label">Módulos preparados</div><div class="delta up">mock funcional</div></div>
+    </section>
+
+    <div class="grid">
+      <section class="card span-8" id="seo">
+        <div class="section-title"><div><h2>Módulos operacionais</h2><p>Base para integrações reais</p></div><div class="toolbar"><button class="chip active">Hoje</button><button class="chip">7 dias</button><button class="chip">30 dias</button></div></div>
+        <div class="modules">
+          <div class="module"><div class="module-head"><h3>SEO / OpenSEO</h3><span class="pill">PREPARADO</span></div><p>Palavras-chave, posições, auditoria e concorrentes.</p><div class="metric">42 <small style="font-size:11px;color:var(--muted)">keywords mock</small></div></div>
+          <div class="module" id="vigilancia"><div class="module-head"><h3>Vigilância</h3><span class="pill">PREPARADO</span></div><p>Alterações em páginas, preços e conteúdo de concorrentes.</p><div class="metric">8 <small style="font-size:11px;color:var(--muted)">watchers</small></div></div>
+          <div class="module"><div class="module-head"><h3>Leads / Scrapling</h3><span class="pill">PREPARADO</span></div><p>Fontes públicas, recolha e validação de potenciais contactos.</p><div class="metric">23 <small style="font-size:11px;color:var(--muted)">leads demo</small></div></div>
+          <div class="module" id="crm"><div class="module-head"><h3>CRM</h3><span class="pill">PREPARADO</span></div><p>Pipeline, estado do cliente e próxima acção recomendada.</p><div class="metric">9 <small style="font-size:11px;color:var(--muted)">tarefas</small></div></div>
+          <div class="module"><div class="module-head"><h3>PaddleOCR</h3><span class="pill">PREPARADO</span></div><p>Extracção estruturada a partir de PDFs, facturas e imagens.</p><div class="metric">0 <small style="font-size:11px;color:var(--muted)">ficheiros reais</small></div></div>
+          <div class="module" id="relatorios"><div class="module-head"><h3>Relatórios</h3><span class="pill">PREPARADO</span></div><p>Resumo mensal, auditorias e apresentações para clientes.</p><div class="metric">3 <small style="font-size:11px;color:var(--muted)">modelos</small></div></div>
+        </div>
+      </section>
+
+      <section class="card span-4" id="clientes">
+        <div class="section-title"><div><h2>Clientes</h2><p>Demonstração</p></div></div>
+        <div class="clients">
+          <div class="client"><div><strong>Pentehouse</strong><small>SEO local · Marquês / Constituição</small></div><div class="score">86<span>saúde</span></div></div>
+          <div class="client"><div><strong>Best Pizza & Kebab</strong><small>Menu · Campanhã / São Roque</small></div><div class="score">79<span>saúde</span></div></div>
+          <div class="client"><div><strong>Restaurante Dois Irmãos</strong><small>SEO local · Campanhã</small></div><div class="score">82<span>saúde</span></div></div>
+        </div>
+      </section>
+
+      <section class="card span-8">
+        <div class="section-title"><div><h2>Radar SEO</h2><p>Exemplo de leitura consolidada</p></div></div>
+        <div style="overflow:auto"><table><thead><tr><th>Negócio</th><th>Consulta</th><th>Posição</th><th>Movimento</th><th>Estado</th></tr></thead><tbody>
+          <tr><td>Pentehouse</td><td>barbearia constituição</td><td>#3</td><td>↑ 2</td><td><span class="tag good">forte</span></td></tr>
+          <tr><td>Best Pizza & Kebab</td><td>kebab campanhã</td><td>#7</td><td>→</td><td><span class="tag">vigiar</span></td></tr>
+          <tr><td>Dois Irmãos</td><td>restaurante campanhã</td><td>#4</td><td>↑ 1</td><td><span class="tag good">subida</span></td></tr>
+          <tr><td>Pentehouse</td><td>barbearia marquês porto</td><td>#2</td><td>↓ 1</td><td><span class="tag alert">verificar</span></td></tr>
+        </tbody></table></div>
+      </section>
+
+      <section class="card span-4">
+        <div class="section-title"><div><h2>Alertas</h2><p>changedetection.io</p></div></div>
+        <div class="clients">
+          <div class="client"><div><strong>Concorrente alterou título</strong><small>há 18 min · página local</small></div><div class="tag alert">novo</div></div>
+          <div class="client"><div><strong>Preço actualizado</strong><small>há 2 h · menu concorrente</small></div><div class="tag">ler</div></div>
+          <div class="client"><div><strong>Nova landing detectada</strong><small>ontem · bairro vizinho</small></div><div class="tag good">oportunidade</div></div>
+        </div>
+      </section>
+
+      <section class="card span-12">
+        <div class="section-title"><div><h2>Conexões Invisíveis</h2><p>Cruzamento de sinais antes de virarem óbvios</p></div></div>
+        <div class="connections">
+          <div class="signal"><b>SEO + alteração do concorrente</b><p>Um concorrente mudou o título da página ao mesmo tempo que ganhou visibilidade numa consulta local. Acção: comparar entidades, headings e links internos.</p></div>
+          <div class="signal"><b>Lead + zona com procura</b><p>Há negócios sem site numa área onde as consultas locais cresceram. Acção: qualificar contactos em vez de recolher listas indiscriminadas.</p></div>
+          <div class="signal"><b>Cliente + queda de posição</b><p>Uma página perdeu uma posição depois de ficar vários dias sem alterações. Acção: verificar concorrência, indexação e conteúdo antes de editar.</p></div>
+          <div class="signal"><b>OCR + CRM</b><p>Documentos recebidos podem alimentar automaticamente campos do cliente e gerar tarefas, depois de validação humana.</p></div>
+        </div>
+      </section>
+
+      <section class="card span-6" id="ocr">
+        <div class="section-title"><div><h2>Documentos / OCR</h2><p>Simulação local</p></div></div>
+        <div class="ocr"><div class="drop" onclick="fakeUpload()"><strong>Carregar documento</strong><small>Clica para simular uma factura ou contrato</small></div><div class="extract" id="extract">{
+  "estado": "à espera",
+  "documento": null,
+  "campos": []
+}</div></div>
+      </section>
+
+      <section class="card span-6" id="definicoes">
+        <div class="section-title"><div><h2>Próximas integrações</h2><p>Ordem sugerida</p></div></div>
+        <div class="clients">
+          <div class="client"><div><strong>1. OpenSEO</strong><small>ranking, keywords, auditoria</small></div><div class="tag good">prioridade</div></div>
+          <div class="client"><div><strong>2. changedetection.io</strong><small>alertas e alterações</small></div><div class="tag good">prioridade</div></div>
+          <div class="client"><div><strong>3. CRM + OCR</strong><small>operações internas</small></div><div class="tag">fase 2</div></div>
+        </div>
+      </section>
+    </div>
+    <footer>Centro de Negócios IA · protótipo funcional · sem APIs pagas ligadas</footer>
+  </main>
+</div>
+<script>
+  document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{document.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));c.classList.add('active')}));
+  function simulateSync(){const b=event.currentTarget;b.textContent='Sincronizado';setTimeout(()=>b.textContent='Sincronizar',1600)}
+  function newAction(){alert('Nova acção: este botão ficará ligado ao CRM na próxima fase.');}
+  function fakeUpload(){document.getElementById('extract').textContent=JSON.stringify({estado:'simulação concluída',documento:'factura-demo.pdf',campos:[{nome:'fornecedor',valor:'Exemplo Lda.'},{nome:'total',valor:'128,40 €'},{nome:'data',valor:'01/10/2026'}]},null,2)}
+</script>
+</body>
+</html>
