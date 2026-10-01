@@ -13,25 +13,44 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
-  monitor:
+  monitor-and-deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
           node-version: "22"
+
       - name: Verificar sites reais
         run: node scripts/monitor.mjs
-      - name: Guardar snapshot
+
+      - name: Guardar snapshot no repositório
         run: |
           if git diff --quiet -- data/live.json; then
             echo "Sem alterações no snapshot."
-            exit 0
+          else
+            git config user.name "centro-ia-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add data/live.json
+            git commit -m "Atualizar monitorização real dos sites"
+            git push
           fi
-          git config user.name "centro-ia-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add data/live.json
-          git commit -m "Atualizar monitorização real dos sites"
-          git push
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Preparar site para publicação
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: "."
+
+      - name: Publicar snapshot actualizado
+        id: deployment
+        uses: actions/deploy-pages@v4
