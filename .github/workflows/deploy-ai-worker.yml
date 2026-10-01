@@ -2,6 +2,11 @@ name: Deploy Cloudflare AI Worker
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - "cloudflare-ai-worker/**"
+      - ".github/workflows/deploy-ai-worker.yml"
 
 permissions:
   contents: read
@@ -15,19 +20,33 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - name: Verificar credenciais Cloudflare
+        id: cloudflare
         shell: bash
         run: |
-          test -n "$CLOUDFLARE_API_TOKEN" || (echo "Falta CLOUDFLARE_API_TOKEN nos GitHub Actions secrets." && exit 1)
-          test -n "$CLOUDFLARE_ACCOUNT_ID" || (echo "Falta CLOUDFLARE_ACCOUNT_ID nos GitHub Actions secrets." && exit 1)
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "Credenciais Cloudflare disponíveis."
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Cloudflare ainda não está ligada a este repositório."
+          fi
 
       - name: Checkout
+        if: steps.cloudflare.outputs.ready == 'true'
         uses: actions/checkout@v6
 
       - name: Setup Node
+        if: steps.cloudflare.outputs.ready == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: "22"
 
       - name: Deploy Worker
+        if: steps.cloudflare.outputs.ready == 'true'
         working-directory: cloudflare-ai-worker
         run: npx --yes wrangler@latest deploy
+
+      - name: Ligação pendente
+        if: steps.cloudflare.outputs.ready != 'true'
+        run: |
+          echo "Para activar a IA, adicionar CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID aos Actions secrets deste repositório."
