@@ -18,7 +18,7 @@ let vaultTimer=null;
 let installPrompt=null;
 let toastTimer=null;
 
-function defaultState(){return {clients:{},leads:[],gsc:null,transactions:[],agent:{opportunities:[],decisions:[],reports:[]}};}
+function defaultState(){return {clients:{},leads:[],gsc:null,transactions:[],agent:{opportunities:[],decisions:[],reports:[],telegramOffset:0}};}
 function loadState(){
   try{
     const current=localStorage.getItem(STORE_KEY);
@@ -39,7 +39,8 @@ function normalizeState(value){
     agent:{
       opportunities:Array.isArray(value.agent?.opportunities)?value.agent.opportunities:[],
       decisions:Array.isArray(value.agent?.decisions)?value.agent.decisions:[],
-      reports:Array.isArray(value.agent?.reports)?value.agent.reports:[]
+      reports:Array.isArray(value.agent?.reports)?value.agent.reports:[],
+      telegramOffset:Number(value.agent?.telegramOffset)||0
     }
   };
 }
@@ -462,22 +463,23 @@ async function testAIEndpoint(){
 }
 function queueAgentActions(actions,sourceQuestion=''){
   const allowed=new Set(['create_lead','update_crm','create_opportunity','create_note']);
-  let added=0;
+  const created=[];
   for(const action of Array.isArray(actions)?actions:[]){
     if(!action||!allowed.has(action.type))continue;
-    state.agent.decisions.push({
+    const item={
       id:uid('decision'),type:action.type,title:String(action.title||'Acção proposta').slice(0,120),
       reason:String(action.reason||'').slice(0,500),payload:action.payload&&typeof action.payload==='object'?action.payload:{},
-      sourceQuestion:String(sourceQuestion||'').slice(0,500),status:'pending',createdAt:new Date().toISOString()
-    });
-    added++;
+      sourceQuestion:String(sourceQuestion||'').slice(0,500),status:'pending',telegramSent:false,createdAt:new Date().toISOString()
+    };
+    state.agent.decisions.push(item);created.push(item);
   }
-  if(added)localStorage.setItem(STORE_KEY,JSON.stringify(state));
+  if(created.length)localStorage.setItem(STORE_KEY,JSON.stringify(state));
   renderAgentState();
-  return added;
+  created.forEach(item=>sendDecisionTelegram(item.id,true));
+  return created.length;
 }
 function renderAgentState(){
-  if(!state.agent)state.agent={opportunities:[],decisions:[],reports:[]};
+  if(!state.agent)state.agent={opportunities:[],decisions:[],reports:[],telegramOffset:0};
   const pending=state.agent.decisions.filter(x=>x.status==='pending').slice().reverse();
   if($('decision-count'))$('decision-count').textContent=pending.length;
   if($('decision-count-secondary'))$('decision-count-secondary').textContent=pending.length;
@@ -536,12 +538,29 @@ function rejectAgentDecision(id){
   const item=state.agent.decisions.find(x=>x.id===id&&x.status==='pending');if(!item)return;
   item.status='rejected';item.resolvedAt=new Date().toISOString();saveState();toast('Proposta recusada.');
 }
-async function sendDecisionTelegram(id){
-  const item=state.agent.decisions.find(x=>x.id===id);if(!item)return;
+async function sendDecisionTelegram(id,silent=false){
+  const item=state.agent.decisions.find(x=>x.id===id);if(!item||item.status!=='pending')return;
   try{
-    await aiFetch('/api/telegram/notify',{method:'POST',body:JSON.stringify({text:'CENTRO DE NEGÓCIOS\\n\\nDECISÃO PENDENTE\\n'+item.title+'\\n\\n'+item.reason+'\\n\\nAbre o Centro para confirmar ou recusar.'})});
-    toast('Pedido enviado para o Telegram.');
-  }catch(err){toast(err.message);}
+    await aiFetch('/api/telegram/decision',{method:'POST',body:JSON.stringify({decision:{id:item.id,title:item.title,reason:item.reason}})});
+    item.telegramSent=true;item.telegramSentAt=new Date().toISOString();localStorage.setItem(STORE_KEY,JSON.stringify(state));
+    if(!silent)toast('Pedido enviado para o Telegram.');
+  }catch(err){if(!silent)toast(err.message);}
+}
+async function pollTelegramApprovals(showToast=false){
+  if(!state.agent)return;
+  const offset=Number(state.agent.telegramOffset)||0;
+  try{
+    const data=await aiFetch('/api/telegram/poll?offset='+encodeURIComponent(offset),{method:'GET',headers:{}});
+    if(Number(data.maxUpdateId)>offset){state.agent.telegramOffset=Number(data.maxUpdateId);localStorage.setItem(STORE_KEY,JSON.stringify(state));}
+    let applied=0,rejected=0;
+    for(const remote of Array.isArray(data.decisions)?data.decisions:[]){
+      const item=state.agent.decisions.find(x=>x.id===remote.decisionId&&x.status==='pending');
+      if(!item)continue;
+      if(remote.status==='approved'){applyAgentDecision(item.id);applied++;}
+      if(remote.status==='rejected'){rejectAgentDecision(item.id);rejected++;}
+    }
+    if(showToast&&(applied||rejected))toast('Telegram: '+applied+' confirmada(s), '+rejected+' recusada(s).');
+  }catch{}
 }
 async function checkTelegramStatus(showToast=true){
   if(!$('telegram-status'))return;
@@ -549,6 +568,7 @@ async function checkTelegramStatus(showToast=true){
   try{
     const data=await aiFetch('/api/telegram/status',{method:'GET',headers:{}});
     $('telegram-status').textContent=data.configured?'LIGADO':'POR LIGAR';
+    if(data.configured)pollTelegramApprovals(false);
     if(showToast)toast(data.configured?'Telegram ligado.':'Telegram ainda precisa do bot.');
   }catch{$('telegram-status').textContent='ERRO';if(showToast)toast('Não consegui verificar o Telegram.');}
 }
@@ -601,7 +621,7 @@ function setupEvents(){
   $('prospect-voice-btn').addEventListener('click',()=>startDictation('prospect-capture'));
   $('prospect-analyse').addEventListener('click',captureOpportunity);
   $('prospect-capture').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();captureOpportunity();}});
-  $('telegram-check-btn').addEventListener('click',()=>checkTelegramStatus(true));
+  $('telegram-check-btn').addEventListener('click',async()=>{await checkTelegramStatus(true);await pollTelegramApprovals(true);});
   document.querySelectorAll('[data-ai-question]').forEach(btn=>btn.addEventListener('click',()=>{
     if(btn.dataset.openAi==='1')openPanel('assistente');
     askAI(btn.dataset.aiQuestion);
@@ -618,5 +638,5 @@ document.addEventListener('DOMContentLoaded',()=>{
   seedCRMDefaults();seedLeadDefaults();setupEvents();setupPWA();
   $('finance-date').value=new Date().toISOString().slice(0,10);
   renderLeads();renderFinance();renderGsc();renderAgentState();setupVaultState();renderSystem();renderAIStatus();
-  checkTelegramStatus(false);loadLive();
+  checkTelegramStatus(false);pollTelegramApprovals(false);setInterval(()=>pollTelegramApprovals(false),30000);loadLive();
 });
