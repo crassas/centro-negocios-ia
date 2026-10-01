@@ -1,4 +1,5 @@
 {
+  // deploy-trigger: secrets configured
   "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
   "name": "centro-negocios-ai",
   "main": "src/index.js",
