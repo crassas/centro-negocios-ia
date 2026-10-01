@@ -1,15 +1,17 @@
 {
-  "generatedAt": "2026-10-01T14:26:54.293Z",
+  "generatedAt": "2026-10-01T15:11:45.578Z",
   "source": "github-actions",
+  "intervalMinutes": 15,
   "sites": [
     {
       "id": "pentehouse",
       "name": "Pentehouse",
       "url": "https://pentehouse.pt/",
-      "checkedAt": "2026-10-01T14:26:54.293Z",
+      "area": "Marquês / Constituição",
+      "checkedAt": "2026-10-01T15:11:45.578Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 673,
+      "responseTimeMs": 446,
       "finalUrl": "https://pentehouse.pt/",
       "title": "Pentehouse | Barbearia no Marquês, Porto",
       "description": "Pentehouse é uma barbearia no Marquês, Porto, na Rua da Constituição 656, Loja 20. Cortes, barba, preços, barbeiros e marcações online.",
@@ -39,12 +41,13 @@
       "id": "best-pizza",
       "name": "Best Pizza & Kebab",
       "url": "https://bestpizzaandkebab.pt/",
-      "checkedAt": "2026-10-01T14:26:54.293Z",
+      "area": "Campanhã / São Roque",
+      "checkedAt": "2026-10-01T15:11:45.578Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 287,
+      "responseTimeMs": 249,
       "finalUrl": "https://bestpizzaandkebab.pt/",
-      "title": "Kebab no Porto | São Roque da Lameira, Campanhã | Best Pizza &amp; Kebab",
+      "title": "Kebab no Porto | São Roque da Lameira, Campanhã | Best Pizza & Kebab",
       "description": "Kebab no Porto em São Roque da Lameira, Campanhã. Doner, durum, falafel, pizza, takeaway e entrega. Rua de São Roque da Lameira 2346.",
       "h1Count": 0,
       "firstH1": "",
@@ -64,7 +67,7 @@
       "issues": [
         {
           "level": "warn",
-          "message": "Nenhum H1 detectado na homepage."
+          "message": "Nenhum H1 detectado após duas leituras."
         }
       ],
       "contentHash": "d729eea975ee8bb841a10600f24b67f463137ab4cfa486d17d33989579753668",
@@ -77,10 +80,11 @@
       "id": "dois-irmaos",
       "name": "Restaurante 2 Irmãos",
       "url": "https://restaurantedoisirmaos.pt/",
-      "checkedAt": "2026-10-01T14:26:54.293Z",
+      "area": "Campanhã / São Roque",
+      "checkedAt": "2026-10-01T15:11:45.578Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 174,
+      "responseTimeMs": 313,
       "finalUrl": "https://restaurantedoisirmaos.pt/",
       "title": "Restaurante 2 Irmãos | Comida Caseira em São Roque, Porto",
       "description": "Comida caseira portuguesa na Rua de São Roque da Lameira, Porto. Restaurante 2 Irmãos — “Os Miúdos do Aleixo” — com pratos de tacho, francesinha, tripas e bacalhau.",
@@ -102,7 +106,7 @@
       "issues": [
         {
           "level": "warn",
-          "message": "Nenhum H1 detectado na homepage."
+          "message": "Nenhum H1 detectado após duas leituras."
         }
       ],
       "contentHash": "13809a5dcb050b9148660c6842f6cb355223e70fde2c725b5966f213a95118e2",
