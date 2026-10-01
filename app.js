@@ -188,20 +188,17 @@ function renderLeads(){
   renderLocalSummary();
 }
 
-function normalizeHeader(v){return String(v||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ');}
+function normalizeHeader(v){return String(v||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ');}
 function parseLocaleNumber(v){
-  let s=String(v==null?'':v).trim().replace(/s/g,'');if(!s)return NaN;
-  if(s.includes(',')&&s.includes('.')){if(s.lastIndexOf(',')>s.lastIndexOf('.'))s=s.replace(/./g,'').replace(',','.');else s=s.replace(/,/g,'');}
+  let s=String(v==null?'':v).trim().replace(/\s/g,'');if(!s)return NaN;
+  if(s.includes(',')&&s.includes('.')){if(s.lastIndexOf(',')>s.lastIndexOf('.'))s=s.replace(/\./g,'').replace(',','.');else s=s.replace(/,/g,'');}
   else if(s.includes(','))s=s.replace(',','.');return Number(s.replace('%',''));
 }
 function parsePercent(v){const n=parseLocaleNumber(v);if(!Number.isFinite(n))return null;return String(v).includes('%')?n/100:n;}
 function parseCSV(text){
-  text=text.replace(/^﻿/,'');const first=text.split(/?
-/)[0]||'';const delim=(first.match(/;/g)||[]).length>(first.match(/,/g)||[]).length?';':',';
+  text=text.replace(/^\uFEFF/,'');const first=text.split(/\r?\n/)[0]||'';const delim=(first.match(/;/g)||[]).length>(first.match(/,/g)||[]).length?';':',';
   const rows=[];let row=[],cell='',quote=false;
-  for(let i=0;i<text.length;i++){const ch=text[i];if(ch==='"'){if(quote&&text[i+1]==='"'){cell+='"';i++;}else quote=!quote;}else if(ch===delim&&!quote){row.push(cell);cell='';}else if((ch==='
-'||ch==='')&&!quote){if(ch===''&&text[i+1]==='
-')i++;row.push(cell);cell='';if(row.some(x=>x.trim()!==''))rows.push(row);row=[];}else cell+=ch;}
+  for(let i=0;i<text.length;i++){const ch=text[i];if(ch==='"'){if(quote&&text[i+1]==='"'){cell+='"';i++;}else quote=!quote;}else if(ch===delim&&!quote){row.push(cell);cell='';}else if((ch==='\n'||ch==='\r')&&!quote){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(cell);cell='';if(row.some(x=>x.trim()!==''))rows.push(row);row=[];}else cell+=ch;}
   row.push(cell);if(row.some(x=>x.trim()!==''))rows.push(row);if(rows.length<2)return [];
   const headers=rows[0].map(normalizeHeader);const find=names=>headers.findIndex(h=>names.some(n=>h===n||h.includes(n)));
   const qi=find(['query','consulta','termo']),ci=find(['clicks','cliques']),ii=find(['impressions','impressoes']),ti=find(['ctr']),pi=find(['position','posicao']);
@@ -244,8 +241,7 @@ function reportObject(){return {exportedAt:new Date().toISOString(),monitor:live
 function sitesCsv(){
   const rows=[['site','url','online','http','response_ms','changed','title','h1_count','sitemap_urls','issues']];
   sites.forEach(s=>{const r=siteResult(s.id)||{};rows.push([s.name,s.url,r.online,r.status,r.responseTimeMs,r.changed,r.title,r.h1Count,r.sitemapUrls,(r.issues||[]).map(x=>x.message).join(' | ')]);});
-  return rows.map(row=>row.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(',')).join('
-');
+  return rows.map(row=>row.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(',')).join('\n');
 }
 function exportBackup(){
   const vaultRaw=localStorage.getItem(VAULT_KEY);const payload={kind:'centro-negocios-backup',version:APP_VERSION,exportedAt:new Date().toISOString(),state,vault:vaultRaw?JSON.parse(vaultRaw):null};
