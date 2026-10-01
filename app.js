@@ -1,6 +1,7 @@
 const STORE_KEY='centro_negocios_v3';
 const LEGACY_KEY='centro_ia_real_v2';
 const VAULT_KEY='centro_negocios_vault_v1';
+const AI_ENDPOINT_KEY='centro_negocios_ai_endpoint_v1';
 const APP_VERSION=3;
 const VAULT_LOCK_MS=5*60*1000;
 const EXTRA_PROJECTS=[
@@ -138,7 +139,7 @@ async function loadLive(){
 
 function renderAll(){
   fillProjectSelects();
-  renderMonitorStatus();renderKpis();renderSites();renderAlerts();renderConnections();renderCRM();renderLeads();renderGsc();renderFinance();renderSystem();setupVaultState();
+  renderMonitorStatus();renderKpis();renderSites();renderAlerts();renderConnections();renderCRM();renderLeads();renderGsc();renderFinance();renderSystem();renderAIStatus();setupVaultState();
 }
 function renderMonitorStatus(){
   const pill=$('monitor-pill'),label=$('monitor-label'),meta=$('audit-meta');
@@ -348,6 +349,106 @@ function renderVault(){
   box.querySelectorAll('[data-vault-delete]').forEach(btn=>btn.addEventListener('click',async()=>{if(!confirm('Eliminar esta credencial?'))return;vaultSession=vaultSession.filter(x=>x.id!==btn.dataset.vaultDelete);await persistVault();renderVault();toast('Credencial eliminada.');}));
 }
 
+
+function normalizeAIEndpoint(value){
+  const raw=String(value||'').trim().replace(/\/+$/,'');
+  if(!raw)return '';
+  try{
+    const url=new URL(raw);
+    if(url.protocol!=='https:'&&url.hostname!=='localhost'&&url.hostname!=='127.0.0.1')return '';
+    return url.href.replace(/\/+$/,'');
+  }catch{return '';}
+}
+function getAIEndpoint(){return normalizeAIEndpoint(localStorage.getItem(AI_ENDPOINT_KEY)||'');}
+function renderAIStatus(){
+  if(!$('ai-status'))return;
+  const endpoint=getAIEndpoint();
+  $('ai-status').textContent=endpoint?'configurado':'por ligar';
+  if(endpoint&&!$('ai-endpoint').value)$('ai-endpoint').value=endpoint;
+}
+function aiContext(){
+  const projects=allProjects().map(project=>{
+    const technical=siteResult(project.id);
+    return {
+      id:project.id,
+      name:project.name,
+      area:project.area||'',
+      crm:state.clients[project.id]||null,
+      technical:technical?{
+        online:technical.online,
+        status:technical.status,
+        responseTimeMs:technical.responseTimeMs,
+        title:technical.title,
+        description:technical.description,
+        h1Count:technical.h1Count,
+        firstH1:technical.firstH1,
+        canonical:technical.canonical,
+        sitemapUrls:technical.sitemapUrls,
+        issues:technical.issues||[]
+      }:null
+    };
+  });
+  const g=gscSummary();
+  return {
+    generatedAt:new Date().toISOString(),
+    auditGeneratedAt:live.generatedAt||null,
+    projects,
+    leads:state.leads.slice(-50).map(lead=>({
+      name:lead.name,status:lead.status,contact:lead.contact||'',createdAt:lead.createdAt||null
+    })),
+    finance:{...financeTotals(),movements:state.transactions.length},
+    searchConsole:g?{
+      summary:g,
+      topQueries:(state.gsc.rows||[]).slice().sort((a,b)=>b.clicks-a.clicks||b.impressions-a.impressions).slice(0,20)
+    }:null
+  };
+}
+async function aiFetch(path,options={}){
+  const endpoint=getAIEndpoint();
+  if(!endpoint)throw new Error('Primeiro liga o Worker da Cloudflare.');
+  const response=await fetch(endpoint+path,{...options,headers:{'content-type':'application/json',...(options.headers||{})}});
+  let data=null;
+  try{data=await response.json();}catch{}
+  if(!response.ok)throw new Error((data&&data.error)||('Erro HTTP '+response.status));
+  return data||{};
+}
+async function testAIEndpoint(){
+  const candidate=normalizeAIEndpoint($('ai-endpoint').value);
+  if(!candidate){toast('URL do Worker inválido.');return;}
+  localStorage.setItem(AI_ENDPOINT_KEY,candidate);
+  $('ai-status').textContent='a testar';
+  try{
+    const data=await aiFetch('/health',{method:'GET',headers:{}});
+    $('ai-status').textContent=data.ok?'ligado':'erro';
+    toast(data.ok?'Cloudflare IA ligada.':'O Worker respondeu sem confirmação.');
+  }catch(err){
+    $('ai-status').textContent='erro';
+    toast('Falha na IA: '+err.message);
+  }
+}
+async function askAI(questionOverride){
+  const question=String(questionOverride||$('ai-question').value||'').trim();
+  if(!question){toast('Escreve uma pergunta para a IA.');return;}
+  if(!getAIEndpoint()){toast('Liga primeiro o Worker da Cloudflare.');$('ai-endpoint').focus();return;}
+  $('ai-question').value=question;
+  const btn=$('ai-ask-btn'),answer=$('ai-answer');
+  btn.disabled=true;btn.textContent='A analisar';
+  answer.classList.add('loading');answer.textContent='A analisar os dados do Centro de Negócios...';
+  try{
+    const data=await aiFetch('/api/assist',{
+      method:'POST',
+      body:JSON.stringify({question,context:aiContext()})
+    });
+    answer.textContent=data.answer||'A IA não devolveu resposta.';
+    $('ai-status').textContent='ligado';
+  }catch(err){
+    answer.textContent='Não foi possível obter a análise: '+err.message;
+    $('ai-status').textContent='erro';
+  }finally{
+    answer.classList.remove('loading');btn.disabled=false;btn.textContent='Analisar com IA';
+  }
+}
+
 function renderSystem(){
   const age=ageMinutes(live.generatedAt);$('sys-monitor').textContent=live.generatedAt?(age!=null&&age>40?'Leitura atrasada':'Activo · '+ageLabel(live.generatedAt)):'Sem leitura';
   try{const t='__centro_test';localStorage.setItem(t,'1');localStorage.removeItem(t);$('sys-storage').textContent='Disponível';}catch{$('sys-storage').textContent='Bloqueado';}
@@ -355,7 +456,18 @@ function renderSystem(){
 }
 
 function setupEvents(){
-  $('refresh-btn').addEventListener('click',loadLive);$('backup-top-btn').addEventListener('click',exportBackup);$('export-backup').addEventListener('click',exportBackup);
+  $('refresh-btn').addEventListener('click',loadLive);
+  $('ai-save-endpoint').addEventListener('click',()=>{
+    const endpoint=normalizeAIEndpoint($('ai-endpoint').value);
+    if(!endpoint){toast('URL do Worker inválido.');return;}
+    localStorage.setItem(AI_ENDPOINT_KEY,endpoint);renderAIStatus();toast('Ligação IA guardada neste dispositivo.');
+  });
+  $('ai-test-endpoint').addEventListener('click',testAIEndpoint);
+  $('ai-ask-btn').addEventListener('click',()=>askAI());
+  $('ai-clear-btn').addEventListener('click',()=>{$('ai-question').value='';$('ai-answer').innerHTML='<div class="empty">Escreve uma pergunta ou usa uma das sugestões rápidas.</div>';});
+  $('ai-question').addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter')askAI();});
+  document.querySelectorAll('[data-ai-question]').forEach(btn=>btn.addEventListener('click',()=>askAI(btn.dataset.aiQuestion)));
+  $('backup-top-btn').addEventListener('click',exportBackup);$('export-backup').addEventListener('click',exportBackup);$('backup-top-btn').addEventListener('click',exportBackup);$('export-backup').addEventListener('click',exportBackup);
   $('download-json').addEventListener('click',()=>download('centro-negocios-relatorio.json',JSON.stringify(reportObject(),null,2),'application/json'));
   $('download-csv').addEventListener('click',()=>download('centro-negocios-sites.csv',sitesCsv(),'text/csv;charset=utf-8'));$('print-report').addEventListener('click',()=>window.print());
   $('lead-form').addEventListener('submit',e=>{e.preventDefault();const name=$('lead-name').value.trim();if(!name)return;state.leads.push({id:uid('lead'),name,url:$('lead-url').value.trim(),contact:$('lead-contact').value.trim(),status:$('lead-status').value,createdAt:new Date().toISOString()});saveState();e.target.reset();renderLeads();toast('Lead adicionado.');});
