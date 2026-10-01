@@ -101,6 +101,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .value{font:850 27px var(--mono);letter-spacing:-.05em;margin-top:13px}.value.money{font-size:21px}
 .label{margin-top:5px;font-size:10px}.delta{margin-top:7px;font:8px var(--mono);color:var(--muted)}
 
+.module-launcher{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin:8px 0}.module-launcher button{min-height:48px;border:1px solid var(--line);background:var(--panel-3);cursor:pointer;text-align:left;padding:8px}.module-launcher button:hover{border-color:var(--signal)}.module-launcher span{display:block;font:7px var(--mono);color:var(--signal)}.module-launcher b{display:block;margin-top:6px;font:800 8px var(--mono)}
 .overview-grid,.radar-grid,.ai-layout,.tools-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 .tools-grid{grid-template-columns:1fr}.module{background:var(--panel);border:1px solid var(--line);padding:15px;min-width:0}
 .module-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px}
@@ -176,7 +177,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   .command-hero{min-height:160px;padding:16px;align-items:flex-start}.core-status{display:none}
   .command-actions{grid-template-columns:1fr 1fr;gap:6px}.command-actions button{min-height:74px;padding:10px}
   .kpis{grid-template-columns:1fr 1fr;gap:6px}.kpi{min-height:100px;padding:12px}.value{font-size:23px}.value.money{font-size:17px}
-  .overview-grid,.radar-grid,.ai-layout,.tools-grid,.site-grid,.crm-grid,.upload-row,.ocr-grid{grid-template-columns:1fr}
+  .module-launcher{grid-template-columns:repeat(4,1fr)}.overview-grid,.radar-grid,.ai-layout,.tools-grid,.site-grid,.crm-grid,.upload-row,.ocr-grid{grid-template-columns:1fr}
   .status-strip{grid-template-columns:1fr 1fr}.status-strip div:nth-child(2n){border-right:0}.status-strip div:nth-child(-n+2){border-bottom:1px solid var(--line)}
   .ai-input-row,.capture-console{grid-template-columns:40px minmax(0,1fr)}.ai-input-row .execute-key,.capture-console .execute-key{grid-column:1/-1;min-height:40px}
   .ai-question,.capture-console input,.lead-form input,.lead-form select,.finance-form input,.finance-form select,.vault-form input,.vault-form select,.vault-unlock-form input,.field input,.field select,.field textarea,.ai-config input{font-size:16px}
