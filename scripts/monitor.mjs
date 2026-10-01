@@ -41,7 +41,7 @@ function extract(html){
 async function fetchTimed(url,extraHeaders={}){
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),20000);const start=Date.now();
   try{
-    const res=await fetch(url,{redirect:'follow',signal:controller.signal,cache:'no-store',headers:{'user-agent':'Mozilla/5.0 (compatible; CentroNegocios-Monitor/2.0; +https://github.com/crassas/centro-negocios-ia)','accept':'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8','cache-control':'no-cache','pragma':'no-cache',...extraHeaders}});
+    const res=await fetch(url,{redirect:'follow',signal:controller.signal,cache:'no-store',headers:{'user-agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36','accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8','accept-language':'pt-PT,pt;q=0.9,en;q=0.7','cache-control':'no-cache','pragma':'no-cache',...extraHeaders}});
     return {res,ms:Date.now()-start};
   }finally{clearTimeout(timer);}
 }
