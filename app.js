@@ -134,7 +134,10 @@ function openPanel(id,options={}){
   document.querySelectorAll('.panel-view').forEach(panel=>panel.classList.toggle('is-active',panel.dataset.panel===id));
   document.querySelectorAll('[data-panel-target]').forEach(control=>control.classList.toggle('active',control.dataset.panelTarget===id));
   if($('active-panel-name'))$('active-panel-name').textContent=PANEL_NAMES[id]||String(id).toUpperCase();
-  if(location.hash!=='#'+id)history.replaceState(null,'','#'+id);
+  if(location.hash!=='#'+id){
+    if(options.history===false||options.instant)history.replaceState({panel:id},'','#'+id);
+    else history.pushState({panel:id},'','#'+id);
+  }
   window.scrollTo({top:0,behavior:options.instant?'auto':'smooth'});
   if(options.focusDecisions&&id==='assistente')setTimeout(()=>document.querySelector('#decisions')?.scrollIntoView({behavior:'smooth',block:'start'}),120);
 }
@@ -145,8 +148,12 @@ function setupPanelNavigation(){
   }));
   $('nav-home')?.addEventListener('click',()=>openPanel('visao'));
   $('return-top')?.addEventListener('click',()=>openPanel('visao'));
+  window.addEventListener('popstate',()=>{
+    const id=location.hash.replace('#','');
+    openPanel(PANEL_NAMES[id]?id:'visao',{instant:true,history:false});
+  });
   const initial=location.hash.replace('#','');
-  openPanel(PANEL_NAMES[initial]?initial:'visao',{instant:true});
+  openPanel(PANEL_NAMES[initial]?initial:'visao',{instant:true,history:false});
 }
 function startDictation(targetId){
   const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
