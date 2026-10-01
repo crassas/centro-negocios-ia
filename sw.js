@@ -1,4 +1,4 @@
-const CACHE='centro-negocios-v2';
+const CACHE='centro-negocios-v3-mobile';
 const SHELL=['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./icon.svg','./data/sites.json'];
 
 self.addEventListener('install',event=>{
