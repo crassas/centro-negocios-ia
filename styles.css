@@ -3,7 +3,7 @@
   --accent:#0a6858;--accent-soft:#dbe9e4;--warn:#a46716;--warn-soft:#f8ecd5;--danger:#963c31;--danger-soft:#f5dfda;
   --good:#0f6a55;--shadow:0 12px 30px rgba(37,31,24,.055);--radius:17px
 }
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth;max-width:100%;overflow-x:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}body{margin:0;max-width:100%;overflow-x:hidden;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.app-shell,main,.section,.two-col,.site-grid,.crm-grid,.upload-row,.ocr-grid,.table-wrap{min-width:0;max-width:100%}
 button,input,select,textarea{font:inherit}button{color:inherit}a{color:inherit;text-decoration:none}.app-shell{display:grid;grid-template-columns:244px minmax(0,1fr);min-height:100vh}
 .sidebar{position:sticky;top:0;height:100vh;padding:22px 17px;border-right:1px solid var(--line);background:#e3ded4}.brand{display:flex;align-items:center;gap:10px;margin:2px 8px 14px}.brand-mark{width:34px;height:34px;border-radius:10px;background:var(--ink);color:#fff;display:grid;place-items:center;font-weight:900}.brand div{display:grid}.brand strong{font-size:16px;line-height:1}.brand small{font-size:10px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.08em}
 .monitor-pill{margin:0 8px 20px;display:flex;align-items:center;gap:8px;font-size:10px;color:var(--muted)}.monitor-pill i{width:8px;height:8px;border-radius:50%;background:#a99f90}.monitor-pill.ok i{background:var(--good);box-shadow:0 0 0 4px rgba(15,106,85,.1)}.monitor-pill.bad i{background:var(--danger)}
@@ -29,7 +29,65 @@ h1{margin:5px 0 0;font-size:36px;line-height:1;letter-spacing:-.055em}h2{margin:
 .system-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.system-grid article{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--paper2)}.system-grid span{display:block;font-size:8px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}.system-grid b{display:block;font-size:11px;margin-top:4px}.usage-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.usage-grid article{padding:12px;border-top:1px solid var(--line)}.usage-grid b{font-size:10px}.usage-grid p{font-size:9px;color:var(--muted);line-height:1.5;margin:5px 0 0}
 .toast{position:fixed;right:18px;bottom:18px;max-width:320px;background:var(--ink);color:#fff;padding:10px 12px;border-radius:9px;font-size:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);opacity:0;transform:translateY(8px);pointer-events:none;transition:.18s}.toast.show{opacity:1;transform:none}
 footer{text-align:center;color:var(--muted);font-size:9px;margin-top:17px}
-@media(max-width:1120px){.kpis{grid-template-columns:repeat(2,1fr)}.site-grid,.crm-grid{grid-template-columns:1fr}.lead-form{grid-template-columns:1fr 1fr}.lead-form .btn{grid-column:span 2}.finance-form{grid-template-columns:repeat(3,1fr)}.finance-form .btn{grid-column:span 3}.vault-form{grid-template-columns:repeat(2,1fr)}.vault-form .btn{grid-column:span 2}.report-actions,.system-grid,.usage-grid{grid-template-columns:1fr 1fr}}
-@media(max-width:780px){.app-shell{grid-template-columns:1fr}.sidebar{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:13px}.brand{margin:0 0 8px}.monitor-pill{margin:0 0 9px}.nav{display:flex;overflow:auto;padding-bottom:2px}.nav a{white-space:nowrap}.sidebar-bottom{display:none}main{padding:17px 12px 42px}.topbar{display:block}h1{font-size:30px}.controls{margin-top:13px;width:100%;display:grid;grid-template-columns:1fr 1fr}.controls .primary{grid-column:span 2}.status-strip{grid-template-columns:1fr 1fr}.status-strip div:nth-child(2){border-right:0}.status-strip div:nth-child(-n+2){border-bottom:1px solid var(--line)}.two-col,.upload-row,.ocr-grid{grid-template-columns:1fr}.mini-kpis{grid-template-columns:1fr 1fr}.mini-kpis div:nth-child(2){border-right:0}.mini-kpis div:nth-child(-n+2){border-bottom:1px solid var(--line)}.lead-form,.finance-form,.vault-form{grid-template-columns:1fr}.lead-form .btn,.finance-form .btn,.vault-form .btn{grid-column:auto}.finance-summary{grid-template-columns:1fr}.finance-summary div{border-right:0;border-bottom:1px solid var(--line)}.finance-summary div:last-child{border-bottom:0}.vault-locked{grid-template-columns:1fr}.vault-unlock-form{grid-template-columns:1fr}.vault-item{grid-template-columns:1fr 1fr}.report-actions,.system-grid,.usage-grid{grid-template-columns:1fr}.section{padding:14px}.section-head{align-items:flex-start}.site-grid{grid-template-columns:1fr}}
-@media(max-width:460px){.kpis{grid-template-columns:1fr 1fr}.kpi{padding:13px}.value{font-size:25px}.value.money{font-size:18px}.status-strip{grid-template-columns:1fr}.status-strip div{border-right:0;border-bottom:1px solid var(--line)}.status-strip div:last-child{border-bottom:0}.controls{grid-template-columns:1fr}.controls .primary{grid-column:auto}.vault-item{grid-template-columns:1fr}}
+
+/* Mobile app layout */
+@media(max-width:1024px){
+  .app-shell{display:block;width:100%;min-height:100dvh}
+  .sidebar{
+    position:sticky;top:0;z-index:50;width:100%;height:auto;padding:10px 10px 8px;
+    border-right:0;border-bottom:1px solid var(--line);
+    background:rgba(227,222,212,.96);backdrop-filter:blur(14px)
+  }
+  .brand{margin:0 4px 7px;gap:8px}.brand-mark{width:30px;height:30px;border-radius:9px}.brand strong{font-size:14px}.brand small{font-size:8px}
+  .monitor-pill{position:absolute;right:11px;top:16px;margin:0;font-size:9px}
+  .nav{display:flex;gap:5px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;padding:0 1px 2px}
+  .nav::-webkit-scrollbar{display:none}.nav a{flex:0 0 auto;white-space:nowrap;padding:8px 11px;font-size:11px;border:1px solid transparent}
+  .nav a.active{border-color:var(--line)}.sidebar-bottom{display:none}
+  main{width:100%;max-width:none;margin:0;padding:16px 12px calc(40px + env(safe-area-inset-bottom))}
+  .topbar{display:block}.controls{display:grid;grid-template-columns:1fr 1fr;margin-top:12px;width:100%}.controls .btn{min-height:44px}.controls .primary{grid-column:1/-1}
+  h1{font-size:31px}.sub{font-size:12px;line-height:1.45}
+  .status-strip{grid-template-columns:1fr 1fr}.status-strip div:nth-child(2n){border-right:0}.status-strip div:nth-child(-n+2){border-bottom:1px solid var(--line)}
+  .kpis{grid-template-columns:1fr 1fr;gap:8px}.kpi{padding:13px}.value{font-size:26px}.value.money{font-size:20px}
+  .site-grid,.crm-grid,.two-col,.upload-row,.ocr-grid{grid-template-columns:1fr}
+  .site-card,.crm-card{width:100%}.fact b{white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word}
+  .lead-form,.finance-form,.vault-form{grid-template-columns:1fr 1fr}
+  .lead-form .btn,.finance-form .btn,.vault-form .btn{grid-column:1/-1}
+  .finance-summary{grid-template-columns:repeat(3,1fr)}
+  .vault-locked{grid-template-columns:1fr}.vault-form{grid-template-columns:1fr 1fr}.vault-item{grid-template-columns:1fr 1fr}
+  .report-actions,.system-grid,.usage-grid{grid-template-columns:1fr 1fr}
+  .table-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;border-radius:10px}
+  table{min-width:620px}
+  .section{scroll-margin-top:96px}
+}
+@media(max-width:640px){
+  main{padding:12px 9px calc(30px + env(safe-area-inset-bottom))}
+  .sidebar{padding:8px 8px 7px}.brand{margin-bottom:6px}.monitor-pill{top:14px;right:9px}
+  .nav a{padding:8px 10px;font-size:10px}
+  .eyebrow{font-size:8px}h1{font-size:28px}h2{font-size:20px}
+  .section{padding:12px;border-radius:14px;margin-top:10px;scroll-margin-top:88px}.section-head{align-items:flex-start;gap:8px;flex-wrap:wrap}
+  .status-strip{grid-template-columns:1fr 1fr;margin-top:12px}.status-strip div{padding:9px}.status-strip b{font-size:9px}
+  .kpis{grid-template-columns:1fr 1fr;margin:10px 0 14px}.kpi{padding:12px}.value{font-size:24px}.value.money{font-size:17px}.label{font-size:9px}.delta{font-size:8px}
+  .site-top{align-items:flex-start}.status{font-size:8px}.fact-grid{grid-template-columns:1fr 1fr}.technical{gap:4px}
+  .mini-kpis{grid-template-columns:1fr 1fr}.mini-kpis div:nth-child(2){border-right:0}.mini-kpis div:nth-child(-n+2){border-bottom:1px solid var(--line)}
+  .lead-form,.finance-form,.vault-form{grid-template-columns:1fr}
+  .lead-form .btn,.finance-form .btn,.vault-form .btn{grid-column:auto}
+  .lead-form input,.lead-form select,.finance-form input,.finance-form select,.vault-form input,.vault-form select,.vault-unlock-form input,.field select,.field textarea,.field input,.inline-status{
+    width:100%;min-height:44px;font-size:16px
+  }
+  .btn{min-height:42px;font-size:13px}.drop{padding:18px}.drop strong{font-size:13px}.drop span{font-size:11px}
+  .finance-summary{grid-template-columns:1fr}.finance-summary div{border-right:0;border-bottom:1px solid var(--line);padding:11px}.finance-summary div:last-child{border-bottom:0}.finance-summary b{font-size:18px}
+  .vault-unlock-form{grid-template-columns:1fr}.vault-unlock-form #vault-confirm{grid-column:auto}.vault-item{grid-template-columns:1fr}.vault-toolbar{align-items:flex-start;gap:8px}
+  .report-actions,.system-grid,.usage-grid{grid-template-columns:1fr}
+  .action-card{min-height:72px}.ocr-panel textarea{font-size:14px;height:180px}
+  .table-wrap{margin-left:-2px;margin-right:-2px;width:calc(100% + 4px)}
+  table{min-width:560px;font-size:11px}th{font-size:9px}th,td{padding:10px 8px}
+  .toast{left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));max-width:none;font-size:12px}
+}
+@media(max-width:390px){
+  .monitor-pill{max-width:145px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .status-strip{grid-template-columns:1fr}.status-strip div{border-right:0;border-bottom:1px solid var(--line)}.status-strip div:last-child{border-bottom:0}
+  .kpis{grid-template-columns:1fr 1fr}.controls{grid-template-columns:1fr}.controls .primary{grid-column:auto}
+  .fact-grid{grid-template-columns:1fr}.mini-kpis{grid-template-columns:1fr 1fr}
+}
+
 @media print{.sidebar,.controls,.status-strip,.btn,.lead-form,.finance-form,.vault-form,.vault-locked,.drop,.local-tag,.action-card,.danger-btn,.toast{display:none!important}.app-shell{display:block}main{padding:0}.section,.kpi{box-shadow:none;break-inside:avoid}.kpis{grid-template-columns:repeat(4,1fr)}body{background:#fff}}
