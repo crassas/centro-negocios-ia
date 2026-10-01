@@ -46,6 +46,21 @@ jobs:
         working-directory: cloudflare-ai-worker
         run: npx --yes wrangler@latest deploy
 
+      - name: Testar Worker e Workers AI
+        if: steps.cloudflare.outputs.ready == 'true'
+        shell: bash
+        run: |
+          sleep 2
+          curl --fail --silent --show-error "https://centro-negocios-ai.travisthejarvis.workers.dev/health"
+          echo
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "content-type: application/json" \
+            --data '{"question":"Responde apenas em português de Portugal: IA operacional.","context":{"projects":[],"leads":[],"finance":{"income":0,"expense":0,"balance":0,"movements":0},"searchConsole":null}}' \
+            "https://centro-negocios-ai.travisthejarvis.workers.dev/api/assist" \
+            -o /tmp/ai-smoke.json
+          node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/ai-smoke.json','utf8'));if(!x.ok||!x.answer)process.exit(1);console.log('Workers AI respondeu:',x.answer.slice(0,200));"
+
       - name: Ligação pendente
         if: steps.cloudflare.outputs.ready != 'true'
         run: |
