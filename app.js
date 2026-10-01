@@ -18,7 +18,7 @@ let vaultTimer=null;
 let installPrompt=null;
 let toastTimer=null;
 
-function defaultState(){return {clients:{},leads:[],gsc:null,transactions:[]};}
+function defaultState(){return {clients:{},leads:[],gsc:null,transactions:[],agent:{opportunities:[],decisions:[],reports:[]}};}
 function loadState(){
   try{
     const current=localStorage.getItem(STORE_KEY);
@@ -35,10 +35,15 @@ function normalizeState(value){
     clients:value.clients&&typeof value.clients==='object'?value.clients:{},
     leads:Array.isArray(value.leads)?value.leads:[],
     gsc:value.gsc&&typeof value.gsc==='object'?value.gsc:null,
-    transactions:Array.isArray(value.transactions)?value.transactions:[]
+    transactions:Array.isArray(value.transactions)?value.transactions:[],
+    agent:{
+      opportunities:Array.isArray(value.agent?.opportunities)?value.agent.opportunities:[],
+      decisions:Array.isArray(value.agent?.decisions)?value.agent.decisions:[],
+      reports:Array.isArray(value.agent?.reports)?value.agent.reports:[]
+    }
   };
 }
-function saveState(){localStorage.setItem(STORE_KEY,JSON.stringify(state));renderLocalSummary();}
+function saveState(){localStorage.setItem(STORE_KEY,JSON.stringify(state));renderLocalSummary();if($('decision-list'))renderAgentState();}
 function seedCRMDefaults(){
   const defaults={
     pentehouse:{stage:'Activo',note:'Acompanhar ranking Marquês / Constituição e rever posições locais.'},
@@ -117,9 +122,50 @@ function ageLabel(value){
   const h=Math.floor(m/60);return 'há '+h+' h'+(h===1?'':'');
 }
 
+
+const PANEL_NAMES={
+  visao:'COMANDO',assistente:'INTELIGÊNCIA IA',radar:'RADAR',sites:'SITES',crm:'CRM',
+  leads:'LEADS',caixa:'CAIXA',seo:'SEARCH',cofre:'COFRE',ferramentas:'SISTEMA'
+};
+function openPanel(id,options={}){
+  const target=document.querySelector('[data-panel="'+id+'"]');
+  if(!target)id='visao';
+  document.querySelectorAll('.panel-view').forEach(panel=>panel.classList.toggle('is-active',panel.dataset.panel===id));
+  document.querySelectorAll('[data-panel-target]').forEach(control=>control.classList.toggle('active',control.dataset.panelTarget===id));
+  if($('active-panel-name'))$('active-panel-name').textContent=PANEL_NAMES[id]||String(id).toUpperCase();
+  if(location.hash!=='#'+id)history.replaceState(null,'','#'+id);
+  window.scrollTo({top:0,behavior:options.instant?'auto':'smooth'});
+  if(options.focusDecisions&&id==='assistente')setTimeout(()=>document.querySelector('#decisions')?.scrollIntoView({behavior:'smooth',block:'start'}),120);
+}
+function setupPanelNavigation(){
+  document.querySelectorAll('[data-panel-target]').forEach(control=>control.addEventListener('click',event=>{
+    event.preventDefault();
+    openPanel(control.dataset.panelTarget,{focusDecisions:control.dataset.focusDecisions==='1'});
+  }));
+  $('nav-home')?.addEventListener('click',()=>openPanel('visao'));
+  $('return-top')?.addEventListener('click',()=>openPanel('visao'));
+  const initial=location.hash.replace('#','');
+  openPanel(PANEL_NAMES[initial]?initial:'visao',{instant:true});
+}
+function startDictation(targetId){
+  const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!Recognition){toast('Ditado por voz não é suportado neste navegador.');return;}
+  const target=$(targetId);if(!target)return;
+  const rec=new Recognition();
+  rec.lang='pt-PT';rec.interimResults=false;rec.maxAlternatives=1;
+  rec.onstart=()=>toast('A ouvir…');
+  rec.onerror=()=>toast('Não consegui ouvir. Tenta novamente.');
+  rec.onresult=e=>{
+    const text=e.results?.[0]?.[0]?.transcript||'';
+    target.value=(target.value?target.value.trim()+' ':'')+text;
+    target.focus();
+  };
+  rec.start();
+}
+
 async function loadLive(){
   const stamp=Date.now();
-  $('refresh-btn').disabled=true;$('refresh-btn').textContent='A recarregar';
+  $('refresh-btn').disabled=true;$('refresh-btn').textContent='…';
   try{
     const [sitesRes,liveRes]=await Promise.all([
       fetch('./data/sites.json?v='+stamp,{cache:'no-store'}),
@@ -132,10 +178,10 @@ async function loadLive(){
     renderAll();
     toast('Leitura recarregada.');
   }catch(err){
-    $('monitor-label').textContent='falha ao ler auditoria';$('monitor-pill').className='monitor-pill bad';
+    $('monitor-label').textContent='falha ao ler auditoria';$('monitor-pill').className='rail-health bad';
     $('site-grid').innerHTML='<div class="empty">'+esc(err.message)+'</div>';
     $('sys-monitor').textContent='Falha de leitura';
-  }finally{$('refresh-btn').disabled=false;$('refresh-btn').textContent='Recarregar leitura';}
+  }finally{$('refresh-btn').disabled=false;$('refresh-btn').textContent='↻';}
 }
 
 function renderAll(){
@@ -144,9 +190,9 @@ function renderAll(){
 }
 function renderMonitorStatus(){
   const pill=$('monitor-pill'),label=$('monitor-label'),meta=$('audit-meta');
-  if(!live.generatedAt){pill.className='monitor-pill bad';label.textContent='sem auditoria';meta.textContent='Sem leitura';$('headline-status').textContent='Sem auditoria técnica disponível.';return;}
+  if(!live.generatedAt){pill.className='rail-health bad';label.textContent='sem auditoria';meta.textContent='Sem leitura';$('headline-status').textContent='Sem auditoria técnica disponível.';return;}
   const age=ageMinutes(live.generatedAt);const stale=age!=null&&age>40;
-  pill.className='monitor-pill '+(stale?'bad':'ok');
+  pill.className='rail-health '+(stale?'bad':'ok');
   label.textContent=(stale?'leitura atrasada · ':'auditoria · ')+ageLabel(live.generatedAt);
   meta.textContent=fmtDate(live.generatedAt)+' · '+ageLabel(live.generatedAt);
   const online=(live.sites||[]).filter(r=>r.online).length;
@@ -291,7 +337,7 @@ function fillProjectSelects(){
 function download(name,content,type='text/plain;charset=utf-8'){
   const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),500);
 }
-function reportObject(){return {exportedAt:new Date().toISOString(),monitor:live,crm:state.clients,leads:state.leads,finance:{transactions:state.transactions,totals:financeTotals()},gsc:state.gsc?{fileName:state.gsc.fileName,importedAt:state.gsc.importedAt,summary:gscSummary(),rows:state.gsc.rows}:null};}
+function reportObject(){return {exportedAt:new Date().toISOString(),monitor:live,crm:state.clients,leads:state.leads,agent:state.agent,finance:{transactions:state.transactions,totals:financeTotals()},gsc:state.gsc?{fileName:state.gsc.fileName,importedAt:state.gsc.importedAt,summary:gscSummary(),rows:state.gsc.rows}:null};}
 function sitesCsv(){
   const rows=[['site','url','online','http','response_ms','changed','title','h1_count','sitemap_urls','issues']];
   sites.forEach(s=>{const r=siteResult(s.id)||{};rows.push([s.name,s.url,r.online,r.status,r.responseTimeMs,r.changed,r.title,r.h1Count,r.sitemapUrls,(r.issues||[]).map(x=>x.message).join(' | ')]);});
@@ -364,7 +410,7 @@ function getAIEndpoint(){return normalizeAIEndpoint(localStorage.getItem(AI_ENDP
 function renderAIStatus(){
   if(!$('ai-status'))return;
   const endpoint=getAIEndpoint();
-  $('ai-status').textContent=endpoint?'configurado':'por ligar';
+  $('ai-status').textContent=endpoint?'ONLINE':'OFFLINE';
   if(endpoint&&!$('ai-endpoint').value)$('ai-endpoint').value=endpoint;
 }
 function aiContext(){
@@ -376,15 +422,9 @@ function aiContext(){
       area:project.area||'',
       crm:state.clients[project.id]||null,
       technical:technical?{
-        online:technical.online,
-        status:technical.status,
-        responseTimeMs:technical.responseTimeMs,
-        title:technical.title,
-        description:technical.description,
-        h1Count:technical.h1Count,
-        firstH1:technical.firstH1,
-        canonical:technical.canonical,
-        sitemapUrls:technical.sitemapUrls,
+        online:technical.online,status:technical.status,responseTimeMs:technical.responseTimeMs,
+        title:technical.title,description:technical.description,h1Count:technical.h1Count,
+        firstH1:technical.firstH1,canonical:technical.canonical,sitemapUrls:technical.sitemapUrls,
         issues:technical.issues||[]
       }:null
     };
@@ -394,22 +434,18 @@ function aiContext(){
     generatedAt:new Date().toISOString(),
     auditGeneratedAt:live.generatedAt||null,
     projects,
-    leads:state.leads.slice(-50).map(lead=>({
-      name:lead.name,status:lead.status,contact:lead.contact||'',createdAt:lead.createdAt||null
-    })),
+    leads:state.leads.slice(-50).map(lead=>({name:lead.name,status:lead.status,contact:lead.contact||'',createdAt:lead.createdAt||null})),
     finance:{...financeTotals(),movements:state.transactions.length},
-    searchConsole:g?{
-      summary:g,
-      topQueries:(state.gsc.rows||[]).slice().sort((a,b)=>b.clicks-a.clicks||b.impressions-a.impressions).slice(0,20)
-    }:null
+    searchConsole:g?{summary:g,topQueries:(state.gsc.rows||[]).slice().sort((a,b)=>b.clicks-a.clicks||b.impressions-a.impressions).slice(0,20)}:null,
+    opportunities:(state.agent?.opportunities||[]).slice(-50),
+    pendingDecisions:(state.agent?.decisions||[]).filter(x=>x.status==='pending').slice(-30).map(x=>({type:x.type,title:x.title,reason:x.reason,payload:x.payload}))
   };
 }
 async function aiFetch(path,options={}){
   const endpoint=getAIEndpoint();
-  if(!endpoint)throw new Error('Primeiro liga o Worker da Cloudflare.');
+  if(!endpoint)throw new Error('Worker da IA indisponível.');
   const response=await fetch(endpoint+path,{...options,headers:{'content-type':'application/json',...(options.headers||{})}});
-  let data=null;
-  try{data=await response.json();}catch{}
+  let data=null;try{data=await response.json();}catch{}
   if(!response.ok)throw new Error((data&&data.error)||('Erro HTTP '+response.status));
   return data||{};
 }
@@ -417,37 +453,128 @@ async function testAIEndpoint(){
   const candidate=normalizeAIEndpoint($('ai-endpoint').value);
   if(!candidate){toast('URL do Worker inválido.');return;}
   localStorage.setItem(AI_ENDPOINT_KEY,candidate);
-  $('ai-status').textContent='a testar';
+  $('ai-status').textContent='TESTE';
   try{
     const data=await aiFetch('/health',{method:'GET',headers:{}});
-    $('ai-status').textContent=data.ok?'ligado':'erro';
-    toast(data.ok?'Cloudflare IA ligada.':'O Worker respondeu sem confirmação.');
-  }catch(err){
-    $('ai-status').textContent='erro';
-    toast('Falha na IA: '+err.message);
+    $('ai-status').textContent=data.ok?'ONLINE':'ERRO';
+    toast(data.ok?'Núcleo IA ligado.':'Worker sem confirmação.');
+  }catch(err){$('ai-status').textContent='ERRO';toast('Falha na IA: '+err.message);}
+}
+function queueAgentActions(actions,sourceQuestion=''){
+  const allowed=new Set(['create_lead','update_crm','create_opportunity','create_note']);
+  let added=0;
+  for(const action of Array.isArray(actions)?actions:[]){
+    if(!action||!allowed.has(action.type))continue;
+    state.agent.decisions.push({
+      id:uid('decision'),type:action.type,title:String(action.title||'Acção proposta').slice(0,120),
+      reason:String(action.reason||'').slice(0,500),payload:action.payload&&typeof action.payload==='object'?action.payload:{},
+      sourceQuestion:String(sourceQuestion||'').slice(0,500),status:'pending',createdAt:new Date().toISOString()
+    });
+    added++;
   }
+  if(added)localStorage.setItem(STORE_KEY,JSON.stringify(state));
+  renderAgentState();
+  return added;
+}
+function renderAgentState(){
+  if(!state.agent)state.agent={opportunities:[],decisions:[],reports:[]};
+  const pending=state.agent.decisions.filter(x=>x.status==='pending').slice().reverse();
+  if($('decision-count'))$('decision-count').textContent=pending.length;
+  if($('decision-count-secondary'))$('decision-count-secondary').textContent=pending.length;
+  if($('opportunity-count'))$('opportunity-count').textContent=state.agent.opportunities.length;
+
+  if($('decision-list')){
+    $('decision-list').innerHTML=pending.length?pending.map(item=>
+      '<article class="decision-card">'+
+      '<div class="decision-type">'+esc(item.type.replaceAll('_',' ').toUpperCase())+'</div>'+
+      '<h3>'+esc(item.title)+'</h3>'+
+      '<p>'+esc(item.reason||'Sem justificação adicional.')+'</p>'+
+      '<div class="decision-actions">'+
+      '<button type="button" class="approve" data-decision-approve="'+esc(item.id)+'">CONFIRMAR</button>'+
+      '<button type="button" data-decision-telegram="'+esc(item.id)+'">TELEGRAM</button>'+
+      '<button type="button" class="reject" data-decision-reject="'+esc(item.id)+'">RECUSAR</button>'+
+      '</div></article>'
+    ).join(''):'<div class="empty">Nenhuma decisão pendente.</div>';
+
+    $('decision-list').querySelectorAll('[data-decision-approve]').forEach(btn=>btn.addEventListener('click',()=>applyAgentDecision(btn.dataset.decisionApprove)));
+    $('decision-list').querySelectorAll('[data-decision-reject]').forEach(btn=>btn.addEventListener('click',()=>rejectAgentDecision(btn.dataset.decisionReject)));
+    $('decision-list').querySelectorAll('[data-decision-telegram]').forEach(btn=>btn.addEventListener('click',()=>sendDecisionTelegram(btn.dataset.decisionTelegram)));
+  }
+
+  if($('opportunity-list')){
+    const rows=state.agent.opportunities.slice().reverse();
+    $('opportunity-list').innerHTML=rows.length?rows.map(item=>
+      '<article class="opportunity-card"><div><span>'+esc(item.niche||'SINAL')+'</span><h3>'+esc(item.title||'Oportunidade')+'</h3></div>'+
+      '<p>'+esc(item.note||'')+'</p><small>'+esc(item.area||'Zona por confirmar')+' · '+esc(fmtDate(item.createdAt))+'</small></article>'
+    ).join(''):'<div class="empty">Ainda não há sinais guardados.</div>';
+  }
+}
+function applyAgentDecision(id){
+  const item=state.agent.decisions.find(x=>x.id===id&&x.status==='pending');if(!item)return;
+  const p=item.payload||{};
+  if(item.type==='create_lead'){
+    const name=String(p.name||item.title||'Lead').trim();
+    if(!state.leads.some(x=>x.name.toLowerCase()===name.toLowerCase())){
+      state.leads.push({id:uid('lead'),name,url:String(p.url||''),contact:String(p.contact||item.reason||''),status:['Novo','Contactado','Interessado','Proposta','Fechado','Perdido'].includes(p.status)?p.status:'Novo',createdAt:new Date().toISOString()});
+    }
+  }else if(item.type==='update_crm'){
+    const project=allProjects().find(x=>x.id===p.projectId);
+    if(project&&String(p.note||'').trim()){
+      const current=state.clients[project.id]||{stage:'Activo',note:''};
+      state.clients[project.id]={...current,note:String(p.note).trim()};
+    }
+  }else if(item.type==='create_opportunity'||item.type==='create_note'){
+    state.agent.opportunities.push({
+      id:uid('opp'),title:String(p.title||item.title||'Sinal').trim(),area:String(p.area||''),niche:String(p.niche||item.type==='create_note'?'Nota':'Oportunidade'),
+      note:String(p.note||item.reason||'').trim(),createdAt:new Date().toISOString(),source:'agent'
+    });
+  }
+  item.status='approved';item.resolvedAt=new Date().toISOString();
+  saveState();renderCRM();renderLeads();toast('Acção confirmada e aplicada.');
+}
+function rejectAgentDecision(id){
+  const item=state.agent.decisions.find(x=>x.id===id&&x.status==='pending');if(!item)return;
+  item.status='rejected';item.resolvedAt=new Date().toISOString();saveState();toast('Proposta recusada.');
+}
+async function sendDecisionTelegram(id){
+  const item=state.agent.decisions.find(x=>x.id===id);if(!item)return;
+  try{
+    await aiFetch('/api/telegram/notify',{method:'POST',body:JSON.stringify({text:'CENTRO DE NEGÓCIOS\\n\\nDECISÃO PENDENTE\\n'+item.title+'\\n\\n'+item.reason+'\\n\\nAbre o Centro para confirmar ou recusar.'})});
+    toast('Pedido enviado para o Telegram.');
+  }catch(err){toast(err.message);}
+}
+async function checkTelegramStatus(showToast=true){
+  if(!$('telegram-status'))return;
+  $('telegram-status').textContent='A VERIFICAR';
+  try{
+    const data=await aiFetch('/api/telegram/status',{method:'GET',headers:{}});
+    $('telegram-status').textContent=data.configured?'LIGADO':'POR LIGAR';
+    if(showToast)toast(data.configured?'Telegram ligado.':'Telegram ainda precisa do bot.');
+  }catch{$('telegram-status').textContent='ERRO';if(showToast)toast('Não consegui verificar o Telegram.');}
 }
 async function askAI(questionOverride){
   const question=String(questionOverride||$('ai-question').value||'').trim();
-  if(!question){toast('Escreve uma pergunta para a IA.');return;}
-  if(!getAIEndpoint()){toast('Liga primeiro o Worker da Cloudflare.');$('ai-endpoint').focus();return;}
+  if(!question){toast('Diz à IA o que queres analisar.');return;}
   $('ai-question').value=question;
   const btn=$('ai-ask-btn'),answer=$('ai-answer');
-  btn.disabled=true;btn.textContent='A analisar';
-  answer.classList.add('loading');answer.textContent='A analisar os dados do Centro de Negócios...';
+  btn.disabled=true;btn.textContent='A PROCESSAR';
+  answer.classList.add('loading');answer.textContent='A cruzar sinais da operação…';
   try{
-    const data=await aiFetch('/api/assist',{
-      method:'POST',
-      body:JSON.stringify({question,context:aiContext()})
-    });
-    answer.textContent=data.answer||'A IA não devolveu resposta.';
-    $('ai-status').textContent='ligado';
+    const data=await aiFetch('/api/agent',{method:'POST',body:JSON.stringify({question,context:aiContext()})});
+    const added=queueAgentActions(data.actions,question);
+    answer.textContent=(data.summary||'Análise concluída.')+(added?'\\n\\n'+added+' proposta'+(added===1?'':'s')+' aguarda'+(added===1?'':'m')+' confirmação.':'');
+    $('ai-status').textContent='ONLINE';
   }catch(err){
-    answer.textContent='Não foi possível obter a análise: '+err.message;
-    $('ai-status').textContent='erro';
-  }finally{
-    answer.classList.remove('loading');btn.disabled=false;btn.textContent='Analisar com IA';
-  }
+    answer.textContent='Falha: '+err.message;$('ai-status').textContent='ERRO';
+  }finally{answer.classList.remove('loading');btn.disabled=false;btn.textContent='EXECUTAR';}
+}
+async function captureOpportunity(){
+  const input=$('prospect-capture');const raw=String(input.value||'').trim();
+  if(!raw){toast('Diz ou escreve o sinal que encontraste.');return;}
+  const captured={id:uid('opp'),title:raw.slice(0,100),area:'',niche:'Sinal capturado',note:raw,createdAt:new Date().toISOString(),source:'capture'};
+  state.agent.opportunities.push(captured);saveState();input.value='';toast('Sinal guardado no radar.');
+  openPanel('assistente');
+  await askAI('Analisa este novo sinal de prospecção: "'+raw+'". Se houver dados suficientes, propõe apenas as acções concretas que devo confirmar. Não inventes nome, morada ou contacto.');
 }
 
 function renderSystem(){
@@ -457,31 +584,29 @@ function renderSystem(){
 }
 
 function setupEvents(){
+  setupPanelNavigation();
   $('refresh-btn').addEventListener('click',loadLive);
+  $('backup-top-btn').addEventListener('click',exportBackup);
+  $('export-backup').addEventListener('click',exportBackup);
   $('ai-save-endpoint').addEventListener('click',()=>{
     const endpoint=normalizeAIEndpoint($('ai-endpoint').value);
     if(!endpoint){toast('URL do Worker inválido.');return;}
-    localStorage.setItem(AI_ENDPOINT_KEY,endpoint);renderAIStatus();toast('Ligação IA guardada neste dispositivo.');
+    localStorage.setItem(AI_ENDPOINT_KEY,endpoint);renderAIStatus();toast('Ligação IA guardada.');
   });
   $('ai-test-endpoint').addEventListener('click',testAIEndpoint);
   $('ai-ask-btn').addEventListener('click',()=>askAI());
-  $('ai-clear-btn').addEventListener('click',()=>{$('ai-question').value='';$('ai-answer').innerHTML='<div class="empty">Escreve uma pergunta ou usa uma das sugestões rápidas.</div>';});
+  $('ai-clear-btn').addEventListener('click',()=>{$('ai-question').value='';$('ai-answer').innerHTML='<div class="empty">Pronto para analisar a operação.</div>';});
   $('ai-question').addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter')askAI();});
-  document.querySelectorAll('[data-ai-question]').forEach(btn=>btn.addEventListener('click',()=>askAI(btn.dataset.aiQuestion)));
-  $('backup-top-btn').addEventListener('click',exportBackup);$('export-backup').addEventListener('click',exportBackup);$('backup-top-btn').addEventListener('click',exportBackup);$('export-backup').addEventListener('click',exportBackup);
-  $('download-json').addEventListener('click',()=>download('centro-negocios-relatorio.json',JSON.stringify(reportObject(),null,2),'application/json'));
-  $('download-csv').addEventListener('click',()=>download('centro-negocios-sites.csv',sitesCsv(),'text/csv;charset=utf-8'));$('print-report').addEventListener('click',()=>window.print());
-  $('lead-form').addEventListener('submit',e=>{e.preventDefault();const name=$('lead-name').value.trim();if(!name)return;state.leads.push({id:uid('lead'),name,url:$('lead-url').value.trim(),contact:$('lead-contact').value.trim(),status:$('lead-status').value,createdAt:new Date().toISOString()});saveState();e.target.reset();renderLeads();toast('Lead adicionado.');});
-  $('finance-form').addEventListener('submit',e=>{e.preventDefault();const amount=Math.abs(Number($('finance-amount').value));if(!Number.isFinite(amount)||amount<=0)return;state.transactions.push({id:uid('mov'),date:$('finance-date').value,type:$('finance-type').value,amount,category:$('finance-category').value.trim(),projectId:$('finance-project').value,description:$('finance-description').value.trim(),createdAt:new Date().toISOString()});saveState();e.target.reset();$('finance-date').value=new Date().toISOString().slice(0,10);renderFinance();toast('Movimento registado.');});
-  $('gsc-input').addEventListener('change',async e=>{const file=e.target.files&&e.target.files[0];if(!file)return;try{const rows=parseCSV(await file.text());if(!rows.length)throw new Error('O CSV não contém linhas reconhecíveis.');state.gsc={fileName:file.name,importedAt:new Date().toISOString(),rows};saveState();renderGsc();renderSystem();toast('Search Console importado.');}catch(err){alert('Não foi possível importar: '+err.message);}});
-  $('clear-gsc-btn').addEventListener('click',()=>{if(!state.gsc||confirm('Remover os dados importados do Search Console?')){state.gsc=null;saveState();renderGsc();renderSystem();$('gsc-input').value='';}});
-  $('ocr-input').addEventListener('change',async e=>{const file=e.target.files&&e.target.files[0];if(!file)return;const status=$('ocr-status'),prog=$('ocr-progress'),out=$('ocr-output');if(!window.Tesseract){status.textContent='Motor OCR indisponível.';return;}status.textContent='A preparar OCR.';prog.textContent='';out.value='';try{const result=await window.Tesseract.recognize(file,'por+eng',{logger:m=>{if(m.status)status.textContent=m.status;if(typeof m.progress==='number')prog.textContent=Math.round(m.progress*100)+'%';}});out.value=(result.data&&result.data.text)||'';status.textContent='Concluído';prog.textContent='100%';}catch(err){status.textContent='Erro: '+err.message;prog.textContent='';}});
-  $('copy-ocr-btn').addEventListener('click',async()=>{const value=$('ocr-output').value;if(value){await navigator.clipboard.writeText(value);toast('Texto copiado.');}});
-  $('vault-unlock-btn').addEventListener('click',unlockVault);$('vault-passphrase').addEventListener('keydown',e=>{if(e.key==='Enter')unlockVault();});$('vault-lock-btn').addEventListener('click',()=>lockVault(true));
-  $('vault-form').addEventListener('submit',async e=>{e.preventDefault();if(!vaultSession)return;vaultSession.push({id:uid('cred'),projectId:$('vault-project').value,label:$('vault-label').value.trim(),user:$('vault-user').value.trim(),secret:$('vault-secret').value,url:$('vault-url').value.trim(),note:$('vault-note').value.trim(),createdAt:new Date().toISOString()});await persistVault();e.target.reset();fillProjectSelects();renderVault();toast('Credencial cifrada e guardada.');});
-  $('import-backup').addEventListener('change',async e=>{const file=e.target.files&&e.target.files[0];if(!file)return;if(!confirm('Restaurar este backup e substituir os dados locais actuais?')){e.target.value='';return;}try{await importBackup(file);}catch(err){alert(err.message);}e.target.value='';});
-  $('clear-local').addEventListener('click',()=>{if(!confirm('Apagar CRM, leads, caixa, Search Console e cofre deste dispositivo? Esta acção não pode ser anulada sem backup.'))return;localStorage.removeItem(STORE_KEY);localStorage.removeItem(LEGACY_KEY);localStorage.removeItem(VAULT_KEY);state=defaultState();lockVault(false);renderAll();toast('Dados locais apagados.');});
-  document.querySelectorAll('.nav a').forEach(a=>a.addEventListener('click',()=>{document.querySelectorAll('.nav a').forEach(x=>x.classList.remove('active'));a.classList.add('active');}));
+  $('ai-voice-btn').addEventListener('click',()=>startDictation('ai-question'));
+  $('prospect-voice-btn').addEventListener('click',()=>startDictation('prospect-capture'));
+  $('prospect-analyse').addEventListener('click',captureOpportunity);
+  $('prospect-capture').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();captureOpportunity();}});
+  $('telegram-check-btn').addEventListener('click',()=>checkTelegramStatus(true));
+  document.querySelectorAll('[data-ai-question]').forEach(btn=>btn.addEventListener('click',()=>{
+    if(btn.dataset.openAi==='1')openPanel('assistente');
+    askAI(btn.dataset.aiQuestion);
+  }));
+
 }
 function setupPWA(){
   if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
@@ -490,5 +615,8 @@ function setupPWA(){
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
-  seedCRMDefaults();seedLeadDefaults();setupEvents();setupPWA();$('finance-date').value=new Date().toISOString().slice(0,10);renderLeads();renderFinance();renderGsc();setupVaultState();renderSystem();loadLive();
+  seedCRMDefaults();seedLeadDefaults();setupEvents();setupPWA();
+  $('finance-date').value=new Date().toISOString().slice(0,10);
+  renderLeads();renderFinance();renderGsc();renderAgentState();setupVaultState();renderSystem();renderAIStatus();
+  checkTelegramStatus(false);loadLive();
 });
