@@ -1,4 +1,4 @@
-const CACHE='centro-negocios-v4-ai';
+const CACHE='centro-negocios-v5-ai-live';
 const SHELL=['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./icon.svg','./data/sites.json'];
 
 self.addEventListener('install',event=>{
