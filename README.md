@@ -1,27 +1,31 @@
-# Centro de Negócios IA
+# Centro de Negócios
 
-Painel operacional publicado em GitHub Pages.
+Aplicação operacional publicada em GitHub Pages. Não usa métricas de demonstração.
 
-## O que está real
+## Funções
 
-- Monitorização técnica automática de `pentehouse.pt`, `bestpizzaandkebab.pt` e `restaurantedoisirmaos.pt`.
-- Verificação de HTTP, tempo de resposta, title, description, H1, canonical, robots.txt, sitemap.xml e JSON-LD.
-- Detecção de alterações através do hash da página comparado com a leitura anterior.
-- CRM, notas e leads guardados localmente no navegador.
-- Importação de CSV do Google Search Console, sem inventar rankings.
-- OCR local de imagens com Tesseract.js.
-- Exportação de relatório JSON, CSV e impressão/PDF.
+- Auditoria automática dos sites a cada 15 minutos.
+- HTTP, tempo de resposta, title, description, H1, canonical, robots.txt, sitemap e JSON-LD.
+- Segunda leitura automática quando title ou H1 falham, para reduzir falsos alertas de cache/deploy.
+- Detecção de alteração do HTML por SHA-256.
+- Importação de CSV do Google Search Console.
+- CRM e leads no armazenamento local do navegador.
+- Caixa com entradas, saídas e saldo calculado.
+- Cofre local cifrado com PBKDF2-SHA256 + AES-GCM. A palavra-passe mestra não é guardada.
+- OCR local com Tesseract.js.
+- Relatório JSON, CSV técnico, impressão/PDF e backup/restauro.
+- PWA instalável em dispositivos compatíveis.
 
-## Monitor
+## Dados
 
-O workflow `.github/workflows/monitor.yml` corre de hora a hora e também quando a configuração do monitor muda.
-O resultado mais recente é guardado em `data/live.json`.
+`data/sites.json` define os sites auditados. `data/live.json` contém apenas resultados técnicos públicos da auditoria. CRM, leads, caixa, Search Console importado e cofre não são enviados para o repositório.
 
-## Limites actuais
+## Segurança do cofre
 
-O site é estático. Credenciais privadas não ficam no repositório.
-A API directa do Google Search Console e fontes automáticas de leads exigem um backend/OAuth e ficam para a próxima fase.
+O cofre usa PBKDF2-SHA256 (250.000 iterações) para derivar uma chave e AES-GCM 256 para cifrar os dados. O backup contém apenas o blob cifrado do cofre. Sem a palavra-passe mestra, não há mecanismo de recuperação.
 
-## Página
+## Publicação
 
-https://crassas.github.io/centro-negocios-ia/
+Página: https://crassas.github.io/centro-negocios-ia/
+
+O workflow `.github/workflows/monitor.yml` executa a auditoria e publica a leitura actualizada. O workflow `.github/workflows/pages.yml` publica alterações da interface.
