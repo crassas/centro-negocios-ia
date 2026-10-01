@@ -45,6 +45,15 @@ function seedCRMDefaults(){
     if(!state.clients[id]){
       state.clients[id]=value;
       changed=true;
+      continue;
+    }
+    if(!state.clients[id].stage){
+      state.clients[id].stage=value.stage;
+      changed=true;
+    }
+    if(!String(state.clients[id].note||'').trim()){
+      state.clients[id].note=value.note;
+      changed=true;
     }
   }
   if(changed)localStorage.setItem(STORE_KEY,JSON.stringify(state));
