@@ -23,6 +23,7 @@
     <div class="monitor-pill" id="monitor-pill"><i></i><span id="monitor-label">A ler monitor</span></div>
     <nav class="nav" aria-label="Navegação principal">
       <a class="active" href="#visao">Visão geral</a>
+      <a href="#assistente">Assistente IA</a>
       <a href="#sites">Sites</a>
       <a href="#seo">Search Console</a>
       <a href="#crm">CRM</a>
@@ -65,6 +66,42 @@
       <article class="kpi"><div class="value" id="kpi-issues">—</div><div class="label">Alertas técnicos</div><div class="delta" id="kpi-issues-note">A verificar</div></article>
       <article class="kpi"><div class="value" id="kpi-leads">0</div><div class="label">Leads abertos</div><div class="delta" id="kpi-leads-note">Pipeline local</div></article>
       <article class="kpi"><div class="value money" id="kpi-balance">0,00 €</div><div class="label">Saldo registado</div><div class="delta" id="kpi-balance-note">Entradas − saídas</div></article>
+    </section>
+
+    <section class="section ai-section" id="assistente">
+      <div class="section-head">
+        <div><span class="eyebrow">Cloudflare Workers AI</span><h2>Assistente IA</h2></div>
+        <span class="local-tag" id="ai-status">por ligar</span>
+      </div>
+      <div class="ai-grid">
+        <div class="ai-workspace">
+          <div class="ai-quick">
+            <button type="button" data-ai-question="O que tenho de fazer agora? Ordena as prioridades pelos projectos." class="ai-chip">Prioridades</button>
+            <button type="button" data-ai-question="Analisa os alertas técnicos e diz-me o que merece atenção." class="ai-chip">Alertas SEO</button>
+            <button type="button" data-ai-question="Analisa o CRM e os leads. Diz-me qual é a próxima acção útil em cada negócio." class="ai-chip">CRM e leads</button>
+            <button type="button" data-ai-question="Procura conexões invisíveis entre os projectos e oportunidades locais que eu possa estar a ignorar." class="ai-chip">Conexões invisíveis</button>
+          </div>
+          <textarea id="ai-question" class="ai-question" placeholder="Ex.: O que devo fazer hoje na Engomadoria Beatriz?"></textarea>
+          <div class="ai-actions">
+            <button class="btn primary" id="ai-ask-btn" type="button">Analisar com IA</button>
+            <button class="btn" id="ai-clear-btn" type="button">Limpar</button>
+          </div>
+          <div id="ai-answer" class="ai-answer" aria-live="polite">
+            <div class="empty">Liga o Worker da Cloudflare uma vez. Depois podes perguntar sobre sites, CRM, leads, caixa e Search Console.</div>
+          </div>
+        </div>
+        <aside class="ai-config">
+          <span class="eyebrow">Ligação</span>
+          <label for="ai-endpoint">URL do Worker Cloudflare</label>
+          <input id="ai-endpoint" type="url" inputmode="url" placeholder="https://centro-negocios-ai....workers.dev">
+          <div class="ai-config-actions">
+            <button class="btn" id="ai-save-endpoint" type="button">Guardar</button>
+            <button class="btn" id="ai-test-endpoint" type="button">Testar</button>
+          </div>
+          <p>O assistente recebe apenas dados operacionais necessários. O conteúdo do Cofre nunca é enviado à IA.</p>
+          <div class="ai-model"><span>Modelo preparado</span><b>Llama 3.2 3B · Workers AI</b></div>
+        </aside>
+      </div>
     </section>
 
     <section class="section" id="sites">
