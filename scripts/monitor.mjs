@@ -1,5 +1,9 @@
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync=promisify(execFile);
 
 const sites=JSON.parse(await fs.readFile(new URL('../data/sites.json',import.meta.url),'utf8'));
 let previous={sites:[]};
@@ -38,6 +42,18 @@ function extract(html){
     schemaCount:(html.match(/application\/ld\+json/gi)||[]).length
   };
 }
+async function renderWithBrowser(url){
+  const bins=['/usr/bin/google-chrome','google-chrome','/usr/bin/chromium','chromium','chromium-browser'];
+  const args=['--headless=new','--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--hide-scrollbars','--virtual-time-budget=6000','--dump-dom',url];
+  for(const bin of bins){
+    try{
+      const {stdout}=await execFileAsync(bin,args,{timeout:30000,maxBuffer:12*1024*1024});
+      if(stdout&&/<html[\s>]/i.test(stdout))return stdout.slice(0,6000000);
+    }catch{}
+  }
+  return '';
+}
+
 async function fetchTimed(url,extraHeaders={}){
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),20000);const start=Date.now();
   try{
@@ -46,21 +62,45 @@ async function fetchTimed(url,extraHeaders={}){
   }finally{clearTimeout(timer);}
 }
 async function pageSnapshot(url){
-  const first=await fetchTimed(url);let html=(await first.res.text()).slice(0,2000000);let extracted=extract(html);let responseTimeMs=first.ms;let finalUrl=first.res.url;let status=first.res.status;let ok=first.res.ok;
+  const first=await fetchTimed(url);
+  let html=(await first.res.text()).slice(0,2000000);
+  let extracted=extract(html);
+  let responseTimeMs=first.ms;
+  let finalUrl=first.res.url;
+  let status=first.res.status;
+  let ok=first.res.ok;
+  let renderMode='html';
+
+  if(first.res.ok&&(!extracted.title||extracted.h1Count===0)){
+    const rendered=await renderWithBrowser(url);
+    if(rendered){
+      const renderedExtract=extract(rendered);
+      if(renderedExtract.h1Count>extracted.h1Count||(!extracted.title&&renderedExtract.title)){
+        html=rendered;
+        extracted=renderedExtract;
+        renderMode='browser';
+      }
+    }
+  }
+
   if(first.res.ok&&(!extracted.title||extracted.h1Count===0)){
     await new Promise(r=>setTimeout(r,900));
     const separator=url.includes('?')?'&':'?';
-    const second=await fetchTimed(url+separator+'__centro_audit='+Date.now());const html2=(await second.res.text()).slice(0,2000000);const extracted2=extract(html2);
-    if((extracted2.h1Count>extracted.h1Count)||(!extracted.title&&extracted2.title)){html=html2;extracted=extracted2;responseTimeMs=second.ms;finalUrl=second.res.url;status=second.res.status;ok=second.res.ok;}
+    const second=await fetchTimed(url+separator+'__centro_audit='+Date.now());
+    const html2=(await second.res.text()).slice(0,2000000);
+    const extracted2=extract(html2);
+    if((extracted2.h1Count>extracted.h1Count)||(!extracted.title&&extracted2.title)){
+      html=html2;extracted=extracted2;responseTimeMs=second.ms;finalUrl=second.res.url;status=second.res.status;ok=second.res.ok;renderMode='html-retry';
+    }
   }
-  return {html,extracted,responseTimeMs,finalUrl,status,ok};
+  return {html,extracted,responseTimeMs,finalUrl,status,ok,renderMode};
 }
 async function endpoint(url){try{const x=await fetchTimed(url,{accept:'application/xml,text/plain,text/html,*/*'});return {ok:x.res.ok,status:x.res.status,text:x.res.ok?await x.res.text():''};}catch(e){return {ok:false,status:null,text:'',error:e.name==='AbortError'?'timeout':String(e.message||e)};}}
 function sameCanonical(canonical,finalUrl){try{const a=new URL(canonical,finalUrl);const b=new URL(finalUrl);return a.origin===b.origin;}catch{return false;}}
 async function inspect(site){
-  const base={id:site.id,name:site.name,url:site.url,area:site.area||'',checkedAt:now,online:false,status:null,responseTimeMs:null,finalUrl:null,title:'',description:'',h1Count:0,firstH1:'',canonical:'',robotsMeta:'',schemaCount:0,sitemapUrls:null,checks:{title:false,description:false,h1:false,canonical:false,robots:false,sitemap:false,schema:false},issues:[]};
+  const base={id:site.id,name:site.name,url:site.url,area:site.area||'',checkedAt:now,online:false,status:null,responseTimeMs:null,renderMode:'html',finalUrl:null,title:'',description:'',h1Count:0,firstH1:'',canonical:'',robotsMeta:'',schemaCount:0,sitemapUrls:null,checks:{title:false,description:false,h1:false,canonical:false,robots:false,sitemap:false,schema:false},issues:[]};
   try{
-    const snap=await pageSnapshot(site.url);base.status=snap.status;base.responseTimeMs=snap.responseTimeMs;base.finalUrl=snap.finalUrl;base.online=snap.ok;Object.assign(base,snap.extracted);
+    const snap=await pageSnapshot(site.url);base.status=snap.status;base.responseTimeMs=snap.responseTimeMs;base.renderMode=snap.renderMode;base.finalUrl=snap.finalUrl;base.online=snap.ok;Object.assign(base,snap.extracted);
     const normalized=snap.html.replace(/\s+/g,' ').trim();base.contentHash=crypto.createHash('sha256').update(normalized).digest('hex');const prev=previousById.get(site.id);base.changed=prev&&prev.contentHash?prev.contentHash!==base.contentHash:null;base.changedAt=base.changed===true?now:(prev&&prev.changedAt)||null;
     const origin=new URL(base.finalUrl||site.url).origin;const [robots,sitemap]=await Promise.all([endpoint(origin+'/robots.txt'),endpoint(origin+'/sitemap.xml')]);base.robotsStatus=robots.status;base.sitemapStatus=sitemap.status;
     if(sitemap.ok){base.sitemapUrls=(sitemap.text.match(/<url>/gi)||[]).length;if(base.sitemapUrls===0)base.sitemapUrls=(sitemap.text.match(/<sitemap>/gi)||[]).length;}
