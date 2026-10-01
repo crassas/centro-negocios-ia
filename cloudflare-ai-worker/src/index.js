@@ -1,4 +1,5 @@
 const MODEL='@cf/meta/llama-3.2-3b-instruct';
+const AGENT_MODEL='@cf/meta/llama-3.1-8b-instruct-fast';
 const ALLOWED_ORIGIN='https://crassas.github.io';
 
 function cors(origin){
@@ -58,24 +59,48 @@ async function runAssist(env,question,context){
   });
 }
 async function runAgent(env,question,context){
-  const schema=[
-    'Devolve APENAS JSON válido, sem markdown, neste formato:',
-    '{"summary":"resumo curto","actions":[{"type":"create_lead|update_crm|create_opportunity|create_note","title":"título curto","reason":"motivo factual","payload":{}}]}',
-    'Máximo 5 actions.',
-    'Só cria actions quando há uma acção útil e concreta que merece confirmação humana.',
-    'create_lead payload: {"name":"","contact":"","status":"Novo","url":""}.',
-    'update_crm payload: {"projectId":"","note":""}; projectId só pode ser um id existente nos dados.',
-    'create_opportunity payload: {"title":"","area":"","niche":"","note":""}.',
-    'create_note payload: {"title":"","note":""}.',
-    'Se não houver acções, usa actions:[] e responde apenas com summary.'
+  const instructions=[
+    'Cria no máximo 5 propostas que mereçam confirmação humana.',
+    'Só usa projectId que exista nos dados recebidos.',
+    'Não inventes nomes, moradas, contactos ou métricas.',
+    'Para create_lead usa payload com name, contact, status e url.',
+    'Para update_crm usa payload com projectId e note.',
+    'Para create_opportunity usa payload com title, area, niche e note.',
+    'Para create_note usa payload com title e note.',
+    'Se não houver acções concretas, devolve actions vazio.'
   ].join(' ');
-  return env.AI.run(MODEL,{
+  const responseFormat={
+    type:'json_schema',
+    json_schema:{
+      type:'object',
+      properties:{
+        summary:{type:'string'},
+        actions:{
+          type:'array',
+          maxItems:5,
+          items:{
+            type:'object',
+            properties:{
+              type:{type:'string',enum:['create_lead','update_crm','create_opportunity','create_note']},
+              title:{type:'string'},
+              reason:{type:'string'},
+              payload:{type:'object'}
+            },
+            required:['type','title','reason','payload']
+          }
+        }
+      },
+      required:['summary','actions']
+    }
+  };
+  return env.AI.run(AGENT_MODEL,{
     messages:[
-      {role:'system',content:baseSystem()+' '+schema},
+      {role:'system',content:baseSystem()+' '+instructions},
       {role:'user',content:'PEDIDO:\n'+question+'\n\nDADOS ACTUAIS:\n'+JSON.stringify(context).slice(0,60000)}
     ],
+    response_format:responseFormat,
     max_tokens:900,
-    temperature:0.15
+    temperature:0.1
   });
 }
 async function telegramSend(env,text){
@@ -105,6 +130,7 @@ export default {
         ok:true,
         service:'centro-negocios-ai',
         model:MODEL,
+        agentModel:AGENT_MODEL,
         telegramConfigured:Boolean(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID)
       },200,origin);
     }
@@ -140,11 +166,11 @@ export default {
       try{
         if(url.pathname==='/api/agent'){
           const result=await runAgent(env,question,context);
-          const raw=typeof result?.response==='string'?result.response.trim():'';
-          const parsed=extractJson(raw);
-          if(!parsed)return json({ok:true,summary:raw||'Sem resposta.',actions:[],model:MODEL,usage:result?.usage||null},200,origin);
+          const response=result?.response;
+          const parsed=response&&typeof response==='object'?response:extractJson(typeof response==='string'?response:'');
+          if(!parsed)return json({ok:true,summary:'Análise concluída sem propostas estruturadas.',actions:[],model:AGENT_MODEL,usage:result?.usage||null},200,origin);
           const actions=Array.isArray(parsed.actions)?parsed.actions.slice(0,5).filter(x=>x&&typeof x==='object'):[];
-          return json({ok:true,summary:String(parsed.summary||'').trim()||'Análise concluída.',actions,model:MODEL,usage:result?.usage||null},200,origin);
+          return json({ok:true,summary:String(parsed.summary||'').trim()||'Análise concluída.',actions,model:AGENT_MODEL,usage:result?.usage||null},200,origin);
         }
 
         const result=await runAssist(env,question,context);
