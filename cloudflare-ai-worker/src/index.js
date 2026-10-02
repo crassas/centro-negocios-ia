@@ -120,6 +120,27 @@ export class TaskQueue extends DurableObject {
     const paired=Boolean(await this.getJson('device:tokenHash',''));
     return {...stats,paired};
   }
+  async setRepoSnapshot(project,snapshot){
+    const key=String(project||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,40);
+    if(!key)return {ok:false};
+    const value={...(snapshot&&typeof snapshot==='object'?snapshot:{}),project:key,updatedAt:Date.now()};
+    await this.setJson('repo:snapshot:'+key,value);
+    return {ok:true,updatedAt:value.updatedAt};
+  }
+  async getRepoSnapshot(project){
+    const key=String(project||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,40);
+    if(!key)return null;
+    return await this.getJson('repo:snapshot:'+key,null);
+  }
+  async repoSnapshotStatus(){
+    const projects=['centro','pentehouse','pizza','doisirmaos'];
+    const out={};
+    for(const project of projects){
+      const row=await this.getRepoSnapshot(project);
+      out[project]=row?{available:true,updatedAt:row.updatedAt||null,source:row.source||'local'}:{available:false};
+    }
+    return out;
+  }
 
   async enqueueCouncil(topic){
     const subject=String(topic||'').trim().slice(0,5000);
