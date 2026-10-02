@@ -1,12 +1,25 @@
 {
-  // deploy-trigger: secrets configured
   "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
   "name": "centro-negocios-ai",
   "main": "src/index.js",
-  "compatibility_date": "2026-10-01",
+  "compatibility_date": "2026-10-02",
   "ai": {
     "binding": "AI"
   },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "TASKS",
+        "class_name": "TaskQueue"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["TaskQueue"]
+    }
+  ],
   "observability": {
     "enabled": true
   }
