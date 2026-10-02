@@ -604,10 +604,14 @@ async function handleTelegramUpdate(env,update,ctx){
       if(!topic){
         await telegramSend(env,'Usa: /mesa <tema>\n\nExemplo: /mesa como levamos a Pentehouse ao próximo nível?');
       }else{
-        await telegramSend(env,'🗣️ SALA DE CONSELHO ABERTA\n\nTema: '+topic.slice(0,1200)+'\n\n3 modelos vão responder uns aos outros. 1 ronda para poupar quota.');
-        const job=runCouncil(env,topic);
-        if(ctx&&typeof ctx.waitUntil==='function')ctx.waitUntil(job);
-        else await job;
+        const task=await q.createTask({
+          action:'council_run',
+          target:'cloud',
+          args:{topic},
+          label:'Sala de Conselho · '+topic.slice(0,120)
+        },'telegram');
+        await q.resolveTask(task.id,true);
+        await telegramSend(env,'🗣️ SALA DE CONSELHO ABERTA\n\nTema: '+topic.slice(0,1200)+'\n\nA estação já recebeu a mesa. As LLMs vão responder por ordem no próprio Telegram.');
       }
       return {ok:true};
     }
@@ -862,6 +866,22 @@ export default {
       try{body=await request.json();}catch{return json({ok:false,error:'Pedido inválido.'},400,origin);}
     }
 
+    if(url.pathname==='/api/council/run'&&request.method==='POST'){
+      try{
+        const token=bearer(request);
+        const hash=await sha256Hex(token);
+        const q=taskQueue(env);
+        if(!await q.authenticate(hash))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
+        const topic=String(body?.topic||'').trim();
+        if(!topic)return json({ok:false,error:'Tema em falta.'},400,origin);
+        await runCouncil(env,topic);
+        return json({ok:true},200,origin);
+      }catch(error){
+        await telegramSend(env,'MESA INTERROMPIDA\n\n'+String(error?.message||error).slice(0,1200));
+        return json({ok:false,error:String(error?.message||error)},500,origin);
+      }
+    }
+
     if(url.pathname==='/api/operit/result'&&request.method==='POST'){
       try{
         const token=bearer(request);
@@ -878,7 +898,11 @@ export default {
         const done=await q.completeTask(id,result);
         if(!done.ok)return json({ok:false,error:'Tarefa não encontrada.'},404,origin);
         const output=(result.stdout||result.stderr||'(sem saída)').slice(0,2800);
-        await telegramSend(env,'OPERIT CONCLUÍDO\n\n'+done.task.label+'\n\nExit: '+result.exitCode+'\nTempo: '+result.durationMs+' ms\n\n'+output);
+        if(done.task.action==='council_run'){
+          await telegramSend(env,result.exitCode===0?'✅ SALA DE CONSELHO CONCLUÍDA':'⚠️ SALA DE CONSELHO TERMINOU COM ERRO');
+        }else{
+          await telegramSend(env,'OPERIT CONCLUÍDO\n\n'+done.task.label+'\n\nExit: '+result.exitCode+'\nTempo: '+result.durationMs+' ms\n\n'+output);
+        }
         return json({ok:true},200,origin);
       }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
     }
