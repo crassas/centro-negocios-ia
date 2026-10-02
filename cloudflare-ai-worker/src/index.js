@@ -122,8 +122,9 @@ export class TaskQueue extends DurableObject {
   }
 }
 
-const MODEL='@cf/meta/llama-3.2-3b-instruct';
-const AGENT_MODEL='@cf/meta/llama-3.1-8b-instruct-fast';
+const MODEL='@cf/openai/gpt-oss-120b';
+const FAST_MODEL='@cf/zai-org/glm-4.7-flash';
+const AGENT_MODEL='@cf/openai/gpt-oss-120b';
 const ALLOWED_ORIGIN='https://crassas.github.io';
 
 function cors(origin){
@@ -259,12 +260,12 @@ async function runTelegramFront(env,text){
   };
 
   const projectHint=projectContext[hintedProject]||'';
-  return env.AI.run(AGENT_MODEL,{
+  return env.AI.run(FAST_MODEL,{
     messages:[
       {
         role:'system',
         content:[
-          'És a IA frontal rápida da Estação Centro.',
+          'És o router frontal rápido da Estação Centro.',
           'Responde em português de Portugal, sem gerúndio.',
           'A resposta deve ser útil por si só: nunca respondas apenas com um nome, título ou palavra isolada.',
           'Para pedidos de melhoria, dá 3 a 5 acções concretas e prioritárias em frases curtas.',
@@ -282,6 +283,39 @@ async function runTelegramFront(env,text){
     max_tokens:520,
     temperature:0.2
   });
+}
+
+
+async function runFrontPower(env,text,project='local'){
+  const projectContext={
+    pentehouse:'Projecto Pentehouse: barbearia local no Porto. Prioridades conhecidas: mobile, reservas/WhatsApp, SEO/GEO Marquês-Constituição-Porto, equipa/galeria, performance e confiança. Não inventes métricas ou estado técnico actual.',
+    pizza:'Projecto Best Pizza & Kebab: restauração local em Campanhã. Prioridades conhecidas: menu mobile, pedido/contacto, SEO/GEO Campanhã-São Roque, indexação e conversão. Não inventes métricas ou estado técnico actual.',
+    doisirmaos:'Projecto 2 Irmãos: restaurante local em Campanhã. Prioridades conhecidas: comida portuguesa, menu, localização/confiança, SEO/GEO Campanhã-Porto, schema Restaurant. Não inventes dados actuais.',
+    centro:'Projecto Centro de Negócios: estação operacional Telegram + Cloudflare + Centro Agent + Centro Server privado. Prioridades: baixa latência, resiliência, router multi-agente, memória SQLite, observabilidade e custo zero sempre que possível.',
+    local:''
+  };
+  const context=projectContext[project]||'';
+  const result=await env.AI.run(MODEL,{
+    messages:[
+      {
+        role:'system',
+        content:[
+          'És a IA principal da Estação Centro.',
+          'Responde em português de Portugal, sem gerúndio.',
+          'Qualidade acima de frases genéricas. Dá respostas concretas, úteis e compactas.',
+          'Quando falares de um projecto, separa o que sabes do que precisaria de verificação real.',
+          'Não inventes métricas, rankings, ficheiros ou execuções.',
+          'Quando fizer sentido, apresenta prioridades práticas por ordem.',
+          'Não peças para usar Claude Code. Tu és agora o modelo principal de raciocínio.',
+          context?('CONTEXTO: '+context):''
+        ].filter(Boolean).join(' ')
+      },
+      {role:'user',content:String(text||'').slice(0,6000)}
+    ],
+    max_tokens:900,
+    temperature:0.25
+  });
+  return typeof result?.response==='string'?result.response.trim():'';
 }
 
 function taskQueue(env){return env.TASKS.getByName('primary');}
@@ -474,19 +508,13 @@ async function handleTelegramUpdate(env,update){
       }else{
         const deterministic=deterministicProjectFront(text);
         if(deterministic){
-          const repo=OPERIT_PROJECTS[deterministic.project]||'local';
-          const task=await q.createTask({
-            action:'claude_query',
-            target:repo,
-            args:{prompt:deterministic.claudePrompt},
-            label:'Claude Code · '+repo
-          },'telegram-front');
-          await telegramSend(env,'⚡ '+deterministic.answer+'\n\nPosso confirmar isto no projecto real com o Claude Code.',{
-            reply_markup:{inline_keyboard:[[
-              {text:'🧠 Aprofundar',callback_data:'taskapprove:'+task.id},
-              {text:'❌ Não',callback_data:'taskreject:'+task.id}
-            ]]}
-          });
+          await telegramApi(env,'sendChatAction',{chat_id:env.TELEGRAM_CHAT_ID,action:'typing'});
+          try{
+            const answer=await runFrontPower(env,text,deterministic.project);
+            await telegramSend(env,'🧠 '+(answer||deterministic.answer));
+          }catch(error){
+            await telegramSend(env,'⚡ '+deterministic.answer);
+          }
         }else{
         await telegramApi(env,'sendChatAction',{chat_id:env.TELEGRAM_CHAT_ID,action:'typing'});
         try{
@@ -544,21 +572,9 @@ async function handleTelegramUpdate(env,update){
             if(!needsClaude){
               await telegramSend(env,'⚡ '+answer);
             }else{
-              const alias=String(parsed.project||'local').toLowerCase();
-              const repo=alias==='local'?null:OPERIT_PROJECTS[alias];
-              const prompt=String(parsed.claudePrompt||text).trim().slice(0,5000);
-              const task=await q.createTask({
-                action:'claude_query',
-                target:repo||'local',
-                args:{prompt},
-                label:'Claude Code · '+(repo||'geral')
-              },'telegram-front');
-              await telegramSend(env,'⚡ '+answer+'\n\nPosso aprofundar isto com o Claude Code.',{
-                reply_markup:{inline_keyboard:[[
-                  {text:'🧠 Aprofundar',callback_data:'taskapprove:'+task.id},
-                  {text:'❌ Não',callback_data:'taskreject:'+task.id}
-                ]]}
-              });
+              const project=String(parsed.project||'local').toLowerCase();
+              const deep=await runFrontPower(env,String(parsed.claudePrompt||text),project);
+              await telegramSend(env,'🧠 '+(deep||answer));
             }
           }
         }catch(error){
@@ -646,6 +662,7 @@ export default {
         service:'centro-negocios-ai',
         model:MODEL,
         agentModel:AGENT_MODEL,
+        fastModel:FAST_MODEL,
         telegramConfigured:Boolean(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID),
         operitQueue:Boolean(env.TASKS),
         telegramFront:'v3-deterministic-projects'
