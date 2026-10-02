@@ -120,11 +120,40 @@ export class TaskQueue extends DurableObject {
     const paired=Boolean(await this.getJson('device:tokenHash',''));
     return {...stats,paired};
   }
+
+  async enqueueCouncil(topic){
+    const subject=String(topic||'').trim().slice(0,5000);
+    if(!subject)return {ok:false};
+    const queue=await this.getJson('council:queue',[]);
+    const id=crypto.randomUUID().replaceAll('-','').slice(0,12);
+    queue.push({id,topic:subject,createdAt:Date.now()});
+    await this.setJson('council:queue',queue.slice(-20));
+    const current=await this.ctx.storage.getAlarm();
+    if(current===null)await this.ctx.storage.setAlarm(Date.now()+50);
+    return {ok:true,id};
+  }
+
+  async alarm(){
+    const queue=await this.getJson('council:queue',[]);
+    if(!queue.length)return;
+    const job=queue.shift();
+    await this.setJson('council:queue',queue);
+    try{
+      await runCouncil(this.env,job.topic);
+    }catch(error){
+      try{
+        await telegramSend(this.env,'MESA INTERROMPIDA\n\n'+String(error?.message||error).slice(0,1200));
+      }catch{}
+    }
+    const remaining=await this.getJson('council:queue',[]);
+    if(remaining.length)await this.ctx.storage.setAlarm(Date.now()+50);
+  }
 }
 
-const MODEL='@cf/openai/gpt-oss-120b';
 const FAST_MODEL='@cf/zai-org/glm-4.7-flash';
-const AGENT_MODEL='@cf/openai/gpt-oss-120b';
+const MODEL='@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+const DEEP_MODEL='@cf/openai/gpt-oss-120b';
+const AGENT_MODEL='@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const COUNCIL_CRITIC_MODEL='@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const ALLOWED_ORIGIN='https://crassas.github.io';
 
@@ -361,13 +390,12 @@ async function runCouncil(env,topic){
       [
         'És o EXPLORADOR numa mesa de três LLMs.',
         'Responde em português de Portugal, sem gerúndio.',
-        'Abre o problema rapidamente: identifica o objectivo, 3 oportunidades, 2 riscos e perguntas que os outros modelos devem resolver.',
-        'Não inventes factos. Assume explicitamente quando algo precisa de verificação.',
-        'Máximo 350 palavras.'
+        'Abre o problema depressa: objectivo, 3 oportunidades e 2 riscos.',
+        'Não inventes factos. Máximo 220 palavras.'
       ].join(' '),
       'TEMA DA MESA:\n'+subject,
-      520,
-      COUNCIL_CRITIC_MODEL
+      360,
+      MODEL
     );
     await telegramSend(env,'⚡ GLM · EXPLORADOR\n\n'+(scout||'Sem resposta.'));
 
@@ -375,54 +403,34 @@ async function runCouncil(env,topic){
       env,
       MODEL,
       [
-        'És o ARQUITECTO numa mesa multi-LLM.',
-        'Lê a proposta do Explorador e responde directamente a ela.',
+        'És o ARQUITECTO-CRÍTICO numa mesa multi-LLM.',
+        'Lê o Explorador e responde directamente.',
         'Responde em português de Portugal, sem gerúndio.',
-        'Transforma possibilidades em estratégia concreta: prioridades, dependências e uma sequência executável.',
-        'Discorda quando necessário. Não inventes dados.',
-        'Máximo 500 palavras.'
+        'Transforma as ideias numa estratégia executável e, ao mesmo tempo, aponta pressupostos frágeis, riscos e ordem correcta.',
+        'Fecha com 3 prioridades. Não inventes dados. Máximo 360 palavras.'
       ].join(' '),
-      'TEMA:\n'+subject+'\n\nO EXPLORADOR DISSE:\n'+scout,
-      760,
-      COUNCIL_CRITIC_MODEL
-    );
-    await telegramSend(env,'🧠 GPT-OSS-120B · ARQUITECTO\n\n'+(architect||'Sem resposta.'));
-
-    const critic=await councilTurn(
-      env,
-      COUNCIL_CRITIC_MODEL,
-      [
-        'És o CRÍTICO numa mesa multi-LLM.',
-        'Lê o Explorador e o Arquitecto e responde aos dois.',
-        'Responde em português de Portugal, sem gerúndio.',
-        'Procura erros, pressupostos frágeis, custos escondidos, riscos técnicos e passos que estão fora de ordem.',
-        'Não sejas contrarian por estilo: reconhece o que está sólido e aponta apenas problemas reais.',
-        'Fecha com as 3 correcções mais importantes.',
-        'Máximo 400 palavras.'
-      ].join(' '),
-      'TEMA:\n'+subject+'\n\nEXPLORADOR:\n'+scout+'\n\nARQUITECTO:\n'+architect,
-      620,
+      'TEMA:\n'+subject+'\n\nEXPLORADOR:\n'+scout,
+      560,
       FAST_MODEL
     );
-    await telegramSend(env,'🔎 LLAMA · CRÍTICO\n\n'+(critic||'Sem resposta.'));
+    await telegramSend(env,'🔎 LLAMA 70B · ARQUITECTO/CRÍTICO\n\n'+(architect||'Sem resposta.'));
 
     const synthesis=await councilTurn(
       env,
-      MODEL,
+      DEEP_MODEL,
       [
         'És o RELATOR FINAL da mesa multi-LLM.',
-        'Lê toda a discussão e responde à crítica.',
+        'Lê o tema, o Explorador e o Arquitecto/Crítico.',
         'Responde em português de Portugal, sem gerúndio.',
-        'Não repitas a conversa. Constrói uma síntese final curta e operacional.',
-        'Formato: DECISÃO, PORQUÊ, ORDEM DE EXECUÇÃO, O QUE FICA PENDENTE DE VERIFICAÇÃO.',
-        'Não inventes factos nem afirmes execução.',
-        'Máximo 500 palavras.'
+        'Não repitas a conversa. Fecha em: DECISÃO, PORQUÊ, ORDEM DE EXECUÇÃO, PENDENTE DE VERIFICAÇÃO.',
+        'Não inventes factos. Máximo 380 palavras.'
       ].join(' '),
-      'TEMA:\n'+subject+'\n\nEXPLORADOR:\n'+scout+'\n\nARQUITECTO:\n'+architect+'\n\nCRÍTICO:\n'+critic,
-      760,
-      COUNCIL_CRITIC_MODEL
+      'TEMA:\n'+subject+'\n\nEXPLORADOR:\n'+scout+'\n\nARQUITECTO/CRÍTICO:\n'+architect,
+      620,
+      MODEL
     );
     await telegramSend(env,'🎯 GPT-OSS-120B · SÍNTESE\n\n'+(synthesis||'Sem resposta.'));
+    await telegramSend(env,'✅ SALA DE CONSELHO CONCLUÍDA');
   }catch(error){
     await telegramSend(env,'MESA INTERROMPIDA\n\n'+String(error?.message||error).slice(0,1200));
   }
@@ -604,14 +612,8 @@ async function handleTelegramUpdate(env,update,ctx){
       if(!topic){
         await telegramSend(env,'Usa: /mesa <tema>\n\nExemplo: /mesa como levamos a Pentehouse ao próximo nível?');
       }else{
-        const task=await q.createTask({
-          action:'council_run',
-          target:'cloud',
-          args:{topic},
-          label:'Sala de Conselho · '+topic.slice(0,120)
-        },'telegram');
-        await q.resolveTask(task.id,true);
-        await telegramSend(env,'🗣️ SALA DE CONSELHO ABERTA\n\nTema: '+topic.slice(0,1200)+'\n\nA estação já recebeu a mesa. As LLMs vão responder por ordem no próprio Telegram.');
+        await q.enqueueCouncil(topic);
+        await telegramSend(env,'🗣️ SALA DE CONSELHO ABERTA\n\nTema: '+topic.slice(0,1200)+'\n\nExecução cloud directa. A primeira LLM deve responder em poucos segundos.');
       }
       return {ok:true};
     }
@@ -790,6 +792,7 @@ export default {
         ok:true,
         service:'centro-negocios-ai',
         model:MODEL,
+        deepModel:DEEP_MODEL,
         agentModel:AGENT_MODEL,
         fastModel:FAST_MODEL,
         councilCriticModel:COUNCIL_CRITIC_MODEL,
