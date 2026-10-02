@@ -151,6 +151,57 @@ export class TaskQueue extends DurableObject {
     return next;
   }
 
+  async createGpuTask(spec,source='telegram'){
+    const id=crypto.randomUUID().replaceAll('-','').slice(0,12);
+    const safe=spec&&typeof spec==='object'?spec:{};
+    const task={
+      id,
+      prompt:String(safe.prompt||'').slice(0,12000),
+      system:String(safe.system||'').slice(0,5000),
+      maxTokens:Math.max(64,Math.min(Number(safe.maxTokens)||1200,4096)),
+      temperature:Math.max(0,Math.min(Number(safe.temperature)||0.2,1.5)),
+      source,status:'queued',createdAt:Date.now()
+    };
+    await this.setJson('gpu:task:'+id,task);
+    const ids=await this.getJson('gpu:task:ids',[]);
+    ids.push(id);
+    await this.setJson('gpu:task:ids',ids.slice(-100));
+    return task;
+  }
+  async pullGpuTask(){
+    const ids=await this.getJson('gpu:task:ids',[]);
+    for(const id of ids){
+      const task=await this.getJson('gpu:task:'+id,null);
+      if(task&&task.status==='queued'){
+        task.status='running';
+        task.startedAt=Date.now();
+        await this.setJson('gpu:task:'+id,task);
+        return task;
+      }
+    }
+    return null;
+  }
+  async completeGpuTask(id,result){
+    const task=await this.getJson('gpu:task:'+id,null);
+    if(!task)return {ok:false};
+    task.status='completed';
+    task.completedAt=Date.now();
+    task.result=result;
+    await this.setJson('gpu:task:'+id,task);
+    return {ok:true,task};
+  }
+  async gpuStats(){
+    const ids=await this.getJson('gpu:task:ids',[]);
+    const stats={queued:0,running:0,completed:0};
+    for(const id of ids.slice(-50)){
+      const task=await this.getJson('gpu:task:'+id,null);
+      if(task&&stats[task.status]!==undefined)stats[task.status]++;
+    }
+    const meta=await this.getJson('gpu:meta',null);
+    const paired=Boolean(await this.getJson('gpu:tokenHash',''));
+    return {paired,meta,...stats};
+  }
+
   async taskStats(){
     const ids=await this.getJson('task:ids',[]);
     const stats={pending:0,queued:0,running:0,completed:0,rejected:0};
