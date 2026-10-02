@@ -225,7 +225,7 @@ export class TaskQueue extends DurableObject {
     return await this.getJson('repo:snapshot:'+key,null);
   }
   async repoSnapshotStatus(){
-    const projects=['centro','pentehouse','pizza','doisirmaos'];
+    const projects=['centro','pentehouse','pizza','doisirmaos','beatriz'];
     const out={};
     for(const project of projects){
       const row=await this.getRepoSnapshot(project);
@@ -528,7 +528,8 @@ const PROJECT_REPOS={
   centro:{repo:'crassas/centro-negocios-ia',public:true},
   pentehouse:{repo:'crassas/pente_houselanding',public:true},
   pizza:{repo:'crassas/best-pizza-kebab',public:true},
-  doisirmaos:{repo:'crassas/restaurante-2-irmaos',public:false}
+  doisirmaos:{repo:'crassas/restaurante-2-irmaos',public:false},
+  beatriz:{repo:'crassas/engomadoria-beatriz',public:true}
 };
 
 const PROJECT_SITES={
@@ -627,6 +628,7 @@ function projectFromTopic(text){
   if(lower.includes('pentehouse')||lower.includes('pente house')||lower.includes('penthouse'))return 'pentehouse';
   if(lower.includes('best pizza')||lower.includes('pizza')||lower.includes('kebab'))return 'pizza';
   if(lower.includes('2 irmãos')||lower.includes('dois irmãos')||lower.includes('doisirmaos'))return 'doisirmaos';
+  if(lower.includes('beatriz')||lower.includes('engomadoria'))return 'beatriz';
   if(lower.includes('centro de negócios')||lower.includes('centro negocios')||lower.includes('centro'))return 'centro';
   return 'local';
 }
@@ -643,7 +645,7 @@ async function fetchPublicRepoSnapshot(project){
     .map(x=>x.path)
     .filter(p=>!/(^|\/)(node_modules|dist|build|\.git)(\/|$)/.test(p))
     .slice(0,140);
-  const preferred=['README.md','package.json','index.html','app.js','src/main.js','src/main.ts','src/App.jsx','src/App.tsx'];
+  const preferred=['CONTENT_TRUTH.md','README.md','package.json','index.html','app.js','src/main.js','src/main.ts','src/App.jsx','src/App.tsx'];
   const files={};
   for(const path of preferred){
     if(!paths.includes(path))continue;
@@ -899,28 +901,28 @@ async function runCouncil(env,topic){
   try{
     const scoutP=councilTurn(
       env,FAST_MODEL,
-      'És o EXPLORADOR. Abre oportunidades e riscos. Português de Portugal, curto, concreto, sem inventar. Máximo 220 palavras.',
-      'TEMA:\n'+subject,340,MODEL
+      'És o EXPLORADOR. Abre oportunidades e riscos APENAS a partir do tema e da evidência fornecida. Não inventes funcionários, equipamentos, processos, métricas ou necessidades. Português de Portugal, curto, concreto. Máximo 220 palavras.',
+      'TEMA:\n'+subject+'\n\nEVIDÊNCIA REAL DO PROJECTO:\n'+evidence,340,MODEL
     );
     const repoP=councilTurn(
       env,QWEN_MODEL,
-      'És o ENGENHEIRO DE REPOSITÓRIO. Foca arquitectura, código, performance, manutenção e alterações concretas. Se não tiveres evidência de ficheiros, diz isso claramente. Português de Portugal. Máximo 280 palavras.',
-      'TEMA:\n'+subject,430,MODEL
+      'És o ENGENHEIRO DE REPOSITÓRIO. Usa os ficheiros e paths fornecidos como fonte factual. Foca arquitectura, código, performance, manutenção e alterações concretas. Nunca digas que não tens acesso ao repositório se a evidência o identificar como disponível. Não inventes ficheiros. Português de Portugal. Máximo 280 palavras.',
+      'TEMA:\n'+subject+'\n\nEVIDÊNCIA REAL DO PROJECTO:\n'+evidence,430,MODEL
     );
     const seoP=councilTurn(
       env,MISTRAL_MODEL,
-      'És o ESPECIALISTA SEO/GEO/AEO. Foca intenção local, estrutura, conteúdo, dados estruturados e descoberta. Não inventes rankings. Português de Portugal. Máximo 260 palavras.',
-      'TEMA:\n'+subject,400,FAST_MODEL
+      'És o ESPECIALISTA SEO/GEO/AEO. Usa apenas factos confirmados na evidência. Foca intenção local, estrutura, conteúdo, dados estruturados e descoberta. Não inventes moradas, rankings, avaliações ou serviços. Português de Portugal. Máximo 260 palavras.',
+      'TEMA:\n'+subject+'\n\nEVIDÊNCIA REAL DO PROJECTO:\n'+evidence,400,FAST_MODEL
     );
     const uxP=councilTurn(
       env,GEMMA_MODEL,
-      'És o ESPECIALISTA UX/CONVERSÃO. Foca mobile, clareza, CTA, confiança, fricção e percurso do utilizador. Português de Portugal. Máximo 260 palavras.',
-      'TEMA:\n'+subject,400,FAST_MODEL
+      'És o ESPECIALISTA UX/CONVERSÃO. Baseia-te apenas no tema e na evidência real. Foca mobile, clareza, CTA, confiança, fricção e percurso do utilizador. Não inventes equipa, processos internos ou funcionalidades existentes. Português de Portugal. Máximo 260 palavras.',
+      'TEMA:\n'+subject+'\n\nEVIDÊNCIA REAL DO PROJECTO:\n'+evidence,400,FAST_MODEL
     );
     const auditP=councilTurn(
       env,MODEL,
-      'És o AUDITOR. Procura riscos, pressupostos frágeis, performance, segurança, manutenção e testes necessários. Não faças conversa social. Português de Portugal. Máximo 260 palavras.',
-      'TEMA:\n'+subject,400,FAST_MODEL
+      'És o AUDITOR. Verifica cada afirmação contra a evidência fornecida. Procura riscos, pressupostos frágeis, performance, segurança, manutenção e testes necessários. Assinala explicitamente qualquer invenção dos outros agentes. Não inventes informação operacional do negócio. Português de Portugal. Máximo 260 palavras.',
+      'TEMA:\n'+subject+'\n\nEVIDÊNCIA REAL DO PROJECTO:\n'+evidence,400,FAST_MODEL
     );
 
     const scout=await scoutP;
@@ -944,9 +946,13 @@ async function runCouncil(env,topic){
         'Não continues a debater: transforma as análises em execução.',
         'Português de Portugal, sem gerúndio.',
         'Formato: PRIORIDADE AGORA; ACÇÕES CONCRETAS; ALTERAÇÕES TÉCNICAS; TESTES; BLOQUEIOS.',
+        'A EVIDÊNCIA REAL DO PROJECTO é a fonte de verdade e tem prioridade sobre qualquer afirmação dos especialistas.',
+        'Remove qualquer sugestão baseada em funcionários, equipamentos, processos ou factos que não apareçam na evidência.',
+        'Nunca declares falta de acesso ao repositório quando a evidência indicar available=true.',
         'Distingue factos de hipóteses. Máximo 480 palavras.'
       ].join(' '),
       'TEMA:\n'+subject+
+      '\n\nEVIDÊNCIA REAL DO PROJECTO:\n'+evidence+
       '\n\nEXPLORADOR:\n'+scout+
       '\n\nENGENHEIRO:\n'+repoAnswer+
       '\n\nSEO/GEO:\n'+seo+
@@ -977,7 +983,9 @@ const OPERIT_PROJECTS={
   pizza:'best-pizza-kebab',
   kebab:'best-pizza-kebab',
   doisirmaos:'restaurante-2-irmaos',
-  '2irmaos':'restaurante-2-irmaos'
+  '2irmaos':'restaurante-2-irmaos',
+  beatriz:'engomadoria-beatriz',
+  engomadoria:'engomadoria-beatriz'
 };
 function parseOperitInstruction(text){
   const raw=String(text||'').trim();
