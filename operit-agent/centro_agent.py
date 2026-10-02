@@ -11,10 +11,12 @@ import urllib.request
 from pathlib import Path
 
 BASE = "https://centro-negocios-ai.travisthejarvis.workers.dev"
+SERVER_BASE = "http://127.0.0.1:8765"
 HOME = Path.home()
 STATE_DIR = HOME / ".centro-agent"
 TOKEN_FILE = STATE_DIR / "token"
 OLLAMA_KEY_FILE = STATE_DIR / "ollama_api_key"
+SERVER_TOKEN_FILE = HOME / ".centro-server" / "token"
 POLL_SECONDS = 4
 CMD_TIMEOUT = 120
 CLAUDE_TIMEOUT = 300
@@ -236,11 +238,43 @@ ACTIONS = {
 
 
 def execute(task):
-    action = task.get("action", "")
-    handler = ACTIONS.get(action)
-    if not handler:
-        return 126, "", f"Acção não permitida: {action}", 0
-    return handler(task)
+    try:
+        server_token = SERVER_TOKEN_FILE.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return 70, "", "Centro Server sem token. Arranca primeiro: centroserver start", 0
+
+    if not server_token:
+        return 70, "", "Token do Centro Server vazio.", 0
+
+    payload = json.dumps(task).encode("utf-8")
+    req = urllib.request.Request(
+        SERVER_BASE + "/execute",
+        data=payload,
+        method="POST",
+        headers={
+            "Authorization": "Bearer " + server_token,
+            "Content-Type": "application/json",
+            "User-Agent": "Centro-Agent-Bridge/1.0",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=CLAUDE_TIMEOUT + 30) as res:
+            data = json.loads(res.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        return exc.code, "", f"Centro Server HTTP {exc.code}", 0
+    except Exception as exc:
+        return 71, "", f"Centro Server indisponível: {exc}", 0
+
+    result = data.get("result") if isinstance(data, dict) else None
+    if not isinstance(result, dict):
+        return 72, "", "Resposta inválida do Centro Server.", 0
+
+    return (
+        int(result.get("exitCode", 1)),
+        str(result.get("stdout") or ""),
+        str(result.get("stderr") or ""),
+        int(result.get("durationMs") or 0),
+    )
 
 
 def work_once(token):
