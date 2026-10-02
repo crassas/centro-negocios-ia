@@ -971,6 +971,19 @@ function parseOperitInstruction(text){
   if(m)return {action:'station_doctor',target:'local',label:'Diagnóstico da Estação Centro'};
   m=raw.match(/^\/server$/i);
   if(m)return {action:'server_status',target:'local',label:'Estado do Centro Server privado'};
+  m=raw.match(/^\/(?:openclaw|openclaw-status)$/i);
+  if(m)return {action:'openclaw_status',target:'local',label:'Estado do OpenClaw Gateway'};
+  m=raw.match(/^\/openclaw\s+([\s\S]{1,5000})$/i);
+  if(m){
+    const prompt=m[1].trim();
+    if(!prompt)return null;
+    return {
+      action:'openclaw_query',
+      target:'local',
+      args:{prompt},
+      label:'OpenClaw · agente principal'
+    };
+  }
   m=raw.match(/^\/operit\s+system$/i);
   if(m)return {action:'system_info',target:'local',label:'Informação do sistema'};
   m=raw.match(/^\/operit\s+sites?$/i);
@@ -1132,10 +1145,13 @@ async function handleTelegramUpdate(env,update,ctx){
     if(instruction){
       const task=await q.createTask(instruction,'telegram');
       const isClaude=instruction.action==='claude_query';
-      await telegramSend(env,(isClaude?'CLAUDE CODE':'ACÇÃO OPERIT')+'\n\n'+task.label+'\n\n'+(isClaude?'Enviar ao Claude Code?':'Executar?'),{
+      const isOpenClaw=instruction.action==='openclaw_query'||instruction.action==='openclaw_status';
+      const heading=isClaude?'CLAUDE CODE':(isOpenClaw?'OPENCLAW':'ACÇÃO OPERIT');
+      const question=isClaude?'Enviar ao Claude Code?':(isOpenClaw?'Executar no OpenClaw local?':'Executar?');
+      await telegramSend(env,heading+'\n\n'+task.label+'\n\n'+question,{
         reply_markup:{inline_keyboard:[[
-          {text:isClaude?'✅ Enviar':'✅ Executar',callback_data:'taskapprove:'+task.id},
-          {text:isClaude?'❌ Cancelar':'❌ Recusar',callback_data:'taskreject:'+task.id}
+          {text:(isClaude||isOpenClaw)?'✅ Enviar':'✅ Executar',callback_data:'taskapprove:'+task.id},
+          {text:(isClaude||isOpenClaw)?'❌ Cancelar':'❌ Recusar',callback_data:'taskreject:'+task.id}
         ]]}
       });
     }else if(text==='/limpar'){
@@ -1182,10 +1198,10 @@ async function handleTelegramUpdate(env,update,ctx){
       const stats=await q.taskStats();
       await telegramSend(env,'OPERIT\n\n'+(stats.paired?'Dispositivo: ligado':'Dispositivo: por emparelhar')+'\nFila: '+stats.queued+'\nEm execução: '+stats.running+'\nConcluídas: '+stats.completed);
     }else if(text==='/start'){
-      await telegramSend(env,'Centro de Negócios online.\n\nConversa normal = grupo multi-LLM\nSites/repos conhecidos são consultados automaticamente quando pedes análise\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/gpu-status — estado do Colab\n/gpu <pedido> — usar GPU Colab\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
+      await telegramSend(env,'Centro de Negócios online.\n\nConversa normal = grupo multi-LLM\nSites/repos conhecidos são consultados automaticamente quando pedes análise\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/gpu-status — estado do Colab\n/gpu <pedido> — usar GPU Colab\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/openclaw — estado do OpenClaw\n/openclaw <pedido> — agente OpenClaw local\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
     }else if(text){
       if(text.startsWith('/')){
-        await telegramSend(env,'Centro disponível:\nConversa normal = grupo multi-LLM\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
+        await telegramSend(env,'Centro disponível:\nConversa normal = grupo multi-LLM\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/openclaw — estado do OpenClaw\n/openclaw <pedido> — agente OpenClaw local\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
       }else{
         await telegramApi(env,'sendChatAction',{chat_id:env.TELEGRAM_CHAT_ID,action:'typing'});
         const job=runGroupChat(env,text);
@@ -1474,7 +1490,8 @@ export default {
         if(done.task.action==='council_run'){
           await telegramSend(env,result.exitCode===0?'✅ SALA DE CONSELHO CONCLUÍDA':'⚠️ SALA DE CONSELHO TERMINOU COM ERRO');
         }else{
-          await telegramSend(env,'OPERIT CONCLUÍDO\n\n'+done.task.label+'\n\nExit: '+result.exitCode+'\nTempo: '+result.durationMs+' ms\n\n'+output);
+          const isOpenClaw=String(done.task.action||'').startsWith('openclaw_');
+          await telegramSend(env,(isOpenClaw?'OPENCLAW CONCLUÍDO':'OPERIT CONCLUÍDO')+'\n\n'+done.task.label+'\n\nExit: '+result.exitCode+'\nTempo: '+result.durationMs+' ms\n\n'+output);
         }
         return json({ok:true},200,origin);
       }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
