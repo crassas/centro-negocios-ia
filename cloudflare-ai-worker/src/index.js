@@ -141,6 +141,26 @@ export class TaskQueue extends DurableObject {
     }
     return out;
   }
+  async appendRoomMessage(message){
+    const rows=await this.getJson('room:history',[]);
+    rows.push({
+      id:crypto.randomUUID().replaceAll('-','').slice(0,10),
+      role:String(message?.role||'assistant').slice(0,30),
+      agent:String(message?.agent||'').slice(0,50),
+      text:String(message?.text||'').slice(0,5000),
+      createdAt:Date.now()
+    });
+    await this.setJson('room:history',rows.slice(-40));
+    return {ok:true};
+  }
+  async roomHistory(limit=16){
+    const rows=await this.getJson('room:history',[]);
+    return rows.slice(-Math.max(1,Math.min(Number(limit)||16,40)));
+  }
+  async clearRoom(){
+    await this.setJson('room:history',[]);
+    return {ok:true};
+  }
 
   async enqueueCouncil(topic){
     const subject=String(topic||'').trim().slice(0,5000);
@@ -478,6 +498,113 @@ function compactRepoContext(ctx){
   }).slice(0,24000);
 }
 
+
+function strictOutputHint(text){
+  const raw=String(text||'').trim();
+  const lower=raw.toLowerCase();
+  const exact=/\b(apenas|só|somente|responde[m]? apenas|digam apenas|diz apenas)\b/.test(lower);
+  return exact
+    ? 'O utilizador impôs uma restrição literal de formato. Cumpre-a exactamente. Não acrescentes explicações, títulos, justificações, listas, avisos ou texto extra.'
+    : '';
+}
+
+function roomTranscript(rows){
+  return (Array.isArray(rows)?rows:[]).map(row=>{
+    const who=row.role==='user'?'Joao':(row.agent||'IA');
+    return who+': '+String(row.text||'');
+  }).join('\n').slice(-18000);
+}
+
+async function groupTurn(env,model,name,role,userText,history,peerText=''){
+  const exact=strictOutputHint(userText);
+  const result=await env.AI.run(model,{
+    messages:[
+      {
+        role:'system',
+        content:[
+          'Estás num grupo permanente de IAs no Telegram com o utilizador.',
+          'O teu nome é '+name+'. A tua função é '+role+'.',
+          'Fala como membro de um grupo, não como relatório empresarial.',
+          'Responde em português de Portugal, sem gerúndio.',
+          'Segue primeiro a instrução literal do utilizador.',
+          exact,
+          'Não transformes cumprimentos ou pedidos simples em análises.',
+          'Não repitas o que outra IA já disse sem acrescentar valor.',
+          'Se não tens nada útil a acrescentar, responde exactamente: [SILÊNCIO].',
+          'Nunca inventes acesso, resultados ou acções.'
+        ].filter(Boolean).join(' ')
+      },
+      {
+        role:'user',
+        content:
+          'CONVERSA RECENTE:\n'+roomTranscript(history)+
+          '\n\nMENSAGEM NOVA DO UTILIZADOR:\n'+String(userText||'').slice(0,5000)+
+          (peerText?'\n\nOUTRAS IAs JÁ DISSERAM NESTA RONDA:\n'+peerText:'')
+      }
+    ],
+    max_tokens:360,
+    temperature:0.25
+  });
+  return modelText(result);
+}
+
+async function runGroupChat(env,userText){
+  const q=taskQueue(env);
+  await q.appendRoomMessage({role:'user',agent:'Joao',text:userText});
+  const history=await q.roomHistory(14);
+  const exact=Boolean(strictOutputHint(userText));
+
+  // Resposta frontal rápida primeiro.
+  let first=await groupTurn(
+    env,FAST_MODEL,'GLM','responder depressa, perceber intenção e abrir a conversa',
+    userText,history
+  );
+  if(first&&first!=='[SILÊNCIO]'){
+    await q.appendRoomMessage({role:'assistant',agent:'GLM',text:first});
+    await telegramSend(env,'⚡ GLM\n'+first);
+  }
+
+  // Dois especialistas pensam em paralelo.
+  const qwenP=groupTurn(
+    env,QWEN_MODEL,'Qwen','engenharia, código, lógica e decomposição de problemas',
+    userText,history,first
+  );
+  const llamaP=groupTurn(
+    env,MODEL,'Llama','crítica, raciocínio e detecção de falhas',
+    userText,history,first
+  );
+
+  const settled=await Promise.allSettled([qwenP,llamaP]);
+  const qwen=settled[0].status==='fulfilled'?settled[0].value:'';
+  const llama=settled[1].status==='fulfilled'?settled[1].value:'';
+
+  for(const [agent,label,text] of [
+    ['Qwen','🧩 QWEN',qwen],
+    ['Llama','🔎 LLAMA 70B',llama]
+  ]){
+    if(text&&text!=='[SILÊNCIO]'){
+      await q.appendRoomMessage({role:'assistant',agent,text});
+      await telegramSend(env,label+'\n'+text);
+    }
+  }
+
+  // Em pedidos literais curtos, não forçar debate.
+  if(exact)return;
+
+  const peers=[first,qwen,llama].filter(x=>x&&x!=='[SILÊNCIO]').join('\n\n');
+  if(!peers)return;
+
+  // Um quarto agente reage ao que os outros disseram, para criar conversa real.
+  const follow=await groupTurn(
+    env,MISTRAL_MODEL,'Mistral','síntese prática e ligação entre as ideias dos outros',
+    userText,await q.roomHistory(16),peers
+  );
+  if(follow&&follow!=='[SILÊNCIO]'){
+    await q.appendRoomMessage({role:'assistant',agent:'Mistral',text:follow});
+    await telegramSend(env,'📍 MISTRAL\n'+follow);
+  }
+}
+
 async function runCouncil(env,topic){
   const subject=String(topic||'').trim().slice(0,5000);
   if(!subject)return;
@@ -745,6 +872,9 @@ async function handleTelegramUpdate(env,update,ctx){
           {text:isClaude?'❌ Cancelar':'❌ Recusar',callback_data:'taskreject:'+task.id}
         ]]}
       });
+    }else if(text==='/limpar'){
+      await q.clearRoom();
+      await telegramSend(env,'Conversa do grupo limpa.');
     }else if(text==='/repos'){
       const status=await q.repoSnapshotStatus();
       const lines=['REPOSITÓRIOS DA ESTAÇÃO'];
@@ -756,86 +886,15 @@ async function handleTelegramUpdate(env,update,ctx){
       const stats=await q.taskStats();
       await telegramSend(env,'OPERIT\n\n'+(stats.paired?'Dispositivo: ligado':'Dispositivo: por emparelhar')+'\nFila: '+stats.queued+'\nEm execução: '+stats.running+'\nConcluídas: '+stats.completed);
     }else if(text==='/start'){
-      await telegramSend(env,'Centro de Negócios online.\n\n/mesa <tema> — esquadrão multi-agente\n/repos — repositórios\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
+      await telegramSend(env,'Centro de Negócios online.\n\nConversa normal = grupo multi-LLM\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
     }else if(text){
       if(text.startsWith('/')){
-        await telegramSend(env,'Centro disponível:\n/mesa <tema> — esquadrão multi-agente\n/repos — repositórios\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
+        await telegramSend(env,'Centro disponível:\nConversa normal = grupo multi-LLM\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
       }else{
-        const deterministic=deterministicProjectFront(text);
-        if(deterministic){
-          await telegramApi(env,'sendChatAction',{chat_id:env.TELEGRAM_CHAT_ID,action:'typing'});
-          try{
-            const answer=await runFrontPower(env,text,deterministic.project);
-            await telegramSend(env,'🧠 '+(answer||deterministic.answer));
-          }catch(error){
-            await telegramSend(env,'⚡ '+deterministic.answer);
-          }
-        }else{
         await telegramApi(env,'sendChatAction',{chat_id:env.TELEGRAM_CHAT_ID,action:'typing'});
-        try{
-          const fast=await runTelegramFront(env,text);
-          const response=fast?.response;
-          const parsed=response&&typeof response==='object'?response:extractJson(typeof response==='string'?response:'');
-          if(!parsed){
-            await telegramSend(env,'Não consegui estruturar a resposta rápida. Usa /claude seguido do pedido para enviar directamente ao Claude Code.');
-          }else{
-            let answer=String(parsed.answer||'').trim();
-            const project=String(parsed.project||'local').toLowerCase();
-            const weakEnding=/[:;,-]\s*$/.test(answer);
-            const genericIntro=/^(existem|há|podemos|algumas|várias)\b/i.test(answer)&&answer.length<220;
-            const tooShort=answer.length<120||answer.split(/\s+/).length<18||weakEnding||genericIntro;
-
-            const fallbacks={
-              pentehouse:[
-                'Hoje eu atacaria 4 pontos na Pentehouse:',
-                '1. Hero/mobile: confirmar se a primeira dobra mostra marca, localização e CTA de WhatsApp sem ruído.',
-                '2. Conversão: tornar escolha de barbeiro/serviço mais directa e reduzir passos até à reserva.',
-                '3. SEO local: rever títulos, headings e conteúdo para Marquês, Constituição e Porto sem repetir texto artificialmente.',
-                '4. Confiança: reforçar equipa, galeria real e informação prática sem inventar horários ou métricas.',
-                'Para saber exactamente o que mudar no código e no site publicado, posso mandar o Claude Code analisar o projecto real.'
-              ].join('\n'),
-              pizza:[
-                'Hoje eu atacaria 4 pontos no Best Pizza & Kebab:',
-                '1. Mobile: reduzir o comprimento do menu e garantir pesquisa/categorias rápidas.',
-                '2. Conversão: manter telefone/pedido sempre acessível e simplificar o caminho até à compra.',
-                '3. SEO local: reforçar Campanhã e São Roque nas páginas certas sem keyword stuffing.',
-                '4. Técnico: confirmar indexação, headings, schema e ligações internas.',
-                'Posso mandar o Claude Code verificar o projecto real antes de propor alterações.'
-              ].join('\n'),
-              doisirmaos:[
-                'Hoje eu atacaria 4 pontos no 2 Irmãos:',
-                '1. Primeira dobra: comida portuguesa, Campanhã e contacto devem ficar imediatamente claros.',
-                '2. Menu: destacar os pratos fortes e reduzir navegação desnecessária.',
-                '3. Confiança local: horários, localização e informação prática consistentes.',
-                '4. SEO local: rever headings, schema Restaurant e páginas/termos de Campanhã.',
-                'Posso mandar o Claude Code analisar o projecto real para dizer exactamente o que alterar.'
-              ].join('\n'),
-              centro:[
-                'Hoje eu atacaria 4 pontos no Centro:',
-                '1. Latência: manter respostas rápidas e separar conversa de execução pesada.',
-                '2. Resiliência: confirmar supervisor, fila e recuperação automática.',
-                '3. Memória: centralizar tarefas, projectos e histórico em SQLite.',
-                '4. Router: distribuir pedidos entre IA rápida, Claude, auditor e executor.',
-                'Posso aprofundar o código real com o Claude Code.'
-              ].join('\n')
-            };
-
-            if(tooShort){
-              answer=fallbacks[project]||'Consigo responder já, mas esta resposta ficou demasiado vaga. Para não inventar, posso aprofundar o pedido com o Claude Code e consultar o estado real.';
-            }
-            const needsClaude=parsed.needsClaude===true||tooShort;
-            if(!needsClaude){
-              await telegramSend(env,'⚡ '+answer);
-            }else{
-              const project=String(parsed.project||'local').toLowerCase();
-              const deep=await runFrontPower(env,String(parsed.claudePrompt||text),project);
-              await telegramSend(env,'🧠 '+(deep||answer));
-            }
-          }
-        }catch(error){
-          await telegramSend(env,'IA rápida indisponível neste momento. Podes continuar com /claude <pedido>.');
-        }
-        }
+        const job=runGroupChat(env,text);
+        if(ctx&&typeof ctx.waitUntil==='function')ctx.waitUntil(job);
+        else await job;
       }
     }
   }
