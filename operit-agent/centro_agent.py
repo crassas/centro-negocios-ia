@@ -178,23 +178,16 @@ def action_claude_query(task):
         if not cwd:
             return 3, "", f"Repositório {target} ainda não existe localmente.", 0
 
-    claude = shutil.which("claude")
-    if not claude:
+    ollama = shutil.which("ollama")
+    if not ollama:
         candidates = [
-            HOME / ".local" / "bin" / "claude",
-            Path("/usr/local/bin/claude"),
-            Path("/usr/bin/claude"),
+            HOME / ".local" / "bin" / "ollama",
+            Path("/usr/local/bin/ollama"),
+            Path("/usr/bin/ollama"),
         ]
-        claude = next((str(p) for p in candidates if p.exists()), None)
-    if not claude:
-        return 127, "", "Claude Code não foi encontrado no PATH.", 0
-
-    try:
-        ollama_key = OLLAMA_KEY_FILE.read_text(encoding="utf-8").strip()
-    except FileNotFoundError:
-        ollama_key = ""
-    if not ollama_key:
-        return 78, "", "Chave Ollama não configurada para o Centro Agent. Executa: centroctl claude-key", 0
+        ollama = next((str(p) for p in candidates if p.exists()), None)
+    if not ollama:
+        return 127, "", "Ollama não foi encontrado no PATH.", 0
 
     system_note = (
         "Estás a responder através do Centro de Negócios no Telegram. "
@@ -202,18 +195,15 @@ def action_claude_query(task):
         "Esta chamada está em modo de análise: não alteres ficheiros nem executes acções destrutivas."
     )
 
-    claude_env = os.environ.copy()
-    claude_env["OLLAMA_API_KEY"] = ollama_key
-    claude_env["ANTHROPIC_BASE_URL"] = "https://ollama.com"
-    claude_env["ANTHROPIC_AUTH_TOKEN"] = ollama_key
-    claude_env["ANTHROPIC_API_KEY"] = ""
-    claude_env["ANTHROPIC_MODEL"] = "gpt-oss:120b"
-
     return run_cmd(
         [
-            claude,
+            ollama,
+            "launch",
+            "claude",
             "--model",
-            "gpt-oss:120b",
+            "gpt-oss:120b-cloud",
+            "--yes",
+            "--",
             "--permission-mode",
             "plan",
             "--append-system-prompt",
@@ -223,9 +213,7 @@ def action_claude_query(task):
         ],
         cwd=cwd,
         timeout=CLAUDE_TIMEOUT,
-        env=claude_env,
     )
-
 
 
 ACTIONS = {
