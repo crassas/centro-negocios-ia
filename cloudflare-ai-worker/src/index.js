@@ -915,30 +915,64 @@ export default {
 
       try{
         if(url.pathname==='/api/agent'){
-          const result=await runAgent(env,question,context);
-          const response=result?.response;
-          const parsed=response&&typeof response==='object'?response:extractJson(typeof response==='string'?response:'');
-          if(!parsed)return json({ok:true,summary:'Análise concluída sem propostas estruturadas.',actions:[],model:AGENT_MODEL,usage:result?.usage||null},200,origin);
+          let result=null,usedModel=AGENT_MODEL,parsed=null;
+          try{
+            result=await runAgent(env,question,context);
+            const response=result?.response;
+            parsed=response&&typeof response==='object'?response:extractJson(typeof response==='string'?response:'');
+          }catch{}
+          if(!parsed){
+            usedModel=COUNCIL_CRITIC_MODEL;
+            try{
+              const fallback=await env.AI.run(COUNCIL_CRITIC_MODEL,{
+                messages:[
+                  {role:'system',content:baseSystem()+' Devolve JSON válido com summary string e actions array. Se não houver acções seguras, actions deve ser vazio.'},
+                  {role:'user',content:'PEDIDO:\n'+question+'\n\nDADOS ACTUAIS:\n'+JSON.stringify(context).slice(0,30000)}
+                ],
+                response_format:{
+                  type:'json_schema',
+                  json_schema:{
+                    type:'object',
+                    properties:{
+                      summary:{type:'string'},
+                      actions:{type:'array',items:{type:'object'}}
+                    },
+                    required:['summary','actions']
+                  }
+                },
+                max_tokens:650,
+                temperature:0.1
+              });
+              const response=fallback?.response;
+              parsed=response&&typeof response==='object'?response:extractJson(typeof response==='string'?response:'');
+              result=fallback;
+            }catch{}
+          }
+          if(!parsed)return json({ok:true,summary:'Análise concluída sem propostas estruturadas.',actions:[],model:usedModel,usage:result?.usage||null},200,origin);
           const actions=Array.isArray(parsed.actions)?parsed.actions.slice(0,5).filter(x=>x&&typeof x==='object'):[];
-          return json({ok:true,summary:String(parsed.summary||'').trim()||'Análise concluída.',actions,model:AGENT_MODEL,usage:result?.usage||null},200,origin);
+          return json({ok:true,summary:String(parsed.summary||'').trim()||'Análise concluída.',actions,model:usedModel,usage:result?.usage||null},200,origin);
         }
 
-        let result,usedModel=MODEL;
+        let result=null,usedModel=MODEL,answer='';
         try{
           result=await runAssist(env,question,context);
-        }catch{
+          answer=typeof result?.response==='string'?result.response.trim():'';
+        }catch{}
+        if(!answer){
           usedModel=FAST_MODEL;
-          result=await env.AI.run(FAST_MODEL,{
-            messages:[
-              {role:'system',content:baseSystem()},
-              {role:'user',content:'PEDIDO:\n'+question+'\n\nDADOS ACTUAIS:\n'+JSON.stringify(context).slice(0,30000)}
-            ],
-            max_tokens:550,
-            temperature:0.2
-          });
+          try{
+            result=await env.AI.run(FAST_MODEL,{
+              messages:[
+                {role:'system',content:baseSystem()},
+                {role:'user',content:'PEDIDO:\n'+question+'\n\nDADOS ACTUAIS:\n'+JSON.stringify(context).slice(0,30000)}
+              ],
+              max_tokens:550,
+              temperature:0.2
+            });
+            answer=typeof result?.response==='string'?result.response.trim():'';
+          }catch{}
         }
-        const answer=typeof result?.response==='string'?result.response.trim():'';
-        if(!answer)return json({ok:false,error:'Os modelos não devolveram texto.'},502,origin);
+        if(!answer)return json({ok:true,answer:'IA temporariamente sem resposta. A estação e o Telegram continuam operacionais.',model:'fallback-local',usage:null},200,origin);
         return json({ok:true,answer,model:usedModel,usage:result?.usage||null},200,origin);
       }catch(error){
         return json({ok:false,error:'Falha no Workers AI: '+String(error?.message||error)},500,origin);
