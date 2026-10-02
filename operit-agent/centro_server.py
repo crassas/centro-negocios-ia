@@ -3,6 +3,7 @@ import json
 import os
 import secrets
 import signal
+import shutil
 import subprocess
 import time
 import urllib.request
@@ -18,6 +19,8 @@ TOKEN_FILE = STATE_DIR / "token"
 AGENT_PID_FILE = HOME / ".centro-agent" / "agent.pid"
 STARTED_AT = time.time()
 CMD_TIMEOUT = 120
+CLAUDE_TIMEOUT = 300
+OLLAMA_KEY_FILE = HOME / ".centro-agent" / "ollama_api_key"
 
 REPOS = {
     "centro-negocios-ia": "https://github.com/crassas/centro-negocios-ia.git",
@@ -169,6 +172,96 @@ def execute_action(task):
                 "durationMs": origin["durationMs"],
             }
         return run_cmd(["git", "pull", "--ff-only"], cwd=path)
+
+    if action == "claude_query":
+        prompt = str((task.get("args") or {}).get("prompt") or "").strip()
+        if not prompt:
+            return {"exitCode": 2, "stdout": "", "stderr": "Pedido para o Claude Code em falta.", "durationMs": 0}
+        if len(prompt) > 5000:
+            return {"exitCode": 2, "stdout": "", "stderr": "Pedido demasiado longo.", "durationMs": 0}
+
+        cwd = HOME
+        if target != "local":
+            if target not in REPOS:
+                return {"exitCode": 2, "stdout": "", "stderr": "Projecto não permitido.", "durationMs": 0}
+            cwd = locate_repo(target)
+            if not cwd:
+                return {
+                    "exitCode": 3,
+                    "stdout": "",
+                    "stderr": f"Repositório {target} ainda não existe localmente.",
+                    "durationMs": 0,
+                }
+
+        claude = shutil.which("claude")
+        if not claude:
+            candidates = [
+                HOME / ".local" / "bin" / "claude",
+                Path("/usr/local/bin/claude"),
+                Path("/usr/bin/claude"),
+            ]
+            claude = next((str(p) for p in candidates if p.exists()), None)
+        if not claude:
+            return {"exitCode": 127, "stdout": "", "stderr": "Claude Code não foi encontrado.", "durationMs": 0}
+
+        try:
+            key = OLLAMA_KEY_FILE.read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            key = ""
+        if not key:
+            return {
+                "exitCode": 78,
+                "stdout": "",
+                "stderr": "Falta a chave Ollama em ~/.centro-agent/ollama_api_key.",
+                "durationMs": 0,
+            }
+
+        env = os.environ.copy()
+        env["ANTHROPIC_BASE_URL"] = "https://ollama.com"
+        env["ANTHROPIC_AUTH_TOKEN"] = key
+        env["OLLAMA_API_KEY"] = key
+        env.pop("ANTHROPIC_API_KEY", None)
+
+        system_note = (
+            "Estás a responder através do Centro de Negócios no Telegram. "
+            "Responde em português de Portugal, de forma directa e curta. "
+            "Esta chamada está em modo de análise: não alteres ficheiros nem executes acções destrutivas."
+        )
+
+        started = time.time()
+        try:
+            proc = subprocess.run(
+                [
+                    claude,
+                    "--model",
+                    "gpt-oss:120b",
+                    "--permission-mode",
+                    "plan",
+                    "--append-system-prompt",
+                    system_note,
+                    "-p",
+                    prompt,
+                ],
+                cwd=str(cwd),
+                text=True,
+                capture_output=True,
+                timeout=CLAUDE_TIMEOUT,
+                check=False,
+                env=env,
+            )
+            return {
+                "exitCode": proc.returncode,
+                "stdout": proc.stdout[-12000:],
+                "stderr": proc.stderr[-6000:],
+                "durationMs": int((time.time() - started) * 1000),
+            }
+        except subprocess.TimeoutExpired:
+            return {
+                "exitCode": 124,
+                "stdout": "",
+                "stderr": "Tempo limite do Claude Code excedido.",
+                "durationMs": int((time.time() - started) * 1000),
+            }
 
     return {
         "exitCode": 126,
