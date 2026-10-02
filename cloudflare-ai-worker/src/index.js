@@ -403,9 +403,89 @@ async function councilTurn(env,model,system,user,maxTokens=650,fallbackModel=nul
   return '';
 }
 
+const PROJECT_REPOS={
+  centro:{repo:'crassas/centro-negocios-ia',public:true},
+  pentehouse:{repo:'crassas/pente_houselanding',public:true},
+  pizza:{repo:'crassas/best-pizza-kebab',public:true},
+  doisirmaos:{repo:'crassas/restaurante-2-irmaos',public:false}
+};
+
+function projectFromTopic(text){
+  const lower=String(text||'').toLowerCase();
+  if(lower.includes('pentehouse')||lower.includes('pente house')||lower.includes('penthouse'))return 'pentehouse';
+  if(lower.includes('best pizza')||lower.includes('pizza')||lower.includes('kebab'))return 'pizza';
+  if(lower.includes('2 irmãos')||lower.includes('dois irmãos')||lower.includes('doisirmaos'))return 'doisirmaos';
+  if(lower.includes('centro de negócios')||lower.includes('centro negocios')||lower.includes('centro'))return 'centro';
+  return 'local';
+}
+
+async function fetchPublicRepoSnapshot(project){
+  const info=PROJECT_REPOS[project];
+  if(!info||!info.public)return null;
+  const headers={'user-agent':'centro-negocios-ai','accept':'application/vnd.github+json'};
+  const treeRes=await fetch('https://api.github.com/repos/'+info.repo+'/git/trees/main?recursive=1',{headers});
+  if(!treeRes.ok)return null;
+  const tree=await treeRes.json();
+  const paths=(Array.isArray(tree?.tree)?tree.tree:[])
+    .filter(x=>x&&x.type==='blob'&&typeof x.path==='string')
+    .map(x=>x.path)
+    .filter(p=>!/(^|\/)(node_modules|dist|build|\.git)(\/|$)/.test(p))
+    .slice(0,140);
+  const preferred=['README.md','package.json','index.html','app.js','src/main.js','src/main.ts','src/App.jsx','src/App.tsx'];
+  const files={};
+  for(const path of preferred){
+    if(!paths.includes(path))continue;
+    try{
+      const res=await fetch('https://raw.githubusercontent.com/'+info.repo+'/main/'+path,{headers:{'user-agent':'centro-negocios-ai'}});
+      if(res.ok)files[path]=(await res.text()).slice(0,5000);
+    }catch{}
+    if(Object.keys(files).length>=4)break;
+  }
+  return {source:'github-public',repo:info.repo,branch:'main',paths,files};
+}
+
+async function getRepoContextForCouncil(env,project){
+  if(!project||project==='local')return {project:'local',available:false,note:'Sem projecto específico.'};
+  const q=taskQueue(env);
+  let snapshot=await q.getRepoSnapshot(project);
+  if(snapshot)return {project,available:true,...snapshot};
+  snapshot=await fetchPublicRepoSnapshot(project);
+  if(snapshot){
+    await q.setRepoSnapshot(project,snapshot);
+    return {project,available:true,...snapshot};
+  }
+  const info=PROJECT_REPOS[project];
+  return {
+    project,
+    available:false,
+    repo:info?.repo||null,
+    note:info&&!info.public?'Repositório privado: aguarda snapshot do Centro Agent local.':'Snapshot ainda indisponível.'
+  };
+}
+
+function compactRepoContext(ctx){
+  if(!ctx||!ctx.available)return JSON.stringify(ctx||{available:false});
+  return JSON.stringify({
+    project:ctx.project,
+    source:ctx.source,
+    repo:ctx.repo,
+    branch:ctx.branch,
+    head:ctx.head,
+    status:ctx.status,
+    paths:Array.isArray(ctx.paths)?ctx.paths.slice(0,100):[],
+    files:ctx.files&&typeof ctx.files==='object'?ctx.files:{},
+    updatedAt:ctx.updatedAt||null
+  }).slice(0,24000);
+}
+
 async function runCouncil(env,topic){
   const subject=String(topic||'').trim().slice(0,5000);
   if(!subject)return;
+
+  const project=projectFromTopic(subject);
+  const repoContext=await getRepoContextForCouncil(env,project);
+  const evidence=compactRepoContext(repoContext);
+  await telegramSend(env,'⚙️ ESQUADRÃO ACTIVADO\n\n5 especialistas em paralelo · projecto: '+project+'\nRepositório: '+(repoContext.available?'contexto disponível':'contexto limitado'));
 
   try{
     const scoutP=councilTurn(
