@@ -18,7 +18,7 @@ let vaultTimer=null;
 let installPrompt=null;
 let toastTimer=null;
 
-function defaultState(){return {clients:{},leads:[],gsc:null,transactions:[],agent:{opportunities:[],decisions:[],reports:[],telegramOffset:0}};}
+function defaultState(){return {clients:{},leads:[],gsc:null,transactions:[],pendingPayments:[],agent:{opportunities:[],decisions:[],reports:[],telegramOffset:0}};}
 function loadState(){
   try{
     const current=localStorage.getItem(STORE_KEY);
@@ -36,6 +36,7 @@ function normalizeState(value){
     leads:Array.isArray(value.leads)?value.leads:[],
     gsc:value.gsc&&typeof value.gsc==='object'?value.gsc:null,
     transactions:Array.isArray(value.transactions)?value.transactions:[],
+    pendingPayments:Array.isArray(value.pendingPayments)?value.pendingPayments:[],
     agent:{
       opportunities:Array.isArray(value.agent?.opportunities)?value.agent.opportunities:[],
       decisions:Array.isArray(value.agent?.decisions)?value.agent.decisions:[],
@@ -69,6 +70,24 @@ function seedCRMDefaults(){
     }
   }
   if(changed)localStorage.setItem(STORE_KEY,JSON.stringify(state));
+}
+
+function seedPaymentDefaults(){
+  if(!Array.isArray(state.pendingPayments))state.pendingPayments=[];
+  const id='payment_engomadoria_20261002';
+  if(!state.pendingPayments.some(item=>item&&item.id===id)){
+    state.pendingPayments.push({
+      id,
+      client:'Engomadoria Beatriz',
+      amount:25,
+      projectId:'engomadoria',
+      description:'Site da Engomadoria Beatriz — pagamento apenas após conclusão e validação da cliente.',
+      dueDate:'',
+      status:'pending',
+      createdAt:'2026-10-02T07:57:00.000Z'
+    });
+    localStorage.setItem(STORE_KEY,JSON.stringify(state));
+  }
 }
 
 function seedLeadDefaults(){
@@ -194,7 +213,7 @@ async function loadLive(){
 
 function renderAll(){
   fillProjectSelects();
-  renderMonitorStatus();renderKpis();renderSites();renderAlerts();renderConnections();renderCRM();renderLeads();renderGsc();renderFinance();renderSystem();renderAIStatus();setupVaultState();
+  renderMonitorStatus();renderKpis();renderSites();renderAlerts();renderConnections();renderCRM();renderLeads();renderGsc();renderPayments();renderFinance();renderSystem();renderAIStatus();setupVaultState();
 }
 function renderMonitorStatus(){
   const pill=$('monitor-pill'),label=$('monitor-label'),meta=$('audit-meta');
@@ -325,6 +344,33 @@ function renderGsc(){
   tbody.innerHTML=g.rows.slice().sort((a,b)=>b.clicks-a.clicks||b.impressions-a.impressions).slice(0,50).map(r=>'<tr><td>'+esc(r.query||'—')+'</td><td>'+fmtNum(r.clicks)+'</td><td>'+fmtNum(r.impressions)+'</td><td>'+fmtNum((r.ctr==null?(r.impressions?r.clicks/r.impressions:0):r.ctr)*100,2)+'%</td><td>'+fmtNum(r.position,2)+'</td></tr>').join('');
 }
 
+function pendingPaymentTotals(){
+  const pending=(state.pendingPayments||[]).filter(p=>p.status==='pending');
+  return {count:pending.length,total:pending.reduce((sum,p)=>sum+Math.abs(Number(p.amount)||0),0)};
+}
+function renderPayments(){
+  if(!Array.isArray(state.pendingPayments))state.pendingPayments=[];
+  const totals=pendingPaymentTotals();
+  if($('payment-pending-total'))$('payment-pending-total').textContent=fmtMoney(totals.total);
+  if($('payment-pending-count'))$('payment-pending-count').textContent=totals.count+' pendente'+(totals.count===1?'':'s');
+  const tbody=$('payment-table');if(!tbody)return;
+  if(!state.pendingPayments.length){tbody.innerHTML='<tr><td colspan="7" class="empty-cell">Sem pagamentos pendentes.</td></tr>';return;}
+  tbody.innerHTML=state.pendingPayments.slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).map(row=>{
+    const idx=state.pendingPayments.indexOf(row),project=projectById(row.projectId);
+    const label=row.status==='received'?'Recebido':row.status==='cancelled'?'Cancelado':'Pendente';
+    return '<tr><td>'+esc(row.client||'—')+'</td><td>'+esc(project?project.name:'—')+'</td><td>'+esc(row.description||'—')+'</td><td>'+esc(row.dueDate?fmtDateOnly(row.dueDate):'—')+'</td><td>'+fmtMoney(row.amount)+'</td><td><b>'+label+'</b></td><td>'+(row.status==='pending'?'<button class="btn" data-payment-received="'+idx+'" type="button">Recebi</button> <button class="danger-btn" data-payment-cancel="'+idx+'" title="Cancelar">×</button>':'<button class="danger-btn" data-payment-delete="'+idx+'" title="Eliminar">×</button>')+'</td></tr>';
+  }).join('');
+  tbody.querySelectorAll('[data-payment-received]').forEach(btn=>btn.addEventListener('click',()=>{
+    const row=state.pendingPayments[Number(btn.dataset.paymentReceived)];if(!row||row.status!=='pending')return;
+    if(!confirm('Confirmar que '+fmtMoney(row.amount)+' foi efectivamente recebido?'))return;
+    row.status='received';row.receivedAt=new Date().toISOString();
+    state.transactions.push({id:uid('txn'),date:new Date().toISOString().slice(0,10),type:'income',amount:Math.abs(Number(row.amount)||0),category:'Pagamento recebido',projectId:row.projectId||'',description:(row.client||'Cliente')+(row.description?' · '+row.description:''),createdAt:new Date().toISOString()});
+    saveState();renderPayments();renderFinance();toast('Pagamento marcado como recebido e adicionado ao Caixa.');
+  }));
+  tbody.querySelectorAll('[data-payment-cancel]').forEach(btn=>btn.addEventListener('click',()=>{const row=state.pendingPayments[Number(btn.dataset.paymentCancel)];if(!row)return;if(confirm('Cancelar este pagamento pendente?')){row.status='cancelled';saveState();renderPayments();}}));
+  tbody.querySelectorAll('[data-payment-delete]').forEach(btn=>btn.addEventListener('click',()=>{if(confirm('Eliminar este registo de pagamento?')){state.pendingPayments.splice(Number(btn.dataset.paymentDelete),1);saveState();renderPayments();}}));
+}
+
 function financeTotals(){return state.transactions.reduce((a,t)=>{const n=Math.abs(Number(t.amount)||0);if(t.type==='income')a.income+=n;else a.expense+=n;a.balance=a.income-a.expense;return a;},{income:0,expense:0,balance:0});}
 function renderFinance(){
   const t=financeTotals();$('finance-income').textContent=fmtMoney(t.income);$('finance-expense').textContent=fmtMoney(t.expense);$('finance-balance').textContent=fmtMoney(t.balance);
@@ -339,13 +385,13 @@ function renderFinance(){
 function fillProjectSelects(){
   const projects=allProjects();
   const options='<option value="">Sem projecto</option>'+projects.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join('');
-  ['finance-project','vault-project'].forEach(id=>{const el=$(id);if(el&&el.dataset.ready!==String(projects.length)){const current=el.value;el.innerHTML=options;el.value=current;el.dataset.ready=String(projects.length);}});
+  ['finance-project','payment-project','vault-project'].forEach(id=>{const el=$(id);if(el&&el.dataset.ready!==String(projects.length)){const current=el.value;el.innerHTML=options;el.value=current;el.dataset.ready=String(projects.length);}});
 }
 
 function download(name,content,type='text/plain;charset=utf-8'){
   const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),500);
 }
-function reportObject(){return {exportedAt:new Date().toISOString(),monitor:live,crm:state.clients,leads:state.leads,agent:state.agent,finance:{transactions:state.transactions,totals:financeTotals()},gsc:state.gsc?{fileName:state.gsc.fileName,importedAt:state.gsc.importedAt,summary:gscSummary(),rows:state.gsc.rows}:null};}
+function reportObject(){return {exportedAt:new Date().toISOString(),monitor:live,crm:state.clients,leads:state.leads,agent:state.agent,finance:{transactions:state.transactions,pendingPayments:state.pendingPayments,pendingTotals:pendingPaymentTotals(),totals:financeTotals()},gsc:state.gsc?{fileName:state.gsc.fileName,importedAt:state.gsc.importedAt,summary:gscSummary(),rows:state.gsc.rows}:null};}
 function sitesCsv(){
   const rows=[['site','url','online','http','response_ms','changed','title','h1_count','sitemap_urls','issues']];
   sites.forEach(s=>{const r=siteResult(s.id)||{};rows.push([s.name,s.url,r.online,r.status,r.responseTimeMs,r.changed,r.title,r.h1Count,r.sitemapUrls,(r.issues||[]).map(x=>x.message).join(' | ')]);});
@@ -443,7 +489,7 @@ function aiContext(){
     auditGeneratedAt:live.generatedAt||null,
     projects,
     leads:state.leads.slice(-50).map(lead=>({name:lead.name,status:lead.status,contact:lead.contact||'',createdAt:lead.createdAt||null})),
-    finance:{...financeTotals(),movements:state.transactions.length},
+    finance:{...financeTotals(),movements:state.transactions.length,pending:pendingPaymentTotals(),pendingPayments:(state.pendingPayments||[]).filter(p=>p.status==='pending')},
     searchConsole:g?{summary:g,topQueries:(state.gsc.rows||[]).slice().sort((a,b)=>b.clicks-a.clicks||b.impressions-a.impressions).slice(0,20)}:null,
     opportunities:(state.agent?.opportunities||[]).slice(-50),
     pendingDecisions:(state.agent?.decisions||[]).filter(x=>x.status==='pending').slice(-30).map(x=>({type:x.type,title:x.title,reason:x.reason,payload:x.payload}))
@@ -628,6 +674,19 @@ function setupEvents(){
   $('prospect-voice-btn').addEventListener('click',()=>startDictation('prospect-capture'));
   $('prospect-analyse').addEventListener('click',captureOpportunity);
   $('prospect-capture').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();captureOpportunity();}});
+  $('payment-form')?.addEventListener('submit',e=>{
+    e.preventDefault();
+    const amount=Math.abs(Number($('payment-amount').value)||0);
+    if(!amount){toast('Indica um valor válido.');return;}
+    state.pendingPayments.push({id:uid('payment'),client:$('payment-client').value.trim(),amount,projectId:$('payment-project').value,description:$('payment-description').value.trim(),dueDate:$('payment-due-date').value,status:'pending',createdAt:new Date().toISOString()});
+    saveState();e.target.reset();renderPayments();toast('Pagamento pendente adicionado.');
+  });
+  $('finance-form')?.addEventListener('submit',e=>{
+    e.preventDefault();
+    const amount=Math.abs(Number($('finance-amount').value)||0);if(!amount){toast('Indica um valor válido.');return;}
+    state.transactions.push({id:uid('txn'),date:$('finance-date').value,type:$('finance-type').value,amount,category:$('finance-category').value.trim(),projectId:$('finance-project').value,description:$('finance-description').value.trim(),createdAt:new Date().toISOString()});
+    saveState();e.target.reset();$('finance-date').value=new Date().toISOString().slice(0,10);renderFinance();toast('Movimento registado.');
+  });
   $('telegram-check-btn').addEventListener('click',async()=>{await checkTelegramStatus(true);await pollTelegramApprovals(true);});
   document.querySelectorAll('[data-ai-question]').forEach(btn=>btn.addEventListener('click',()=>{
     if(btn.dataset.openAi==='1')openPanel('assistente');
@@ -642,8 +701,8 @@ function setupPWA(){
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
-  seedCRMDefaults();seedLeadDefaults();setupEvents();setupPWA();
+  seedCRMDefaults();seedLeadDefaults();seedPaymentDefaults();setupEvents();setupPWA();
   $('finance-date').value=new Date().toISOString().slice(0,10);
-  renderLeads();renderFinance();renderGsc();renderAgentState();setupVaultState();renderSystem();renderAIStatus();
+  renderLeads();renderPayments();renderFinance();renderGsc();renderAgentState();setupVaultState();renderSystem();renderAIStatus();
   checkTelegramStatus(false);pollTelegramApprovals(false);setInterval(()=>pollTelegramApprovals(false),30000);loadLive();
 });
