@@ -1146,14 +1146,22 @@ async function handleTelegramUpdate(env,update,ctx){
       const task=await q.createTask(instruction,'telegram');
       const isClaude=instruction.action==='claude_query';
       const isOpenClaw=instruction.action==='openclaw_query'||instruction.action==='openclaw_status';
-      const heading=isClaude?'CLAUDE CODE':(isOpenClaw?'OPENCLAW':'ACÇÃO OPERIT');
-      const question=isClaude?'Enviar ao Claude Code?':(isOpenClaw?'Executar no OpenClaw local?':'Executar?');
-      await telegramSend(env,heading+'\n\n'+task.label+'\n\n'+question,{
-        reply_markup:{inline_keyboard:[[
-          {text:(isClaude||isOpenClaw)?'✅ Enviar':'✅ Executar',callback_data:'taskapprove:'+task.id},
-          {text:(isClaude||isOpenClaw)?'❌ Cancelar':'❌ Recusar',callback_data:'taskreject:'+task.id}
-        ]]}
-      });
+
+      // OpenClaw está limitado a leitura/análise nesta fase.
+      // O próprio comando /openclaw já é autorização suficiente para uma operação read-only.
+      if(isOpenClaw){
+        await q.resolveTask(task.id,true);
+        await telegramSend(env,'⚡ OPENCLAW\n\n'+task.label+'\n\nEnviado directamente ao Gateway local.');
+      }else{
+        const heading=isClaude?'CLAUDE CODE':'ACÇÃO OPERIT';
+        const question=isClaude?'Enviar ao Claude Code?':'Executar?';
+        await telegramSend(env,heading+'\n\n'+task.label+'\n\n'+question,{
+          reply_markup:{inline_keyboard:[[
+            {text:isClaude?'✅ Enviar':'✅ Executar',callback_data:'taskapprove:'+task.id},
+            {text:isClaude?'❌ Cancelar':'❌ Recusar',callback_data:'taskreject:'+task.id}
+          ]]}
+        });
+      }
     }else if(text==='/limpar'){
       await q.clearRoom();
       await telegramSend(env,'Conversa do grupo limpa.');
