@@ -974,11 +974,41 @@ async function handleTelegramUpdate(env,update,ctx){
         lines.push((row.available?'✅ ':'⚠️ ')+name+(row.available?' · '+(row.source||'snapshot'):' · sem snapshot'));
       }
       await telegramSend(env,lines.join('\n'));
+    }else if(text==='/gpu-status'){
+      const gpu=await q.gpuStats();
+      const online=Boolean(gpu?.meta?.lastSeenAt&&Date.now()-Number(gpu.meta.lastSeenAt)<30000);
+      const meta=gpu?.meta||{};
+      await telegramSend(env,[
+        'GPU NODE',
+        '',
+        'Estado: '+(online?'🟢 ONLINE':(gpu.paired?'🟡 EMPARELHADO / OFFLINE':'⚫ NÃO EMPARELHADO')),
+        'GPU: '+String(meta.gpuName||'-'),
+        'VRAM: '+String(meta.vramGb||'-')+' GB',
+        'Modelo: '+String(meta.model||'-'),
+        'Fila: '+String(gpu.queued||0),
+        'Em execução: '+String(gpu.running||0),
+        'Concluídas: '+String(gpu.completed||0)
+      ].join('\n'));
+    }else if(/^\/gpu\s+/i.test(text)){
+      const prompt=text.replace(/^\/gpu\s+/i,'').trim();
+      const gpu=await q.gpuStats();
+      const online=Boolean(gpu?.meta?.lastSeenAt&&Date.now()-Number(gpu.meta.lastSeenAt)<30000);
+      if(!online){
+        await telegramSend(env,'GPU Node está offline. Abre o Colab e inicia o nó.');
+      }else{
+        const task=await q.createGpuTask({
+          prompt,
+          system:'Responde em português de Portugal, sem gerúndio. Sê tecnicamente rigoroso e directo.',
+          maxTokens:1400,
+          temperature:0.2
+        },'telegram');
+        await telegramSend(env,'🟣 GPU NODE\n\nTarefa '+task.id+' enviada para '+String(gpu.meta?.model||'modelo Colab')+'.');
+      }
     }else if(text==='/status'){
       const stats=await q.taskStats();
       await telegramSend(env,'OPERIT\n\n'+(stats.paired?'Dispositivo: ligado':'Dispositivo: por emparelhar')+'\nFila: '+stats.queued+'\nEm execução: '+stats.running+'\nConcluídas: '+stats.completed);
     }else if(text==='/start'){
-      await telegramSend(env,'Centro de Negócios online.\n\nConversa normal = grupo multi-LLM\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
+      await telegramSend(env,'Centro de Negócios online.\n\nConversa normal = grupo multi-LLM\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/gpu-status — estado do Colab\n/gpu <pedido> — usar GPU Colab\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
     }else if(text){
       if(text.startsWith('/')){
         await telegramSend(env,'Centro disponível:\nConversa normal = grupo multi-LLM\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
