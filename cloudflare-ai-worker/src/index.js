@@ -110,6 +110,47 @@ export class TaskQueue extends DurableObject {
     await this.setJson('task:'+id,task);
     return {ok:true,task};
   }
+  async createGpuPair(meta={}){
+    const now=Date.now();
+    const active=await this.getJson('gpu:pair:active',null);
+    if(active&&active.expiresAt>now&&active.status==='pending')return {id:active.id,expiresAt:active.expiresAt};
+    const id=crypto.randomUUID().replaceAll('-','').slice(0,12);
+    const bytes=crypto.getRandomValues(new Uint8Array(32));
+    const token=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
+    const pair={id,token,status:'pending',createdAt:now,expiresAt:now+10*60*1000,meta:meta&&typeof meta==='object'?meta:{}};
+    await this.setJson('gpu:pair:active',pair);
+    return {id,expiresAt:pair.expiresAt};
+  }
+  async resolveGpuPair(id,approved){
+    const pair=await this.getJson('gpu:pair:active',null);
+    if(!pair||pair.id!==id||pair.expiresAt<Date.now())return {ok:false};
+    pair.status=approved?'approved':'rejected';
+    if(approved){
+      const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pair.token));
+      pair.tokenHash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+      await this.setJson('gpu:tokenHash',pair.tokenHash);
+      await this.setJson('gpu:meta',{...(pair.meta||{}),pairedAt:Date.now(),lastSeenAt:Date.now()});
+    }
+    await this.setJson('gpu:pair:active',pair);
+    return {ok:true,status:pair.status};
+  }
+  async gpuPairStatus(id){
+    const pair=await this.getJson('gpu:pair:active',null);
+    if(!pair||pair.id!==id)return {status:'missing'};
+    if(pair.expiresAt<Date.now())return {status:'expired'};
+    return {status:pair.status,token:pair.status==='approved'?pair.token:undefined,expiresAt:pair.expiresAt};
+  }
+  async authenticateGpu(hash){
+    const saved=await this.getJson('gpu:tokenHash','');
+    return Boolean(saved&&hash&&saved===hash);
+  }
+  async touchGpu(meta={}){
+    const current=await this.getJson('gpu:meta',{});
+    const next={...current,...(meta&&typeof meta==='object'?meta:{}),lastSeenAt:Date.now()};
+    await this.setJson('gpu:meta',next);
+    return next;
+  }
+
   async taskStats(){
     const ids=await this.getJson('task:ids',[]);
     const stats={pending:0,queued:0,running:0,completed:0,rejected:0};
