@@ -17,6 +17,8 @@ HOME = Path.home()
 STATE_DIR = HOME / ".centro-server"
 TOKEN_FILE = STATE_DIR / "token"
 AGENT_PID_FILE = HOME / ".centro-agent" / "agent.pid"
+SUPERVISOR_PID_FILE = HOME / ".centro-station" / "supervisor.pid"
+HISTORY_FILE = STATE_DIR / "history.jsonl"
 STARTED_AT = time.time()
 CMD_TIMEOUT = 120
 CLAUDE_TIMEOUT = 300
@@ -58,6 +60,56 @@ def pid_running(path):
         return True, pid
     except Exception:
         return False, None
+
+
+def append_history(task, result):
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        row = {
+            "timestamp": int(time.time()),
+            "action": str(task.get("action") or ""),
+            "target": str(task.get("target") or ""),
+            "label": str(task.get("label") or ""),
+            "exitCode": int(result.get("exitCode", 1)),
+            "durationMs": int(result.get("durationMs", 0)),
+        }
+        with HISTORY_FILE.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+def read_history(limit=20):
+    try:
+        rows = HISTORY_FILE.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return []
+    out = []
+    for line in rows[-max(1, min(int(limit), 100)):]:
+        try:
+            out.append(json.loads(line))
+        except Exception:
+            pass
+    return out
+
+
+def capabilities():
+    return {
+        "mode": "local-first",
+        "paidApiFallback": False,
+        "actions": [
+            "server_status",
+            "station_status",
+            "station_doctor",
+            "system_info",
+            "site_check",
+            "git_status",
+            "git_pull",
+            "claude_query",
+        ],
+        "repos": list(REPOS.keys()),
+        "sites": [name for name, _ in SITES],
+    }
 
 
 def run_cmd(args, cwd=None, timeout=CMD_TIMEOUT):
@@ -113,6 +165,7 @@ def execute_action(task):
 
     if action == "server_status":
         agent_active, agent_pid = pid_running(AGENT_PID_FILE)
+        supervisor_active, supervisor_pid = pid_running(SUPERVISOR_PID_FILE)
         return {
             "exitCode": 0,
             "stdout": "\n".join([
@@ -123,8 +176,52 @@ def execute_action(task):
                 f"Uptime: {int(time.time() - STARTED_AT)} s",
                 f"Centro Agent: {'ACTIVO' if agent_active else 'PARADO'}",
                 f"PID agente: {agent_pid if agent_pid else '-'}",
+                f"Supervisor: {'ACTIVO' if supervisor_active else 'PARADO'}",
+                f"PID supervisor: {supervisor_pid if supervisor_pid else '-'}",
             ]),
             "stderr": "",
+            "durationMs": 0,
+        }
+
+    if action == "station_status":
+        agent_active, agent_pid = pid_running(AGENT_PID_FILE)
+        supervisor_active, supervisor_pid = pid_running(SUPERVISOR_PID_FILE)
+        lines = [
+            "ESTAÇÃO CENTRO",
+            "Núcleo local-first",
+            "Fallback pago automático: NÃO",
+            "",
+            f"Servidor: ACTIVO · PID {os.getpid()}",
+            f"Agente: {'ACTIVO' if agent_active else 'PARADO'} · PID {agent_pid if agent_pid else '-'}",
+            f"Supervisor: {'ACTIVO' if supervisor_active else 'PARADO'} · PID {supervisor_pid if supervisor_pid else '-'}",
+            f"Capacidades: {len(capabilities()['actions'])}",
+            f"Projectos autorizados: {len(REPOS)}",
+            f"Sites monitorizados: {len(SITES)}",
+        ]
+        return {"exitCode": 0, "stdout": "\n".join(lines), "stderr": "", "durationMs": 0}
+
+    if action == "station_doctor":
+        agent_active, _ = pid_running(AGENT_PID_FILE)
+        supervisor_active, _ = pid_running(SUPERVISOR_PID_FILE)
+        claude = shutil.which("claude") or (str(HOME / ".local" / "bin" / "claude") if (HOME / ".local" / "bin" / "claude").exists() else "")
+        checks = [
+            ("Servidor privado", True),
+            ("Centro Agent", agent_active),
+            ("Supervisor", supervisor_active),
+            ("Python 3", bool(shutil.which("python3"))),
+            ("Node", bool(shutil.which("node"))),
+            ("Claude Code", bool(claude)),
+            ("Token servidor", TOKEN_FILE.exists()),
+            ("Token Operit", (HOME / ".centro-agent" / "token").exists()),
+        ]
+        lines = ["DIAGNÓSTICO CENTRO STATION"]
+        for name, ok in checks:
+            lines.append(f"{'OK' if ok else 'FALHA'} · {name}")
+        overall = all(ok for _, ok in checks)
+        return {
+            "exitCode": 0 if overall else 1,
+            "stdout": "\n".join(lines),
+            "stderr": "" if overall else "Há componentes por corrigir.",
             "durationMs": 0,
         }
 
@@ -333,6 +430,14 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(401, {"ok": False, "error": "Não autorizado."})
             return
 
+        if path == "/capabilities":
+            self.send_json(200, {"ok": True, "capabilities": capabilities()})
+            return
+
+        if path == "/history":
+            self.send_json(200, {"ok": True, "history": read_history(30)})
+            return
+
         if path == "/status":
             agent_active, agent_pid = pid_running(AGENT_PID_FILE)
             self.send_json(
@@ -371,7 +476,9 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self.send_json(400, {"ok": False, "error": "JSON inválido."})
                 return
-            result = execute_action(task if isinstance(task, dict) else {})
+            task = task if isinstance(task, dict) else {}
+            result = execute_action(task)
+            append_history(task, result)
             self.send_json(200, {"ok": True, "result": result})
             return
 
