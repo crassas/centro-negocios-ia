@@ -195,6 +195,19 @@ def action_claude_query(task):
         "Esta chamada está em modo de análise: não alteres ficheiros nem executes acções destrutivas."
     )
 
+    try:
+        key = OLLAMA_KEY_FILE.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        key = ""
+    if not key:
+        return 78, "", "Falta a chave Ollama validada em ~/.centro-agent/ollama_api_key.", 0
+
+    claude_env = os.environ.copy()
+    claude_env["ANTHROPIC_BASE_URL"] = "https://ollama.com"
+    claude_env["ANTHROPIC_AUTH_TOKEN"] = key
+    claude_env["OLLAMA_API_KEY"] = key
+    claude_env.pop("ANTHROPIC_API_KEY", None)
+
     return run_cmd(
         [
             claude,
@@ -209,6 +222,7 @@ def action_claude_query(task):
         ],
         cwd=cwd,
         timeout=CLAUDE_TIMEOUT,
+        env=claude_env,
     )
 
 
