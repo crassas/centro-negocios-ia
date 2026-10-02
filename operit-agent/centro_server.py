@@ -111,6 +111,23 @@ def execute_action(task):
     action = str(task.get("action") or "")
     target = str(task.get("target") or "")
 
+    if action == "server_status":
+        agent_active, agent_pid = pid_running(AGENT_PID_FILE)
+        return {
+            "exitCode": 0,
+            "stdout": "\n".join([
+                "Centro Server: ACTIVO",
+                f"Endereço: http://{HOST}:{PORT}",
+                "Privado: sim (127.0.0.1)",
+                f"PID servidor: {os.getpid()}",
+                f"Uptime: {int(time.time() - STARTED_AT)} s",
+                f"Centro Agent: {'ACTIVO' if agent_active else 'PARADO'}",
+                f"PID agente: {agent_pid if agent_pid else '-'}",
+            ]),
+            "stderr": "",
+            "durationMs": 0,
+        }
+
     if action == "system_info":
         import platform
         result = run_cmd(["node", "--version"])
