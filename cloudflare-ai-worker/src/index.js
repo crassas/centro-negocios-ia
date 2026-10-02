@@ -154,6 +154,9 @@ const FAST_MODEL='@cf/zai-org/glm-4.7-flash';
 const MODEL='@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const DEEP_MODEL='@cf/openai/gpt-oss-120b';
 const AGENT_MODEL='@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+const QWEN_MODEL='@cf/qwen/qwen3-30b-a3b-fp8';
+const MISTRAL_MODEL='@cf/mistralai/mistral-small-3.1-24b-instruct';
+const GEMMA_MODEL='@cf/google/gemma-4-26b-a4b-it';
 const COUNCIL_CRITIC_MODEL='@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const ALLOWED_ORIGIN='https://crassas.github.io';
 
