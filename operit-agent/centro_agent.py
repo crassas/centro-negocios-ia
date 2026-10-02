@@ -26,6 +26,7 @@ REPOS = {
     "pente_houselanding": "https://github.com/crassas/pente_houselanding.git",
     "best-pizza-kebab": "https://github.com/crassas/best-pizza-kebab.git",
     "restaurante-2-irmaos": "https://github.com/crassas/restaurante-2-irmaos.git",
+    "engomadoria-beatriz": "https://github.com/crassas/engomadoria-beatriz.git",
 }
 
 SITES = [
