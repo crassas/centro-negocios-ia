@@ -2,6 +2,7 @@
 import json
 import os
 import platform
+import shutil
 import subprocess
 import sys
 import time
@@ -15,6 +16,7 @@ STATE_DIR = HOME / ".centro-agent"
 TOKEN_FILE = STATE_DIR / "token"
 POLL_SECONDS = 4
 CMD_TIMEOUT = 120
+CLAUDE_TIMEOUT = 300
 
 REPOS = {
     "centro-negocios-ia": "https://github.com/crassas/centro-negocios-ia.git",
@@ -75,7 +77,7 @@ def pair():
     raise RuntimeError("Tempo de emparelhamento esgotado.")
 
 
-def run_cmd(args, cwd=None):
+def run_cmd(args, cwd=None, timeout=CMD_TIMEOUT):
     started = time.time()
     try:
         proc = subprocess.run(
@@ -83,7 +85,7 @@ def run_cmd(args, cwd=None):
             cwd=str(cwd) if cwd else None,
             text=True,
             capture_output=True,
-            timeout=CMD_TIMEOUT,
+            timeout=timeout,
             check=False,
         )
         return proc.returncode, proc.stdout[-12000:], proc.stderr[-6000:], int((time.time() - started) * 1000)
@@ -158,12 +160,64 @@ def action_git_pull(task):
         return 4, "", "Remote Git não corresponde ao repositório autorizado.", 0
     return run_cmd(["git", "pull", "--ff-only"], cwd=path)
 
+def action_claude_query(task):
+    prompt = str((task.get("args") or {}).get("prompt") or "").strip()
+    if not prompt:
+        return 2, "", "Pedido para o Claude Code em falta.", 0
+    if len(prompt) > 5000:
+        return 2, "", "Pedido demasiado longo.", 0
+
+    target = task.get("target", "local")
+    cwd = HOME
+    if target != "local":
+        if target not in REPOS:
+            return 2, "", "Projecto não permitido.", 0
+        cwd = locate_repo(target)
+        if not cwd:
+            return 3, "", f"Repositório {target} ainda não existe localmente.", 0
+
+    claude = shutil.which("claude")
+    if not claude:
+        candidates = [
+            HOME / ".local" / "bin" / "claude",
+            Path("/usr/local/bin/claude"),
+            Path("/usr/bin/claude"),
+        ]
+        claude = next((str(p) for p in candidates if p.exists()), None)
+    if not claude:
+        return 127, "", "Claude Code não foi encontrado no PATH.", 0
+
+    system_note = (
+        "Estás a responder através do Centro de Negócios no Telegram. "
+        "Responde em português de Portugal, de forma directa e curta. "
+        "Esta chamada está em modo de análise: não alteres ficheiros nem executes acções destrutivas."
+    )
+    return run_cmd(
+        [
+            claude,
+            "-p",
+            prompt,
+            "--output-format",
+            "text",
+            "--permission-mode",
+            "plan",
+            "--permission-prompts",
+            "none",
+            "--append-system-prompt",
+            system_note,
+        ],
+        cwd=cwd,
+        timeout=CLAUDE_TIMEOUT,
+    )
+
+
 
 ACTIONS = {
     "system_info": action_system_info,
     "site_check": action_site_check,
     "git_status": action_git_status,
     "git_pull": action_git_pull,
+    "claude_query": action_claude_query,
 }
 
 
