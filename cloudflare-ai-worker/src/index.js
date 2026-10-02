@@ -125,7 +125,7 @@ export class TaskQueue extends DurableObject {
 const MODEL='@cf/openai/gpt-oss-120b';
 const FAST_MODEL='@cf/zai-org/glm-4.7-flash';
 const AGENT_MODEL='@cf/openai/gpt-oss-120b';
-const COUNCIL_CRITIC_MODEL='@cf/meta/llama-3.1-8b-instruct-fast';
+const COUNCIL_CRITIC_MODEL='@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const ALLOWED_ORIGIN='https://crassas.github.io';
 
 function cors(origin){
@@ -326,16 +326,28 @@ function modelText(result){
   return '';
 }
 
-async function councilTurn(env,model,system,user,maxTokens=650){
-  const result=await env.AI.run(model,{
+async function councilTurn(env,model,system,user,maxTokens=650,fallbackModel=null){
+  const input={
     messages:[
       {role:'system',content:system},
       {role:'user',content:user}
     ],
     max_tokens:maxTokens,
     temperature:0.25
-  });
-  return modelText(result);
+  };
+  try{
+    const result=await env.AI.run(model,input);
+    const text=modelText(result);
+    if(text)return text;
+  }catch{}
+  if(fallbackModel&&fallbackModel!==model){
+    try{
+      const result=await env.AI.run(fallbackModel,input);
+      const text=modelText(result);
+      if(text)return text;
+    }catch{}
+  }
+  return '';
 }
 
 async function runCouncil(env,topic){
@@ -354,7 +366,8 @@ async function runCouncil(env,topic){
         'Máximo 350 palavras.'
       ].join(' '),
       'TEMA DA MESA:\n'+subject,
-      520
+      520,
+      COUNCIL_CRITIC_MODEL
     );
     await telegramSend(env,'⚡ GLM · EXPLORADOR\n\n'+(scout||'Sem resposta.'));
 
@@ -370,7 +383,8 @@ async function runCouncil(env,topic){
         'Máximo 500 palavras.'
       ].join(' '),
       'TEMA:\n'+subject+'\n\nO EXPLORADOR DISSE:\n'+scout,
-      760
+      760,
+      COUNCIL_CRITIC_MODEL
     );
     await telegramSend(env,'🧠 GPT-OSS-120B · ARQUITECTO\n\n'+(architect||'Sem resposta.'));
 
@@ -387,7 +401,8 @@ async function runCouncil(env,topic){
         'Máximo 400 palavras.'
       ].join(' '),
       'TEMA:\n'+subject+'\n\nEXPLORADOR:\n'+scout+'\n\nARQUITECTO:\n'+architect,
-      620
+      620,
+      FAST_MODEL
     );
     await telegramSend(env,'🔎 LLAMA · CRÍTICO\n\n'+(critic||'Sem resposta.'));
 
@@ -404,7 +419,8 @@ async function runCouncil(env,topic){
         'Máximo 500 palavras.'
       ].join(' '),
       'TEMA:\n'+subject+'\n\nEXPLORADOR:\n'+scout+'\n\nARQUITECTO:\n'+architect+'\n\nCRÍTICO:\n'+critic,
-      760
+      760,
+      COUNCIL_CRITIC_MODEL
     );
     await telegramSend(env,'🎯 GPT-OSS-120B · SÍNTESE\n\n'+(synthesis||'Sem resposta.'));
   }catch(error){
@@ -907,10 +923,23 @@ export default {
           return json({ok:true,summary:String(parsed.summary||'').trim()||'Análise concluída.',actions,model:AGENT_MODEL,usage:result?.usage||null},200,origin);
         }
 
-        const result=await runAssist(env,question,context);
+        let result,usedModel=MODEL;
+        try{
+          result=await runAssist(env,question,context);
+        }catch{
+          usedModel=FAST_MODEL;
+          result=await env.AI.run(FAST_MODEL,{
+            messages:[
+              {role:'system',content:baseSystem()},
+              {role:'user',content:'PEDIDO:\n'+question+'\n\nDADOS ACTUAIS:\n'+JSON.stringify(context).slice(0,30000)}
+            ],
+            max_tokens:550,
+            temperature:0.2
+          });
+        }
         const answer=typeof result?.response==='string'?result.response.trim():'';
-        if(!answer)return json({ok:false,error:'O modelo não devolveu texto.'},502,origin);
-        return json({ok:true,answer,model:MODEL,usage:result?.usage||null},200,origin);
+        if(!answer)return json({ok:false,error:'Os modelos não devolveram texto.'},502,origin);
+        return json({ok:true,answer,model:usedModel,usage:result?.usage||null},200,origin);
       }catch(error){
         return json({ok:false,error:'Falha no Workers AI: '+String(error?.message||error)},500,origin);
       }
