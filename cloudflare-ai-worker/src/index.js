@@ -745,14 +745,21 @@ async function handleTelegramUpdate(env,update,ctx){
           {text:isClaude?'❌ Cancelar':'❌ Recusar',callback_data:'taskreject:'+task.id}
         ]]}
       });
+    }else if(text==='/repos'){
+      const status=await q.repoSnapshotStatus();
+      const lines=['REPOSITÓRIOS DA ESTAÇÃO'];
+      for(const [name,row] of Object.entries(status)){
+        lines.push((row.available?'✅ ':'⚠️ ')+name+(row.available?' · '+(row.source||'snapshot'):' · sem snapshot'));
+      }
+      await telegramSend(env,lines.join('\n'));
     }else if(text==='/status'){
       const stats=await q.taskStats();
       await telegramSend(env,'OPERIT\n\n'+(stats.paired?'Dispositivo: ligado':'Dispositivo: por emparelhar')+'\nFila: '+stats.queued+'\nEm execução: '+stats.running+'\nConcluídas: '+stats.completed);
     }else if(text==='/start'){
-      await telegramSend(env,'Centro de Negócios online.\n\n/mesa <tema> — LLMs em conselho\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
+      await telegramSend(env,'Centro de Negócios online.\n\n/mesa <tema> — esquadrão multi-agente\n/repos — repositórios\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
     }else if(text){
       if(text.startsWith('/')){
-        await telegramSend(env,'Centro disponível:\n/mesa <tema> — LLMs em conselho\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
+        await telegramSend(env,'Centro disponível:\n/mesa <tema> — esquadrão multi-agente\n/repos — repositórios\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
       }else{
         const deterministic=deterministicProjectFront(text);
         if(deterministic){
