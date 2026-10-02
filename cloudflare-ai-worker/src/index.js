@@ -600,6 +600,18 @@ function strictOutputHint(text){
     : '';
 }
 
+function literalGroupReply(text){
+  const raw=String(text||'').trim();
+  const lower=raw.toLowerCase();
+  const prefixes=['digam apenas ','respondam apenas ','diz apenas ','responde apenas '];
+  for(const prefix of prefixes){
+    if(lower.startsWith(prefix)){
+      return raw.slice(prefix.length).trim().replace(/[.!?]+$/,'');
+    }
+  }
+  return '';
+}
+
 function roomTranscript(rows){
   return (Array.isArray(rows)?rows:[]).map(row=>{
     const who=row.role==='user'?'Joao':(row.agent||'IA');
