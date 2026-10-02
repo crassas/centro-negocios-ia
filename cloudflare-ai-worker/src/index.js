@@ -227,6 +227,44 @@ async function runAgent(env,question,context){
     temperature:0.1
   });
 }
+async function runTelegramFront(env,text){
+  const responseFormat={
+    type:'json_schema',
+    json_schema:{
+      type:'object',
+      properties:{
+        answer:{type:'string'},
+        needsClaude:{type:'boolean'},
+        project:{type:'string',enum:['local','centro','pentehouse','pizza','doisirmaos']},
+        claudePrompt:{type:'string'}
+      },
+      required:['answer','needsClaude','project','claudePrompt']
+    }
+  };
+  return env.AI.run(AGENT_MODEL,{
+    messages:[
+      {
+        role:'system',
+        content:[
+          'És a IA frontal rápida da Estação Centro.',
+          'Responde em português de Portugal, sem gerúndio, de forma curta, clara e útil.',
+          'Tens prioridade em responder imediatamente a conversa, dúvidas, planeamento e perguntas simples.',
+          'Não inventes estado do telemóvel, sites, Git, clientes, rankings ou execuções.',
+          'Quando o pedido exigir análise profunda de código, ficheiros, repositórios, alteração de projecto ou investigação local, define needsClaude=true.',
+          'Quando needsClaude=true, mantém uma resposta útil imediata e prepara claudePrompt com o pedido completo para o Claude Code.',
+          'Projectos disponíveis: centro, pentehouse, pizza, doisirmaos. Usa local quando não houver projecto específico.',
+          'Nunca executes acções nem afirmes que executaste. Alterações continuam sujeitas a confirmação humana.',
+          'Evita respostas longas. O Telegram deve parecer rápido.'
+        ].join(' ')
+      },
+      {role:'user',content:String(text||'').slice(0,5000)}
+    ],
+    response_format:responseFormat,
+    max_tokens:420,
+    temperature:0.15
+  });
+}
+
 function taskQueue(env){return env.TASKS.getByName('primary');}
 async function sha256Hex(value){
   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(String(value||'')));
@@ -342,7 +380,43 @@ async function handleTelegramUpdate(env,update){
     }else if(text==='/start'){
       await telegramSend(env,'Centro de Negócios online.\n\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
     }else if(text){
-      await telegramSend(env,'Centro disponível:\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
+      if(text.startsWith('/')){
+        await telegramSend(env,'Centro disponível:\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
+      }else{
+        await telegramApi(env,'sendChatAction',{chat_id:env.TELEGRAM_CHAT_ID,action:'typing'});
+        try{
+          const fast=await runTelegramFront(env,text);
+          const response=fast?.response;
+          const parsed=response&&typeof response==='object'?response:extractJson(typeof response==='string'?response:'');
+          if(!parsed){
+            await telegramSend(env,'Não consegui estruturar a resposta rápida. Usa /claude seguido do pedido para enviar directamente ao Claude Code.');
+          }else{
+            const answer=String(parsed.answer||'').trim()||'Pedido recebido.';
+            const needsClaude=parsed.needsClaude===true;
+            if(!needsClaude){
+              await telegramSend(env,'⚡ '+answer);
+            }else{
+              const alias=String(parsed.project||'local').toLowerCase();
+              const repo=alias==='local'?null:OPERIT_PROJECTS[alias];
+              const prompt=String(parsed.claudePrompt||text).trim().slice(0,5000);
+              const task=await q.createTask({
+                action:'claude_query',
+                target:repo||'local',
+                args:{prompt},
+                label:'Claude Code · '+(repo||'geral')
+              },'telegram-front');
+              await telegramSend(env,'⚡ '+answer+'\n\nPosso aprofundar isto com o Claude Code.',{
+                reply_markup:{inline_keyboard:[[
+                  {text:'🧠 Aprofundar',callback_data:'taskapprove:'+task.id},
+                  {text:'❌ Não',callback_data:'taskreject:'+task.id}
+                ]]}
+              });
+            }
+          }
+        }catch(error){
+          await telegramSend(env,'IA rápida indisponível neste momento. Podes continuar com /claude <pedido>.');
+        }
+      }
     }
   }
 
