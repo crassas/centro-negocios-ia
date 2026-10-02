@@ -994,6 +994,14 @@ async function handleTelegramUpdate(env,update,ctx){
   const cb=update?.callback_query;
   if(cb&&String(cb.message?.chat?.id||'')===String(env.TELEGRAM_CHAT_ID)){
     const data=String(cb.data||'');
+    let gm=data.match(/^gpu(approve|reject):(.+)$/);
+    if(gm){
+      const approved=gm[1]==='approve';
+      const resolved=await q.resolveGpuPair(gm[2],approved);
+      await telegramApi(env,'answerCallbackQuery',{callback_query_id:cb.id,text:approved?'GPU Colab autorizado.':'GPU Colab recusado.'});
+      if(resolved.ok)await telegramSend(env,approved?'🟢 GPU Colab autorizado. O notebook pode ligar-se.':'GPU Colab recusado.');
+      return {ok:true};
+    }
     let m=data.match(/^task(approve|reject):(.+)$/);
     if(m){
       const approved=m[1]==='approve';
