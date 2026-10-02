@@ -260,6 +260,22 @@ function parseOperitInstruction(text){
     const repo=OPERIT_PROJECTS[m[1].toLowerCase()];
     return repo?{action:'git_pull',target:repo,label:'Git pull --ff-only · '+repo}:null;
   }
+
+  // Claude Code no próprio telemóvel. @projecto é opcional.
+  m=raw.match(/^\/claude(?:\s+@([a-z0-9_-]+))?\s+([\s\S]{1,5000})$/i);
+  if(m){
+    const alias=(m[1]||'').toLowerCase();
+    const repo=alias?OPERIT_PROJECTS[alias]:null;
+    if(alias&&!repo)return null;
+    const prompt=m[2].trim();
+    if(!prompt)return null;
+    return {
+      action:'claude_query',
+      target:repo||'local',
+      args:{prompt},
+      label:'Claude Code · '+(repo||'geral')
+    };
+  }
   return null;
 }
 
@@ -307,19 +323,20 @@ async function handleTelegramUpdate(env,update){
     const instruction=parseOperitInstruction(text);
     if(instruction){
       const task=await q.createTask(instruction,'telegram');
-      await telegramSend(env,'ACÇÃO OPERIT\n\n'+task.label+'\n\nExecutar?',{
+      const isClaude=instruction.action==='claude_query';
+      await telegramSend(env,(isClaude?'CLAUDE CODE':'ACÇÃO OPERIT')+'\n\n'+task.label+'\n\n'+(isClaude?'Enviar ao Claude Code?':'Executar?'),{
         reply_markup:{inline_keyboard:[[
-          {text:'✅ Executar',callback_data:'taskapprove:'+task.id},
-          {text:'❌ Recusar',callback_data:'taskreject:'+task.id}
+          {text:isClaude?'✅ Enviar':'✅ Executar',callback_data:'taskapprove:'+task.id},
+          {text:isClaude?'❌ Cancelar':'❌ Recusar',callback_data:'taskreject:'+task.id}
         ]]}
       });
     }else if(text==='/status'){
       const stats=await q.taskStats();
       await telegramSend(env,'OPERIT\n\n'+(stats.paired?'Dispositivo: ligado':'Dispositivo: por emparelhar')+'\nFila: '+stats.queued+'\nEm execução: '+stats.running+'\nConcluídas: '+stats.completed);
     }else if(text==='/start'){
-      await telegramSend(env,'Centro de Negócios online.\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
+      await telegramSend(env,'Centro de Negócios online.\n\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
     }else if(text){
-      await telegramSend(env,'Operit disponível:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, doisirmaos\n/status — estado do executor');
+      await telegramSend(env,'Centro disponível:\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
     }
   }
 
