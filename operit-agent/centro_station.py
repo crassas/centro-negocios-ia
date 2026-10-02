@@ -13,7 +13,10 @@ SERVER_PID_FILE = HOME / ".centro-server" / "server.pid"
 AGENT_PID_FILE = HOME / ".centro-agent" / "agent.pid"
 SERVER_CTL = Path("/usr/local/bin/centroserver")
 AGENT_CTL = Path("/usr/local/bin/centroctl")
+OPENCLAW_CTL = Path("/usr/local/bin/openclawctl")
+OPENCLAW_HEALTH = "http://127.0.0.1:18789/healthz"
 INTERVAL = 3
+OPENCLAW_RETRY_SECONDS = 30
 
 
 def pid_running(path):
@@ -32,6 +35,16 @@ def server_healthy():
             return res.status == 200 and data.get("ok") is True
     except Exception:
         return False
+
+
+
+def openclaw_healthy():
+    try:
+        with urllib.request.urlopen(OPENCLAW_HEALTH, timeout=3) as res:
+            return 200 <= res.status < 500
+    except Exception:
+        return False
+
 
 
 def run_ctl(path, command):
@@ -58,6 +71,7 @@ def write_status(payload):
 def main():
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     print("Centro Station supervisor activo. Ctrl+C para parar.", flush=True)
+    last_openclaw_attempt = 0
 
     while True:
         now = int(time.time())
@@ -79,6 +93,19 @@ def main():
             time.sleep(1)
             agent_active, agent_pid = pid_running(AGENT_PID_FILE)
 
+        openclaw_ok = openclaw_healthy()
+        if (
+            not openclaw_ok
+            and OPENCLAW_CTL.exists()
+            and now - last_openclaw_attempt >= OPENCLAW_RETRY_SECONDS
+        ):
+            last_openclaw_attempt = now
+            ok, output = run_ctl(OPENCLAW_CTL, "start")
+            actions.append({"service": "openclaw", "ok": ok, "output": output})
+            if ok:
+                time.sleep(2)
+                openclaw_ok = openclaw_healthy()
+
         write_status({
             "ok": bool(healthy and agent_active),
             "timestamp": now,
@@ -90,6 +117,10 @@ def main():
             "agent": {
                 "active": agent_active,
                 "pid": agent_pid,
+            },
+            "openclaw": {
+                "healthy": openclaw_ok,
+                "endpoint": "127.0.0.1:18789",
             },
             "actions": actions,
         })
