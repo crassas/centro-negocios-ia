@@ -989,6 +989,8 @@ function parseOperitInstruction(text){
   if(m)return {action:'server_status',target:'local',label:'Estado do Centro Server privado'};
   m=raw.match(/^\/(?:openclaw|openclaw-status)$/i);
   if(m)return {action:'openclaw_status',target:'local',label:'Estado do OpenClaw Gateway'};
+  m=raw.match(/^\/openclaw-models$/i);
+  if(m)return {action:'openclaw_models',target:'local',label:'Modelos disponíveis no OpenClaw'};
   m=raw.match(/^\/openclaw\s+([\s\S]{1,5000})$/i);
   if(m){
     const prompt=m[1].trim();
@@ -1223,7 +1225,7 @@ async function handleTelegramUpdate(env,update,ctx){
       const stats=await q.taskStats();
       await telegramSend(env,'OPERIT\n\n'+(stats.paired?'Dispositivo: ligado':'Dispositivo: por emparelhar')+'\nFila: '+stats.queued+'\nEm execução: '+stats.running+'\nConcluídas: '+stats.completed);
     }else if(text==='/start'){
-      await telegramSend(env,'Centro de Negócios online.\n\nConversa normal = grupo multi-LLM\nSites/repos conhecidos são consultados automaticamente quando pedes análise\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/gpu-status — estado do Colab\n/gpu <pedido> — usar GPU Colab\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/openclaw — estado do OpenClaw\n/openclaw <pedido> — agente OpenClaw local\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
+      await telegramSend(env,'Centro de Negócios online.\n\nConversa normal = grupo multi-LLM\nSites/repos conhecidos são consultados automaticamente quando pedes análise\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/gpu-status — estado do Colab\n/gpu <pedido> — usar GPU Colab\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/openclaw — estado do OpenClaw\n/openclaw-models — modelos disponíveis\n/openclaw <pedido> — agente OpenClaw local\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
     }else if(text){
       if(text.startsWith('/')){
         await telegramSend(env,'Centro disponível:\nConversa normal = grupo multi-LLM\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/openclaw — estado do OpenClaw\n/openclaw <pedido> — agente OpenClaw local\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
