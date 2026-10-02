@@ -387,55 +387,68 @@ async function runCouncil(env,topic){
   if(!subject)return;
 
   try{
-    const scout=await councilTurn(
-      env,
-      FAST_MODEL,
-      [
-        'És o EXPLORADOR numa mesa de três LLMs.',
-        'Responde em português de Portugal, sem gerúndio.',
-        'Abre o problema depressa: objectivo, 3 oportunidades e 2 riscos.',
-        'Não inventes factos. Máximo 220 palavras.'
-      ].join(' '),
-      'TEMA DA MESA:\n'+subject,
-      360,
-      MODEL
+    const scoutP=councilTurn(
+      env,FAST_MODEL,
+      'És o EXPLORADOR. Abre oportunidades e riscos. Português de Portugal, curto, concreto, sem inventar. Máximo 220 palavras.',
+      'TEMA:\n'+subject,340,MODEL
     );
+    const repoP=councilTurn(
+      env,QWEN_MODEL,
+      'És o ENGENHEIRO DE REPOSITÓRIO. Foca arquitectura, código, performance, manutenção e alterações concretas. Se não tiveres evidência de ficheiros, diz isso claramente. Português de Portugal. Máximo 280 palavras.',
+      'TEMA:\n'+subject,430,MODEL
+    );
+    const seoP=councilTurn(
+      env,MISTRAL_MODEL,
+      'És o ESPECIALISTA SEO/GEO/AEO. Foca intenção local, estrutura, conteúdo, dados estruturados e descoberta. Não inventes rankings. Português de Portugal. Máximo 260 palavras.',
+      'TEMA:\n'+subject,400,FAST_MODEL
+    );
+    const uxP=councilTurn(
+      env,GEMMA_MODEL,
+      'És o ESPECIALISTA UX/CONVERSÃO. Foca mobile, clareza, CTA, confiança, fricção e percurso do utilizador. Português de Portugal. Máximo 260 palavras.',
+      'TEMA:\n'+subject,400,FAST_MODEL
+    );
+    const auditP=councilTurn(
+      env,MODEL,
+      'És o AUDITOR. Procura riscos, pressupostos frágeis, performance, segurança, manutenção e testes necessários. Não faças conversa social. Português de Portugal. Máximo 260 palavras.',
+      'TEMA:\n'+subject,400,FAST_MODEL
+    );
+
+    const scout=await scoutP;
     await telegramSend(env,'⚡ GLM · EXPLORADOR\n\n'+(scout||'Sem resposta.'));
 
-    const architect=await councilTurn(
-      env,
-      MODEL,
-      [
-        'És o ARQUITECTO-CRÍTICO numa mesa multi-LLM.',
-        'Lê o Explorador e responde directamente.',
-        'Responde em português de Portugal, sem gerúndio.',
-        'Transforma as ideias numa estratégia executável e, ao mesmo tempo, aponta pressupostos frágeis, riscos e ordem correcta.',
-        'Fecha com 3 prioridades. Não inventes dados. Máximo 360 palavras.'
-      ].join(' '),
-      'TEMA:\n'+subject+'\n\nEXPLORADOR:\n'+scout,
-      560,
-      FAST_MODEL
-    );
-    await telegramSend(env,'🔎 LLAMA 70B · ARQUITECTO/CRÍTICO\n\n'+(architect||'Sem resposta.'));
+    const settled=await Promise.allSettled([repoP,seoP,uxP,auditP]);
+    const take=(i)=>settled[i].status==='fulfilled'&&settled[i].value?settled[i].value:'Sem resposta.';
+    const repoAnswer=take(0),seo=take(1),ux=take(2),audit=take(3);
+
+    await Promise.all([
+      telegramSend(env,'🧩 QWEN · ENGENHEIRO DE REPO\n\n'+repoAnswer),
+      telegramSend(env,'📍 MISTRAL · SEO/GEO/AEO\n\n'+seo),
+      telegramSend(env,'🎛️ GEMMA · UX/CONVERSÃO\n\n'+ux),
+      telegramSend(env,'🔎 LLAMA 70B · AUDITOR\n\n'+audit)
+    ]);
 
     const synthesis=await councilTurn(
-      env,
-      DEEP_MODEL,
+      env,DEEP_MODEL,
       [
-        'És o RELATOR FINAL da mesa multi-LLM.',
-        'Lê o tema, o Explorador e o Arquitecto/Crítico.',
-        'Responde em português de Portugal, sem gerúndio.',
-        'Não repitas a conversa. Fecha em: DECISÃO, PORQUÊ, ORDEM DE EXECUÇÃO, PENDENTE DE VERIFICAÇÃO.',
-        'Não inventes factos. Máximo 380 palavras.'
+        'És o DIRECTOR FINAL de um esquadrão multi-agente.',
+        'Não continues a debater: transforma as análises em execução.',
+        'Português de Portugal, sem gerúndio.',
+        'Formato: PRIORIDADE AGORA; ACÇÕES CONCRETAS; ALTERAÇÕES TÉCNICAS; TESTES; BLOQUEIOS.',
+        'Distingue factos de hipóteses. Máximo 480 palavras.'
       ].join(' '),
-      'TEMA:\n'+subject+'\n\nEXPLORADOR:\n'+scout+'\n\nARQUITECTO/CRÍTICO:\n'+architect,
-      620,
-      MODEL
+      'TEMA:\n'+subject+
+      '\n\nEXPLORADOR:\n'+scout+
+      '\n\nENGENHEIRO:\n'+repoAnswer+
+      '\n\nSEO/GEO:\n'+seo+
+      '\n\nUX:\n'+ux+
+      '\n\nAUDITOR:\n'+audit,
+      720,MODEL
     );
-    await telegramSend(env,'🎯 GPT-OSS-120B · SÍNTESE\n\n'+(synthesis||'Sem resposta.'));
-    await telegramSend(env,'✅ SALA DE CONSELHO CONCLUÍDA');
+
+    await telegramSend(env,'🎯 GPT-OSS-120B · DIRECTOR\n\n'+(synthesis||'Sem resposta.'));
+    await telegramSend(env,'✅ ESQUADRÃO CONCLUÍDO');
   }catch(error){
-    await telegramSend(env,'MESA INTERROMPIDA\n\n'+String(error?.message||error).slice(0,1200));
+    await telegramSend(env,'ESQUADRÃO INTERROMPIDO\n\n'+String(error?.message||error).slice(0,1200));
   }
 }
 
