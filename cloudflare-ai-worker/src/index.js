@@ -1177,6 +1177,28 @@ export default {
       }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
     }
 
+    if(url.pathname==='/api/gpu/pair-status'&&request.method==='GET'){
+      try{
+        const status=await taskQueue(env).gpuPairStatus(String(url.searchParams.get('id')||''));
+        return json({ok:true,...status},200,origin);
+      }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
+    }
+
+    if(url.pathname==='/api/gpu/pull'&&request.method==='GET'){
+      try{
+        const token=bearer(request);
+        const hash=await sha256Hex(token);
+        const q=taskQueue(env);
+        if(!await q.authenticateGpu(hash))return json({ok:false,error:'GPU Node não autorizado.'},401,origin);
+        await q.touchGpu({
+          gpuName:String(url.searchParams.get('gpu')||'Colab GPU').slice(0,120),
+          vramGb:Number(url.searchParams.get('vram'))||0,
+          model:String(url.searchParams.get('model')||'').slice(0,180)
+        });
+        return json({ok:true,task:await q.pullGpuTask()},200,origin);
+      }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
+    }
+
     let body={};
     if(request.method==='POST'){
       try{body=await request.json();}catch{return json({ok:false,error:'Pedido inválido.'},400,origin);}
