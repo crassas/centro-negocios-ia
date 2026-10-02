@@ -1,3 +1,119 @@
+import { DurableObject } from "cloudflare:workers";
+
+export class TaskQueue extends DurableObject {
+  constructor(ctx,env){
+    super(ctx,env);
+    this.env=env;
+  }
+  async getJson(key,fallback=null){
+    const value=await this.ctx.storage.get(key);
+    return value===undefined?fallback:value;
+  }
+  async setJson(key,value){await this.ctx.storage.put(key,value);}
+  async createPair(){
+    const active=await this.getJson('pair:active',null);
+    const now=Date.now();
+    if(active&&active.expiresAt>now&&active.status==='pending')return {id:active.id,expiresAt:active.expiresAt};
+    const id=crypto.randomUUID().replaceAll('-','').slice(0,12);
+    const bytes=crypto.getRandomValues(new Uint8Array(32));
+    const token=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
+    const pair={id,token,status:'pending',createdAt:now,expiresAt:now+10*60*1000};
+    await this.setJson('pair:active',pair);
+    return {id,expiresAt:pair.expiresAt};
+  }
+  async resolvePair(id,approved){
+    const pair=await this.getJson('pair:active',null);
+    if(!pair||pair.id!==id||pair.expiresAt<Date.now())return {ok:false};
+    pair.status=approved?'approved':'rejected';
+    if(approved){
+      const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pair.token));
+      pair.tokenHash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+      await this.setJson('device:tokenHash',pair.tokenHash);
+    }
+    await this.setJson('pair:active',pair);
+    return {ok:true,status:pair.status};
+  }
+  async pairStatus(id){
+    const pair=await this.getJson('pair:active',null);
+    if(!pair||pair.id!==id)return {status:'missing'};
+    if(pair.expiresAt<Date.now())return {status:'expired'};
+    return {status:pair.status,token:pair.status==='approved'?pair.token:undefined,expiresAt:pair.expiresAt};
+  }
+  async authenticate(hash){
+    const saved=await this.getJson('device:tokenHash','');
+    return Boolean(saved&&hash&&saved===hash);
+  }
+  async getTelegramOffset(){return Number(await this.getJson('telegram:offset',0))||0;}
+  async claimTelegramUpdate(id){
+    const last=await this.getTelegramOffset();
+    const n=Number(id)||0;
+    if(n<=last)return false;
+    await this.setJson('telegram:offset',n);
+    return true;
+  }
+  async appendDecisionEvent(event){
+    const seq=(Number(await this.getJson('decision:seq',0))||0)+1;
+    await this.setJson('decision:seq',seq);
+    await this.setJson('decision:event:'+seq,{...event,seq,createdAt:Date.now()});
+    return seq;
+  }
+  async decisionEvents(since=0){
+    const max=Number(await this.getJson('decision:seq',0))||0;
+    const rows=[];
+    for(let i=Math.max(1,Number(since)+1);i<=max;i++){
+      const row=await this.getJson('decision:event:'+i,null);
+      if(row)rows.push(row);
+    }
+    return {events:rows,maxSeq:max};
+  }
+  async createTask(command,source='telegram'){
+    const id=crypto.randomUUID().replaceAll('-','').slice(0,12);
+    const task={id,command:String(command||'').slice(0,2000),source,status:'pending',createdAt:Date.now()};
+    await this.setJson('task:'+id,task);
+    const ids=await this.getJson('task:ids',[]);
+    ids.push(id);
+    await this.setJson('task:ids',ids.slice(-200));
+    return task;
+  }
+  async resolveTask(id,approved){
+    const task=await this.getJson('task:'+id,null);
+    if(!task||task.status!=='pending')return {ok:false};
+    task.status=approved?'queued':'rejected';
+    task.resolvedAt=Date.now();
+    await this.setJson('task:'+id,task);
+    return {ok:true,task};
+  }
+  async pullTask(){
+    const ids=await this.getJson('task:ids',[]);
+    for(const id of ids){
+      const task=await this.getJson('task:'+id,null);
+      if(task&&task.status==='queued'){
+        task.status='running';task.startedAt=Date.now();
+        await this.setJson('task:'+id,task);
+        return task;
+      }
+    }
+    return null;
+  }
+  async completeTask(id,result){
+    const task=await this.getJson('task:'+id,null);
+    if(!task)return {ok:false};
+    task.status='completed';task.completedAt=Date.now();task.result=result;
+    await this.setJson('task:'+id,task);
+    return {ok:true,task};
+  }
+  async taskStats(){
+    const ids=await this.getJson('task:ids',[]);
+    const stats={pending:0,queued:0,running:0,completed:0,rejected:0};
+    for(const id of ids.slice(-100)){
+      const task=await this.getJson('task:'+id,null);
+      if(task&&stats[task.status]!==undefined)stats[task.status]++;
+    }
+    const paired=Boolean(await this.getJson('device:tokenHash',''));
+    return {...stats,paired};
+  }
+}
+
 const MODEL='@cf/meta/llama-3.2-3b-instruct';
 const AGENT_MODEL='@cf/meta/llama-3.1-8b-instruct-fast';
 const ALLOWED_ORIGIN='https://crassas.github.io';
@@ -103,6 +219,25 @@ async function runAgent(env,question,context){
     temperature:0.1
   });
 }
+function taskQueue(env){return env.TASKS.getByName('primary');}
+async function sha256Hex(value){
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(String(value||'')));
+  return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+}
+function bearer(request){
+  const value=request.headers.get('authorization')||'';
+  return value.toLowerCase().startsWith('bearer ')?value.slice(7).trim():'';
+}
+function safeCommand(command){
+  const text=String(command||'').trim();
+  if(!text||text.length>2000)return false;
+  const denied=[
+    /rm\s+-rf\s+\/(?:\s|$)/i,/mkfs\b/i,/\bdd\s+if=/i,/shutdown\b/i,/poweroff\b/i,/reboot\b/i,
+    /:\(\)\s*\{\s*:\|:&\s*;\s*\}:/,/>\s*\/dev\/sd[a-z]/i
+  ];
+  return !denied.some(rx=>rx.test(text));
+}
+
 async function telegramApi(env,method,payload){
   if(!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_CHAT_ID)return {ok:false,configured:false};
   const res=await fetch('https://api.telegram.org/bot'+env.TELEGRAM_BOT_TOKEN+'/'+method,{
@@ -131,27 +266,79 @@ async function telegramSendDecision(env,decision){
     ]]}
   });
 }
-async function telegramPoll(env,offset){
-  if(!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_CHAT_ID)return {ok:false,configured:false,decisions:[],maxUpdateId:offset||0};
-  const start=Number.isFinite(Number(offset))&&Number(offset)>0?Number(offset)+1:-50;
-  const result=await telegramApi(env,'getUpdates',{offset:start,limit:50,timeout:0,allowed_updates:['callback_query']});
-  if(!result.ok)return {ok:false,configured:true,decisions:[],maxUpdateId:Number(offset)||0};
+async function processTelegramUpdates(env){
+  if(!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_CHAT_ID)return {ok:false,configured:false};
+  const q=taskQueue(env);
+  const offset=await q.getTelegramOffset();
+  const result=await telegramApi(env,'getUpdates',{offset:offset+1,limit:50,timeout:0,allowed_updates:['message','callback_query']});
+  if(!result.ok)return {ok:false,configured:true};
   const updates=Array.isArray(result.data?.result)?result.data.result:[];
-  let max=Number(offset)||0;
-  const decisions=[];
   for(const update of updates){
-    max=Math.max(max,Number(update.update_id)||0);
+    const claimed=await q.claimTelegramUpdate(update.update_id);
+    if(!claimed)continue;
+
+    const message=update.message;
+    if(message&&String(message.chat?.id||'')===String(env.TELEGRAM_CHAT_ID)){
+      const text=String(message.text||'').trim();
+      if(/^\/(?:exec|run)\s+/i.test(text)){
+        const command=text.replace(/^\/(?:exec|run)\s+/i,'').trim();
+        if(!safeCommand(command)){
+          await telegramSend(env,'Comando recusado pela protecção local.');
+          continue;
+        }
+        const task=await q.createTask(command,'telegram');
+        await telegramSend(env,'EXECUÇÃO PROPOSTA\n\n'+command+'\n\nExecutar no Operit?',{
+          reply_markup:{inline_keyboard:[[
+            {text:'✅ Executar',callback_data:'taskapprove:'+task.id},
+            {text:'❌ Recusar',callback_data:'taskreject:'+task.id}
+          ]]}
+        });
+      }else if(text==='/status'){
+        const stats=await q.taskStats();
+        await telegramSend(env,'OPERIT\n\n'+(stats.paired?'Dispositivo: ligado':'Dispositivo: por emparelhar')+'\nFila: '+stats.queued+'\nEm execução: '+stats.running+'\nConcluídas: '+stats.completed);
+      }else if(text&&text!=='/start'){
+        await telegramSend(env,'Comandos disponíveis:\n/exec <comando> — propõe execução no Operit\n/status — estado do executor');
+      }
+    }
+
     const cb=update.callback_query;
-    if(!cb)continue;
-    const chatId=String(cb.message?.chat?.id||'');
-    if(chatId!==String(env.TELEGRAM_CHAT_ID))continue;
-    const match=String(cb.data||'').match(/^(approve|reject):(.+)$/);
-    if(!match)continue;
-    decisions.push({decisionId:match[2],status:match[1]==='approve'?'approved':'rejected',updateId:update.update_id});
-    await telegramApi(env,'answerCallbackQuery',{callback_query_id:cb.id,text:match[1]==='approve'?'Confirmação registada.':'Recusa registada.'});
+    if(cb&&String(cb.message?.chat?.id||'')===String(env.TELEGRAM_CHAT_ID)){
+      const data=String(cb.data||'');
+      let m=data.match(/^task(approve|reject):(.+)$/);
+      if(m){
+        const approved=m[1]==='approve';
+        const resolved=await q.resolveTask(m[2],approved);
+        await telegramApi(env,'answerCallbackQuery',{callback_query_id:cb.id,text:approved?'Tarefa enviada para execução.':'Tarefa recusada.'});
+        if(resolved.ok)await telegramSend(env,approved?'Tarefa na fila do Operit.':'Tarefa recusada.');
+        continue;
+      }
+      m=data.match(/^pair(approve|reject):(.+)$/);
+      if(m){
+        const approved=m[1]==='approve';
+        await q.resolvePair(m[2],approved);
+        await telegramApi(env,'answerCallbackQuery',{callback_query_id:cb.id,text:approved?'Operit autorizado.':'Emparelhamento recusado.'});
+        continue;
+      }
+      m=data.match(/^(approve|reject):(.+)$/);
+      if(m){
+        await q.appendDecisionEvent({decisionId:m[2],status:m[1]==='approve'?'approved':'rejected'});
+        await telegramApi(env,'answerCallbackQuery',{callback_query_id:cb.id,text:m[1]==='approve'?'Confirmação registada.':'Recusa registada.'});
+      }
+    }
   }
-  return {ok:true,configured:true,decisions,maxUpdateId:max};
+  return {ok:true,configured:true};
 }
+async function telegramPoll(env,since){
+  if(!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_CHAT_ID)return {ok:false,configured:false,decisions:[],maxUpdateId:Number(since)||0};
+  await processTelegramUpdates(env);
+  const rows=await taskQueue(env).decisionEvents(Number(since)||0);
+  return {
+    ok:true,configured:true,
+    decisions:rows.events.map(e=>({decisionId:e.decisionId,status:e.status,updateId:e.seq})),
+    maxUpdateId:rows.maxSeq
+  };
+}
+
 
 export default {
   async fetch(request,env){
@@ -170,7 +357,8 @@ export default {
         service:'centro-negocios-ai',
         model:MODEL,
         agentModel:AGENT_MODEL,
-        telegramConfigured:Boolean(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID)
+        telegramConfigured:Boolean(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID),
+        operitQueue:Boolean(env.TASKS)
       },200,origin);
     }
 
@@ -187,9 +375,76 @@ export default {
       }
     }
 
+    if(url.pathname==='/api/operit/pair'&&request.method==='POST'){
+      try{
+        const q=taskQueue(env);
+        const pair=await q.createPair();
+        const sent=await telegramSend(env,'NOVO DISPOSITIVO OPERIT\n\nPedido de emparelhamento recebido. Autorizar este telemóvel?',{
+          reply_markup:{inline_keyboard:[[
+            {text:'✅ Autorizar',callback_data:'pairapprove:'+pair.id},
+            {text:'❌ Recusar',callback_data:'pairreject:'+pair.id}
+          ]]}
+        });
+        if(!sent.ok)return json({ok:false,error:'Não consegui enviar confirmação ao Telegram.'},502,origin);
+        return json({ok:true,pairId:pair.id,expiresAt:pair.expiresAt},200,origin);
+      }catch(error){return json({ok:false,error:'Falha no emparelhamento: '+String(error?.message||error)},500,origin);}
+    }
+
+    if(url.pathname==='/api/operit/pair-status'&&request.method==='GET'){
+      try{
+        await processTelegramUpdates(env);
+        const status=await taskQueue(env).pairStatus(String(url.searchParams.get('id')||''));
+        return json({ok:true,...status},200,origin);
+      }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
+    }
+
+    if(url.pathname==='/api/operit/pull'&&request.method==='GET'){
+      try{
+        await processTelegramUpdates(env);
+        const token=bearer(request);
+        const hash=await sha256Hex(token);
+        const q=taskQueue(env);
+        if(!await q.authenticate(hash))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
+        const task=await q.pullTask();
+        return json({ok:true,task},200,origin);
+      }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
+    }
+
+    if(url.pathname==='/api/operit/status'&&request.method==='GET'){
+      try{
+        await processTelegramUpdates(env);
+        const token=bearer(request);
+        const hash=await sha256Hex(token);
+        const q=taskQueue(env);
+        if(!await q.authenticate(hash))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
+        return json({ok:true,stats:await q.taskStats()},200,origin);
+      }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
+    }
+
     let body={};
     if(request.method==='POST'){
       try{body=await request.json();}catch{return json({ok:false,error:'Pedido inválido.'},400,origin);}
+    }
+
+    if(url.pathname==='/api/operit/result'&&request.method==='POST'){
+      try{
+        const token=bearer(request);
+        const hash=await sha256Hex(token);
+        const q=taskQueue(env);
+        if(!await q.authenticate(hash))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
+        const id=String(body?.id||'');
+        const result={
+          exitCode:Number(body?.exitCode),
+          stdout:String(body?.stdout||'').slice(0,12000),
+          stderr:String(body?.stderr||'').slice(0,6000),
+          durationMs:Number(body?.durationMs)||0
+        };
+        const done=await q.completeTask(id,result);
+        if(!done.ok)return json({ok:false,error:'Tarefa não encontrada.'},404,origin);
+        const output=(result.stdout||result.stderr||'(sem saída)').slice(0,2800);
+        await telegramSend(env,'OPERIT CONCLUÍDO\n\nComando:\n'+done.task.command+'\n\nExit: '+result.exitCode+'\nTempo: '+result.durationMs+' ms\n\n'+output);
+        return json({ok:true},200,origin);
+      }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
     }
 
     if(url.pathname==='/api/telegram/notify'&&request.method==='POST'){
