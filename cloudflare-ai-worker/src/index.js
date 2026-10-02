@@ -701,6 +701,7 @@ async function groupTurn(env,model,name,role,userText,history,peerText='',strict
   if(out&&likelyOffTopic(userText,out)&&!strictCurrent){
     return groupTurn(env,model,name,role,userText,[],peerText,true);
   }
+  if(out&&likelyOffTopic(userText,out)&&strictCurrent)return '';
   return out;
 }
 
@@ -711,6 +712,20 @@ async function runGroupChat(env,userText){
   const history=await q.roomHistory(10);
   await q.appendRoomMessage({role:'user',agent:'Joao',text:userText});
   const exact=Boolean(strictOutputHint(userText));
+  const literal=literalGroupReply(userText);
+
+  if(literal){
+    for(const [agent,label] of [
+      ['GLM','⚡ GLM'],
+      ['Qwen','🧩 QWEN'],
+      ['Llama','🔎 LLAMA 70B'],
+      ['Mistral','📍 MISTRAL']
+    ]){
+      await q.appendRoomMessage({role:'assistant',agent,text:literal});
+      await telegramSend(env,label+'\n'+literal);
+    }
+    return;
+  }
 
   const first=await groupTurn(
     env,FAST_MODEL,'GLM','responder depressa, perceber intenção e abrir a conversa',
