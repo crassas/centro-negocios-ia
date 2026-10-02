@@ -348,7 +348,7 @@ def execute_action(task):
                 "só responde",
             ))
         )
-        thinking = "off" if literal_fast else "low"
+        thinking = "low"
 
         started = time.time()
         result = run_cmd(
