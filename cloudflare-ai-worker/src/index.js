@@ -1204,6 +1204,51 @@ export default {
       try{body=await request.json();}catch{return json({ok:false,error:'Pedido inválido.'},400,origin);}
     }
 
+    if(url.pathname==='/api/gpu/pair'&&request.method==='POST'){
+      try{
+        const q=taskQueue(env);
+        const pair=await q.createGpuPair({
+          gpuName:String(body?.gpuName||'Colab GPU').slice(0,120),
+          vramGb:Number(body?.vramGb)||0,
+          computeCapability:String(body?.computeCapability||'').slice(0,40),
+          model:String(body?.model||'').slice(0,180)
+        });
+        const sent=await telegramSend(env,'NOVO GPU NODE · COLAB\n\n'+
+          'GPU: '+String(body?.gpuName||'desconhecida')+'\n'+
+          'VRAM: '+String(body?.vramGb||'?')+' GB\n'+
+          'Modelo: '+String(body?.model||'a seleccionar')+'\n\nAutorizar?',{
+          reply_markup:{inline_keyboard:[[
+            {text:'✅ Autorizar GPU',callback_data:'gpuapprove:'+pair.id},
+            {text:'❌ Recusar',callback_data:'gpureject:'+pair.id}
+          ]]}
+        });
+        if(!sent.ok)return json({ok:false,error:'Não consegui enviar confirmação ao Telegram.'},502,origin);
+        return json({ok:true,pairId:pair.id,expiresAt:pair.expiresAt},200,origin);
+      }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
+    }
+
+    if(url.pathname==='/api/gpu/result'&&request.method==='POST'){
+      try{
+        const token=bearer(request);
+        const hash=await sha256Hex(token);
+        const q=taskQueue(env);
+        if(!await q.authenticateGpu(hash))return json({ok:false,error:'GPU Node não autorizado.'},401,origin);
+        await q.touchGpu(body?.meta&&typeof body.meta==='object'?body.meta:{});
+        const id=String(body?.id||'');
+        const result={
+          text:String(body?.text||'').slice(0,12000),
+          durationMs:Number(body?.durationMs)||0,
+          inputTokens:Number(body?.inputTokens)||0,
+          outputTokens:Number(body?.outputTokens)||0
+        };
+        const done=await q.completeGpuTask(id,result);
+        if(!done.ok)return json({ok:false,error:'Tarefa GPU não encontrada.'},404,origin);
+        await telegramSend(env,'🟣 GPU COLAB · '+String(body?.meta?.model||'modelo local')+'\n\n'+
+          result.text.slice(0,3600)+'\n\n⏱ '+result.durationMs+' ms');
+        return json({ok:true},200,origin);
+      }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
+    }
+
     if(url.pathname==='/api/repo/snapshot'&&request.method==='POST'){
       try{
         const token=bearer(request);
