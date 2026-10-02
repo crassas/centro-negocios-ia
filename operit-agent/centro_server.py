@@ -22,6 +22,9 @@ HISTORY_FILE = STATE_DIR / "history.jsonl"
 STARTED_AT = time.time()
 CMD_TIMEOUT = 120
 CLAUDE_TIMEOUT = 300
+OPENCLAW_TIMEOUT = 300
+OPENCLAW_PORT = 18789
+OPENCLAW_HEALTH = f"http://127.0.0.1:{OPENCLAW_PORT}/healthz"
 OLLAMA_KEY_FILE = HOME / ".centro-agent" / "ollama_api_key"
 
 REPOS = {
@@ -106,6 +109,8 @@ def capabilities():
             "git_status",
             "git_pull",
             "claude_query",
+            "openclaw_status",
+            "openclaw_query",
         ],
         "repos": list(REPOS.keys()),
         "sites": [name for name, _ in SITES],
@@ -157,6 +162,63 @@ def locate_repo(name):
         if (path / ".git").is_dir():
             return path
     return None
+
+
+
+def locate_openclaw():
+    found = shutil.which("openclaw")
+    if found:
+        return found
+    candidates = [
+        HOME / ".local" / "bin" / "openclaw",
+        Path("/usr/local/bin/openclaw"),
+        Path("/usr/bin/openclaw"),
+    ]
+    return next((str(p) for p in candidates if p.exists()), None)
+
+
+def openclaw_http_health():
+    started = time.time()
+    try:
+        req = urllib.request.Request(
+            OPENCLAW_HEALTH,
+            headers={"User-Agent": "Centro-Server/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=4) as res:
+            body = res.read(4096).decode("utf-8", errors="replace").strip()
+            return True, res.status, body, int((time.time() - started) * 1000)
+    except Exception as exc:
+        return False, 0, str(exc), int((time.time() - started) * 1000)
+
+
+def extract_openclaw_reply(raw):
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    try:
+        data = json.loads(text)
+    except Exception:
+        return text
+
+    preferred = []
+
+    def walk(value):
+        if isinstance(value, dict):
+            for key in ("text", "reply", "response", "message", "content", "output"):
+                item = value.get(key)
+                if isinstance(item, str) and item.strip():
+                    preferred.append(item.strip())
+            for item in value.values():
+                walk(item)
+        elif isinstance(value, list):
+            for item in value:
+                walk(item)
+
+    walk(data)
+    if preferred:
+        return max(preferred, key=len)
+    return json.dumps(data, ensure_ascii=False, indent=2)
+
 
 
 def execute_action(task):
@@ -211,6 +273,8 @@ def execute_action(task):
             ("Python 3", bool(shutil.which("python3"))),
             ("Node", bool(shutil.which("node"))),
             ("Claude Code", bool(claude)),
+            ("OpenClaw CLI", bool(locate_openclaw())),
+            ("OpenClaw Gateway", openclaw_http_health()[0]),
             ("Token servidor", TOKEN_FILE.exists()),
             ("Token Operit", (HOME / ".centro-agent" / "token").exists()),
         ]
@@ -224,6 +288,92 @@ def execute_action(task):
             "stderr": "" if overall else "Há componentes por corrigir.",
             "durationMs": 0,
         }
+
+    if action == "openclaw_status":
+        started = time.time()
+        binary = locate_openclaw()
+        if not binary:
+            return {
+                "exitCode": 127,
+                "stdout": "",
+                "stderr": "OpenClaw não foi encontrado neste sistema.",
+                "durationMs": int((time.time() - started) * 1000),
+            }
+
+        healthy, http_status, health_body, health_ms = openclaw_http_health()
+        version = run_cmd([binary, "--version"], timeout=20)
+        lines = [
+            "OPENCLAW",
+            f"Binário: {binary}",
+            f"Versão: {(version['stdout'] or version['stderr']).strip() or 'desconhecida'}",
+            f"Gateway: {'ONLINE' if healthy else 'OFFLINE'}",
+            f"Endpoint: 127.0.0.1:{OPENCLAW_PORT}",
+            f"Health HTTP: {http_status if http_status else '-'}",
+            f"Health: {health_body[:500] if health_body else '-'}",
+        ]
+
+        if healthy:
+            probe = run_cmd(
+                [binary, "gateway", "health", "--port", str(OPENCLAW_PORT), "--json"],
+                timeout=30,
+            )
+            if probe["stdout"].strip():
+                lines.append("RPC: " + probe["stdout"].strip()[:1800])
+            elif probe["stderr"].strip():
+                lines.append("RPC aviso: " + probe["stderr"].strip()[:800])
+
+        return {
+            "exitCode": 0 if healthy else 1,
+            "stdout": "\n".join(lines),
+            "stderr": "" if healthy else "Gateway OpenClaw não responde em loopback.",
+            "durationMs": int((time.time() - started) * 1000),
+        }
+
+    if action == "openclaw_query":
+        prompt = str((task.get("args") or {}).get("prompt") or "").strip()
+        if not prompt:
+            return {"exitCode": 2, "stdout": "", "stderr": "Pedido OpenClaw em falta.", "durationMs": 0}
+        if len(prompt) > 5000:
+            return {"exitCode": 2, "stdout": "", "stderr": "Pedido OpenClaw demasiado longo.", "durationMs": 0}
+
+        binary = locate_openclaw()
+        if not binary:
+            return {"exitCode": 127, "stdout": "", "stderr": "OpenClaw não foi encontrado.", "durationMs": 0}
+
+        healthy, _, _, _ = openclaw_http_health()
+        if not healthy:
+            return {
+                "exitCode": 69,
+                "stdout": "",
+                "stderr": "Gateway OpenClaw está offline em 127.0.0.1:18789.",
+                "durationMs": 0,
+            }
+
+        safe_prompt = (
+            "Pedido recebido através do Centro de Negócios. "
+            "Responde em português de Portugal, de forma directa e curta. "
+            "Nesta primeira integração estás em modo de análise: não alteres ficheiros, "
+            "não faças deploy, não apagues dados e não executes acções destrutivas sem uma autorização separada.\n\n"
+            + prompt
+        )
+
+        started = time.time()
+        result = run_cmd(
+            [
+                binary,
+                "agent",
+                "--agent",
+                "main",
+                "--message",
+                safe_prompt,
+                "--json",
+            ],
+            timeout=OPENCLAW_TIMEOUT,
+        )
+        if result["exitCode"] == 0:
+            result["stdout"] = extract_openclaw_reply(result["stdout"])[-12000:]
+        result["durationMs"] = int((time.time() - started) * 1000)
+        return result
 
     if action == "system_info":
         import platform
