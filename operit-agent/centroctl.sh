@@ -19,7 +19,7 @@ is_running() {
 start_agent() {
   if is_running; then
     echo "Centro Agent já está activo. PID $(cat "$PID_FILE")"
-    exit 0
+    return 0
   fi
 
   if [ ! -f "$AGENT" ]; then
@@ -48,7 +48,7 @@ stop_agent() {
   if ! is_running; then
     echo "Centro Agent já está parado."
     rm -f "$PID_FILE"
-    exit 0
+    return 0
   fi
 
   PID="$(cat "$PID_FILE")"
