@@ -264,6 +264,10 @@ function parseOperitInstruction(text){
 }
 
 
+async function telegramWebhookSecret(env){
+  return (await sha256Hex(env.TELEGRAM_BOT_TOKEN||'')).slice(0,64);
+}
+
 async function telegramApi(env,method,payload){
   if(!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_CHAT_ID)return {ok:false,configured:false};
   const res=await fetch('https://api.telegram.org/bot'+env.TELEGRAM_BOT_TOKEN+'/'+method,{
@@ -292,64 +296,66 @@ async function telegramSendDecision(env,decision){
     ]]}
   });
 }
-async function processTelegramUpdates(env){
-  if(!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_CHAT_ID)return {ok:false,configured:false};
+async function handleTelegramUpdate(env,update){
   const q=taskQueue(env);
-  const offset=await q.getTelegramOffset();
-  const result=await telegramApi(env,'getUpdates',{offset:offset+1,limit:50,timeout:0,allowed_updates:['message','callback_query']});
-  if(!result.ok)return {ok:false,configured:true};
-  const updates=Array.isArray(result.data?.result)?result.data.result:[];
-  for(const update of updates){
-    const claimed=await q.claimTelegramUpdate(update.update_id);
-    if(!claimed)continue;
+  const claimed=await q.claimTelegramUpdate(update?.update_id);
+  if(!claimed)return {ok:true,duplicate:true};
 
-    const message=update.message;
-    if(message&&String(message.chat?.id||'')===String(env.TELEGRAM_CHAT_ID)){
-      const text=String(message.text||'').trim();
-      const instruction=parseOperitInstruction(text);
-      if(instruction){
-        const task=await q.createTask(instruction,'telegram');
-        await telegramSend(env,'ACÇÃO OPERIT\n\n'+task.label+'\n\nExecutar?',{
-          reply_markup:{inline_keyboard:[[
-            {text:'✅ Executar',callback_data:'taskapprove:'+task.id},
-            {text:'❌ Recusar',callback_data:'taskreject:'+task.id}
-          ]]}
-        });
-      }else if(text==='/status'){
-        const stats=await q.taskStats();
-        await telegramSend(env,'OPERIT\n\n'+(stats.paired?'Dispositivo: ligado':'Dispositivo: por emparelhar')+'\nFila: '+stats.queued+'\nEm execução: '+stats.running+'\nConcluídas: '+stats.completed);
-      }else if(text&&text!=='/start'){
-        await telegramSend(env,'Operit disponível:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, doisirmaos\n/status — estado do executor');
-      }
-    }
-
-    const cb=update.callback_query;
-    if(cb&&String(cb.message?.chat?.id||'')===String(env.TELEGRAM_CHAT_ID)){
-      const data=String(cb.data||'');
-      let m=data.match(/^task(approve|reject):(.+)$/);
-      if(m){
-        const approved=m[1]==='approve';
-        const resolved=await q.resolveTask(m[2],approved);
-        await telegramApi(env,'answerCallbackQuery',{callback_query_id:cb.id,text:approved?'Tarefa enviada para execução.':'Tarefa recusada.'});
-        if(resolved.ok)await telegramSend(env,approved?'Tarefa na fila do Operit.':'Tarefa recusada.');
-        continue;
-      }
-      m=data.match(/^pair(approve|reject):(.+)$/);
-      if(m){
-        const approved=m[1]==='approve';
-        await q.resolvePair(m[2],approved);
-        await telegramApi(env,'answerCallbackQuery',{callback_query_id:cb.id,text:approved?'Operit autorizado.':'Emparelhamento recusado.'});
-        continue;
-      }
-      m=data.match(/^(approve|reject):(.+)$/);
-      if(m){
-        await q.appendDecisionEvent({decisionId:m[2],status:m[1]==='approve'?'approved':'rejected'});
-        await telegramApi(env,'answerCallbackQuery',{callback_query_id:cb.id,text:m[1]==='approve'?'Confirmação registada.':'Recusa registada.'});
-      }
+  const message=update?.message;
+  if(message&&String(message.chat?.id||'')===String(env.TELEGRAM_CHAT_ID)){
+    const text=String(message.text||'').trim();
+    const instruction=parseOperitInstruction(text);
+    if(instruction){
+      const task=await q.createTask(instruction,'telegram');
+      await telegramSend(env,'ACÇÃO OPERIT\n\n'+task.label+'\n\nExecutar?',{
+        reply_markup:{inline_keyboard:[[
+          {text:'✅ Executar',callback_data:'taskapprove:'+task.id},
+          {text:'❌ Recusar',callback_data:'taskreject:'+task.id}
+        ]]}
+      });
+    }else if(text==='/status'){
+      const stats=await q.taskStats();
+      await telegramSend(env,'OPERIT\n\n'+(stats.paired?'Dispositivo: ligado':'Dispositivo: por emparelhar')+'\nFila: '+stats.queued+'\nEm execução: '+stats.running+'\nConcluídas: '+stats.completed);
+    }else if(text==='/start'){
+      await telegramSend(env,'Centro de Negócios online.\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
+    }else if(text){
+      await telegramSend(env,'Operit disponível:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, doisirmaos\n/status — estado do executor');
     }
   }
-  return {ok:true,configured:true};
+
+  const cb=update?.callback_query;
+  if(cb&&String(cb.message?.chat?.id||'')===String(env.TELEGRAM_CHAT_ID)){
+    const data=String(cb.data||'');
+    let m=data.match(/^task(approve|reject):(.+)$/);
+    if(m){
+      const approved=m[1]==='approve';
+      const resolved=await q.resolveTask(m[2],approved);
+      await telegramApi(env,'answerCallbackQuery',{callback_query_id:cb.id,text:approved?'Tarefa enviada para execução.':'Tarefa recusada.'});
+      if(resolved.ok)await telegramSend(env,approved?'Tarefa na fila do Operit.':'Tarefa recusada.');
+      return {ok:true};
+    }
+    m=data.match(/^pair(approve|reject):(.+)$/);
+    if(m){
+      const approved=m[1]==='approve';
+      await q.resolvePair(m[2],approved);
+      await telegramApi(env,'answerCallbackQuery',{callback_query_id:cb.id,text:approved?'Operit autorizado.':'Emparelhamento recusado.'});
+      return {ok:true};
+    }
+    m=data.match(/^(approve|reject):(.+)$/);
+    if(m){
+      await q.appendDecisionEvent({decisionId:m[2],status:m[1]==='approve'?'approved':'rejected'});
+      await telegramApi(env,'answerCallbackQuery',{callback_query_id:cb.id,text:m[1]==='approve'?'Confirmação registada.':'Recusa registada.'});
+    }
+  }
+  return {ok:true};
 }
+
+async function processTelegramUpdates(env){
+  // O Telegram entra por webhook. Mantemos esta função para compatibilidade
+  // com endpoints do Centro sem depender de getUpdates.
+  return {ok:true,configured:Boolean(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID)};
+}
+
 async function telegramPoll(env,since){
   if(!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_CHAT_ID)return {ok:false,configured:false,decisions:[],maxUpdateId:Number(since)||0};
   await processTelegramUpdates(env);
@@ -371,6 +377,21 @@ export default {
 
     if(origin&&origin!==ALLOWED_ORIGIN&&!origin.startsWith('http://localhost')&&!origin.startsWith('http://127.0.0.1')){
       return json({ok:false,error:'Origem não autorizada.'},403,origin);
+    }
+
+    if(url.pathname==='/telegram/webhook'&&request.method==='POST'){
+      if(!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_CHAT_ID)return json({ok:false,error:'Telegram não configurado.'},409,origin);
+      const supplied=request.headers.get('x-telegram-bot-api-secret-token')||'';
+      const expected=await telegramWebhookSecret(env);
+      if(!supplied||supplied!==expected)return json({ok:false,error:'Webhook não autorizado.'},403,origin);
+      let update;
+      try{update=await request.json();}catch{return json({ok:false,error:'Update inválido.'},400,origin);}
+      try{
+        await handleTelegramUpdate(env,update);
+        return json({ok:true},200,origin);
+      }catch(error){
+        return json({ok:false,error:'Falha Telegram webhook: '+String(error?.message||error)},500,origin);
+      }
     }
 
     if(url.pathname==='/health'&&request.method==='GET'){
