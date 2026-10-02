@@ -228,12 +228,28 @@ async function runAgent(env,question,context){
   });
 }
 async function runTelegramFront(env,text){
+  const raw=String(text||'').trim();
+  const lower=raw.toLowerCase();
+  let hintedProject='local';
+  if(lower.includes('pentehouse'))hintedProject='pentehouse';
+  else if(lower.includes('best pizza')||lower.includes('pizza')||lower.includes('kebab'))hintedProject='pizza';
+  else if(lower.includes('2 irmãos')||lower.includes('dois irmãos')||lower.includes('doisirmaos'))hintedProject='doisirmaos';
+  else if(lower.includes('centro de negócios')||lower.includes('centro negocios')||lower.includes('centro'))hintedProject='centro';
+
+  const projectContext={
+    pentehouse:'Pentehouse é uma barbearia local no Porto. O foco do sistema é SEO/GEO local, conversão, reservas/WhatsApp, mobile e qualidade visual. Não assumas métricas actuais sem as verificar.',
+    pizza:'Best Pizza & Kebab é um negócio local de restauração em Campanhã. O foco é SEO/GEO local, menu, pedidos, mobile e conversão. Não assumas preços ou rankings actuais sem os verificar.',
+    doisirmaos:'2 Irmãos é um restaurante local em Campanhã. O foco é presença local, SEO/GEO, menu, confiança e conversão. Não assumas dados actuais sem os verificar.',
+    centro:'Centro de Negócios é a estação operacional que liga Telegram, Cloudflare, Centro Agent e Centro Server privado. Não assumas estado técnico sem o verificar.',
+    local:''
+  };
+
   const responseFormat={
     type:'json_schema',
     json_schema:{
       type:'object',
       properties:{
-        answer:{type:'string'},
+        answer:{type:'string',minLength:40},
         needsClaude:{type:'boolean'},
         project:{type:'string',enum:['local','centro','pentehouse','pizza','doisirmaos']},
         claudePrompt:{type:'string'}
@@ -241,27 +257,30 @@ async function runTelegramFront(env,text){
       required:['answer','needsClaude','project','claudePrompt']
     }
   };
+
+  const projectHint=projectContext[hintedProject]||'';
   return env.AI.run(AGENT_MODEL,{
     messages:[
       {
         role:'system',
         content:[
           'És a IA frontal rápida da Estação Centro.',
-          'Responde em português de Portugal, sem gerúndio, de forma curta, clara e útil.',
-          'Tens prioridade em responder imediatamente a conversa, dúvidas, planeamento e perguntas simples.',
-          'Não inventes estado do telemóvel, sites, Git, clientes, rankings ou execuções.',
-          'Quando o pedido exigir análise profunda de código, ficheiros, repositórios, alteração de projecto ou investigação local, define needsClaude=true.',
-          'Quando needsClaude=true, mantém uma resposta útil imediata e prepara claudePrompt com o pedido completo para o Claude Code.',
+          'Responde em português de Portugal, sem gerúndio.',
+          'A resposta deve ser útil por si só: nunca respondas apenas com um nome, título ou palavra isolada.',
+          'Para pedidos de melhoria, dá 3 a 5 acções concretas e prioritárias em frases curtas.',
+          'Se não tens dados actuais verificados, distingue claramente o que é proposta do que é facto.',
+          'Quando o pedido exigir ver código, ficheiros, repositório, estado técnico real, métricas actuais ou alterações, define needsClaude=true.',
+          'Quando needsClaude=true, responde já com uma orientação útil e prepara claudePrompt completo para o Claude Code.',
           'Projectos disponíveis: centro, pentehouse, pizza, doisirmaos. Usa local quando não houver projecto específico.',
-          'Nunca executes acções nem afirmes que executaste. Alterações continuam sujeitas a confirmação humana.',
-          'Evita respostas longas. O Telegram deve parecer rápido.'
-        ].join(' ')
+          'Nunca afirmes que executaste alterações.',
+          projectHint?('CONTEXTO DO PROJECTO: '+projectHint):''
+        ].filter(Boolean).join(' ')
       },
-      {role:'user',content:String(text||'').slice(0,5000)}
+      {role:'user',content:raw.slice(0,5000)}
     ],
     response_format:responseFormat,
-    max_tokens:420,
-    temperature:0.15
+    max_tokens:520,
+    temperature:0.2
   });
 }
 
@@ -391,8 +410,12 @@ async function handleTelegramUpdate(env,update){
           if(!parsed){
             await telegramSend(env,'Não consegui estruturar a resposta rápida. Usa /claude seguido do pedido para enviar directamente ao Claude Code.');
           }else{
-            const answer=String(parsed.answer||'').trim()||'Pedido recebido.';
-            const needsClaude=parsed.needsClaude===true;
+            let answer=String(parsed.answer||'').trim();
+            const tooShort=answer.length<40||answer.split(/\s+/).length<6;
+            const needsClaude=parsed.needsClaude===true||tooShort;
+            if(tooShort){
+              answer='Posso dar-te uma resposta útil, mas para não inventar preciso de consultar o estado real do projecto. Posso aprofundar já com o Claude Code.';
+            }
             if(!needsClaude){
               await telegramSend(env,'⚡ '+answer);
             }else{
