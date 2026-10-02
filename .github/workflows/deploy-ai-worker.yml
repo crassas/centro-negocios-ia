@@ -53,14 +53,30 @@ jobs:
         working-directory: cloudflare-ai-worker
         shell: bash
         run: |
-          if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
-            node -e "require('fs').writeFileSync('/tmp/telegram-secrets.json', JSON.stringify({TELEGRAM_BOT_TOKEN:process.env.TELEGRAM_BOT_TOKEN,TELEGRAM_CHAT_ID:process.env.TELEGRAM_CHAT_ID}))"
-            npx --yes wrangler@latest secret bulk /tmp/telegram-secrets.json
-            rm -f /tmp/telegram-secrets.json
-            echo "Telegram sincronizado com o Worker."
-          else
-            echo "Telegram ainda sem credenciais; integração fica preparada mas inactiva."
+          if [ -z "$TELEGRAM_BOT_TOKEN" ]; then
+            echo "TELEGRAM_BOT_TOKEN ainda não está configurado."
+            exit 0
           fi
+
+          CHAT_ID="$TELEGRAM_CHAT_ID"
+
+          if [ -z "$CHAT_ID" ]; then
+            curl --fail --silent --show-error               "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getUpdates?limit=100"               -o /tmp/telegram-updates.json
+
+            CHAT_ID="$(node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/telegram-updates.json','utf8'));const rows=Array.isArray(x.result)?x.result:[];let id='';for(const u of rows){const c=u.message?.chat||u.callback_query?.message?.chat;if(c&&c.type==='private')id=String(c.id)}process.stdout.write(id)")"
+
+            if [ -z "$CHAT_ID" ]; then
+              echo "Não encontrei uma conversa privada com o bot. Envia /start ao bot e volta a executar."
+              exit 1
+            fi
+          fi
+
+          echo "::add-mask::$CHAT_ID"
+          export TELEGRAM_CHAT_ID="$CHAT_ID"
+          node -e "require('fs').writeFileSync('/tmp/telegram-secrets.json', JSON.stringify({TELEGRAM_BOT_TOKEN:process.env.TELEGRAM_BOT_TOKEN,TELEGRAM_CHAT_ID:process.env.TELEGRAM_CHAT_ID}))"
+          npx --yes wrangler@latest secret bulk /tmp/telegram-secrets.json
+          rm -f /tmp/telegram-secrets.json /tmp/telegram-updates.json
+          echo "Telegram sincronizado com o Worker."
 
       - name: Testar Worker e Workers AI
         if: steps.cloudflare.outputs.ready == 'true'
@@ -83,6 +99,8 @@ jobs:
             "https://centro-negocios-ai.travisthejarvis.workers.dev/api/agent" \
             -o /tmp/agent-smoke.json
           node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/agent-smoke.json','utf8'));if(!x.ok||!Array.isArray(x.actions))process.exit(1);console.log('Agent OK:',x.summary,'actions=',x.actions.length);"
+          curl --fail --silent --show-error             -X POST             -H "content-type: application/json"             --data '{"text":"Centro de Negócios ligado ao @furalife_bot. Telegram operacional."}'             "https://centro-negocios-ai.travisthejarvis.workers.dev/api/telegram/notify"             -o /tmp/telegram-smoke.json
+          node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/telegram-smoke.json','utf8'));if(!x.ok||!x.configured)process.exit(1);console.log('Telegram OK')"
 
       - name: Ligação pendente
         if: steps.cloudflare.outputs.ready != 'true'
