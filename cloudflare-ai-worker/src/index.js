@@ -233,6 +233,15 @@ export class TaskQueue extends DurableObject {
     }
     return out;
   }
+  async nextRoomTurn(){
+    const next=(Number(await this.getJson('room:turn',0))||0)+1;
+    await this.setJson('room:turn',next);
+    return next;
+  }
+  async isRoomTurnCurrent(turn){
+    return Number(await this.getJson('room:turn',0))===Number(turn);
+  }
+
   async appendRoomMessage(message){
     const rows=await this.getJson('room:history',[]);
     rows.push({
@@ -714,8 +723,12 @@ function roomTranscript(rows){
 function cleanGroupOutput(text){
   let out=String(text||'').trim();
   if(!out)return '';
-  if(out==='[SILÊNCIO]')return '';
-  out=out.replace(/\[SILÊNCIO\]\.?/gi,'').trim();
+  out=out
+    .replace(/&#91;|&lbrack;/gi,'[')
+    .replace(/&#93;|&rbrack;/gi,']');
+  if(/^\s*\[?SIL[ÊE]NCIO\]?\.?\s*$/i.test(out))return '';
+  if(/^\s*\[?SIL[ÊE]/i.test(out)&&out.length<40)return '';
+  out=out.replace(/\[SIL[ÊE]NCIO\]\.?/gi,'').trim();
   return out;
 }
 
@@ -798,7 +811,7 @@ async function groupTurn(env,model,name,role,userText,history,peerText='',strict
   return out;
 }
 
-async function runGroupChat(env,userText){
+async function runGroupChat(env,userText,turnId){
   const q=taskQueue(env);
 
   // O histórico é lido ANTES de guardar a mensagem actual para não duplicar a tarefa.
@@ -827,6 +840,7 @@ async function runGroupChat(env,userText){
     env,FAST_MODEL,'GLM','responder depressa, perceber intenção e abrir a conversa',
     userText,history,'',false,externalEvidence
   );
+  if(turnId&&!await q.isRoomTurnCurrent(turnId))return;
   if(first){
     await q.appendRoomMessage({role:'assistant',agent:'GLM',text:first});
     await telegramSend(env,'⚡ GLM\n'+first);
@@ -842,6 +856,7 @@ async function runGroupChat(env,userText){
   );
 
   const settled=await Promise.allSettled([qwenP,llamaP]);
+  if(turnId&&!await q.isRoomTurnCurrent(turnId))return;
   const qwen=settled[0].status==='fulfilled'?cleanGroupOutput(settled[0].value):'';
   const llama=settled[1].status==='fulfilled'?cleanGroupOutput(settled[1].value):'';
 
@@ -865,6 +880,7 @@ async function runGroupChat(env,userText){
     env,MISTRAL_MODEL,'Mistral','síntese prática e ligação entre as ideias dos outros',
     userText,await q.roomHistory(12),peers,false,externalEvidence
   );
+  if(turnId&&!await q.isRoomTurnCurrent(turnId))return;
   if(follow){
     await q.appendRoomMessage({role:'assistant',agent:'Mistral',text:follow});
     await telegramSend(env,'📍 MISTRAL\n'+follow);
@@ -1128,6 +1144,7 @@ async function handleTelegramUpdate(env,update,ctx){
   const message=update?.message;
   if(message&&String(message.chat?.id||'')===String(env.TELEGRAM_CHAT_ID)){
     const text=String(message.text||'').trim();
+    const roomTurnId=await q.nextRoomTurn();
 
     const mesa=text.match(/^\/mesa(?:\s+([\s\S]{1,5000}))?$/i);
     if(mesa){
@@ -1212,7 +1229,7 @@ async function handleTelegramUpdate(env,update,ctx){
         await telegramSend(env,'Centro disponível:\nConversa normal = grupo multi-LLM\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/openclaw — estado do OpenClaw\n/openclaw <pedido> — agente OpenClaw local\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
       }else{
         await telegramApi(env,'sendChatAction',{chat_id:env.TELEGRAM_CHAT_ID,action:'typing'});
-        const job=runGroupChat(env,text);
+        const job=runGroupChat(env,text,roomTurnId);
         if(ctx&&typeof ctx.waitUntil==='function')ctx.waitUntil(job);
         else await job;
       }
