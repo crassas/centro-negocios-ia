@@ -110,6 +110,7 @@ def capabilities():
             "git_pull",
             "claude_query",
             "openclaw_status",
+            "openclaw_models",
             "openclaw_query",
         ],
         "repos": list(REPOS.keys()),
@@ -308,6 +309,15 @@ def execute_action(task):
             "stderr": "" if healthy else "Gateway OpenClaw não responde em loopback.",
             "durationMs": int((time.time() - started) * 1000),
         }
+
+    if action == "openclaw_models":
+        binary = locate_openclaw()
+        if not binary:
+            return {"exitCode": 127, "stdout": "", "stderr": "OpenClaw não foi encontrado.", "durationMs": 0}
+        started = time.time()
+        result = run_cmd([binary, "models", "list", "--json"], timeout=60)
+        result["durationMs"] = int((time.time() - started) * 1000)
+        return result
 
     if action == "openclaw_query":
         prompt = str((task.get("args") or {}).get("prompt") or "").strip()
