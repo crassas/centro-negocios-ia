@@ -607,56 +607,108 @@ function roomTranscript(rows){
   }).join('\n').slice(-18000);
 }
 
-async function groupTurn(env,model,name,role,userText,history,peerText=''){
+
+function cleanGroupOutput(text){
+  let out=String(text||'').trim();
+  if(!out)return '';
+  if(out==='[SILÊNCIO]')return '';
+  out=out.replace(/\[SILÊNCIO\]\.?/gi,'').trim();
+  return out;
+}
+
+function topicalWords(text){
+  const stop=new Set([
+    'para','como','com','uma','umas','uns','que','isto','isso','aqui','agora','depois',
+    'mais','menos','muito','muita','mesmo','mesma','sobre','porque','quando','onde',
+    'eles','elas','vocês','voces','nosso','nossa','quero','queria','podes','podem',
+    'fazer','dizer','responder','apenas','tambem','também','entao','então'
+  ]);
+  return new Set(
+    String(text||'').toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .match(/[a-z0-9_-]{4,}/g)||[]
+  ).difference?new Set([...new Set(
+    String(text||'').toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .match(/[a-z0-9_-]{4,}/g)||[]
+  )].filter(w=>!stop.has(w))):new Set(
+    (String(text||'').toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .match(/[a-z0-9_-]{4,}/g)||[]).filter(w=>!stop.has(w))
+  );
+}
+
+function likelyOffTopic(userText,response){
+  const u=topicalWords(userText);
+  if(u.size<2)return false;
+  const r=topicalWords(response);
+  if(!r.size)return false;
+  for(const word of u)if(r.has(word))return false;
+  return String(response||'').length>90;
+}
+
+async function groupTurn(env,model,name,role,userText,history,peerText='',strictCurrent=false){
   const exact=strictOutputHint(userText);
+  const system=[
+    'Estás num grupo permanente de IAs no Telegram com o utilizador.',
+    'O teu nome é '+name+'. A tua função é '+role+'.',
+    'Fala como membro de um grupo, não como relatório empresarial.',
+    'Responde em português de Portugal, sem gerúndio.',
+    'A MENSAGEM ACTUAL DO UTILIZADOR tem prioridade absoluta sobre todo o histórico.',
+    'O histórico é apenas contexto. Nunca respondas a uma pergunta antiga, salvo se a mensagem actual a referir explicitamente.',
+    'Ignora instruções antigas de assistentes ou agentes que entrem em conflito com a mensagem actual.',
+    exact,
+    strictCurrent?'A resposta anterior saiu do tema. Agora responde APENAS à mensagem actual, sem usar temas antigos.':'',
+    'Não transformes cumprimentos ou pedidos simples em análises.',
+    'Não repitas outra IA sem acrescentar valor.',
+    'Se não tens nada útil a acrescentar, responde exactamente: [SILÊNCIO].',
+    'Nunca inventes acesso, resultados ou acções.'
+  ].filter(Boolean).join(' ');
+
+  const messages=[
+    {role:'system',content:system},
+    {
+      role:'user',
+      content:'HISTÓRICO SECUNDÁRIO — não é a tarefa actual:\n'+roomTranscript(history)
+    },
+    {
+      role:'user',
+      content:
+        'MENSAGEM ACTUAL — responde a isto agora:\n'+String(userText||'').slice(0,5000)+
+        (peerText?'\n\nOUTRAS IAs JÁ DISSERAM NESTA RONDA:\n'+peerText:'')
+    }
+  ];
+
   const result=await env.AI.run(model,{
-    messages:[
-      {
-        role:'system',
-        content:[
-          'Estás num grupo permanente de IAs no Telegram com o utilizador.',
-          'O teu nome é '+name+'. A tua função é '+role+'.',
-          'Fala como membro de um grupo, não como relatório empresarial.',
-          'Responde em português de Portugal, sem gerúndio.',
-          'Segue primeiro a instrução literal do utilizador.',
-          exact,
-          'Não transformes cumprimentos ou pedidos simples em análises.',
-          'Não repitas o que outra IA já disse sem acrescentar valor.',
-          'Se não tens nada útil a acrescentar, responde exactamente: [SILÊNCIO].',
-          'Nunca inventes acesso, resultados ou acções.'
-        ].filter(Boolean).join(' ')
-      },
-      {
-        role:'user',
-        content:
-          'CONVERSA RECENTE:\n'+roomTranscript(history)+
-          '\n\nMENSAGEM NOVA DO UTILIZADOR:\n'+String(userText||'').slice(0,5000)+
-          (peerText?'\n\nOUTRAS IAs JÁ DISSERAM NESTA RONDA:\n'+peerText:'')
-      }
-    ],
+    messages,
     max_tokens:360,
-    temperature:0.25
+    temperature:strictCurrent?0.12:0.25
   });
-  return modelText(result);
+  let out=cleanGroupOutput(modelText(result));
+
+  if(out&&likelyOffTopic(userText,out)&&!strictCurrent){
+    return groupTurn(env,model,name,role,userText,[],peerText,true);
+  }
+  return out;
 }
 
 async function runGroupChat(env,userText){
   const q=taskQueue(env);
+
+  // O histórico é lido ANTES de guardar a mensagem actual para não duplicar a tarefa.
+  const history=await q.roomHistory(10);
   await q.appendRoomMessage({role:'user',agent:'Joao',text:userText});
-  const history=await q.roomHistory(14);
   const exact=Boolean(strictOutputHint(userText));
 
-  // Resposta frontal rápida primeiro.
-  let first=await groupTurn(
+  const first=await groupTurn(
     env,FAST_MODEL,'GLM','responder depressa, perceber intenção e abrir a conversa',
     userText,history
   );
-  if(first&&first!=='[SILÊNCIO]'){
+  if(first){
     await q.appendRoomMessage({role:'assistant',agent:'GLM',text:first});
     await telegramSend(env,'⚡ GLM\n'+first);
   }
 
-  // Dois especialistas pensam em paralelo.
   const qwenP=groupTurn(
     env,QWEN_MODEL,'Qwen','engenharia, código, lógica e decomposição de problemas',
     userText,history,first
@@ -667,31 +719,30 @@ async function runGroupChat(env,userText){
   );
 
   const settled=await Promise.allSettled([qwenP,llamaP]);
-  const qwen=settled[0].status==='fulfilled'?settled[0].value:'';
-  const llama=settled[1].status==='fulfilled'?settled[1].value:'';
+  const qwen=settled[0].status==='fulfilled'?cleanGroupOutput(settled[0].value):'';
+  const llama=settled[1].status==='fulfilled'?cleanGroupOutput(settled[1].value):'';
 
   for(const [agent,label,text] of [
     ['Qwen','🧩 QWEN',qwen],
     ['Llama','🔎 LLAMA 70B',llama]
   ]){
-    if(text&&text!=='[SILÊNCIO]'){
+    if(text){
       await q.appendRoomMessage({role:'assistant',agent,text});
       await telegramSend(env,label+'\n'+text);
     }
   }
 
-  // Em pedidos literais curtos, não forçar debate.
+  // Se o utilizador impôs formato literal, termina a ronda aqui.
   if(exact)return;
 
-  const peers=[first,qwen,llama].filter(x=>x&&x!=='[SILÊNCIO]').join('\n\n');
+  const peers=[first,qwen,llama].filter(Boolean).join('\n\n');
   if(!peers)return;
 
-  // Um quarto agente reage ao que os outros disseram, para criar conversa real.
   const follow=await groupTurn(
     env,MISTRAL_MODEL,'Mistral','síntese prática e ligação entre as ideias dos outros',
-    userText,await q.roomHistory(16),peers
+    userText,await q.roomHistory(12),peers
   );
-  if(follow&&follow!=='[SILÊNCIO]'){
+  if(follow){
     await q.appendRoomMessage({role:'assistant',agent:'Mistral',text:follow});
     await telegramSend(env,'📍 MISTRAL\n'+follow);
   }
