@@ -125,6 +125,7 @@ export class TaskQueue extends DurableObject {
 const MODEL='@cf/openai/gpt-oss-120b';
 const FAST_MODEL='@cf/zai-org/glm-4.7-flash';
 const AGENT_MODEL='@cf/openai/gpt-oss-120b';
+const COUNCIL_CRITIC_MODEL='@cf/meta/llama-3.1-8b-instruct-fast';
 const ALLOWED_ORIGIN='https://crassas.github.io';
 
 function cors(origin){
@@ -318,6 +319,99 @@ async function runFrontPower(env,text,project='local'){
   return typeof result?.response==='string'?result.response.trim():'';
 }
 
+
+function modelText(result){
+  if(typeof result?.response==='string')return result.response.trim();
+  if(typeof result?.result?.response==='string')return result.result.response.trim();
+  return '';
+}
+
+async function councilTurn(env,model,system,user,maxTokens=650){
+  const result=await env.AI.run(model,{
+    messages:[
+      {role:'system',content:system},
+      {role:'user',content:user}
+    ],
+    max_tokens:maxTokens,
+    temperature:0.25
+  });
+  return modelText(result);
+}
+
+async function runCouncil(env,topic){
+  const subject=String(topic||'').trim().slice(0,5000);
+  if(!subject)return;
+
+  try{
+    const scout=await councilTurn(
+      env,
+      FAST_MODEL,
+      [
+        'És o EXPLORADOR numa mesa de três LLMs.',
+        'Responde em português de Portugal, sem gerúndio.',
+        'Abre o problema rapidamente: identifica o objectivo, 3 oportunidades, 2 riscos e perguntas que os outros modelos devem resolver.',
+        'Não inventes factos. Assume explicitamente quando algo precisa de verificação.',
+        'Máximo 350 palavras.'
+      ].join(' '),
+      'TEMA DA MESA:\n'+subject,
+      520
+    );
+    await telegramSend(env,'⚡ GLM · EXPLORADOR\n\n'+(scout||'Sem resposta.'));
+
+    const architect=await councilTurn(
+      env,
+      MODEL,
+      [
+        'És o ARQUITECTO numa mesa multi-LLM.',
+        'Lê a proposta do Explorador e responde directamente a ela.',
+        'Responde em português de Portugal, sem gerúndio.',
+        'Transforma possibilidades em estratégia concreta: prioridades, dependências e uma sequência executável.',
+        'Discorda quando necessário. Não inventes dados.',
+        'Máximo 500 palavras.'
+      ].join(' '),
+      'TEMA:\n'+subject+'\n\nO EXPLORADOR DISSE:\n'+scout,
+      760
+    );
+    await telegramSend(env,'🧠 GPT-OSS-120B · ARQUITECTO\n\n'+(architect||'Sem resposta.'));
+
+    const critic=await councilTurn(
+      env,
+      COUNCIL_CRITIC_MODEL,
+      [
+        'És o CRÍTICO numa mesa multi-LLM.',
+        'Lê o Explorador e o Arquitecto e responde aos dois.',
+        'Responde em português de Portugal, sem gerúndio.',
+        'Procura erros, pressupostos frágeis, custos escondidos, riscos técnicos e passos que estão fora de ordem.',
+        'Não sejas contrarian por estilo: reconhece o que está sólido e aponta apenas problemas reais.',
+        'Fecha com as 3 correcções mais importantes.',
+        'Máximo 400 palavras.'
+      ].join(' '),
+      'TEMA:\n'+subject+'\n\nEXPLORADOR:\n'+scout+'\n\nARQUITECTO:\n'+architect,
+      620
+    );
+    await telegramSend(env,'🔎 LLAMA · CRÍTICO\n\n'+(critic||'Sem resposta.'));
+
+    const synthesis=await councilTurn(
+      env,
+      MODEL,
+      [
+        'És o RELATOR FINAL da mesa multi-LLM.',
+        'Lê toda a discussão e responde à crítica.',
+        'Responde em português de Portugal, sem gerúndio.',
+        'Não repitas a conversa. Constrói uma síntese final curta e operacional.',
+        'Formato: DECISÃO, PORQUÊ, ORDEM DE EXECUÇÃO, O QUE FICA PENDENTE DE VERIFICAÇÃO.',
+        'Não inventes factos nem afirmes execução.',
+        'Máximo 500 palavras.'
+      ].join(' '),
+      'TEMA:\n'+subject+'\n\nEXPLORADOR:\n'+scout+'\n\nARQUITECTO:\n'+architect+'\n\nCRÍTICO:\n'+critic,
+      760
+    );
+    await telegramSend(env,'🎯 GPT-OSS-120B · SÍNTESE\n\n'+(synthesis||'Sem resposta.'));
+  }catch(error){
+    await telegramSend(env,'MESA INTERROMPIDA\n\n'+String(error?.message||error).slice(0,1200));
+  }
+}
+
 function taskQueue(env){return env.TASKS.getByName('primary');}
 async function sha256Hex(value){
   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(String(value||'')));
@@ -479,7 +573,7 @@ function deterministicProjectFront(text){
   return null;
 }
 
-async function handleTelegramUpdate(env,update){
+async function handleTelegramUpdate(env,update,ctx){
   const q=taskQueue(env);
   const claimed=await q.claimTelegramUpdate(update?.update_id);
   if(!claimed)return {ok:true,duplicate:true};
@@ -487,6 +581,21 @@ async function handleTelegramUpdate(env,update){
   const message=update?.message;
   if(message&&String(message.chat?.id||'')===String(env.TELEGRAM_CHAT_ID)){
     const text=String(message.text||'').trim();
+
+    const mesa=text.match(/^\/mesa(?:\s+([\s\S]{1,5000}))?$/i);
+    if(mesa){
+      const topic=String(mesa[1]||'').trim();
+      if(!topic){
+        await telegramSend(env,'Usa: /mesa <tema>\n\nExemplo: /mesa como levamos a Pentehouse ao próximo nível?');
+      }else{
+        await telegramSend(env,'🗣️ SALA DE CONSELHO ABERTA\n\nTema: '+topic.slice(0,1200)+'\n\n3 modelos vão responder uns aos outros. 1 ronda para poupar quota.');
+        const job=runCouncil(env,topic);
+        if(ctx&&typeof ctx.waitUntil==='function')ctx.waitUntil(job);
+        else await job;
+      }
+      return {ok:true};
+    }
+
     const instruction=parseOperitInstruction(text);
     if(instruction){
       const task=await q.createTask(instruction,'telegram');
@@ -501,10 +610,10 @@ async function handleTelegramUpdate(env,update){
       const stats=await q.taskStats();
       await telegramSend(env,'OPERIT\n\n'+(stats.paired?'Dispositivo: ligado':'Dispositivo: por emparelhar')+'\nFila: '+stats.queued+'\nEm execução: '+stats.running+'\nConcluídas: '+stats.completed);
     }else if(text==='/start'){
-      await telegramSend(env,'Centro de Negócios online.\n\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
+      await telegramSend(env,'Centro de Negócios online.\n\n/mesa <tema> — LLMs em conselho\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
     }else if(text){
       if(text.startsWith('/')){
-        await telegramSend(env,'Centro disponível:\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
+        await telegramSend(env,'Centro disponível:\n/mesa <tema> — LLMs em conselho\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
       }else{
         const deterministic=deterministicProjectFront(text);
         if(deterministic){
@@ -631,7 +740,7 @@ async function telegramPoll(env,since){
 
 
 export default {
-  async fetch(request,env){
+  async fetch(request,env,ctx){
     const url=new URL(request.url);
     const origin=request.headers.get('origin')||'';
 
@@ -649,7 +758,7 @@ export default {
       let update;
       try{update=await request.json();}catch{return json({ok:false,error:'Update inválido.'},400,origin);}
       try{
-        await handleTelegramUpdate(env,update);
+        await handleTelegramUpdate(env,update,ctx);
         return json({ok:true},200,origin);
       }catch(error){
         return json({ok:false,error:'Falha Telegram webhook: '+String(error?.message||error)},500,origin);
@@ -663,6 +772,7 @@ export default {
         model:MODEL,
         agentModel:AGENT_MODEL,
         fastModel:FAST_MODEL,
+        councilCriticModel:COUNCIL_CRITIC_MODEL,
         telegramConfigured:Boolean(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID),
         operitQueue:Boolean(env.TASKS),
         telegramFront:'v3-deterministic-projects'
