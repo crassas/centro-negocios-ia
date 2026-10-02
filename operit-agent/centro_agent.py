@@ -238,6 +238,28 @@ ACTIONS = {
 
 
 def execute(task):
+    if task.get("action") == "council_run":
+        topic = str((task.get("args") or {}).get("topic") or "").strip()
+        if not topic:
+            return 2, "", "Tema da mesa em falta.", 0
+        token = load_token()
+        if not token:
+            return 78, "", "Centro Agent sem token.", 0
+        started = time.time()
+        try:
+            response = api(
+                "/api/council/run",
+                method="POST",
+                payload={"topic": topic},
+                token=token,
+                timeout=CLAUDE_TIMEOUT + 120,
+            )
+            if not response.get("ok"):
+                return 1, "", str(response.get("error") or "Falha na Sala de Conselho."), int((time.time()-started)*1000)
+            return 0, "Sala de Conselho concluída.", "", int((time.time()-started)*1000)
+        except Exception as exc:
+            return 1, "", "Falha na Sala de Conselho: " + str(exc), int((time.time()-started)*1000)
+
     try:
         server_token = SERVER_TOKEN_FILE.read_text(encoding="utf-8").strip()
     except FileNotFoundError:
