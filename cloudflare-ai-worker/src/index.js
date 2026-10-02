@@ -246,7 +246,11 @@ const OPERIT_PROJECTS={
 };
 function parseOperitInstruction(text){
   const raw=String(text||'').trim();
-  let m=raw.match(/^\/server$/i);
+  let m=raw.match(/^\/station$/i);
+  if(m)return {action:'station_status',target:'local',label:'Estado da Estação Centro'};
+  m=raw.match(/^\/doctor$/i);
+  if(m)return {action:'station_doctor',target:'local',label:'Diagnóstico da Estação Centro'};
+  m=raw.match(/^\/server$/i);
   if(m)return {action:'server_status',target:'local',label:'Estado do Centro Server privado'};
   m=raw.match(/^\/operit\s+system$/i);
   if(m)return {action:'system_info',target:'local',label:'Informação do sistema'};
@@ -336,9 +340,9 @@ async function handleTelegramUpdate(env,update){
       const stats=await q.taskStats();
       await telegramSend(env,'OPERIT\n\n'+(stats.paired?'Dispositivo: ligado':'Dispositivo: por emparelhar')+'\nFila: '+stats.queued+'\nEm execução: '+stats.running+'\nConcluídas: '+stats.completed);
     }else if(text==='/start'){
-      await telegramSend(env,'Centro de Negócios online.\n\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
+      await telegramSend(env,'Centro de Negócios online.\n\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
     }else if(text){
-      await telegramSend(env,'Centro disponível:\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
+      await telegramSend(env,'Centro disponível:\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
     }
   }
 
