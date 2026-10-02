@@ -411,11 +411,50 @@ async function handleTelegramUpdate(env,update){
             await telegramSend(env,'Não consegui estruturar a resposta rápida. Usa /claude seguido do pedido para enviar directamente ao Claude Code.');
           }else{
             let answer=String(parsed.answer||'').trim();
-            const tooShort=answer.length<40||answer.split(/\s+/).length<6;
-            const needsClaude=parsed.needsClaude===true||tooShort;
+            const project=String(parsed.project||'local').toLowerCase();
+            const weakEnding=/[:;,-]\s*$/.test(answer);
+            const genericIntro=/^(existem|há|podemos|algumas|várias)\b/i.test(answer)&&answer.length<220;
+            const tooShort=answer.length<120||answer.split(/\s+/).length<18||weakEnding||genericIntro;
+
+            const fallbacks={
+              pentehouse:[
+                'Hoje eu atacaria 4 pontos na Pentehouse:',
+                '1. Hero/mobile: confirmar se a primeira dobra mostra marca, localização e CTA de WhatsApp sem ruído.',
+                '2. Conversão: tornar escolha de barbeiro/serviço mais directa e reduzir passos até à reserva.',
+                '3. SEO local: rever títulos, headings e conteúdo para Marquês, Constituição e Porto sem repetir texto artificialmente.',
+                '4. Confiança: reforçar equipa, galeria real e informação prática sem inventar horários ou métricas.',
+                'Para saber exactamente o que mudar no código e no site publicado, posso mandar o Claude Code analisar o projecto real.'
+              ].join('\n'),
+              pizza:[
+                'Hoje eu atacaria 4 pontos no Best Pizza & Kebab:',
+                '1. Mobile: reduzir o comprimento do menu e garantir pesquisa/categorias rápidas.',
+                '2. Conversão: manter telefone/pedido sempre acessível e simplificar o caminho até à compra.',
+                '3. SEO local: reforçar Campanhã e São Roque nas páginas certas sem keyword stuffing.',
+                '4. Técnico: confirmar indexação, headings, schema e ligações internas.',
+                'Posso mandar o Claude Code verificar o projecto real antes de propor alterações.'
+              ].join('\n'),
+              doisirmaos:[
+                'Hoje eu atacaria 4 pontos no 2 Irmãos:',
+                '1. Primeira dobra: comida portuguesa, Campanhã e contacto devem ficar imediatamente claros.',
+                '2. Menu: destacar os pratos fortes e reduzir navegação desnecessária.',
+                '3. Confiança local: horários, localização e informação prática consistentes.',
+                '4. SEO local: rever headings, schema Restaurant e páginas/termos de Campanhã.',
+                'Posso mandar o Claude Code analisar o projecto real para dizer exactamente o que alterar.'
+              ].join('\n'),
+              centro:[
+                'Hoje eu atacaria 4 pontos no Centro:',
+                '1. Latência: manter respostas rápidas e separar conversa de execução pesada.',
+                '2. Resiliência: confirmar supervisor, fila e recuperação automática.',
+                '3. Memória: centralizar tarefas, projectos e histórico em SQLite.',
+                '4. Router: distribuir pedidos entre IA rápida, Claude, auditor e executor.',
+                'Posso aprofundar o código real com o Claude Code.'
+              ].join('\n')
+            };
+
             if(tooShort){
-              answer='Posso dar-te uma resposta útil, mas para não inventar preciso de consultar o estado real do projecto. Posso aprofundar já com o Claude Code.';
+              answer=fallbacks[project]||'Consigo responder já, mas esta resposta ficou demasiado vaga. Para não inventar, posso aprofundar o pedido com o Claude Code e consultar o estado real.';
             }
+            const needsClaude=parsed.needsClaude===true||tooShort;
             if(!needsClaude){
               await telegramSend(env,'⚡ '+answer);
             }else{
