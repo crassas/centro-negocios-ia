@@ -178,16 +178,16 @@ def action_claude_query(task):
         if not cwd:
             return 3, "", f"Repositório {target} ainda não existe localmente.", 0
 
-    ollama = shutil.which("ollama")
-    if not ollama:
+    claude = shutil.which("claude")
+    if not claude:
         candidates = [
-            HOME / ".local" / "bin" / "ollama",
-            Path("/usr/local/bin/ollama"),
-            Path("/usr/bin/ollama"),
+            HOME / ".local" / "bin" / "claude",
+            Path("/usr/local/bin/claude"),
+            Path("/usr/bin/claude"),
         ]
-        ollama = next((str(p) for p in candidates if p.exists()), None)
-    if not ollama:
-        return 127, "", "Ollama não foi encontrado no PATH.", 0
+        claude = next((str(p) for p in candidates if p.exists()), None)
+    if not claude:
+        return 127, "", "Claude Code não foi encontrado.", 0
 
     system_note = (
         "Estás a responder através do Centro de Negócios no Telegram. "
@@ -197,13 +197,9 @@ def action_claude_query(task):
 
     return run_cmd(
         [
-            ollama,
-            "launch",
-            "claude",
+            claude,
             "--model",
-            "gpt-oss:120b-cloud",
-            "--yes",
-            "--",
+            "gpt-oss:120b",
             "--permission-mode",
             "plan",
             "--append-system-prompt",
