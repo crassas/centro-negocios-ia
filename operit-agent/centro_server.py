@@ -348,22 +348,34 @@ def execute_action(task):
                 "só responde",
             ))
         )
-        thinking = "low"
+
+        params = {
+            "message": safe_prompt,
+            "agentId": "main",
+            "sessionKey": "agent:main:centro",
+            "thinking": "low",
+            "deliver": False,
+            "timeout": 180,
+            "idempotencyKey": secrets.token_hex(16),
+            "label": "Centro de Negócios",
+        }
+        if literal_fast:
+            params["promptMode"] = "minimal"
+            params["bootstrapContextMode"] = "lightweight"
 
         started = time.time()
         result = run_cmd(
             [
                 binary,
+                "gateway",
+                "call",
                 "agent",
-                "--agent",
-                "main",
-                "--thinking",
-                thinking,
-                "--verbose",
-                "off",
-                "--message",
-                safe_prompt,
+                "--params",
+                json.dumps(params, ensure_ascii=False),
+                "--expect-final",
                 "--json",
+                "--timeout",
+                "190000",
             ],
             timeout=OPENCLAW_TIMEOUT,
         )
