@@ -354,7 +354,7 @@ async function handleTelegramUpdate(env,update){
       const approved=m[1]==='approve';
       const resolved=await q.resolveTask(m[2],approved);
       await telegramApi(env,'answerCallbackQuery',{callback_query_id:cb.id,text:approved?'Tarefa enviada para execução.':'Tarefa recusada.'});
-      if(resolved.ok)await telegramSend(env,approved?'Tarefa na fila do Operit.':'Tarefa recusada.');
+      if(resolved.ok)await telegramSend(env,approved?'Autorizado. A entregar ao telemóvel...':'Tarefa recusada.');
       return {ok:true};
     }
     m=data.match(/^pair(approve|reject):(.+)$/);
@@ -472,6 +472,9 @@ export default {
         const q=taskQueue(env);
         if(!await q.authenticate(hash))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
         const task=await q.pullTask();
+        if(task){
+          await telegramSend(env,'A EXECUTAR AGORA\n\n'+task.label+'\n\nO telemóvel já recebeu a tarefa.');
+        }
         return json({ok:true,task},200,origin);
       }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
     }
