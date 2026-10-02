@@ -14,6 +14,7 @@ BASE = "https://centro-negocios-ai.travisthejarvis.workers.dev"
 HOME = Path.home()
 STATE_DIR = HOME / ".centro-agent"
 TOKEN_FILE = STATE_DIR / "token"
+OLLAMA_KEY_FILE = STATE_DIR / "ollama_api_key"
 POLL_SECONDS = 4
 CMD_TIMEOUT = 120
 CLAUDE_TIMEOUT = 300
@@ -77,7 +78,7 @@ def pair():
     raise RuntimeError("Tempo de emparelhamento esgotado.")
 
 
-def run_cmd(args, cwd=None, timeout=CMD_TIMEOUT):
+def run_cmd(args, cwd=None, timeout=CMD_TIMEOUT, env=None):
     started = time.time()
     try:
         proc = subprocess.run(
@@ -87,6 +88,7 @@ def run_cmd(args, cwd=None, timeout=CMD_TIMEOUT):
             capture_output=True,
             timeout=timeout,
             check=False,
+            env=env,
         )
         return proc.returncode, proc.stdout[-12000:], proc.stderr[-6000:], int((time.time() - started) * 1000)
     except FileNotFoundError:
@@ -187,27 +189,41 @@ def action_claude_query(task):
     if not claude:
         return 127, "", "Claude Code não foi encontrado no PATH.", 0
 
+    try:
+        ollama_key = OLLAMA_KEY_FILE.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        ollama_key = ""
+    if not ollama_key:
+        return 78, "", "Chave Ollama não configurada para o Centro Agent. Executa: centroctl claude-key", 0
+
     system_note = (
         "Estás a responder através do Centro de Negócios no Telegram. "
         "Responde em português de Portugal, de forma directa e curta. "
         "Esta chamada está em modo de análise: não alteres ficheiros nem executes acções destrutivas."
     )
+
+    claude_env = os.environ.copy()
+    claude_env["OLLAMA_API_KEY"] = ollama_key
+    claude_env["ANTHROPIC_BASE_URL"] = "https://ollama.com"
+    claude_env["ANTHROPIC_AUTH_TOKEN"] = ollama_key
+    claude_env["ANTHROPIC_API_KEY"] = ""
+    claude_env["ANTHROPIC_MODEL"] = "gpt-oss:120b"
+
     return run_cmd(
         [
             claude,
-            "-p",
-            prompt,
-            "--output-format",
-            "text",
+            "--model",
+            "gpt-oss:120b",
             "--permission-mode",
             "plan",
-            "--permission-prompts",
-            "none",
             "--append-system-prompt",
             system_note,
+            "-p",
+            prompt,
         ],
         cwd=cwd,
         timeout=CLAUDE_TIMEOUT,
+        env=claude_env,
     )
 
 
