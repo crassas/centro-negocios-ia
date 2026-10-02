@@ -39,11 +39,13 @@ if [ -w "/usr/local/bin" ]; then
   CTL="/usr/local/bin/centroctl"
   SERVER_CTL="/usr/local/bin/centroserver"
   STATION_CTL="/usr/local/bin/centrostation"
+  OPENCLAW_CTL="/usr/local/bin/openclawctl"
 else
   mkdir -p "$HOME_DIR/.local/bin"
   CTL="$HOME_DIR/.local/bin/centroctl"
   SERVER_CTL="$HOME_DIR/.local/bin/centroserver"
   STATION_CTL="$HOME_DIR/.local/bin/centrostation"
+  OPENCLAW_CTL="$HOME_DIR/.local/bin/openclawctl"
 fi
 
 fetch_to "$RAW/centroctl.sh" "$CTL"
@@ -52,6 +54,8 @@ fetch_to "$RAW/serverctl.sh" "$SERVER_CTL"
 chmod 700 "$SERVER_CTL"
 fetch_to "$RAW/stationctl.sh" "$STATION_CTL"
 chmod 700 "$STATION_CTL"
+fetch_to "$RAW/openclawctl.sh" "$OPENCLAW_CTL"
+chmod 700 "$OPENCLAW_CTL"
 
 echo "Agente instalado:"
 echo "  $AGENT"
@@ -63,5 +67,6 @@ echo "Controlos:"
 echo "  $CTL"
 echo "  $SERVER_CTL"
 echo "  $STATION_CTL"
+echo "  $OPENCLAW_CTL"
 echo
 "$STATION_CTL" restart
