@@ -17,7 +17,7 @@ STATE_DIR = HOME / ".centro-agent"
 TOKEN_FILE = STATE_DIR / "token"
 OLLAMA_KEY_FILE = STATE_DIR / "ollama_api_key"
 SERVER_TOKEN_FILE = HOME / ".centro-server" / "token"
-POLL_SECONDS = 4
+POLL_SECONDS = 0.75
 CMD_TIMEOUT = 120
 CLAUDE_TIMEOUT = 300
 
@@ -323,10 +323,10 @@ def main():
                 print("Autorização inválida. Apaga ~/.centro-agent/token e reinicia.", file=sys.stderr)
                 return
             print(f"HTTP {exc.code}", file=sys.stderr)
-            time.sleep(5)
+            time.sleep(2)
         except (urllib.error.URLError, TimeoutError) as exc:
             print(f"Ligação: {exc}", file=sys.stderr)
-            time.sleep(5)
+            time.sleep(2)
         except KeyboardInterrupt:
             print("\nCentro Agent parado.")
             return
