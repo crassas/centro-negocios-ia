@@ -66,9 +66,17 @@ export class TaskQueue extends DurableObject {
     }
     return {events:rows,maxSeq:max};
   }
-  async createTask(command,source='telegram'){
+  async createTask(spec,source='telegram'){
     const id=crypto.randomUUID().replaceAll('-','').slice(0,12);
-    const task={id,command:String(command||'').slice(0,2000),source,status:'pending',createdAt:Date.now()};
+    const safeSpec=spec&&typeof spec==='object'?spec:{};
+    const task={
+      id,
+      action:String(safeSpec.action||'').slice(0,60),
+      target:String(safeSpec.target||'').slice(0,120),
+      args:safeSpec.args&&typeof safeSpec.args==='object'?safeSpec.args:{},
+      label:String(safeSpec.label||safeSpec.action||'Tarefa Operit').slice(0,200),
+      source,status:'pending',createdAt:Date.now()
+    };
     await this.setJson('task:'+id,task);
     const ids=await this.getJson('task:ids',[]);
     ids.push(id);
@@ -228,15 +236,33 @@ function bearer(request){
   const value=request.headers.get('authorization')||'';
   return value.toLowerCase().startsWith('bearer ')?value.slice(7).trim():'';
 }
-function safeCommand(command){
-  const text=String(command||'').trim();
-  if(!text||text.length>2000)return false;
-  const denied=[
-    /rm\s+-rf\s+\/(?:\s|$)/i,/mkfs\b/i,/\bdd\s+if=/i,/shutdown\b/i,/poweroff\b/i,/reboot\b/i,
-    /:\(\)\s*\{\s*:\|:&\s*;\s*\}:/,/>\s*\/dev\/sd[a-z]/i
-  ];
-  return !denied.some(rx=>rx.test(text));
+const OPERIT_PROJECTS={
+  centro:'centro-negocios-ia',
+  pentehouse:'pente_houselanding',
+  pizza:'best-pizza-kebab',
+  kebab:'best-pizza-kebab',
+  doisirmaos:'restaurante-2-irmaos',
+  '2irmaos':'restaurante-2-irmaos'
+};
+function parseOperitInstruction(text){
+  const raw=String(text||'').trim();
+  let m=raw.match(/^\/operit\s+system$/i);
+  if(m)return {action:'system_info',target:'local',label:'Informação do sistema'};
+  m=raw.match(/^\/operit\s+sites?$/i);
+  if(m)return {action:'site_check',target:'all',label:'Verificar sites em produção'};
+  m=raw.match(/^\/operit\s+git-status\s+([a-z0-9_-]+)$/i);
+  if(m){
+    const repo=OPERIT_PROJECTS[m[1].toLowerCase()];
+    return repo?{action:'git_status',target:repo,label:'Git status · '+repo}:null;
+  }
+  m=raw.match(/^\/operit\s+git-pull\s+([a-z0-9_-]+)$/i);
+  if(m){
+    const repo=OPERIT_PROJECTS[m[1].toLowerCase()];
+    return repo?{action:'git_pull',target:repo,label:'Git pull --ff-only · '+repo}:null;
+  }
+  return null;
 }
+
 
 async function telegramApi(env,method,payload){
   if(!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_CHAT_ID)return {ok:false,configured:false};
@@ -280,14 +306,10 @@ async function processTelegramUpdates(env){
     const message=update.message;
     if(message&&String(message.chat?.id||'')===String(env.TELEGRAM_CHAT_ID)){
       const text=String(message.text||'').trim();
-      if(/^\/(?:exec|run)\s+/i.test(text)){
-        const command=text.replace(/^\/(?:exec|run)\s+/i,'').trim();
-        if(!safeCommand(command)){
-          await telegramSend(env,'Comando recusado pela protecção local.');
-          continue;
-        }
-        const task=await q.createTask(command,'telegram');
-        await telegramSend(env,'EXECUÇÃO PROPOSTA\n\n'+command+'\n\nExecutar no Operit?',{
+      const instruction=parseOperitInstruction(text);
+      if(instruction){
+        const task=await q.createTask(instruction,'telegram');
+        await telegramSend(env,'ACÇÃO OPERIT\n\n'+task.label+'\n\nExecutar?',{
           reply_markup:{inline_keyboard:[[
             {text:'✅ Executar',callback_data:'taskapprove:'+task.id},
             {text:'❌ Recusar',callback_data:'taskreject:'+task.id}
@@ -297,7 +319,7 @@ async function processTelegramUpdates(env){
         const stats=await q.taskStats();
         await telegramSend(env,'OPERIT\n\n'+(stats.paired?'Dispositivo: ligado':'Dispositivo: por emparelhar')+'\nFila: '+stats.queued+'\nEm execução: '+stats.running+'\nConcluídas: '+stats.completed);
       }else if(text&&text!=='/start'){
-        await telegramSend(env,'Comandos disponíveis:\n/exec <comando> — propõe execução no Operit\n/status — estado do executor');
+        await telegramSend(env,'Operit disponível:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, doisirmaos\n/status — estado do executor');
       }
     }
 
@@ -442,7 +464,7 @@ export default {
         const done=await q.completeTask(id,result);
         if(!done.ok)return json({ok:false,error:'Tarefa não encontrada.'},404,origin);
         const output=(result.stdout||result.stderr||'(sem saída)').slice(0,2800);
-        await telegramSend(env,'OPERIT CONCLUÍDO\n\nComando:\n'+done.task.command+'\n\nExit: '+result.exitCode+'\nTempo: '+result.durationMs+' ms\n\n'+output);
+        await telegramSend(env,'OPERIT CONCLUÍDO\n\n'+done.task.label+'\n\nExit: '+result.exitCode+'\nTempo: '+result.durationMs+' ms\n\n'+output);
         return json({ok:true},200,origin);
       }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
     }
