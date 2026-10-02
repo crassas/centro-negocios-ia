@@ -42,4 +42,4 @@ echo "  $AGENT"
 echo "Controlo:"
 echo "  $CTL"
 echo
-"$CTL" start
+"$CTL" restart
