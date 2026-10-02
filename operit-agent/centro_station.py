@@ -13,7 +13,7 @@ SERVER_PID_FILE = HOME / ".centro-server" / "server.pid"
 AGENT_PID_FILE = HOME / ".centro-agent" / "agent.pid"
 SERVER_CTL = Path("/usr/local/bin/centroserver")
 AGENT_CTL = Path("/usr/local/bin/centroctl")
-INTERVAL = 10
+INTERVAL = 3
 
 
 def pid_running(path):
