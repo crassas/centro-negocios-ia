@@ -67,9 +67,18 @@ jobs:
         shell: bash
         run: |
           if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+            WEBHOOK_URL="https://centro-negocios-ai.travisthejarvis.workers.dev/telegram/webhook"
             WEBHOOK_SECRET="$(printf '%s' "$TELEGRAM_BOT_TOKEN" | sha256sum | awk '{print $1}')"
-            curl --fail --silent --show-error               -X POST               -H "content-type: application/json"               --data "{"url":"https://centro-negocios-ai.travisthejarvis.workers.dev/telegram/webhook","secret_token":"$WEBHOOK_SECRET","allowed_updates":["message","callback_query"],"drop_pending_updates":false}"               "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook"               -o /tmp/telegram-webhook.json
-            node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/telegram-webhook.json','utf8'));if(!x.ok)process.exit(1);console.log('Telegram webhook activo')"
+
+            curl --fail --silent --show-error               -X POST               --data-urlencode "url=$WEBHOOK_URL"               --data-urlencode "secret_token=$WEBHOOK_SECRET"               --data-urlencode 'allowed_updates=["message","callback_query"]'               --data-urlencode "drop_pending_updates=false"               "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook"               -o /tmp/telegram-webhook.json
+
+            node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/telegram-webhook.json','utf8'));console.log(JSON.stringify({ok:x.ok,result:x.result,description:x.description||null},null,2));if(!x.ok||x.result!==true)process.exit(1);"
+
+            sleep 1
+            curl --fail --silent --show-error               "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getWebhookInfo"               -o /tmp/webhook-after-set.json
+
+            node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/webhook-after-set.json','utf8'));const r=x.result||{};console.log(JSON.stringify({url:r.url,pending_update_count:r.pending_update_count,last_error_message:r.last_error_message||null},null,2));if(r.url!=='$WEBHOOK_URL')process.exit(1);"
+            echo "Telegram webhook confirmado: $WEBHOOK_URL"
           else
             echo "Sem TELEGRAM_BOT_TOKEN; webhook não configurado."
           fi
