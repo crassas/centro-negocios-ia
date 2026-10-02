@@ -337,6 +337,19 @@ def execute_action(task):
             + prompt
         )
 
+        lower_prompt = prompt.lower()
+        literal_fast = (
+            len(prompt) <= 500
+            and any(key in lower_prompt for key in (
+                "responde apenas",
+                "diz apenas",
+                "apenas:",
+                "somente",
+                "só responde",
+            ))
+        )
+        thinking = "off" if literal_fast else "low"
+
         started = time.time()
         result = run_cmd(
             [
@@ -344,6 +357,10 @@ def execute_action(task):
                 "agent",
                 "--agent",
                 "main",
+                "--thinking",
+                thinking,
+                "--verbose",
+                "off",
                 "--message",
                 safe_prompt,
                 "--json",
