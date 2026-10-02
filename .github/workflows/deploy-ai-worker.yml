@@ -74,6 +74,15 @@ jobs:
             echo "Sem TELEGRAM_BOT_TOKEN; webhook não configurado."
           fi
 
+      - name: Diagnosticar webhook Telegram
+        if: steps.cloudflare.outputs.ready == 'true'
+        shell: bash
+        run: |
+          if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+            curl --fail --silent --show-error               "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getWebhookInfo"               -o /tmp/webhook-info.json
+            node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/webhook-info.json','utf8'));const r=x.result||{};console.log(JSON.stringify({ok:x.ok,url:r.url,pending_update_count:r.pending_update_count,last_error_message:r.last_error_message||null,last_error_date:r.last_error_date||null,max_connections:r.max_connections||null,allowed_updates:r.allowed_updates||null},null,2));"
+          fi
+
       - name: Testar Worker e Workers AI
         if: steps.cloudflare.outputs.ready == 'true'
         shell: bash
