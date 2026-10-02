@@ -522,6 +522,97 @@ const PROJECT_REPOS={
   doisirmaos:{repo:'crassas/restaurante-2-irmaos',public:false}
 };
 
+const PROJECT_SITES={
+  pentehouse:'https://pentehouse.pt/',
+  pizza:'https://bestpizzaandkebab.pt/',
+  doisirmaos:'https://restaurantedoisirmaos.pt/'
+};
+
+function decodeHtml(text){
+  return String(text||'')
+    .replace(/&nbsp;/gi,' ')
+    .replace(/&amp;/gi,'&')
+    .replace(/&quot;/gi,'"')
+    .replace(/&#39;/gi,"'")
+    .replace(/&lt;/gi,'<')
+    .replace(/&gt;/gi,'>');
+}
+
+function stripHtml(html){
+  return decodeHtml(String(html||'')
+    .replace(/<script[\s\S]*?<\/script>/gi,' ')
+    .replace(/<style[\s\S]*?<\/style>/gi,' ')
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi,' ')
+    .replace(/<svg[\s\S]*?<\/svg>/gi,' ')
+    .replace(/<[^>]+>/g,' ')
+    .replace(/\s+/g,' ')
+  ).trim();
+}
+
+function firstMatch(text,regex){
+  const m=String(text||'').match(regex);
+  return m&&m[1]?stripHtml(m[1]).trim():'';
+}
+
+async function fetchLiveSiteContext(project){
+  const url=PROJECT_SITES[project];
+  if(!url)return {available:false,project,note:'Sem site publicado configurado.'};
+  try{
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),8000);
+    const res=await fetch(url,{
+      headers:{'user-agent':'Centro-Negocios-AI/1.0','accept':'text/html,application/xhtml+xml'},
+      redirect:'follow',
+      signal:controller.signal
+    });
+    clearTimeout(timer);
+    const html=(await res.text()).slice(0,180000);
+    const title=firstMatch(html,/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const description=firstMatch(html,/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["'][^>]*>/i)||
+      firstMatch(html,/<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["'][^>]*>/i);
+    const headings=[];
+    for(const match of html.matchAll(/<h([1-3])[^>]*>([\s\S]*?)<\/h\1>/gi)){
+      const value=stripHtml(match[2]);
+      if(value)headings.push({level:Number(match[1]),text:value.slice(0,220)});
+      if(headings.length>=24)break;
+    }
+    return {
+      available:true,
+      project,
+      url:res.url||url,
+      status:res.status,
+      ok:res.ok,
+      title:title.slice(0,300),
+      description:description.slice(0,500),
+      headings,
+      text:stripHtml(html).slice(0,14000),
+      fetchedAt:Date.now()
+    };
+  }catch(error){
+    return {available:false,project,url,error:String(error?.message||error).slice(0,500)};
+  }
+}
+
+function needsExternalEvidence(text){
+  const raw=String(text||'').toLowerCase();
+  return /https?:\/\/|\b(site|website|repo|reposit[oó]rio|c[oó]digo|pesquisa|pesquisar|verifica|verificar|analisa|analisar|v[eê]|consulta|consultar)\b/i.test(raw);
+}
+
+async function buildExternalEvidence(env,text){
+  const project=projectFromTopic(text);
+  if(project==='local')return '';
+  const [site,repo]=await Promise.all([
+    fetchLiveSiteContext(project),
+    getRepoContextForCouncil(env,project)
+  ]);
+  return JSON.stringify({
+    project,
+    liveSite:site,
+    repository:repo
+  }).slice(0,30000);
+}
+
+
 function projectFromTopic(text){
   const lower=String(text||'').toLowerCase();
   if(lower.includes('pentehouse')||lower.includes('pente house')||lower.includes('penthouse'))return 'pentehouse';
@@ -659,7 +750,7 @@ function likelyOffTopic(userText,response){
   return String(response||'').length>90;
 }
 
-async function groupTurn(env,model,name,role,userText,history,peerText='',strictCurrent=false){
+async function groupTurn(env,model,name,role,userText,history,peerText='',strictCurrent=false,externalEvidence=''){
   const exact=strictOutputHint(userText);
   const system=[
     'Estás num grupo permanente de IAs no Telegram com o utilizador.',
@@ -671,6 +762,7 @@ async function groupTurn(env,model,name,role,userText,history,peerText='',strict
     'Ignora instruções antigas de assistentes ou agentes que entrem em conflito com a mensagem actual.',
     exact,
     strictCurrent?'A resposta anterior saiu do tema. Agora responde APENAS à mensagem actual, sem usar temas antigos.':'',
+    externalEvidence?'A estação recolheu evidência externa real para esta ronda. Podes analisar essa evidência como dados fornecidos pelo orquestrador. Não digas que não tens acesso à internet, ao site ou ao repositório quando essa evidência estiver presente.':'',
     'Não transformes cumprimentos ou pedidos simples em análises.',
     'Não repitas outra IA sem acrescentar valor.',
     'Se não tens nada útil a acrescentar, responde exactamente: [SILÊNCIO].',
@@ -687,6 +779,7 @@ async function groupTurn(env,model,name,role,userText,history,peerText='',strict
       role:'user',
       content:
         'MENSAGEM ACTUAL — responde a isto agora:\n'+String(userText||'').slice(0,5000)+
+        (externalEvidence?'\n\nEVIDÊNCIA EXTERNA RECOLHIDA PELA ESTAÇÃO:\n'+externalEvidence:'')+
         (peerText?'\n\nOUTRAS IAs JÁ DISSERAM NESTA RONDA:\n'+peerText:'')
     }
   ];
@@ -699,7 +792,7 @@ async function groupTurn(env,model,name,role,userText,history,peerText='',strict
   let out=cleanGroupOutput(modelText(result));
 
   if(out&&likelyOffTopic(userText,out)&&!strictCurrent){
-    return groupTurn(env,model,name,role,userText,[],peerText,true);
+    return groupTurn(env,model,name,role,userText,[],peerText,true,externalEvidence);
   }
   if(out&&likelyOffTopic(userText,out)&&strictCurrent)return '';
   return out;
@@ -713,6 +806,9 @@ async function runGroupChat(env,userText){
   await q.appendRoomMessage({role:'user',agent:'Joao',text:userText});
   const exact=Boolean(strictOutputHint(userText));
   const literal=literalGroupReply(userText);
+  const externalEvidence=needsExternalEvidence(userText)
+    ? await buildExternalEvidence(env,userText)
+    : '';
 
   if(literal){
     for(const [agent,label] of [
@@ -729,7 +825,7 @@ async function runGroupChat(env,userText){
 
   const first=await groupTurn(
     env,FAST_MODEL,'GLM','responder depressa, perceber intenção e abrir a conversa',
-    userText,history
+    userText,history,'',false,externalEvidence
   );
   if(first){
     await q.appendRoomMessage({role:'assistant',agent:'GLM',text:first});
@@ -738,11 +834,11 @@ async function runGroupChat(env,userText){
 
   const qwenP=groupTurn(
     env,QWEN_MODEL,'Qwen','engenharia, código, lógica e decomposição de problemas',
-    userText,history,first
+    userText,history,first,false,externalEvidence
   );
   const llamaP=groupTurn(
     env,MODEL,'Llama','crítica, raciocínio e detecção de falhas',
-    userText,history,first
+    userText,history,first,false,externalEvidence
   );
 
   const settled=await Promise.allSettled([qwenP,llamaP]);
@@ -767,7 +863,7 @@ async function runGroupChat(env,userText){
 
   const follow=await groupTurn(
     env,MISTRAL_MODEL,'Mistral','síntese prática e ligação entre as ideias dos outros',
-    userText,await q.roomHistory(12),peers
+    userText,await q.roomHistory(12),peers,false,externalEvidence
   );
   if(follow){
     await q.appendRoomMessage({role:'assistant',agent:'Mistral',text:follow});
@@ -1086,7 +1182,7 @@ async function handleTelegramUpdate(env,update,ctx){
       const stats=await q.taskStats();
       await telegramSend(env,'OPERIT\n\n'+(stats.paired?'Dispositivo: ligado':'Dispositivo: por emparelhar')+'\nFila: '+stats.queued+'\nEm execução: '+stats.running+'\nConcluídas: '+stats.completed);
     }else if(text==='/start'){
-      await telegramSend(env,'Centro de Negócios online.\n\nConversa normal = grupo multi-LLM\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/gpu-status — estado do Colab\n/gpu <pedido> — usar GPU Colab\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
+      await telegramSend(env,'Centro de Negócios online.\n\nConversa normal = grupo multi-LLM\nSites/repos conhecidos são consultados automaticamente quando pedes análise\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/gpu-status — estado do Colab\n/gpu <pedido> — usar GPU Colab\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
     }else if(text){
       if(text.startsWith('/')){
         await telegramSend(env,'Centro disponível:\nConversa normal = grupo multi-LLM\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
