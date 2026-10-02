@@ -292,36 +292,16 @@ def execute_action(task):
     if action == "openclaw_status":
         started = time.time()
         binary = locate_openclaw()
-        if not binary:
-            return {
-                "exitCode": 127,
-                "stdout": "",
-                "stderr": "OpenClaw não foi encontrado neste sistema.",
-                "durationMs": int((time.time() - started) * 1000),
-            }
-
-        healthy, http_status, health_body, health_ms = openclaw_http_health()
-        version = run_cmd([binary, "--version"], timeout=20)
+        healthy, http_status, health_body, _ = openclaw_http_health()
         lines = [
             "OPENCLAW",
-            f"Binário: {binary}",
-            f"Versão: {(version['stdout'] or version['stderr']).strip() or 'desconhecida'}",
+            f"CLI: {'OK' if binary else 'FALTA'}",
             f"Gateway: {'ONLINE' if healthy else 'OFFLINE'}",
             f"Endpoint: 127.0.0.1:{OPENCLAW_PORT}",
             f"Health HTTP: {http_status if http_status else '-'}",
             f"Health: {health_body[:500] if health_body else '-'}",
+            "Modo Centro: leitura/análise",
         ]
-
-        if healthy:
-            probe = run_cmd(
-                [binary, "gateway", "health", "--port", str(OPENCLAW_PORT), "--json"],
-                timeout=30,
-            )
-            if probe["stdout"].strip():
-                lines.append("RPC: " + probe["stdout"].strip()[:1800])
-            elif probe["stderr"].strip():
-                lines.append("RPC aviso: " + probe["stderr"].strip()[:800])
-
         return {
             "exitCode": 0 if healthy else 1,
             "stdout": "\n".join(lines),
