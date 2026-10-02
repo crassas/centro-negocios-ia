@@ -375,6 +375,76 @@ async function telegramSendDecision(env,decision){
     ]]}
   });
 }
+
+function deterministicProjectFront(text){
+  const raw=String(text||'').trim();
+  const lower=raw.toLowerCase();
+  const improvementIntent=/\b(melhorar|melhorias|optimizar|otimizar|corrigir|hoje|fazer melhor)\b/i.test(raw);
+  if(!improvementIntent)return null;
+
+  if(lower.includes('pentehouse')){
+    return {
+      answer:[
+        'Hoje eu atacaria 5 pontos na Pentehouse:',
+        '1. Mobile/hero: confirmar que marca, Marquês e CTA de WhatsApp ficam claros logo na primeira dobra.',
+        '2. Reservas: reduzir passos entre escolher serviço/barbeiro e iniciar contacto.',
+        '3. SEO local: rever titles, H1/H2 e conteúdo para Marquês, Constituição e Porto sem repetição artificial.',
+        '4. Confiança: dar mais destaque à equipa, galeria real e informação prática.',
+        '5. Técnico: confirmar velocidade, indexação, schema e links internos no site publicado.'
+      ].join('\n'),
+      project:'pentehouse',
+      claudePrompt:'Analisa o projecto Pentehouse real e o site publicado. Verifica mobile/hero, conversão e reservas, SEO local Marquês/Constituição/Porto, equipa/galeria, performance, indexação, schema e links internos. Não inventes métricas. Devolve prioridades concretas e alterações de código recomendadas.'
+    };
+  }
+
+  if(lower.includes('best pizza')||lower.includes('pizza')||lower.includes('kebab')){
+    return {
+      answer:[
+        'Hoje eu atacaria 5 pontos no Best Pizza & Kebab:',
+        '1. Menu mobile: reduzir comprimento e tornar categorias/pesquisa realmente rápidas.',
+        '2. Conversão: manter pedido/telefone sempre acessível.',
+        '3. SEO local: reforçar Campanhã e São Roque nas páginas certas.',
+        '4. Conteúdo: evitar blocos repetidos e destacar os produtos/benefícios principais.',
+        '5. Técnico: confirmar headings, schema, sitemap, indexação e links internos.'
+      ].join('\n'),
+      project:'pizza',
+      claudePrompt:'Analisa o projecto Best Pizza & Kebab real e o site publicado. Verifica menu mobile, pesquisa/categorias, conversão, SEO local Campanhã/São Roque, headings, schema, sitemap, indexação e links internos. Não inventes métricas. Devolve prioridades e alterações concretas.'
+    };
+  }
+
+  if(lower.includes('2 irmãos')||lower.includes('dois irmãos')||lower.includes('doisirmaos')){
+    return {
+      answer:[
+        'Hoje eu atacaria 5 pontos no 2 Irmãos:',
+        '1. Hero: comida portuguesa, Campanhã e contacto imediatamente claros.',
+        '2. Menu: destacar os pratos fortes e reduzir navegação desnecessária.',
+        '3. Confiança: localização, horários e informação prática consistentes.',
+        '4. SEO local: headings e conteúdo orientados a Campanhã/Porto.',
+        '5. Técnico: validar schema Restaurant, indexação e performance.'
+      ].join('\n'),
+      project:'doisirmaos',
+      claudePrompt:'Analisa o projecto 2 Irmãos real e o site publicado. Verifica hero, menu, confiança/localização, SEO Campanhã/Porto, schema Restaurant, indexação e performance. Não inventes dados. Devolve prioridades e alterações concretas.'
+    };
+  }
+
+  if(lower.includes('centro de negócios')||lower.includes('centro negocios')||lower.includes('centro')){
+    return {
+      answer:[
+        'Hoje eu atacaria 5 pontos no Centro:',
+        '1. Latência: resposta frontal imediata e execução pesada em segundo plano.',
+        '2. Resiliência: supervisor, retries e recuperação automática.',
+        '3. Memória: SQLite central para tarefas, projectos e histórico.',
+        '4. Router: separar IA rápida, Claude, auditor e executor.',
+        '5. Observabilidade: estado, tempos, erros e fila num painel único.'
+      ].join('\n'),
+      project:'centro',
+      claudePrompt:'Analisa o projecto Centro de Negócios real. Verifica latência, supervisor/retries, arquitectura de memória SQLite, router multi-agente e observabilidade. Não inventes estado. Devolve melhorias concretas por prioridade.'
+    };
+  }
+
+  return null;
+}
+
 async function handleTelegramUpdate(env,update){
   const q=taskQueue(env);
   const claimed=await q.claimTelegramUpdate(update?.update_id);
@@ -402,6 +472,22 @@ async function handleTelegramUpdate(env,update){
       if(text.startsWith('/')){
         await telegramSend(env,'Centro disponível:\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
       }else{
+        const deterministic=deterministicProjectFront(text);
+        if(deterministic){
+          const repo=OPERIT_PROJECTS[deterministic.project]||'local';
+          const task=await q.createTask({
+            action:'claude_query',
+            target:repo,
+            args:{prompt:deterministic.claudePrompt},
+            label:'Claude Code · '+repo
+          },'telegram-front');
+          await telegramSend(env,'⚡ '+deterministic.answer+'\n\nPosso confirmar isto no projecto real com o Claude Code.',{
+            reply_markup:{inline_keyboard:[[
+              {text:'🧠 Aprofundar',callback_data:'taskapprove:'+task.id},
+              {text:'❌ Não',callback_data:'taskreject:'+task.id}
+            ]]}
+          });
+        }else{
         await telegramApi(env,'sendChatAction',{chat_id:env.TELEGRAM_CHAT_ID,action:'typing'});
         try{
           const fast=await runTelegramFront(env,text);
@@ -477,6 +563,7 @@ async function handleTelegramUpdate(env,update){
           }
         }catch(error){
           await telegramSend(env,'IA rápida indisponível neste momento. Podes continuar com /claude <pedido>.');
+        }
         }
       }
     }
@@ -560,7 +647,8 @@ export default {
         model:MODEL,
         agentModel:AGENT_MODEL,
         telegramConfigured:Boolean(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID),
-        operitQueue:Boolean(env.TASKS)
+        operitQueue:Boolean(env.TASKS),
+        telegramFront:'v3-deterministic-projects'
       },200,origin);
     }
 
