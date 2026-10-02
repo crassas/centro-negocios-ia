@@ -993,6 +993,22 @@ export default {
       try{body=await request.json();}catch{return json({ok:false,error:'Pedido inválido.'},400,origin);}
     }
 
+    if(url.pathname==='/api/repo/snapshot'&&request.method==='POST'){
+      try{
+        const token=bearer(request);
+        const hash=await sha256Hex(token);
+        const q=taskQueue(env);
+        if(!await q.authenticate(hash))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
+        const project=String(body?.project||'').toLowerCase();
+        if(!PROJECT_REPOS[project])return json({ok:false,error:'Projecto inválido.'},400,origin);
+        const snapshot=body?.snapshot&&typeof body.snapshot==='object'?body.snapshot:{};
+        const saved=await q.setRepoSnapshot(project,{...snapshot,source:'centro-agent-local'});
+        return json({ok:true,...saved},200,origin);
+      }catch(error){
+        return json({ok:false,error:String(error?.message||error)},500,origin);
+      }
+    }
+
     if(url.pathname==='/api/council/run'&&request.method==='POST'){
       try{
         const token=bearer(request);
