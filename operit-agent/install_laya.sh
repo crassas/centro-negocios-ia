@@ -5,6 +5,8 @@ HOME_DIR="${HOME:-/root}"
 STATE_DIR="$HOME_DIR/.centro-laya"
 VENV="$STATE_DIR/venv"
 TORCH_VERSION="2.14.0"
+export PIP_NO_CACHE_DIR=1
+export PIP_DISABLE_PIP_VERSION_CHECK=1
 
 mkdir -p "$STATE_DIR"
 
