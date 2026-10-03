@@ -25,6 +25,9 @@ CLAUDE_TIMEOUT = 300
 OPENCLAW_TIMEOUT = 300
 OPENCLAW_PORT = 18789
 OPENCLAW_HEALTH = f"http://127.0.0.1:{OPENCLAW_PORT}/healthz"
+LAYA_BASE = "http://127.0.0.1:18790"
+MANUS_BASE = "https://api.manus.ai"
+MANUS_KEY_FILE = HOME / ".centro-agent" / "manus_api_key"
 OLLAMA_KEY_FILE = HOME / ".centro-agent" / "ollama_api_key"
 
 REPOS = {
@@ -113,6 +116,10 @@ def capabilities():
             "openclaw_status",
             "openclaw_models",
             "openclaw_query",
+            "laya_status",
+            "laya_decide",
+            "manus_status",
+            "manus_query",
         ],
         "repos": list(REPOS.keys()),
         "sites": [name for name, _ in SITES],
@@ -223,6 +230,129 @@ def extract_openclaw_reply(raw):
 
 
 
+
+def http_json(url, method="GET", payload=None, headers=None, timeout=30):
+    data = None
+    req_headers = {"User-Agent": "Centro-Server/1.0"}
+    if headers:
+        req_headers.update(headers)
+    if payload is not None:
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        req_headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=data, headers=req_headers, method=method)
+    with urllib.request.urlopen(req, timeout=timeout) as res:
+        raw = res.read().decode("utf-8", errors="replace")
+        return res.status, json.loads(raw) if raw else {}
+
+
+def laya_request(state):
+    questions = {
+        "route": {
+            "type": "choice",
+            "instructions": "Qual é o especialista principal para tratar este pedido?",
+            "criteria": {
+                "fast_chat": "conversa simples, cumprimento, resposta curta ou esclarecimento imediato",
+                "code": "programação, arquitectura, repositórios, debugging, implementação técnica",
+                "audit": "verificação, riscos, segurança, bugs, pressupostos frágeis, qualidade",
+                "seo": "SEO, GEO, AEO, pesquisa local, indexação, conteúdo para motores de busca",
+                "ux": "interface, experiência do utilizador, conversão, percurso, mobile",
+                "research": "pesquisa externa, comparação, recolha ou validação de informação",
+                "openclaw": "execução local, ficheiros, terminal, ferramentas ou automação no dispositivo",
+                "manus": "missão autónoma multi-etapa com pesquisa, browser, artefactos ou trabalho prolongado"
+            }
+        },
+        "complexity": {
+            "type": "score",
+            "instructions": "Qual é a complexidade operacional do pedido?",
+            "criteria": ["simples", "moderada", "complexa", "missão"]
+        },
+        "needs_tools": {
+            "type": "noul",
+            "instructions": "Este pedido precisa de ferramentas ou execução além de uma resposta textual?"
+        },
+        "needs_web": {
+            "type": "noul",
+            "instructions": "Este pedido precisa de informação externa ou navegação web?"
+        }
+    }
+    payload = {
+        "state": str(state),
+        "questions": questions,
+        "model": "multilingual",
+        "min_confidence": 0.45
+    }
+    return http_json(LAYA_BASE + "/v1/systemone", method="POST", payload=payload, timeout=45)
+
+
+def format_laya_result(data):
+    answers = data.get("answers") or {}
+    route = answers.get("route") or {}
+    complexity = answers.get("complexity") or {}
+    tools = answers.get("needs_tools") or {}
+    web = answers.get("needs_web") or {}
+    routing = data.get("routing") or {}
+    lines = [
+        "LAYA · SYSTEM 1",
+        f"Rota: {route.get('choice', '-')}",
+        f"Confiança rota: {float(route.get('answer_confidence') or 0):.3f}",
+        f"Complexidade: {complexity.get('score', '-')}",
+        f"Precisa ferramentas: {float(tools.get('noul') or 0):.3f}",
+        f"Precisa web: {float(web.get('noul') or 0):.3f}",
+        f"Checkpoint: {routing.get('model', 'multilingual')}",
+    ]
+    usage = data.get("usage") or {}
+    if "input_tokens" in usage:
+        lines.append(f"Tokens entrada: {usage.get('input_tokens')}")
+    return "\n".join(lines)
+
+
+def read_secret(path):
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return ""
+
+
+def manus_request(path, method="GET", payload=None, timeout=45):
+    key = read_secret(MANUS_KEY_FILE)
+    if not key:
+        raise RuntimeError("MANUS_KEY_MISSING")
+    headers = {"x-manus-api-key": key}
+    return http_json(MANUS_BASE + path, method=method, payload=payload, headers=headers, timeout=timeout)
+
+
+def manus_extract_latest(messages, since_ms):
+    rows = messages if isinstance(messages, list) else []
+    waiting = None
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        ts = int(row.get("timestamp") or 0)
+        if ts + 3000 < since_ms:
+            continue
+        typ = str(row.get("type") or "")
+        if typ == "assistant_message":
+            msg = row.get("assistant_message") or {}
+            content = str(msg.get("content") or "").strip()
+            if content:
+                return "done", content
+        if typ == "error_message":
+            msg = row.get("error_message") or {}
+            return "error", str(msg.get("content") or msg.get("error_type") or "Erro Manus")
+        if typ == "status_update":
+            status = row.get("status_update") or {}
+            if status.get("agent_status") == "waiting":
+                detail = status.get("status_detail") or {}
+                waiting = str(
+                    detail.get("waiting_description")
+                    or status.get("description")
+                    or status.get("brief")
+                    or "Manus aguarda confirmação."
+                )
+    return ("waiting", waiting) if waiting else ("pending", "")
+
+
+
 def execute_action(task):
     action = str(task.get("action") or "")
     target = str(task.get("target") or "")
@@ -277,6 +407,7 @@ def execute_action(task):
             ("Claude Code", bool(claude)),
             ("OpenClaw CLI", bool(locate_openclaw())),
             ("OpenClaw Gateway", openclaw_http_health()[0]),
+            ("Manus API key", MANUS_KEY_FILE.exists()),
             ("Token servidor", TOKEN_FILE.exists()),
             ("Token Operit", (HOME / ".centro-agent" / "token").exists()),
         ]
@@ -394,6 +525,166 @@ def execute_action(task):
             result["stdout"] = extract_openclaw_reply(result["stdout"])[-12000:]
         result["durationMs"] = int((time.time() - started) * 1000)
         return result
+
+    if action == "laya_status":
+        started = time.time()
+        try:
+            status, data = http_json(LAYA_BASE + "/health", timeout=5)
+            loaded = data.get("loaded") or []
+            return {
+                "exitCode": 0,
+                "stdout": "\n".join([
+                    "LAYA",
+                    "Estado: ONLINE",
+                    f"Endpoint: 127.0.0.1:18790",
+                    f"HTTP: {status}",
+                    f"Modelos carregados: {', '.join(loaded) if loaded else 'nenhum / a carregar'}",
+                    f"Dispositivo: {data.get('device', '-')}",
+                    "Função no Centro: router System 1 / decisões tipadas",
+                ]),
+                "stderr": "",
+                "durationMs": int((time.time() - started) * 1000),
+            }
+        except Exception as exc:
+            return {
+                "exitCode": 1,
+                "stdout": "LAYA\nEstado: OFFLINE\nEndpoint: 127.0.0.1:18790",
+                "stderr": str(exc),
+                "durationMs": int((time.time() - started) * 1000),
+            }
+
+    if action == "laya_decide":
+        prompt = str((task.get("args") or {}).get("prompt") or "").strip()
+        if not prompt:
+            return {"exitCode": 2, "stdout": "", "stderr": "Pedido Laya em falta.", "durationMs": 0}
+        if len(prompt) > 12000:
+            return {"exitCode": 2, "stdout": "", "stderr": "Pedido Laya demasiado longo.", "durationMs": 0}
+        started = time.time()
+        try:
+            _, data = laya_request(prompt)
+            return {
+                "exitCode": 0,
+                "stdout": format_laya_result(data),
+                "stderr": "",
+                "durationMs": int((time.time() - started) * 1000),
+            }
+        except Exception as exc:
+            return {
+                "exitCode": 1,
+                "stdout": "",
+                "stderr": "Laya indisponível: " + str(exc),
+                "durationMs": int((time.time() - started) * 1000),
+            }
+
+    if action == "manus_status":
+        started = time.time()
+        key = read_secret(MANUS_KEY_FILE)
+        if not key:
+            return {
+                "exitCode": 78,
+                "stdout": "MANUS\nEstado: SEM CHAVE LOCAL",
+                "stderr": "Guarda a API key em ~/.centro-agent/manus_api_key com permissão 600.",
+                "durationMs": int((time.time() - started) * 1000),
+            }
+        try:
+            status, data = manus_request("/v2/user.me", timeout=20)
+            return {
+                "exitCode": 0,
+                "stdout": "\n".join([
+                    "MANUS",
+                    "API v2: ONLINE",
+                    f"HTTP: {status}",
+                    f"Conta: {str(data.get('email') or data.get('name') or data.get('user_id') or 'autenticada')}",
+                    "Agente: agent-default",
+                    "Task principal: agent-default-main_task",
+                ]),
+                "stderr": "",
+                "durationMs": int((time.time() - started) * 1000),
+            }
+        except Exception as exc:
+            return {
+                "exitCode": 1,
+                "stdout": "MANUS\nAPI v2: FALHA",
+                "stderr": str(exc),
+                "durationMs": int((time.time() - started) * 1000),
+            }
+
+    if action == "manus_query":
+        prompt = str((task.get("args") or {}).get("prompt") or "").strip()
+        if not prompt:
+            return {"exitCode": 2, "stdout": "", "stderr": "Pedido Manus em falta.", "durationMs": 0}
+        if len(prompt) > 12000:
+            return {"exitCode": 2, "stdout": "", "stderr": "Pedido Manus demasiado longo.", "durationMs": 0}
+        if not read_secret(MANUS_KEY_FILE):
+            return {
+                "exitCode": 78,
+                "stdout": "",
+                "stderr": "Falta ~/.centro-agent/manus_api_key.",
+                "durationMs": 0,
+            }
+
+        safe_prompt = (
+            "Pedido vindo do Centro de Negócios. Responde em português de Portugal. "
+            "Nesta primeira integração trabalha em modo de análise: não compres, não publiques, "
+            "não envies mensagens, não alteres contas e não executes acções externas irreversíveis. "
+            "Se uma acção persistente for necessária, explica o que pretendes fazer e espera por autorização.\n\n"
+            + prompt
+        )
+        started = time.time()
+        since_ms = int(started * 1000)
+        try:
+            manus_request(
+                "/v2/task.sendMessage",
+                method="POST",
+                payload={
+                    "task_id": "agent-default-main_task",
+                    "message": {"content": safe_prompt},
+                },
+                timeout=30,
+            )
+            deadline = time.time() + 240
+            while time.time() < deadline:
+                time.sleep(2)
+                query = (
+                    "/v2/task.listMessages?task_id=agent-default-main_task"
+                    "&order=desc&limit=10"
+                )
+                _, data = manus_request(query, timeout=30)
+                state, content = manus_extract_latest(data.get("messages"), since_ms)
+                if state == "done":
+                    return {
+                        "exitCode": 0,
+                        "stdout": content[-12000:],
+                        "stderr": "",
+                        "durationMs": int((time.time() - started) * 1000),
+                    }
+                if state == "error":
+                    return {
+                        "exitCode": 1,
+                        "stdout": "",
+                        "stderr": content,
+                        "durationMs": int((time.time() - started) * 1000),
+                    }
+                if state == "waiting":
+                    return {
+                        "exitCode": 10,
+                        "stdout": "MANUS AGUARDA CONFIRMAÇÃO\n\n" + content,
+                        "stderr": "",
+                        "durationMs": int((time.time() - started) * 1000),
+                    }
+            return {
+                "exitCode": 124,
+                "stdout": "",
+                "stderr": "Tempo limite do Manus excedido.",
+                "durationMs": int((time.time() - started) * 1000),
+            }
+        except Exception as exc:
+            return {
+                "exitCode": 1,
+                "stdout": "",
+                "stderr": "Falha Manus: " + str(exc),
+                "durationMs": int((time.time() - started) * 1000),
+            }
 
     if action == "system_info":
         import platform
