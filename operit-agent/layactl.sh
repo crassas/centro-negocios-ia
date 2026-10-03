@@ -6,6 +6,7 @@ STATE_DIR="$HOME_DIR/.centro-laya"
 VENV="$STATE_DIR/venv"
 PID_FILE="$STATE_DIR/laya.pid"
 LOG_FILE="$STATE_DIR/laya.log"
+RUNNER="$STATE_DIR/run_server.py"
 HOST="127.0.0.1"
 PORT="18790"
 
@@ -50,9 +51,26 @@ start_laya() {
   export LAYA_MODELS="multilingual"
   export LAYA_DEFAULT_MODEL="multilingual"
   export LAYA_THREADS="${LAYA_THREADS:-4}"
+  export OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
+  export MKL_NUM_THREADS="${MKL_NUM_THREADS:-4}"
   export LAYA_JEV_STRICT="${LAYA_JEV_STRICT:-0}"
 
-  nohup "$BIN" >>"$LOG_FILE" 2>&1 </dev/null &
+  cat >"$RUNNER" <<'PY'
+import os
+import torch
+
+threads = max(1, int(os.environ.get("LAYA_THREADS", "4")))
+torch.set_num_threads(threads)
+try:
+    torch.set_num_interop_threads(1)
+except RuntimeError:
+    pass
+
+from laya.serve import main
+main()
+PY
+
+  nohup "$VENV/bin/python" "$RUNNER" >>"$LOG_FILE" 2>&1 </dev/null &
   PID=$!
   echo "$PID" > "$PID_FILE"
 
