@@ -249,61 +249,41 @@ def laya_request(state):
     questions = {
         "route": {
             "type": "choice",
-            "instructions": "Qual é o especialista principal para tratar este pedido?",
+            "instructions": "Escolhe o especialista principal para tratar este pedido.",
             "criteria": {
-                "fast_chat": "conversa simples, cumprimento, resposta curta ou esclarecimento imediato",
-                "code": "programação, arquitectura, repositórios, debugging, implementação técnica",
-                "audit": "verificação, riscos, segurança, bugs, pressupostos frágeis, qualidade",
-                "seo": "SEO, GEO, AEO, pesquisa local, indexação, conteúdo para motores de busca",
-                "ux": "interface, experiência do utilizador, conversão, percurso, mobile",
-                "research": "pesquisa externa, comparação, recolha ou validação de informação",
+                "fast_chat": "conversa simples, resposta curta ou esclarecimento imediato",
+                "code": "programação, arquitectura, repositórios, debugging ou implementação técnica",
+                "audit": "verificação, riscos, segurança, bugs ou controlo de qualidade",
+                "seo": "SEO, GEO, AEO, pesquisa local, indexação ou conteúdo para motores de busca",
+                "ux": "interface, experiência do utilizador, conversão ou mobile",
+                "research": "pesquisa externa, comparação ou validação de informação",
                 "openclaw": "execução local, ficheiros, terminal, ferramentas ou automação no dispositivo",
                 "manus": "missão autónoma multi-etapa com pesquisa, browser, artefactos ou trabalho prolongado"
             }
-        },
-        "complexity": {
-            "type": "score",
-            "instructions": "Qual é a complexidade operacional do pedido?",
-            "criteria": ["simples", "moderada", "complexa", "missão"]
-        },
-        "needs_tools": {
-            "type": "noul",
-            "instructions": "Este pedido precisa de ferramentas ou execução além de uma resposta textual?"
-        },
-        "needs_web": {
-            "type": "noul",
-            "instructions": "Este pedido precisa de informação externa ou navegação web?"
         }
     }
     payload = {
         "state": str(state),
         "questions": questions,
-        "model": "multilingual",
-        "min_confidence": 0.45
+        "model": "multilingual"
     }
-    return http_json(LAYA_BASE + "/v1/systemone", method="POST", payload=payload, timeout=45)
+    return http_json(LAYA_BASE + "/v1/systemone", method="POST", payload=payload, timeout=120)
+
 
 
 def format_laya_result(data):
     answers = data.get("answers") or {}
     route = answers.get("route") or {}
-    complexity = answers.get("complexity") or {}
-    tools = answers.get("needs_tools") or {}
-    web = answers.get("needs_web") or {}
     routing = data.get("routing") or {}
-    lines = [
+    usage = data.get("usage") or {}
+    return "\n".join([
         "LAYA · SYSTEM 1",
         f"Rota: {route.get('choice', '-')}",
-        f"Confiança rota: {float(route.get('answer_confidence') or 0):.3f}",
-        f"Complexidade: {complexity.get('score', '-')}",
-        f"Precisa ferramentas: {float(tools.get('noul') or 0):.3f}",
-        f"Precisa web: {float(web.get('noul') or 0):.3f}",
+        f"Confiança: {float(route.get('answer_confidence') or 0):.3f}",
         f"Checkpoint: {routing.get('model', 'multilingual')}",
-    ]
-    usage = data.get("usage") or {}
-    if "input_tokens" in usage:
-        lines.append(f"Tokens entrada: {usage.get('input_tokens')}")
-    return "\n".join(lines)
+        f"Tokens entrada: {usage.get('input_tokens', '-')}",
+    ])
+
 
 
 def read_secret(path):
