@@ -1010,6 +1010,32 @@ function parseOperitInstruction(text){
       label:'OpenClaw · agente principal'
     };
   }
+  m=raw.match(/^\/laya$/i);
+  if(m)return {action:'laya_status',target:'local',label:'Estado do Laya local'};
+  m=raw.match(/^\/laya\s+([\s\S]{1,5000})$/i);
+  if(m){
+    const prompt=m[1].trim();
+    if(!prompt)return null;
+    return {
+      action:'laya_decide',
+      target:'local',
+      args:{prompt},
+      label:'Laya · decisão System 1'
+    };
+  }
+  m=raw.match(/^\/manus$/i);
+  if(m)return {action:'manus_status',target:'local',label:'Estado do Manus API'};
+  m=raw.match(/^\/manus\s+([\s\S]{1,5000})$/i);
+  if(m){
+    const prompt=m[1].trim();
+    if(!prompt)return null;
+    return {
+      action:'manus_query',
+      target:'local',
+      args:{prompt},
+      label:'Manus · agente externo'
+    };
+  }
   m=raw.match(/^\/operit\s+system$/i);
   if(m)return {action:'system_info',target:'local',label:'Informação do sistema'};
   m=raw.match(/^\/operit\s+sites?$/i);
@@ -1173,12 +1199,16 @@ async function handleTelegramUpdate(env,update,ctx){
       const task=await q.createTask(instruction,'telegram');
       const isClaude=instruction.action==='claude_query';
       const isOpenClaw=instruction.action==='openclaw_query'||instruction.action==='openclaw_status';
+      const isLaya=instruction.action==='laya_decide'||instruction.action==='laya_status';
+      const isManus=instruction.action==='manus_query'||instruction.action==='manus_status';
 
-      // OpenClaw está limitado a leitura/análise nesta fase.
-      // O próprio comando /openclaw já é autorização suficiente para uma operação read-only.
-      if(isOpenClaw){
+      // /openclaw, /laya e /manus já são pedidos explícitos.
+      // Nesta fase todos trabalham em leitura/análise; acções persistentes continuam bloqueadas.
+      if(isOpenClaw||isLaya||isManus){
         await q.resolveTask(task.id,true);
-        await telegramSend(env,'⚡ OPENCLAW\n\n'+task.label+'\n\nEnviado directamente ao Gateway local.');
+        const heading=isOpenClaw?'⚡ OPENCLAW':(isLaya?'🟦 LAYA':'🛰️ MANUS');
+        const dest=isOpenClaw?'Gateway local':(isLaya?'motor local':'API v2');
+        await telegramSend(env,heading+'\n\n'+task.label+'\n\nEnviado directamente para '+dest+'.');
       }else{
         const heading=isClaude?'CLAUDE CODE':'ACÇÃO OPERIT';
         const question=isClaude?'Enviar ao Claude Code?':'Executar?';
@@ -1233,7 +1263,7 @@ async function handleTelegramUpdate(env,update,ctx){
       const stats=await q.taskStats();
       await telegramSend(env,'OPERIT\n\n'+(stats.paired?'Dispositivo: ligado':'Dispositivo: por emparelhar')+'\nFila: '+stats.queued+'\nEm execução: '+stats.running+'\nConcluídas: '+stats.completed);
     }else if(text==='/start'){
-      await telegramSend(env,'Centro de Negócios online.\n\nConversa normal = grupo multi-LLM\nSites/repos conhecidos são consultados automaticamente quando pedes análise\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/gpu-status — estado do Colab\n/gpu <pedido> — usar GPU Colab\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/openclaw — estado do OpenClaw\n/openclaw-models — modelos disponíveis\n/openclaw <pedido> — agente OpenClaw local\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
+      await telegramSend(env,'Centro de Negócios online.\n\nConversa normal = grupo multi-LLM\nSites/repos conhecidos são consultados automaticamente quando pedes análise\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/gpu-status — estado do Colab\n/gpu <pedido> — usar GPU Colab\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/openclaw — estado do OpenClaw\n/openclaw-models — modelos disponíveis\n/openclaw <pedido> — agente OpenClaw local\n/laya — estado do Laya\n/laya <pedido> — decisão rápida System 1\n/manus — estado do Manus\n/manus <pedido> — agente Manus\n/laya — estado do Laya\n/laya <pedido> — decisão rápida System 1\n/manus — estado do Manus\n/manus <pedido> — agente Manus\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
     }else if(text){
       if(text.startsWith('/')){
         await telegramSend(env,'Centro disponível:\nConversa normal = grupo multi-LLM\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/openclaw — estado do OpenClaw\n/openclaw <pedido> — agente OpenClaw local\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
@@ -1525,8 +1555,12 @@ export default {
         if(done.task.action==='council_run'){
           await telegramSend(env,result.exitCode===0?'✅ SALA DE CONSELHO CONCLUÍDA':'⚠️ SALA DE CONSELHO TERMINOU COM ERRO');
         }else{
-          const isOpenClaw=String(done.task.action||'').startsWith('openclaw_');
-          await telegramSend(env,(isOpenClaw?'OPENCLAW CONCLUÍDO':'OPERIT CONCLUÍDO')+'\n\n'+done.task.label+'\n\nExit: '+result.exitCode+'\nTempo: '+result.durationMs+' ms\n\n'+output);
+          const action=String(done.task.action||'');
+          const isOpenClaw=action.startsWith('openclaw_');
+          const isLaya=action.startsWith('laya_');
+          const isManus=action.startsWith('manus_');
+          const title=isOpenClaw?'OPENCLAW CONCLUÍDO':(isLaya?'LAYA CONCLUÍDO':(isManus?'MANUS CONCLUÍDO':'OPERIT CONCLUÍDO'));
+          await telegramSend(env,title+'\n\n'+done.task.label+'\n\nExit: '+result.exitCode+'\nTempo: '+result.durationMs+' ms\n\n'+output);
         }
         return json({ok:true},200,origin);
       }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
