@@ -40,12 +40,16 @@ if [ -w "/usr/local/bin" ]; then
   SERVER_CTL="/usr/local/bin/centroserver"
   STATION_CTL="/usr/local/bin/centrostation"
   OPENCLAW_CTL="/usr/local/bin/openclawctl"
+  LAYA_CTL="/usr/local/bin/layactl"
+  LAYA_INSTALL="/usr/local/bin/layainstall"
 else
   mkdir -p "$HOME_DIR/.local/bin"
   CTL="$HOME_DIR/.local/bin/centroctl"
   SERVER_CTL="$HOME_DIR/.local/bin/centroserver"
   STATION_CTL="$HOME_DIR/.local/bin/centrostation"
   OPENCLAW_CTL="$HOME_DIR/.local/bin/openclawctl"
+  LAYA_CTL="$HOME_DIR/.local/bin/layactl"
+  LAYA_INSTALL="$HOME_DIR/.local/bin/layainstall"
 fi
 
 fetch_to "$RAW/centroctl.sh" "$CTL"
@@ -56,6 +60,10 @@ fetch_to "$RAW/stationctl.sh" "$STATION_CTL"
 chmod 700 "$STATION_CTL"
 fetch_to "$RAW/openclawctl.sh" "$OPENCLAW_CTL"
 chmod 700 "$OPENCLAW_CTL"
+fetch_to "$RAW/layactl.sh" "$LAYA_CTL"
+chmod 700 "$LAYA_CTL"
+fetch_to "$RAW/install_laya.sh" "$LAYA_INSTALL"
+chmod 700 "$LAYA_INSTALL"
 
 echo "Agente instalado:"
 echo "  $AGENT"
@@ -68,5 +76,7 @@ echo "  $CTL"
 echo "  $SERVER_CTL"
 echo "  $STATION_CTL"
 echo "  $OPENCLAW_CTL"
+echo "  $LAYA_CTL"
+echo "  $LAYA_INSTALL"
 echo
 "$STATION_CTL" restart
