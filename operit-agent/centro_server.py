@@ -6,6 +6,7 @@ import signal
 import shutil
 import subprocess
 import time
+import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -589,19 +590,40 @@ def request_repo_change_plan(target, prompt, worktree):
     if not token:
         raise RuntimeError("Centro Agent sem token para pedir plano de alteração.")
     context = build_local_repo_context(worktree, target, prompt)
-    status, data = http_json(
-        CLOUD_BASE + "/api/repo/change-plan",
-        method="POST",
-        payload={"target": target, "prompt": prompt, "context": context},
-        headers={"Authorization": "Bearer " + token},
-        timeout=180,
-    )
-    if status != 200 or not isinstance(data, dict) or not data.get("ok"):
-        raise RuntimeError(str((data or {}).get("error") or f"Planeador HTTP {status}"))
-    plan = data.get("plan")
-    if not isinstance(plan, dict) or not isinstance(plan.get("edits"), list):
-        raise RuntimeError("Plano de alteração inválido.")
-    return plan
+    payload = {"target": target, "prompt": prompt, "context": context}
+    last_error = ""
+
+    for attempt in range(2):
+        try:
+            status, data = http_json(
+                CLOUD_BASE + "/api/repo/change-plan",
+                method="POST",
+                payload=payload,
+                headers={"Authorization": "Bearer " + token},
+                timeout=150,
+            )
+            if status == 200 and isinstance(data, dict) and data.get("ok"):
+                plan = data.get("plan")
+                if not isinstance(plan, dict) or not isinstance(plan.get("edits"), list):
+                    raise RuntimeError("Plano de alteração inválido.")
+                return plan
+            last_error = str((data or {}).get("error") or f"Planeador HTTP {status}")
+        except urllib.error.HTTPError as exc:
+            try:
+                body = exc.read().decode("utf-8", errors="replace")
+                parsed = json.loads(body) if body else {}
+                last_error = str(parsed.get("error") or f"Planeador HTTP {exc.code}")
+            except Exception:
+                last_error = f"Planeador HTTP {exc.code}"
+            if exc.code < 500:
+                break
+        except Exception as exc:
+            last_error = str(exc)
+
+        if attempt == 0:
+            time.sleep(2)
+
+    raise RuntimeError(last_error or "Planeador automático indisponível.")
 
 
 def protected_repo_path(rel):
