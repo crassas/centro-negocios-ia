@@ -650,6 +650,50 @@ async function captureOpportunity(){
   await askAI('Analisa este novo sinal de prospecção: "'+raw+'". Se houver dados suficientes, propõe apenas as acções concretas que devo confirmar. Não inventes nome, morada ou contacto.');
 }
 
+function executionStatus(row){
+  if(row.status==='running')return {label:'A EXECUTAR',cls:'running'};
+  if(row.status==='queued')return {label:'NA FILA',cls:'queued'};
+  if(row.status==='pending')return {label:'A AGUARDAR',cls:'pending'};
+  if(row.status==='rejected')return {label:'RECUSADO',cls:'rejected'};
+  if(row.status==='completed'&&Number(row.exitCode)===0)return {label:'CONCLUÍDO',cls:'done'};
+  if(row.status==='completed')return {label:'ERRO',cls:'error'};
+  return {label:String(row.status||'—').toUpperCase(),cls:'pending'};
+}
+function executionClock(ms){
+  if(!ms)return '—';
+  try{return new Date(ms).toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}catch{return '—';}
+}
+function renderExecutions(payload){
+  const list=$('execution-list');const summary=$('execution-summary');
+  if(!list||!summary)return;
+  const rows=Array.isArray(payload?.executions)?payload.executions:[];
+  const stats=payload?.stats||{};
+  const active=(Number(stats.running)||0)+(Number(stats.queued)||0)+(Number(stats.pending)||0);
+  summary.textContent=active?active+' ACTIVAS':'EM REPOUSO';
+  summary.classList.toggle('is-live',Boolean(active));
+  if(!rows.length){list.innerHTML='<div class="empty">Ainda não há execuções registadas.</div>';return;}
+  list.innerHTML=rows.slice(0,12).map(row=>{
+    const st=executionStatus(row);
+    const duration=row.durationMs?Math.max(1,Math.round(row.durationMs/1000))+'s':'—';
+    const output=String(row.output||'').replace(/\s+/g,' ').trim().slice(0,220);
+    return '<article class="execution-row '+st.cls+'">'+
+      '<div class="execution-main"><div><span>'+esc(row.target||row.source||'Centro')+'</span><b>'+esc(row.label||row.action||'Execução')+'</b></div>'+
+      '<em class="execution-state">'+esc(st.label)+'</em></div>'+
+      '<div class="execution-meta"><span>'+executionClock(row.startedAt||row.createdAt)+'</span><span>'+esc(duration)+'</span><span>exit '+(row.exitCode==null?'—':esc(row.exitCode))+'</span></div>'+
+      (output?'<p>'+esc(output)+'</p>':'')+
+      '</article>';
+  }).join('');
+}
+async function loadExecutions(){
+  if(!$('execution-list'))return;
+  try{
+    const data=await aiFetch('/api/executions?limit=20',{method:'GET',headers:{}});
+    renderExecutions(data);
+  }catch(err){
+    const summary=$('execution-summary');if(summary)summary.textContent='SEM LIGAÇÃO';
+  }
+}
+
 function renderSystem(){
   const age=ageMinutes(live.generatedAt);$('sys-monitor').textContent=live.generatedAt?(age!=null&&age>40?'Leitura atrasada':'Activo · '+ageLabel(live.generatedAt)):'Sem leitura';
   try{const t='__centro_test';localStorage.setItem(t,'1');localStorage.removeItem(t);$('sys-storage').textContent='Disponível';}catch{$('sys-storage').textContent='Bloqueado';}
@@ -704,5 +748,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   seedCRMDefaults();seedLeadDefaults();seedPaymentDefaults();setupEvents();setupPWA();
   $('finance-date').value=new Date().toISOString().slice(0,10);
   renderLeads();renderPayments();renderFinance();renderGsc();renderAgentState();setupVaultState();renderSystem();renderAIStatus();
-  checkTelegramStatus(false);pollTelegramApprovals(false);setInterval(()=>pollTelegramApprovals(false),30000);loadLive();
+  checkTelegramStatus(false);pollTelegramApprovals(false);loadExecutions();
+  setInterval(()=>pollTelegramApprovals(false),30000);
+  setInterval(()=>loadExecutions(),3000);
+  loadLive();
 });
