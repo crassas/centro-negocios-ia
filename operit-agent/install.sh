@@ -80,11 +80,6 @@ echo "  $LAYA_CTL"
 echo "  $LAYA_INSTALL"
 echo
 
-# OpenClaw deixa de fazer parte do arranque normal da estação. Mantém os
-# ficheiros/configuração, mas pára o processo para libertar RAM. Para optar
-# conscientemente pelo autostart: CENTRO_OPENCLAW_AUTOSTART=1.
-if [ "${CENTRO_OPENCLAW_AUTOSTART:-0}" != "1" ] && [ -x "$OPENCLAW_CTL" ]; then
-  "$OPENCLAW_CTL" stop >/dev/null 2>&1 || true
-fi
-
+# A Estação Centro arranca todos os componentes já instalados.
+# OpenClaw/Laya são best-effort: uma falha neles não derruba Server/Agent.
 "$STATION_CTL" restart
