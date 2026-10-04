@@ -755,6 +755,183 @@ function compactRepoContext(ctx){
 }
 
 
+
+function repoProjectFromTarget(target){
+  const value=String(target||'').trim();
+  for(const [project,repo] of Object.entries(OPERIT_PROJECTS)){
+    if(repo===value)return project==='kebab'?'pizza':(project==='2irmaos'?'doisirmaos':project);
+  }
+  return null;
+}
+
+function repoEditPreferred(project){
+  const map={
+    beatriz:['src/beatriz.js','src/beatriz.css','src/data.mjs','CONTENT_TRUTH.md','README.md','package.json'],
+    pentehouse:['src/App.jsx','src/App.tsx','src/main.js','src/main.ts','index.html','styles.css','README.md','package.json'],
+    pizza:['src/App.jsx','src/App.tsx','src/main.js','src/main.ts','index.html','styles.css','README.md','package.json'],
+    doisirmaos:['src/App.jsx','src/App.tsx','src/main.js','src/main.ts','index.html','styles.css','README.md','package.json'],
+    centro:['cloudflare-ai-worker/src/index.js','operit-agent/centro_server.py','operit-agent/centro_agent.py','app.js','index.html','styles.css','README.md']
+  };
+  return map[project]||['index.html','styles.css','app.js','README.md','package.json'];
+}
+
+function repoEditTerms(prompt){
+  const generic=['hero','mobile','responsive','headline','title','titulo','título','cta','button','botão','texto','text','layout','section','media'];
+  const words=String(prompt||'').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .match(/[a-z0-9_-]{4,}/g)||[];
+  return [...new Set([...words,...generic])].slice(0,24);
+}
+
+function relevantFileExcerpt(text,prompt,maxChars=14000){
+  const raw=String(text||'');
+  if(raw.length<=maxChars)return raw;
+  const lower=raw.toLowerCase();
+  const terms=repoEditTerms(prompt);
+  const slices=[];
+  const seen=[];
+  for(const term of terms){
+    let from=0;
+    for(let n=0;n<2;n++){
+      const idx=lower.indexOf(term.toLowerCase(),from);
+      if(idx<0)break;
+      from=idx+term.length;
+      const start=Math.max(0,idx-1400);
+      const end=Math.min(raw.length,idx+2200);
+      if(seen.some(([a,b])=>Math.max(a,start)<Math.min(b,end)))continue;
+      seen.push([start,end]);
+      slices.push(raw.slice(start,end));
+      if(slices.join('\n\n/* ... */\n\n').length>=maxChars)break;
+    }
+    if(slices.join('').length>=maxChars)break;
+  }
+  if(!slices.length){
+    slices.push(raw.slice(0,7000),raw.slice(-5000));
+  }
+  return slices.join('\n\n/* ... EXCERTO ... */\n\n').slice(0,maxChars);
+}
+
+async function buildRepoChangeContext(project,prompt){
+  const info=PROJECT_REPOS[project];
+  if(!info||!info.public)throw new Error('Planeador automático requer repositório público nesta fase.');
+  const headers={'user-agent':'centro-negocios-ai','accept':'application/vnd.github+json'};
+  const bust=Date.now();
+  const treeRes=await fetch(
+    'https://api.github.com/repos/'+info.repo+'/git/trees/main?recursive=1&_='+bust,
+    {headers,cache:'no-store'}
+  );
+  if(!treeRes.ok)throw new Error('GitHub tree HTTP '+treeRes.status);
+  const tree=await treeRes.json();
+  const paths=(Array.isArray(tree?.tree)?tree.tree:[])
+    .filter(x=>x&&x.type==='blob'&&typeof x.path==='string')
+    .map(x=>x.path)
+    .filter(p=>!/(^|\/)(node_modules|dist|build|\.git)(\/|$)/.test(p));
+
+  const preferred=repoEditPreferred(project);
+  const promptTerms=repoEditTerms(prompt);
+  const textExt=/\.(?:html?|css|scss|sass|less|js|mjs|cjs|jsx|ts|tsx|json|md|py|toml|ya?ml)$/i;
+  const scored=paths
+    .filter(p=>textExt.test(p)||/^(?:README|CONTENT_TRUTH)(?:\.md)?$/i.test(p))
+    .map(p=>{
+      const low=p.toLowerCase();
+      let score=preferred.includes(p)?100:0;
+      for(const term of promptTerms)if(low.includes(term.toLowerCase()))score+=15;
+      if(/(?:src|app|main|index|style|css|data|content|readme)/i.test(p))score+=3;
+      return {p,score};
+    })
+    .sort((a,b)=>b.score-a.score||a.p.localeCompare(b.p));
+
+  const candidates=[];
+  for(const p of preferred)if(paths.includes(p)&&!candidates.includes(p))candidates.push(p);
+  for(const row of scored)if(!candidates.includes(row.p))candidates.push(row.p);
+  const selected=candidates.slice(0,8);
+
+  const files={};
+  for(const filePath of selected){
+    try{
+      const res=await fetch(
+        'https://raw.githubusercontent.com/'+info.repo+'/main/'+filePath+'?_='+bust,
+        {headers:{'user-agent':'centro-negocios-ai'},cache:'no-store'}
+      );
+      if(!res.ok)continue;
+      const text=await res.text();
+      files[filePath]=relevantFileExcerpt(text,prompt);
+    }catch{}
+  }
+  return {
+    project,
+    repo:info.repo,
+    branch:'main',
+    head:tree?.sha||null,
+    paths:paths.slice(0,220),
+    files
+  };
+}
+
+async function planRepoChange(env,project,prompt){
+  const context=await buildRepoChangeContext(project,prompt);
+  const responseFormat={
+    type:'json_schema',
+    json_schema:{
+      type:'object',
+      properties:{
+        summary:{type:'string'},
+        edits:{
+          type:'array',
+          maxItems:12,
+          items:{
+            type:'object',
+            properties:{
+              path:{type:'string'},
+              operation:{type:'string',enum:['replace','append','create']},
+              search:{type:'string'},
+              content:{type:'string'}
+            },
+            required:['path','operation','search','content']
+          }
+        }
+      },
+      required:['summary','edits']
+    }
+  };
+
+  const result=await env.AI.run(QWEN_MODEL,{
+    messages:[
+      {
+        role:'system',
+        content:[
+          'És o executor de alterações de código do Centro de Negócios.',
+          'Recebes um pedido do dono e evidência REAL do repositório GitHub.',
+          'Devolve APENAS o JSON pedido pelo schema.',
+          'Faz alterações mínimas, profissionais e coerentes com o código existente.',
+          'Para operation=replace, SEARCH tem de ser uma sequência EXACTA e suficientemente específica copiada literalmente de um dos ficheiros fornecidos; deve ocorrer uma única vez.',
+          'Para operation=append, deixa search vazio e usa apenas quando um override/adendo no fim do ficheiro é tecnicamente correcto.',
+          'Para operation=create, o path tem de ser novo.',
+          'Nunca edites .env, secrets, credenciais, chaves, .git ou .github/workflows.',
+          'Nunca inventes paths. Se não houver evidência suficiente para uma alteração segura, devolve edits vazio e explica no summary.',
+          'Não alteres mais ficheiros do que o necessário.'
+        ].join(' ')
+      },
+      {
+        role:'user',
+        content:'PEDIDO:\n'+String(prompt||'').slice(0,5000)+'\n\nREPOSITÓRIO:\n'+JSON.stringify(context).slice(0,60000)
+      }
+    ],
+    response_format:responseFormat,
+    max_tokens:3000,
+    temperature:0.08
+  });
+
+  if(result&&typeof result==='object'&&Array.isArray(result.edits))return {ok:true,plan:result,context:{repo:context.repo,head:context.head}};
+  if(result?.response){
+    try{
+      const parsed=JSON.parse(result.response);
+      if(Array.isArray(parsed?.edits))return {ok:true,plan:parsed,context:{repo:context.repo,head:context.head}};
+    }catch{}
+  }
+  throw new Error('Workers AI não devolveu um plano de edição válido.');
+}
+
 function strictOutputHint(text){
   const raw=String(text||'').trim();
   const lower=raw.toLowerCase();
@@ -1633,6 +1810,24 @@ export default {
         return json({ok:true,...saved},200,origin);
       }catch(error){
         return json({ok:false,error:String(error?.message||error)},500,origin);
+      }
+    }
+
+    if(url.pathname==='/api/repo/change-plan'&&request.method==='POST'){
+      try{
+        const token=bearer(request);
+        const hash=await sha256Hex(token);
+        const q=taskQueue(env);
+        if(!await q.authenticate(hash))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
+        const target=String(body?.target||'').trim();
+        const prompt=String(body?.prompt||'').trim();
+        const project=repoProjectFromTarget(target);
+        if(!project||!PROJECT_REPOS[project])return json({ok:false,error:'Projecto inválido.'},400,origin);
+        if(!prompt)return json({ok:false,error:'Pedido em falta.'},400,origin);
+        const planned=await planRepoChange(env,project,prompt);
+        return json(planned,200,origin);
+      }catch(error){
+        return json({ok:false,error:'Falha no planeador de código: '+String(error?.message||error).slice(0,1000)},500,origin);
       }
     }
 
