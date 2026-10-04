@@ -669,7 +669,12 @@ async function fetchPublicRepoSnapshot(project){
     ],
     centro:[
       'README.md','package.json','app.js',
-      'cloudflare-ai-worker/src/index.js'
+      'cloudflare-ai-worker/src/index.js',
+      'operit-agent/centro_server.py',
+      'operit-agent/centro_agent.py',
+      'operit-agent/centro_station.py',
+      'servidor-privado/02-ARQUITETURA.md',
+      'servidor-privado/08-FICHEIROS-E-ENDPOINTS.md'
     ]
   };
   const generic=['CONTENT_TRUTH.md','README.md','package.json','index.html','app.js','src/main.js','src/main.ts','src/App.jsx','src/App.tsx'];
@@ -1108,6 +1113,23 @@ function parseOperitInstruction(text){
     return repo?{action:'git_pull',target:repo,label:'Git pull --ff-only · '+repo}:null;
   }
 
+  // Execução automática de alterações no repositório. O executor local
+  // trabalha num worktree isolado e só publica depois de validar.
+  m=raw.match(/^\/(?:fazer|executar|alterar|modificar)\s+@([a-z0-9_-]+)\s+([\s\S]{1,5000})$/i);
+  if(m){
+    const alias=(m[1]||'').toLowerCase();
+    const repo=OPERIT_PROJECTS[alias];
+    if(!repo)return null;
+    const prompt=m[2].trim();
+    if(!prompt)return null;
+    return {
+      action:'repo_change',
+      target:repo,
+      args:{prompt},
+      label:'Alteração automática · '+repo
+    };
+  }
+
   // Claude Code no próprio telemóvel. @projecto é opcional.
   m=raw.match(/^\/claude(?:\s+@([a-z0-9_-]+))?\s+([\s\S]{1,5000})$/i);
   if(m){
@@ -1158,6 +1180,29 @@ async function telegramSendDecision(env,decision){
       {text:'❌ Recusar',callback_data:'reject:'+id}
     ]]}
   });
+}
+
+function automaticRepoChange(text){
+  const raw=String(text||'').trim();
+  if(!raw||raw.startsWith('/'))return null;
+
+  const project=projectFromTopic(raw);
+  if(!project||project==='local')return null;
+  const repo=OPERIT_PROJECTS[project];
+  if(!repo)return null;
+
+  const direct=/^(?:por favor[\s,:-]*)?(?:altera|modifica|corrige|implementa|adiciona|remove|muda|actualiza|atualiza|cria|substitui|ajusta|aplica|publica|mete|põe|poe|coloca|faz)\b/i;
+  const requested=/\b(?:podes|podem|quero que|preciso que|vamos|façam|faz favor de)\s+(?:já\s+|mesmo\s+|agora\s+)*(?:alterar|modificar|corrigir|implementar|adicionar|remover|mudar|actualizar|atualizar|criar|substituir|ajustar|aplicar|publicar|meter|pôr|por|colocar|fazer)\b/i;
+  const actionPhrase=/\b(?:faz|façam|mete|metam|põe|poe|ponham|coloca|coloquem|aplica|apliquem)\s+(?:isto|isso|esta|essa|o|a|no|na|ao|à)\b/i;
+
+  if(!(direct.test(raw)||requested.test(raw)||actionPhrase.test(raw)))return null;
+
+  return {
+    action:'repo_change',
+    target:repo,
+    args:{prompt:raw},
+    label:'Alteração automática · '+repo
+  };
 }
 
 function deterministicProjectFront(text){
@@ -1255,13 +1300,17 @@ async function handleTelegramUpdate(env,update,ctx){
     if(instruction){
       const task=await q.createTask(instruction,'telegram');
       const isClaude=instruction.action==='claude_query';
+      const isRepoChange=instruction.action==='repo_change';
       const isOpenClaw=instruction.action==='openclaw_query'||instruction.action==='openclaw_status';
       const isLaya=instruction.action==='laya_decide'||instruction.action==='laya_status';
       const isManus=instruction.action==='manus_query'||instruction.action==='manus_status';
 
-      // /openclaw, /laya e /manus já são pedidos explícitos.
-      // Nesta fase todos trabalham em leitura/análise; acções persistentes continuam bloqueadas.
-      if(isOpenClaw||isLaya||isManus){
+      // Alterações de repositório pedidas explicitamente seguem sem um
+      // segundo clique; o executor local isola, valida e bloqueia caminhos sensíveis.
+      if(isRepoChange){
+        await q.resolveTask(task.id,true);
+        await telegramSend(env,'⚙️ AUTOMAÇÃO\n\n'+task.label+'\n\nTarefa aceite automaticamente. O executor vai trabalhar numa cópia isolada, validar e publicar apenas se tudo passar.');
+      }else if(isOpenClaw||isLaya||isManus){
         await q.resolveTask(task.id,true);
         const heading=isOpenClaw?'⚡ OPENCLAW':(isLaya?'🟦 LAYA':'🛰️ MANUS');
         const dest=isOpenClaw?'Gateway local':(isLaya?'motor local':'API v2');
@@ -1276,6 +1325,11 @@ async function handleTelegramUpdate(env,update,ctx){
           ]]}
         });
       }
+    }else if(automaticRepoChange(text)){
+      const autoChange=automaticRepoChange(text);
+      const task=await q.createTask(autoChange,'telegram');
+      await q.resolveTask(task.id,true);
+      await telegramSend(env,'⚙️ AUTOMAÇÃO ACTIVADA\n\n'+autoChange.label+'\n\nNão precisas confirmar outra vez. O Centro vai editar numa cópia isolada, validar, fazer commit e publicar se tudo passar.');
     }else if(text==='/limpar'){
       await q.clearRoom();
       await telegramSend(env,'Conversa do grupo limpa.');
@@ -1320,7 +1374,7 @@ async function handleTelegramUpdate(env,update,ctx){
       const stats=await q.taskStats();
       await telegramSend(env,'OPERIT\n\n'+(stats.paired?'Dispositivo: ligado':'Dispositivo: por emparelhar')+'\nFila: '+stats.queued+'\nEm execução: '+stats.running+'\nConcluídas: '+stats.completed);
     }else if(text==='/start'){
-      await telegramSend(env,'Centro de Negócios online.\n\nConversa normal = grupo multi-LLM\nSites/repos conhecidos são consultados automaticamente quando pedes análise\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/gpu-status — estado do Colab\n/gpu <pedido> — usar GPU Colab\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/openclaw — estado do OpenClaw\n/openclaw-models — modelos disponíveis\n/openclaw <pedido> — agente OpenClaw local\n/laya — estado do Laya\n/laya <pedido> — decisão rápida System 1\n/manus — estado do Manus\n/manus <pedido> — agente Manus\n/laya — estado do Laya\n/laya <pedido> — decisão rápida System 1\n/manus — estado do Manus\n/manus <pedido> — agente Manus\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
+      await telegramSend(env,'Centro de Negócios online.\n\nConversa normal = grupo multi-LLM\nSites/repos conhecidos são consultados automaticamente quando pedes análise\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/gpu-status — estado do Colab\n/gpu <pedido> — usar GPU Colab\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/openclaw — estado do OpenClaw\n/openclaw-models — modelos disponíveis\n/openclaw <pedido> — agente OpenClaw local\n/laya — estado do Laya\n/laya <pedido> — decisão rápida System 1\n/manus — estado do Manus\n/manus <pedido> — agente Manus\n/laya — estado do Laya\n/laya <pedido> — decisão rápida System 1\n/manus — estado do Manus\n/manus <pedido> — agente Manus\n/fazer @beatriz <alteração> — editar, validar e publicar automaticamente\n/fazer @beatriz <alteração> — editar, validar e publicar automaticamente\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n/status');
     }else if(text){
       if(text.startsWith('/')){
         await telegramSend(env,'Centro disponível:\nConversa normal = grupo multi-LLM\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/openclaw — estado do OpenClaw\n/openclaw <pedido> — agente OpenClaw local\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos\n/status — estado do executor');
