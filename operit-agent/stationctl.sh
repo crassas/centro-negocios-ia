@@ -8,6 +8,8 @@ LOG_FILE="$STATE_DIR/supervisor.log"
 SUPERVISOR="$HOME_DIR/centro_station.py"
 SERVER_CTL="/usr/local/bin/centroserver"
 AGENT_CTL="/usr/local/bin/centroctl"
+OPENCLAW_CTL="/usr/local/bin/openclawctl"
+LAYA_CTL="/usr/local/bin/layactl"
 
 mkdir -p "$STATE_DIR"
 
@@ -21,6 +23,14 @@ is_running() {
 start_station() {
   "$SERVER_CTL" start
   "$AGENT_CTL" start
+
+  # Extras: arrancam se estiverem instalados; nunca bloqueiam o núcleo.
+  if [ -x "$OPENCLAW_CTL" ]; then
+    "$OPENCLAW_CTL" start >/dev/null 2>&1 || true
+  fi
+  if [ -x "$LAYA_CTL" ]; then
+    "$LAYA_CTL" start >/dev/null 2>&1 &
+  fi
 
   if is_running; then
     echo "Centro Station já está activo. PID $(cat "$PID_FILE")"
@@ -73,6 +83,14 @@ status_station() {
   fi
   "$SERVER_CTL" status || true
   "$AGENT_CTL" status || true
+  if [ -x "$OPENCLAW_CTL" ]; then
+    echo
+    "$OPENCLAW_CTL" status || true
+  fi
+  if [ -x "$LAYA_CTL" ]; then
+    echo
+    "$LAYA_CTL" status || true
+  fi
 }
 
 doctor_station() {
@@ -106,9 +124,10 @@ doctor_station() {
   [ -f "$HOME_DIR/.centro-agent/token" ] && echo "Operit token: OK" || echo "Operit token: EM FALTA"
   [ -f "$HOME_DIR/.centro-server/token" ] && echo "Server token: OK" || echo "Server token: EM FALTA"
   [ -f "$HOME_DIR/.centro-agent/ollama_api_key" ] && echo "Claude/Ollama: configurado" || echo "Claude/Ollama: por configurar"
+  [ -f "$HOME_DIR/.centro-agent/manus_api_key" ] && echo "Manus: configurado" || echo "Manus: opcional / sem chave"
 
   echo
-  echo "Política: núcleo local-first · sem fallback pago automático"
+  echo "Política: núcleo local-first · extras isolados · sem fallback pago automático"
 }
 
 logs_station() {
