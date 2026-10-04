@@ -637,43 +637,100 @@ async function fetchPublicRepoSnapshot(project){
   const info=PROJECT_REPOS[project];
   if(!info||!info.public)return null;
   const headers={'user-agent':'centro-negocios-ai','accept':'application/vnd.github+json'};
-  const treeRes=await fetch('https://api.github.com/repos/'+info.repo+'/git/trees/main?recursive=1',{headers});
+  const bust=Date.now();
+  const treeRes=await fetch(
+    'https://api.github.com/repos/'+info.repo+'/git/trees/main?recursive=1&_='+bust,
+    {headers,cache:'no-store'}
+  );
   if(!treeRes.ok)return null;
   const tree=await treeRes.json();
   const paths=(Array.isArray(tree?.tree)?tree.tree:[])
     .filter(x=>x&&x.type==='blob'&&typeof x.path==='string')
     .map(x=>x.path)
     .filter(p=>!/(^|\/)(node_modules|dist|build|\.git)(\/|$)/.test(p))
-    .slice(0,140);
-  const preferred=['CONTENT_TRUTH.md','README.md','package.json','index.html','app.js','src/main.js','src/main.ts','src/App.jsx','src/App.tsx'];
+    .slice(0,180);
+
+  const preferredByProject={
+    beatriz:[
+      'CONTENT_TRUTH.md','README.md','package.json',
+      'src/data.mjs','src/beatriz.js','src/beatriz.css'
+    ],
+    pentehouse:[
+      'CONTENT_TRUTH.md','README.md','package.json','index.html',
+      'src/main.js','src/main.ts','src/App.jsx','src/App.tsx'
+    ],
+    pizza:[
+      'CONTENT_TRUTH.md','README.md','package.json','index.html',
+      'src/main.js','src/main.ts','src/App.jsx','src/App.tsx'
+    ],
+    doisirmaos:[
+      'CONTENT_TRUTH.md','README.md','package.json','index.html',
+      'src/main.js','src/main.ts','src/App.jsx','src/App.tsx'
+    ],
+    centro:[
+      'README.md','package.json','app.js',
+      'cloudflare-ai-worker/src/index.js'
+    ]
+  };
+  const generic=['CONTENT_TRUTH.md','README.md','package.json','index.html','app.js','src/main.js','src/main.ts','src/App.jsx','src/App.tsx'];
+  const preferred=[...new Set([...(preferredByProject[project]||[]),...generic])];
+
   const files={};
-  for(const path of preferred){
-    if(!paths.includes(path))continue;
+  for(const filePath of preferred){
+    if(!paths.includes(filePath))continue;
     try{
-      const res=await fetch('https://raw.githubusercontent.com/'+info.repo+'/main/'+path,{headers:{'user-agent':'centro-negocios-ai'}});
-      if(res.ok)files[path]=(await res.text()).slice(0,5000);
+      const res=await fetch(
+        'https://raw.githubusercontent.com/'+info.repo+'/main/'+filePath+'?_='+bust,
+        {headers:{'user-agent':'centro-negocios-ai'},cache:'no-store'}
+      );
+      if(res.ok)files[filePath]=(await res.text()).slice(0,5000);
     }catch{}
-    if(Object.keys(files).length>=4)break;
+    if(Object.keys(files).length>=6)break;
   }
-  return {source:'github-public',repo:info.repo,branch:'main',paths,files};
+  return {
+    source:'github-live',
+    repo:info.repo,
+    branch:'main',
+    head:tree?.sha||null,
+    paths,
+    files,
+    updatedAt:Date.now()
+  };
 }
 
 async function getRepoContextForCouncil(env,project){
   if(!project||project==='local')return {project:'local',available:false,note:'Sem projecto específico.'};
   const q=taskQueue(env);
-  let snapshot=await q.getRepoSnapshot(project);
-  if(snapshot)return {project,available:true,...snapshot};
-  snapshot=await fetchPublicRepoSnapshot(project);
-  if(snapshot){
-    await q.setRepoSnapshot(project,snapshot);
-    return {project,available:true,...snapshot};
-  }
   const info=PROJECT_REPOS[project];
+
+  // Repositórios públicos são consultados ao vivo primeiro. O snapshot serve
+  // apenas de fallback, para evitar respostas baseadas em estados antigos.
+  if(info?.public){
+    const live=await fetchPublicRepoSnapshot(project);
+    if(live){
+      await q.setRepoSnapshot(project,live);
+      return {project,available:true,...live};
+    }
+    const cached=await q.getRepoSnapshot(project);
+    if(cached){
+      return {
+        project,
+        available:true,
+        ...cached,
+        stale:true,
+        note:'GitHub ao vivo indisponível nesta ronda; usado o último snapshot conhecido.'
+      };
+    }
+  }else{
+    const snapshot=await q.getRepoSnapshot(project);
+    if(snapshot)return {project,available:true,...snapshot};
+  }
+
   return {
     project,
     available:false,
     repo:info?.repo||null,
-    note:info&&!info.public?'Repositório privado: aguarda snapshot do Centro Agent local.':'Snapshot ainda indisponível.'
+    note:info&&!info.public?'Repositório privado: aguarda snapshot do Centro Agent local.':'GitHub ao vivo e snapshot indisponíveis nesta ronda.'
   };
 }
 
