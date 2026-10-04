@@ -30,6 +30,8 @@ MANUS_BASE = "https://api.manus.ai"
 MANUS_KEY_FILE = HOME / ".centro-agent" / "manus_api_key"
 OLLAMA_KEY_FILE = HOME / ".centro-agent" / "ollama_api_key"
 WORKTREE_ROOT = STATE_DIR / "worktrees"
+CLOUD_BASE = "https://centro-negocios-ai.travisthejarvis.workers.dev"
+AGENT_TOKEN_FILE = HOME / ".centro-agent" / "token"
 
 REPOS = {
     "centro-negocios-ia": "https://github.com/crassas/centro-negocios-ia.git",
@@ -451,6 +453,101 @@ def validate_repo_change(worktree, paths):
     return checks, failures
 
 
+def request_repo_change_plan(target, prompt):
+    token = read_secret(AGENT_TOKEN_FILE)
+    if not token:
+        raise RuntimeError("Centro Agent sem token para pedir plano de alteração.")
+    status, data = http_json(
+        CLOUD_BASE + "/api/repo/change-plan",
+        method="POST",
+        payload={"target": target, "prompt": prompt},
+        headers={"Authorization": "Bearer " + token},
+        timeout=180,
+    )
+    if status != 200 or not isinstance(data, dict) or not data.get("ok"):
+        raise RuntimeError(str((data or {}).get("error") or f"Planeador HTTP {status}"))
+    plan = data.get("plan")
+    if not isinstance(plan, dict) or not isinstance(plan.get("edits"), list):
+        raise RuntimeError("Plano de alteração inválido.")
+    return plan
+
+
+def protected_repo_path(rel):
+    low = str(rel or "").replace("\\", "/").lstrip("./").lower()
+    return (
+        not low
+        or low.startswith("/")
+        or ".." in Path(low).parts
+        or low == ".env"
+        or low.startswith(".env.")
+        or low.startswith(".git/")
+        or low.startswith(".github/workflows/")
+        or "secret" in low
+        or "credential" in low
+        or low.endswith(".pem")
+        or low.endswith(".key")
+    )
+
+
+def apply_repo_change_plan(worktree, plan):
+    edits = plan.get("edits") if isinstance(plan, dict) else []
+    if not isinstance(edits, list):
+        raise RuntimeError("Plano sem lista de edições.")
+    if len(edits) > 12:
+        raise RuntimeError("Plano excede o limite de 12 edições.")
+
+    applied = []
+    for edit in edits:
+        if not isinstance(edit, dict):
+            raise RuntimeError("Edição inválida no plano.")
+        rel = str(edit.get("path") or "").strip().replace("\\", "/")
+        op = str(edit.get("operation") or "").strip().lower()
+        search = str(edit.get("search") or "")
+        content = str(edit.get("content") or "")
+
+        if protected_repo_path(rel):
+            raise RuntimeError("Plano tentou tocar em caminho protegido: " + rel)
+        if op not in {"replace", "append", "create"}:
+            raise RuntimeError("Operação não permitida: " + op)
+
+        path = (worktree / rel).resolve()
+        root = worktree.resolve()
+        if root != path and root not in path.parents:
+            raise RuntimeError("Path fora do worktree: " + rel)
+
+        if op == "create":
+            if path.exists():
+                raise RuntimeError("Plano tentou criar ficheiro já existente: " + rel)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+            applied.append("create " + rel)
+            continue
+
+        if not path.exists() or not path.is_file():
+            raise RuntimeError("Ficheiro do plano não existe: " + rel)
+
+        original = path.read_text(encoding="utf-8")
+        if op == "append":
+            if not content.strip():
+                raise RuntimeError("Append vazio em " + rel)
+            suffix = "" if original.endswith("\n") else "\n"
+            path.write_text(original + suffix + content.rstrip() + "\n", encoding="utf-8")
+            applied.append("append " + rel)
+            continue
+
+        if not search:
+            raise RuntimeError("Replace sem texto de pesquisa em " + rel)
+        count = original.count(search)
+        if count != 1:
+            raise RuntimeError(
+                f"Replace inseguro em {rel}: bloco esperado ocorre {count} vez(es), deveria ocorrer exactamente 1."
+            )
+        path.write_text(original.replace(search, content, 1), encoding="utf-8")
+        applied.append("replace " + rel)
+
+    return applied
+
+
 def action_repo_change(task):
     prompt = str((task.get("args") or {}).get("prompt") or "").strip()
     target = str(task.get("target") or "")
@@ -471,15 +568,6 @@ def action_repo_change(task):
             "exitCode": 4,
             "stdout": "",
             "stderr": "Remote Git não corresponde ao repositório autorizado.",
-            "durationMs": 0,
-        }
-
-    claude = find_claude()
-    if not claude:
-        return {
-            "exitCode": 127,
-            "stdout": "",
-            "stderr": "Claude Code não foi encontrado para executar a alteração.",
             "durationMs": 0,
         }
 
@@ -516,53 +604,28 @@ def action_repo_change(task):
     pushed = False
     remote_branch = ""
     try:
-        system_note = (
-            "Estás a executar uma alteração pedida pelo dono do projecto através do Centro de Negócios no Telegram. "
-            "Trabalha APENAS dentro deste repositório. Faz a alteração pedida de forma completa e profissional. "
-            "Inspecciona primeiro os ficheiros relevantes e mantém o escopo mínimo. "
-            "Não alteres .env, tokens, chaves, secrets, credenciais, .git ou .github/workflows. "
-            "Não uses git reset --hard, force push, rm -rf, comandos destrutivos, deploy externo ou alterações de contas. "
-            "Podes editar ficheiros do projecto e executar verificações locais seguras. "
-            "Não faças commit nem push; o Centro trata disso depois de validar. "
-            "No fim resume em português de Portugal o que alteraste e o que verificaste."
-        )
-
-        cmd = [
-            claude,
-            "--permission-mode",
-            "auto",
-            "--append-system-prompt",
-            system_note,
-            "-p",
-            prompt,
-        ]
-        model = os.environ.get("CENTRO_CLAUDE_MODEL", "").strip()
-        if model:
-            cmd[1:1] = ["--model", model]
-
         try:
-            proc = subprocess.run(
-                cmd,
-                cwd=str(worktree),
-                text=True,
-                capture_output=True,
-                timeout=max(CLAUDE_TIMEOUT, 600),
-                check=False,
-                env=os.environ.copy(),
+            plan = request_repo_change_plan(target, prompt)
+            plan_summary = str(plan.get("summary") or "").strip()
+            edits = plan.get("edits") if isinstance(plan.get("edits"), list) else []
+            if not edits:
+                return {
+                    "exitCode": 0,
+                    "stdout": "Planeador concluiu que não há alteração segura a aplicar.\n\n" + plan_summary,
+                    "stderr": "",
+                    "durationMs": int((time.time() - started) * 1000),
+                }
+            applied = apply_repo_change_plan(worktree, plan)
+            executor_output = (
+                "WORKERS AI · PLANO APLICADO\n"
+                + (plan_summary + "\n" if plan_summary else "")
+                + "\n".join(applied)
             )
-        except subprocess.TimeoutExpired:
+        except Exception as exc:
             return {
-                "exitCode": 124,
+                "exitCode": 67,
                 "stdout": "",
-                "stderr": "Tempo limite do executor de código excedido.",
-                "durationMs": int((time.time() - started) * 1000),
-            }
-
-        if proc.returncode != 0:
-            return {
-                "exitCode": proc.returncode,
-                "stdout": proc.stdout[-6000:],
-                "stderr": ("Executor de código terminou com erro.\n" + proc.stderr[-5000:]).strip(),
+                "stderr": "Planeamento/aplicação automática falhou com segurança: " + str(exc),
                 "durationMs": int((time.time() - started) * 1000),
             }
 
@@ -570,14 +633,14 @@ def action_repo_change(task):
         if status["exitCode"] != 0:
             return {
                 "exitCode": status["exitCode"],
-                "stdout": proc.stdout[-5000:],
+                "stdout": executor_output[-5000:],
                 "stderr": status["stderr"],
                 "durationMs": int((time.time() - started) * 1000),
             }
         if not paths:
             return {
                 "exitCode": 0,
-                "stdout": "Executor concluiu sem alterações no repositório.\n\n" + proc.stdout[-5000:],
+                "stdout": "Executor concluiu sem alterações no repositório.\n\n" + executor_output[-5000:],
                 "stderr": "",
                 "durationMs": int((time.time() - started) * 1000),
             }
@@ -599,7 +662,7 @@ def action_repo_change(task):
         if protected:
             return {
                 "exitCode": 65,
-                "stdout": proc.stdout[-4000:],
+                "stdout": executor_output[-4000:],
                 "stderr": "Alteração bloqueada por tocar em caminhos protegidos: " + ", ".join(protected[:12]),
                 "durationMs": int((time.time() - started) * 1000),
             }
@@ -607,7 +670,7 @@ def action_repo_change(task):
         if len(paths) > 30:
             return {
                 "exitCode": 65,
-                "stdout": proc.stdout[-4000:],
+                "stdout": executor_output[-4000:],
                 "stderr": f"Alteração bloqueada: {len(paths)} ficheiros modificados (limite automático: 30).",
                 "durationMs": int((time.time() - started) * 1000),
             }
@@ -616,7 +679,7 @@ def action_repo_change(task):
         if failures:
             return {
                 "exitCode": 66,
-                "stdout": proc.stdout[-4000:] + "\n\nVERIFICAÇÕES:\n" + "\n".join(checks),
+                "stdout": executor_output[-4000:] + "\n\nVERIFICAÇÕES:\n" + "\n".join(checks),
                 "stderr": "Validação falhou; nada foi publicado.\n" + "\n".join(failures)[-5000:],
                 "durationMs": int((time.time() - started) * 1000),
             }
@@ -625,7 +688,7 @@ def action_repo_change(task):
         if add_all["exitCode"] != 0:
             return {
                 "exitCode": add_all["exitCode"],
-                "stdout": proc.stdout[-4000:],
+                "stdout": executor_output[-4000:],
                 "stderr": add_all["stderr"],
                 "durationMs": int((time.time() - started) * 1000),
             }
@@ -647,7 +710,7 @@ def action_repo_change(task):
         if commit["exitCode"] != 0:
             return {
                 "exitCode": commit["exitCode"],
-                "stdout": proc.stdout[-4000:],
+                "stdout": executor_output[-4000:],
                 "stderr": "Falhou commit automático.\n" + commit["stderr"],
                 "durationMs": int((time.time() - started) * 1000),
             }
@@ -668,7 +731,7 @@ def action_repo_change(task):
                 return {
                     "exitCode": push_main["exitCode"] or push_branch["exitCode"],
                     "stdout": (
-                        proc.stdout[-3000:]
+                        executor_output[-3000:]
                         + "\n\nCOMMIT LOCAL: " + sha
                         + "\n\n" + stat["stdout"][-3000:]
                     ),
@@ -693,7 +756,7 @@ def action_repo_change(task):
                 + "\n"
                 + stat["stdout"][-3500:]
                 + "\n\nEXECUTOR:\n"
-                + proc.stdout[-3500:]
+                + executor_output[-3500:]
             ),
             "stderr": "",
             "durationMs": int((time.time() - started) * 1000),
