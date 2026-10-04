@@ -14,10 +14,13 @@ AGENT_PID_FILE = HOME / ".centro-agent" / "agent.pid"
 SERVER_CTL = Path("/usr/local/bin/centroserver")
 AGENT_CTL = Path("/usr/local/bin/centroctl")
 OPENCLAW_CTL = Path("/usr/local/bin/openclawctl")
+LAYA_CTL = Path("/usr/local/bin/layactl")
 OPENCLAW_HEALTH = "http://127.0.0.1:18789/healthz"
+LAYA_HEALTH = "http://127.0.0.1:18790/health"
 INTERVAL = 3
-OPENCLAW_RETRY_SECONDS = 30
-OPENCLAW_AUTOSTART = os.environ.get("CENTRO_OPENCLAW_AUTOSTART", "0").strip().lower() in {"1", "true", "yes", "on"}
+OPTIONAL_RETRY_SECONDS = 45
+OPENCLAW_AUTOSTART = os.environ.get("CENTRO_OPENCLAW_AUTOSTART", "1").strip().lower() not in {"0", "false", "no", "off"}
+LAYA_AUTOSTART = os.environ.get("CENTRO_LAYA_AUTOSTART", "1").strip().lower() not in {"0", "false", "no", "off"}
 
 
 def pid_running(path):
@@ -43,6 +46,14 @@ def openclaw_healthy():
     try:
         with urllib.request.urlopen(OPENCLAW_HEALTH, timeout=3) as res:
             return 200 <= res.status < 500
+    except Exception:
+        return False
+
+
+def laya_healthy():
+    try:
+        with urllib.request.urlopen(LAYA_HEALTH, timeout=3) as res:
+            return res.status == 200
     except Exception:
         return False
 
@@ -73,6 +84,7 @@ def main():
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     print("Centro Station supervisor activo. Ctrl+C para parar.", flush=True)
     last_openclaw_attempt = 0
+    last_laya_attempt = 0
 
     while True:
         now = int(time.time())
@@ -99,7 +111,7 @@ def main():
             OPENCLAW_AUTOSTART
             and not openclaw_ok
             and OPENCLAW_CTL.exists()
-            and now - last_openclaw_attempt >= OPENCLAW_RETRY_SECONDS
+            and now - last_openclaw_attempt >= OPTIONAL_RETRY_SECONDS
         ):
             last_openclaw_attempt = now
             ok, output = run_ctl(OPENCLAW_CTL, "start")
@@ -107,6 +119,27 @@ def main():
             if ok:
                 time.sleep(2)
                 openclaw_ok = openclaw_healthy()
+
+        laya_ok = laya_healthy()
+        if (
+            LAYA_AUTOSTART
+            and not laya_ok
+            and LAYA_CTL.exists()
+            and now - last_laya_attempt >= OPTIONAL_RETRY_SECONDS
+        ):
+            last_laya_attempt = now
+            # O arranque inicial pode carregar o checkpoint e demorar.
+            # Lança o controlador sem bloquear o supervisor do núcleo.
+            try:
+                subprocess.Popen(
+                    [str(LAYA_CTL), "start"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+                actions.append({"service": "laya", "ok": True, "output": "arranque solicitado"})
+            except Exception as exc:
+                actions.append({"service": "laya", "ok": False, "output": str(exc)})
 
         write_status({
             "ok": bool(healthy and agent_active),
@@ -124,6 +157,11 @@ def main():
                 "healthy": openclaw_ok,
                 "autostart": OPENCLAW_AUTOSTART,
                 "endpoint": "127.0.0.1:18789",
+            },
+            "laya": {
+                "healthy": laya_ok,
+                "autostart": LAYA_AUTOSTART,
+                "endpoint": "127.0.0.1:18790",
             },
             "actions": actions,
         })
