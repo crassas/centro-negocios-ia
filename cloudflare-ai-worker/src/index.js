@@ -868,68 +868,102 @@ async function buildRepoChangeContext(project,prompt){
   };
 }
 
-async function planRepoChange(env,project,prompt){
-  const context=await buildRepoChangeContext(project,prompt);
-  const responseFormat={
-    type:'json_schema',
-    json_schema:{
-      type:'object',
-      properties:{
-        summary:{type:'string'},
-        edits:{
-          type:'array',
-          maxItems:12,
-          items:{
-            type:'object',
-            properties:{
-              path:{type:'string'},
-              operation:{type:'string',enum:['replace','append','create']},
-              search:{type:'string'},
-              content:{type:'string'}
-            },
-            required:['path','operation','search','content']
-          }
-        }
-      },
-      required:['summary','edits']
-    }
-  };
+function extractJsonObject(text){
+  const raw=String(text||'').trim();
+  if(!raw)return null;
 
-  const result=await env.AI.run(QWEN_MODEL,{
-    messages:[
-      {
-        role:'system',
-        content:[
-          'És o executor de alterações de código do Centro de Negócios.',
-          'Recebes um pedido do dono e evidência REAL do repositório GitHub.',
-          'Devolve APENAS o JSON pedido pelo schema.',
-          'Faz alterações mínimas, profissionais e coerentes com o código existente.',
-          'Para operation=replace, SEARCH tem de ser uma sequência EXACTA e suficientemente específica copiada literalmente de um dos ficheiros fornecidos; deve ocorrer uma única vez.',
-          'Para operation=append, deixa search vazio e usa apenas quando um override/adendo no fim do ficheiro é tecnicamente correcto.',
-          'Para operation=create, o path tem de ser novo.',
-          'Nunca edites .env, secrets, credenciais, chaves, .git ou .github/workflows.',
-          'Nunca inventes paths. Se não houver evidência suficiente para uma alteração segura, devolve edits vazio e explica no summary.',
-          'Não alteres mais ficheiros do que o necessário.'
-        ].join(' ')
-      },
-      {
-        role:'user',
-        content:'PEDIDO:\n'+String(prompt||'').slice(0,5000)+'\n\nREPOSITÓRIO:\n'+JSON.stringify(context).slice(0,60000)
-      }
-    ],
-    response_format:responseFormat,
-    max_tokens:3000,
-    temperature:0.08
-  });
+  const attempts=[raw];
+  const first=raw.indexOf('{');
+  const last=raw.lastIndexOf('}');
+  if(first>=0&&last>first)attempts.push(raw.slice(first,last+1));
 
-  if(result&&typeof result==='object'&&Array.isArray(result.edits))return {ok:true,plan:result,context:{repo:context.repo,head:context.head}};
-  if(result?.response){
+  for(const candidate of attempts){
     try{
-      const parsed=JSON.parse(result.response);
-      if(Array.isArray(parsed?.edits))return {ok:true,plan:parsed,context:{repo:context.repo,head:context.head}};
+      const parsed=JSON.parse(candidate);
+      if(parsed&&typeof parsed==='object')return parsed;
     }catch{}
   }
-  throw new Error('Workers AI não devolveu um plano de edição válido.');
+  return null;
+}
+
+function validRepoEditPlan(plan){
+  if(!plan||typeof plan!=='object'||!Array.isArray(plan.edits))return false;
+  if(plan.edits.length>12)return false;
+  for(const edit of plan.edits){
+    if(!edit||typeof edit!=='object')return false;
+    if(typeof edit.path!=='string')return false;
+    if(!['replace','append','create'].includes(String(edit.operation||'')))return false;
+    if(typeof edit.search!=='string'||typeof edit.content!=='string')return false;
+  }
+  return true;
+}
+
+async function runRepoPlannerModel(env,model,messages,maxTokens=3000){
+  const result=await env.AI.run(model,{
+    messages,
+    max_tokens:maxTokens,
+    temperature:0.05
+  });
+
+  if(result&&typeof result==='object'&&Array.isArray(result.edits)){
+    return result;
+  }
+
+  let text='';
+  if(result&&typeof result.response==='string')text=result.response;
+  else if(result&&result.result&&typeof result.result.response==='string')text=result.result.response;
+  else if(result&&typeof result.text==='string')text=result.text;
+
+  return extractJsonObject(text);
+}
+
+async function planRepoChange(env,project,prompt){
+  const context=await buildRepoChangeContext(project,prompt);
+
+  const system=[
+    'És o executor de alterações de código do Centro de Negócios.',
+    'Recebes um pedido do dono e evidência REAL do repositório GitHub.',
+    'Responde APENAS com UM objecto JSON válido. Sem markdown e sem texto fora do JSON.',
+    'Formato exacto: {"summary":"...","edits":[{"path":"...","operation":"replace|append|create","search":"...","content":"..."}]}.',
+    'Faz alterações mínimas, profissionais e coerentes com o código existente.',
+    'Para operation=replace, search tem de ser uma sequência EXACTA e suficientemente específica copiada literalmente de um dos ficheiros fornecidos; deve ocorrer uma única vez.',
+    'Para operation=append, deixa search vazio e usa apenas quando um override/adendo no fim do ficheiro é tecnicamente correcto.',
+    'Para operation=create, o path tem de ser novo.',
+    'Nunca edites .env, secrets, credenciais, chaves, .git ou .github/workflows.',
+    'Nunca inventes paths.',
+    'Se não houver evidência suficiente para uma alteração segura, devolve {"summary":"explicação","edits":[]}.',
+    'Não alteres mais ficheiros do que o necessário.'
+  ].join(' ');
+
+  const messages=[
+    {role:'system',content:system},
+    {
+      role:'user',
+      content:'PEDIDO:\n'+String(prompt||'').slice(0,5000)+
+        '\n\nREPOSITÓRIO REAL:\n'+JSON.stringify(context).slice(0,52000)
+    }
+  ];
+
+  const errors=[];
+
+  for(const model of [QWEN_MODEL,FAST_MODEL]){
+    try{
+      const plan=await runRepoPlannerModel(env,model,messages,3200);
+      if(validRepoEditPlan(plan)){
+        return {
+          ok:true,
+          plan,
+          plannerModel:model,
+          context:{repo:context.repo,head:context.head}
+        };
+      }
+      errors.push(model+': resposta não era um plano JSON válido');
+    }catch(error){
+      errors.push(model+': '+String((error&&error.message)||error).slice(0,500));
+    }
+  }
+
+  throw new Error('Planeadores falharam: '+errors.join(' | '));
 }
 
 function strictOutputHint(text){
