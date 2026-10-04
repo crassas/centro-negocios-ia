@@ -175,6 +175,50 @@ def locate_repo(name):
     return None
 
 
+def ensure_repo(name):
+    if name not in REPOS:
+        return None, {
+            "exitCode": 2,
+            "stdout": "",
+            "stderr": "Projecto não permitido.",
+            "durationMs": 0,
+        }
+
+    existing = locate_repo(name)
+    if existing:
+        return existing, None
+
+    root = HOME / "repos"
+    root.mkdir(parents=True, exist_ok=True)
+    dest = root / name
+
+    if dest.exists() and not (dest / ".git").is_dir():
+        return None, {
+            "exitCode": 3,
+            "stdout": "",
+            "stderr": f"Existe {dest}, mas não é um repositório Git.",
+            "durationMs": 0,
+        }
+
+    clone = run_cmd(
+        ["git", "clone", "--depth", "1", REPOS[name], str(dest)],
+        cwd=root,
+        timeout=240,
+    )
+    if clone["exitCode"] != 0:
+        return None, {
+            "exitCode": clone["exitCode"],
+            "stdout": clone["stdout"],
+            "stderr": (
+                f"Repositório {name} não existia localmente e o clone automático falhou.\n"
+                + clone["stderr"]
+            ),
+            "durationMs": clone["durationMs"],
+        }
+
+    return dest, None
+
+
 
 def locate_openclaw():
     found = shutil.which("openclaw")
@@ -419,14 +463,9 @@ def action_repo_change(task):
     if len(prompt) > 5000:
         return {"exitCode": 2, "stdout": "", "stderr": "Pedido demasiado longo.", "durationMs": 0}
 
-    source = locate_repo(target)
-    if not source:
-        return {
-            "exitCode": 3,
-            "stdout": "",
-            "stderr": f"Repositório {target} ainda não existe localmente.",
-            "durationMs": 0,
-        }
+    source, repo_error = ensure_repo(target)
+    if repo_error:
+        return repo_error
     if not repo_origin_ok(source, target):
         return {
             "exitCode": 4,
@@ -1042,14 +1081,9 @@ def execute_action(task):
     if action in {"git_status", "git_pull"}:
         if target not in REPOS:
             return {"exitCode": 2, "stdout": "", "stderr": "Projecto não permitido.", "durationMs": 0}
-        path = locate_repo(target)
-        if not path:
-            return {
-                "exitCode": 3,
-                "stdout": "",
-                "stderr": f"Repositório {target} ainda não existe localmente.",
-                "durationMs": 0,
-            }
+        path, repo_error = ensure_repo(target)
+        if repo_error:
+            return repo_error
 
         if action == "git_status":
             return run_cmd(["git", "status", "--short", "--branch"], cwd=path)
@@ -1077,14 +1111,9 @@ def execute_action(task):
         if target != "local":
             if target not in REPOS:
                 return {"exitCode": 2, "stdout": "", "stderr": "Projecto não permitido.", "durationMs": 0}
-            cwd = locate_repo(target)
-            if not cwd:
-                return {
-                    "exitCode": 3,
-                    "stdout": "",
-                    "stderr": f"Repositório {target} ainda não existe localmente.",
-                    "durationMs": 0,
-                }
+            cwd, repo_error = ensure_repo(target)
+            if repo_error:
+                return repo_error
 
         claude = shutil.which("claude")
         if not claude:
