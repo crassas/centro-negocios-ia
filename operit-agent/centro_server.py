@@ -453,14 +453,146 @@ def validate_repo_change(worktree, paths):
     return checks, failures
 
 
-def request_repo_change_plan(target, prompt):
+def local_repo_terms(prompt):
+    words = []
+    seen = set()
+    for raw in str(prompt or "").lower().replace("-", " ").replace("_", " ").split():
+        word = "".join(ch for ch in raw if ch.isalnum())
+        if len(word) < 4 or word in seen:
+            continue
+        seen.add(word)
+        words.append(word)
+    for word in ["hero", "mobile", "responsive", "title", "texto", "layout", "style", "css", "cta"]:
+        if word not in seen:
+            seen.add(word)
+            words.append(word)
+    return words[:24]
+
+
+def local_file_excerpt(text, prompt, max_chars=9000):
+    raw = str(text or "")
+    if len(raw) <= max_chars:
+        return raw
+    low = raw.lower()
+    chunks = []
+    spans = []
+    for term in local_repo_terms(prompt):
+        start_at = 0
+        for _ in range(2):
+            idx = low.find(term.lower(), start_at)
+            if idx < 0:
+                break
+            start_at = idx + len(term)
+            start = max(0, idx - 1200)
+            end = min(len(raw), idx + 1800)
+            if any(max(a, start) < min(b, end) for a, b in spans):
+                continue
+            spans.append((start, end))
+            chunks.append(raw[start:end])
+            if sum(len(x) for x in chunks) >= max_chars:
+                break
+        if sum(len(x) for x in chunks) >= max_chars:
+            break
+    if not chunks:
+        chunks = [raw[:4500], raw[-3500:]]
+    return "\n\n/* ... EXCERTO LOCAL ... */\n\n".join(chunks)[:max_chars]
+
+
+def build_local_repo_context(worktree, target, prompt):
+    listing = run_cmd(["git", "ls-files"], cwd=worktree, timeout=30)
+    if listing["exitCode"] != 0:
+        raise RuntimeError("Não foi possível listar ficheiros locais: " + listing["stderr"])
+    paths = [row.strip() for row in listing["stdout"].splitlines() if row.strip()]
+
+    preferred_map = {
+        "engomadoria-beatriz": [
+            "CONTENT_TRUTH.md", "README.md", "package.json",
+            "src/data.mjs", "src/beatriz.js", "src/beatriz.css",
+        ],
+        "pente_houselanding": [
+            "README.md", "package.json", "index.html", "styles.css",
+            "src/App.jsx", "src/App.tsx", "src/main.js", "src/main.ts",
+        ],
+        "best-pizza-kebab": [
+            "README.md", "package.json", "index.html", "styles.css",
+            "src/App.jsx", "src/App.tsx", "src/main.js", "src/main.ts",
+        ],
+        "restaurante-2-irmaos": [
+            "README.md", "package.json", "index.html", "styles.css",
+            "src/App.jsx", "src/App.tsx", "src/main.js", "src/main.ts",
+        ],
+        "centro-negocios-ia": [
+            "README.md", "app.js", "index.html", "styles.css",
+            "cloudflare-ai-worker/src/index.js",
+            "operit-agent/centro_server.py",
+            "operit-agent/centro_agent.py",
+        ],
+    }
+    terms = local_repo_terms(prompt)
+    preferred = preferred_map.get(target, ["README.md", "package.json", "index.html", "styles.css", "app.js"])
+
+    scored = []
+    for rel in paths:
+        low = rel.lower()
+        if not low.endswith((".html", ".htm", ".css", ".scss", ".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".json", ".md", ".py", ".toml", ".yaml", ".yml")):
+            continue
+        score = 100 if rel in preferred else 0
+        for term in terms:
+            if term in low:
+                score += 15
+        if any(token in low for token in ("src/", "app", "main", "index", "style", "data", "content", "readme")):
+            score += 3
+        scored.append((score, rel))
+    scored.sort(key=lambda item: (-item[0], item[1]))
+
+    selected = []
+    for rel in preferred:
+        if rel in paths and rel not in selected:
+            selected.append(rel)
+    for _, rel in scored:
+        if rel not in selected:
+            selected.append(rel)
+        if len(selected) >= 7:
+            break
+
+    files = {}
+    total = 0
+    for rel in selected[:7]:
+        path = worktree / rel
+        try:
+            text = path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        excerpt = local_file_excerpt(text, prompt, 8500)
+        if total + len(excerpt) > 42000:
+            excerpt = excerpt[:max(0, 42000 - total)]
+        if not excerpt:
+            break
+        files[rel] = excerpt
+        total += len(excerpt)
+        if total >= 42000:
+            break
+
+    head = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree, timeout=20)["stdout"].strip()
+    return {
+        "repo": target,
+        "branch": "main",
+        "head": head,
+        "paths": paths[:220],
+        "files": files,
+        "source": "centro-server-local",
+    }
+
+
+def request_repo_change_plan(target, prompt, worktree):
     token = read_secret(AGENT_TOKEN_FILE)
     if not token:
         raise RuntimeError("Centro Agent sem token para pedir plano de alteração.")
+    context = build_local_repo_context(worktree, target, prompt)
     status, data = http_json(
         CLOUD_BASE + "/api/repo/change-plan",
         method="POST",
-        payload={"target": target, "prompt": prompt},
+        payload={"target": target, "prompt": prompt, "context": context},
         headers={"Authorization": "Bearer " + token},
         timeout=180,
     )
@@ -605,7 +737,7 @@ def action_repo_change(task):
     remote_branch = ""
     try:
         try:
-            plan = request_repo_change_plan(target, prompt)
+            plan = request_repo_change_plan(target, prompt, worktree)
             plan_summary = str(plan.get("summary") or "").strip()
             edits = plan.get("edits") if isinstance(plan.get("edits"), list) else []
             if not edits:
