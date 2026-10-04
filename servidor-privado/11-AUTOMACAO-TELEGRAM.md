@@ -15,11 +15,13 @@ Exemplos:
 
 ## Pipeline de execução
 
-Telegram → Cloudflare Worker → fila TASKS → Centro Agent → Centro Server → executor de código → validação → Git commit → Git push → resultado no Telegram.
+Telegram → Cloudflare Worker → fila TASKS → Centro Agent → Centro Server → Workers AI (planeador de código) → aplicação segura no worktree → validação → Git commit → Git push → resultado no Telegram.
 
 ## Segurança
 
 A automação não edita o checkout principal directamente. Cada alteração é feita num **git worktree isolado** criado a partir de `origin/main`.
+
+Para alterações automáticas normais, o Centro **não depende de login do Claude Code**. O Worker usa o Qwen/Workers AI já activo no Centro para gerar um plano estruturado de edições (`replace`, `append` ou `create`), e o Centro Server aplica esse plano localmente.
 
 Antes de publicar:
 
