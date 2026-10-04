@@ -925,15 +925,50 @@ function validRepoEditPlan(plan){
   return true;
 }
 
-async function runRepoPlannerModel(env,model,messages,maxTokens=3000){
-  const result=await env.AI.run(model,{
+async function runRepoPlannerModel(env,model,messages,maxTokens=1600,useSchema=true){
+  const input={
     messages,
     max_tokens:maxTokens,
-    temperature:0.05
-  });
+    temperature:0.02
+  };
+
+  if(useSchema){
+    input.response_format={
+      type:'json_schema',
+      json_schema:{
+        type:'object',
+        properties:{
+          summary:{type:'string'},
+          edits:{
+            type:'array',
+            maxItems:8,
+            items:{
+              type:'object',
+              properties:{
+                path:{type:'string'},
+                operation:{type:'string',enum:['replace','append','create']},
+                search:{type:'string'},
+                content:{type:'string'}
+              },
+              required:['path','operation','search','content']
+            }
+          }
+        },
+        required:['summary','edits']
+      }
+    };
+  }
+
+  const result=await env.AI.run(model,input);
 
   if(result&&typeof result==='object'&&Array.isArray(result.edits)){
     return result;
+  }
+  if(result?.response&&typeof result.response==='object'&&Array.isArray(result.response.edits)){
+    return result.response;
+  }
+  if(result?.result?.response&&typeof result.result.response==='object'&&Array.isArray(result.result.response.edits)){
+    return result.result.response;
   }
 
   let text='';
@@ -969,15 +1004,20 @@ async function planRepoChange(env,project,prompt,providedContext=null){
     {
       role:'user',
       content:'PEDIDO:\n'+String(prompt||'').slice(0,5000)+
-        '\n\nREPOSITÓRIO REAL:\n'+JSON.stringify(context).slice(0,44000)
+        '\n\nREPOSITÓRIO REAL:\n'+JSON.stringify(context).slice(0,28000)
     }
   ];
 
   const errors=[];
+  const attempts=[
+    [QWEN_MODEL,true],
+    [MODEL,true],
+    [FAST_MODEL,false]
+  ];
 
-  for(const model of [FAST_MODEL,QWEN_MODEL]){
+  for(const [model,useSchema] of attempts){
     try{
-      const plan=await runRepoPlannerModel(env,model,messages,1800);
+      const plan=await runRepoPlannerModel(env,model,messages,1600,useSchema);
       if(validRepoEditPlan(plan)){
         return {
           ok:true,
