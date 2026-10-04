@@ -944,8 +944,10 @@ async function runRepoPlannerModel(env,model,messages,maxTokens=3000){
   return extractJsonObject(text);
 }
 
-async function planRepoChange(env,project,prompt){
-  const context=await buildRepoChangeContext(project,prompt);
+async function planRepoChange(env,project,prompt,providedContext=null){
+  const context=(providedContext&&typeof providedContext==='object')
+    ? providedContext
+    : await buildRepoChangeContext(project,prompt);
 
   const system=[
     'És o executor de alterações de código do Centro de Negócios.',
@@ -967,15 +969,15 @@ async function planRepoChange(env,project,prompt){
     {
       role:'user',
       content:'PEDIDO:\n'+String(prompt||'').slice(0,5000)+
-        '\n\nREPOSITÓRIO REAL:\n'+JSON.stringify(context).slice(0,52000)
+        '\n\nREPOSITÓRIO REAL:\n'+JSON.stringify(context).slice(0,44000)
     }
   ];
 
   const errors=[];
 
-  for(const model of [QWEN_MODEL,FAST_MODEL]){
+  for(const model of [FAST_MODEL,QWEN_MODEL]){
     try{
-      const plan=await runRepoPlannerModel(env,model,messages,3200);
+      const plan=await runRepoPlannerModel(env,model,messages,1800);
       if(validRepoEditPlan(plan)){
         return {
           ok:true,
@@ -1896,7 +1898,8 @@ export default {
         const project=repoProjectFromTarget(target);
         if(!project||!PROJECT_REPOS[project])return json({ok:false,error:'Projecto inválido.'},400,origin);
         if(!prompt)return json({ok:false,error:'Pedido em falta.'},400,origin);
-        const planned=await planRepoChange(env,project,prompt);
+        const provided=body?.context&&typeof body.context==='object'?body.context:null;
+        const planned=await planRepoChange(env,project,prompt,provided);
         return json(planned,200,origin);
       }catch(error){
         return json({ok:false,error:'Falha no planeador de código: '+String(error?.message||error).slice(0,1000)},500,origin);
