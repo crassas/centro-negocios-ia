@@ -988,27 +988,35 @@ def execute_action(task):
         agent_active, _ = pid_running(AGENT_PID_FILE)
         supervisor_active, _ = pid_running(SUPERVISOR_PID_FILE)
         claude = shutil.which("claude") or (str(HOME / ".local" / "bin" / "claude") if (HOME / ".local" / "bin" / "claude").exists() else "")
-        checks = [
+        laya_ok, _, _, _ = laya_http_health()
+        core_checks = [
             ("Servidor privado", True),
             ("Centro Agent", agent_active),
             ("Supervisor", supervisor_active),
             ("Python 3", bool(shutil.which("python3"))),
             ("Node", bool(shutil.which("node"))),
-            ("Claude Code", bool(claude)),
-            ("OpenClaw CLI", bool(locate_openclaw())),
-            ("OpenClaw Gateway", openclaw_http_health()[0]),
-            ("Manus API key", MANUS_KEY_FILE.exists()),
             ("Token servidor", TOKEN_FILE.exists()),
             ("Token Operit", (HOME / ".centro-agent" / "token").exists()),
         ]
-        lines = ["DIAGNÓSTICO CENTRO STATION"]
-        for name, ok in checks:
+        optional = [
+            ("OpenClaw CLI", bool(locate_openclaw())),
+            ("OpenClaw Gateway", openclaw_http_health()[0]),
+            ("Laya", laya_ok),
+            ("Claude Code", bool(claude)),
+            ("Manus API key", MANUS_KEY_FILE.exists()),
+        ]
+        lines = ["DIAGNÓSTICO CENTRO STATION", "", "NÚCLEO"]
+        for name, ok in core_checks:
             lines.append(f"{'OK' if ok else 'FALHA'} · {name}")
-        overall = all(ok for _, ok in checks)
+        lines.append("")
+        lines.append("EXTRAS")
+        for name, ok in optional:
+            lines.append(f"{'OK' if ok else 'OFF'} · {name}")
+        overall = all(ok for _, ok in core_checks)
         return {
             "exitCode": 0 if overall else 1,
             "stdout": "\n".join(lines),
-            "stderr": "" if overall else "Há componentes por corrigir.",
+            "stderr": "" if overall else "O núcleo tem componentes por corrigir.",
             "durationMs": 0,
         }
 
