@@ -17,6 +17,7 @@ OPENCLAW_CTL = Path("/usr/local/bin/openclawctl")
 OPENCLAW_HEALTH = "http://127.0.0.1:18789/healthz"
 INTERVAL = 3
 OPENCLAW_RETRY_SECONDS = 30
+OPENCLAW_AUTOSTART = os.environ.get("CENTRO_OPENCLAW_AUTOSTART", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def pid_running(path):
@@ -95,7 +96,8 @@ def main():
 
         openclaw_ok = openclaw_healthy()
         if (
-            not openclaw_ok
+            OPENCLAW_AUTOSTART
+            and not openclaw_ok
             and OPENCLAW_CTL.exists()
             and now - last_openclaw_attempt >= OPENCLAW_RETRY_SECONDS
         ):
@@ -120,6 +122,7 @@ def main():
             },
             "openclaw": {
                 "healthy": openclaw_ok,
+                "autostart": OPENCLAW_AUTOSTART,
                 "endpoint": "127.0.0.1:18789",
             },
             "actions": actions,
