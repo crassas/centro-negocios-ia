@@ -1589,10 +1589,17 @@ async function handleTelegramUpdate(env,update,ctx){
       const isOpenClaw=instruction.action==='openclaw_query'||instruction.action==='openclaw_status';
       const isLaya=instruction.action==='laya_decide'||instruction.action==='laya_status';
       const isManus=instruction.action==='manus_query'||instruction.action==='manus_status';
+      const isReadOnly=[
+        'station_status','station_doctor','server_status','system_info',
+        'site_check','git_status'
+      ].includes(instruction.action);
 
-      // Alterações de repositório pedidas explicitamente seguem sem um
-      // segundo clique; o executor local isola, valida e bloqueia caminhos sensíveis.
-      if(isRepoChange){
+      // Leituras/diagnóstico executam logo: não faz sentido pedir confirmação
+      // para consultar estado. Alterações explícitas mantêm o executor seguro.
+      if(isReadOnly){
+        await q.resolveTask(task.id,true);
+        await telegramSend(env,'⚡ CENTRO\n\n'+task.label+'\n\nA verificar agora.');
+      }else if(isRepoChange){
         await q.resolveTask(task.id,true);
         await telegramSend(env,'⚙️ AUTOMAÇÃO\n\n'+task.label+'\n\nTarefa aceite automaticamente. O executor vai trabalhar numa cópia isolada, validar e publicar apenas se tudo passar.');
       }else if(isOpenClaw||isLaya||isManus){
