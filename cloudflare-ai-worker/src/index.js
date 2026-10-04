@@ -212,6 +212,33 @@ export class TaskQueue extends DurableObject {
     const paired=Boolean(await this.getJson('device:tokenHash',''));
     return {...stats,paired};
   }
+
+  async recentTasks(limit=20){
+    const ids=await this.getJson('task:ids',[]);
+    const rows=[];
+    const selected=ids.slice(-Math.max(1,Math.min(Number(limit)||20,50))).reverse();
+    for(const id of selected){
+      const task=await this.getJson('task:'+id,null);
+      if(!task)continue;
+      const result=task.result&&typeof task.result==='object'?task.result:{};
+      rows.push({
+        id:String(task.id||''),
+        action:String(task.action||''),
+        target:String(task.target||''),
+        label:String(task.label||''),
+        source:String(task.source||''),
+        status:String(task.status||''),
+        createdAt:Number(task.createdAt)||0,
+        resolvedAt:Number(task.resolvedAt)||0,
+        startedAt:Number(task.startedAt)||0,
+        completedAt:Number(task.completedAt)||0,
+        exitCode:Number.isFinite(Number(result.exitCode))?Number(result.exitCode):null,
+        durationMs:Number(result.durationMs)||0,
+        output:String(result.stdout||result.stderr||'').slice(0,1200)
+      });
+    }
+    return rows;
+  }
   async setRepoSnapshot(project,snapshot){
     const key=String(project||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,40);
     if(!key)return {ok:false};
@@ -1699,6 +1726,17 @@ export default {
 
     if(url.pathname==='/api/telegram/status'&&request.method==='GET'){
       return json({ok:true,configured:Boolean(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID)},200,origin);
+    }
+
+    if(url.pathname==='/api/executions'&&request.method==='GET'){
+      try{
+        const q=taskQueue(env);
+        const rows=await q.recentTasks(Number(url.searchParams.get('limit'))||20);
+        const stats=await q.taskStats();
+        return json({ok:true,stats,executions:rows},200,origin);
+      }catch(error){
+        return json({ok:false,error:'Falha ao ler execuções: '+String((error&&error.message)||error).slice(0,800)},500,origin);
+      }
     }
 
     if(url.pathname==='/api/telegram/poll'&&request.method==='GET'){
