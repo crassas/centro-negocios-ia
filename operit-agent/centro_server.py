@@ -249,6 +249,20 @@ def openclaw_http_health():
         return False, 0, str(exc), int((time.time() - started) * 1000)
 
 
+def laya_http_health():
+    started = time.time()
+    try:
+        req = urllib.request.Request(
+            LAYA_BASE + "/health",
+            headers={"User-Agent": "Centro-Server/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=4) as res:
+            body = res.read(4096).decode("utf-8", errors="replace").strip()
+            return res.status == 200, res.status, body, int((time.time() - started) * 1000)
+    except Exception as exc:
+        return False, 0, str(exc), int((time.time() - started) * 1000)
+
+
 def extract_openclaw_reply(raw):
     text = str(raw or "").strip()
     if not text:
@@ -951,6 +965,8 @@ def execute_action(task):
     if action == "station_status":
         agent_active, agent_pid = pid_running(AGENT_PID_FILE)
         supervisor_active, supervisor_pid = pid_running(SUPERVISOR_PID_FILE)
+        openclaw_ok, _, _, _ = openclaw_http_health()
+        laya_ok, _, _, _ = laya_http_health()
         lines = [
             "ESTAÇÃO CENTRO",
             "Núcleo local-first",
@@ -959,6 +975,9 @@ def execute_action(task):
             f"Servidor: ACTIVO · PID {os.getpid()}",
             f"Agente: {'ACTIVO' if agent_active else 'PARADO'} · PID {agent_pid if agent_pid else '-'}",
             f"Supervisor: {'ACTIVO' if supervisor_active else 'PARADO'} · PID {supervisor_pid if supervisor_pid else '-'}",
+            f"OpenClaw: {'ONLINE' if openclaw_ok else 'OFFLINE'}",
+            f"Laya: {'ONLINE' if laya_ok else 'OFFLINE'}",
+            f"Manus: {'CONFIGURADO' if MANUS_KEY_FILE.exists() else 'SEM CHAVE / OPCIONAL'}",
             f"Capacidades: {len(capabilities()['actions'])}",
             f"Projectos autorizados: {len(REPOS)}",
             f"Sites monitorizados: {len(SITES)}",
