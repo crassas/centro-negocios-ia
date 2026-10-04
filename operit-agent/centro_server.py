@@ -29,6 +29,7 @@ LAYA_BASE = "http://127.0.0.1:18790"
 MANUS_BASE = "https://api.manus.ai"
 MANUS_KEY_FILE = HOME / ".centro-agent" / "manus_api_key"
 OLLAMA_KEY_FILE = HOME / ".centro-agent" / "ollama_api_key"
+WORKTREE_ROOT = STATE_DIR / "worktrees"
 
 REPOS = {
     "centro-negocios-ia": "https://github.com/crassas/centro-negocios-ia.git",
@@ -112,6 +113,7 @@ def capabilities():
             "site_check",
             "git_status",
             "git_pull",
+            "repo_change",
             "claude_query",
             "openclaw_status",
             "openclaw_models",
@@ -330,6 +332,339 @@ def manus_extract_latest(messages, since_ms):
                     or "Manus aguarda confirmação."
                 )
     return ("waiting", waiting) if waiting else ("pending", "")
+
+
+
+def find_claude():
+    found = shutil.which("claude")
+    if found:
+        return found
+    candidates = [
+        HOME / ".local" / "bin" / "claude",
+        Path("/usr/local/bin/claude"),
+        Path("/usr/bin/claude"),
+    ]
+    return next((str(p) for p in candidates if p.exists()), None)
+
+
+def repo_origin_ok(path, target):
+    origin = run_cmd(["git", "remote", "get-url", "origin"], cwd=path)
+    expected = REPOS[target].removesuffix(".git")
+    actual = origin["stdout"].strip().removesuffix(".git")
+    return origin["exitCode"] == 0 and actual == expected
+
+
+def changed_paths(worktree):
+    result = run_cmd(["git", "status", "--porcelain=v1"], cwd=worktree)
+    if result["exitCode"] != 0:
+        return [], result
+    rows = []
+    for raw in result["stdout"].splitlines():
+        if len(raw) < 4:
+            continue
+        name = raw[3:].strip()
+        if " -> " in name:
+            name = name.split(" -> ", 1)[1].strip()
+        rows.append(name)
+    return rows, result
+
+
+def validate_repo_change(worktree, paths):
+    checks = []
+    failures = []
+
+    for rel in paths:
+        p = worktree / rel
+        if not p.exists() or p.is_dir():
+            continue
+        suffix = p.suffix.lower()
+        if suffix in {".js", ".mjs", ".cjs"} and shutil.which("node"):
+            row = run_cmd(["node", "--check", str(p)], cwd=worktree, timeout=60)
+            checks.append(f"node --check {rel}: {row['exitCode']}")
+            if row["exitCode"] != 0:
+                failures.append(row["stderr"] or row["stdout"])
+        elif suffix == ".py":
+            row = run_cmd(["python3", "-m", "py_compile", str(p)], cwd=worktree, timeout=60)
+            checks.append(f"py_compile {rel}: {row['exitCode']}")
+            if row["exitCode"] != 0:
+                failures.append(row["stderr"] or row["stdout"])
+        elif suffix == ".json":
+            try:
+                json.loads(p.read_text(encoding="utf-8"))
+                checks.append(f"json {rel}: 0")
+            except Exception as exc:
+                checks.append(f"json {rel}: 1")
+                failures.append(f"{rel}: {exc}")
+
+    package = worktree / "package.json"
+    node_modules = worktree / "node_modules"
+    if package.exists() and shutil.which("npm") and node_modules.exists():
+        build = run_cmd(["npm", "run", "build", "--if-present"], cwd=worktree, timeout=300)
+        checks.append(f"npm run build --if-present: {build['exitCode']}")
+        if build["exitCode"] != 0:
+            failures.append(build["stderr"] or build["stdout"])
+
+    return checks, failures
+
+
+def action_repo_change(task):
+    prompt = str((task.get("args") or {}).get("prompt") or "").strip()
+    target = str(task.get("target") or "")
+    started = time.time()
+
+    if target not in REPOS:
+        return {"exitCode": 2, "stdout": "", "stderr": "Projecto não permitido.", "durationMs": 0}
+    if not prompt:
+        return {"exitCode": 2, "stdout": "", "stderr": "Alteração em falta.", "durationMs": 0}
+    if len(prompt) > 5000:
+        return {"exitCode": 2, "stdout": "", "stderr": "Pedido demasiado longo.", "durationMs": 0}
+
+    source = locate_repo(target)
+    if not source:
+        return {
+            "exitCode": 3,
+            "stdout": "",
+            "stderr": f"Repositório {target} ainda não existe localmente.",
+            "durationMs": 0,
+        }
+    if not repo_origin_ok(source, target):
+        return {
+            "exitCode": 4,
+            "stdout": "",
+            "stderr": "Remote Git não corresponde ao repositório autorizado.",
+            "durationMs": 0,
+        }
+
+    claude = find_claude()
+    if not claude:
+        return {
+            "exitCode": 127,
+            "stdout": "",
+            "stderr": "Claude Code não foi encontrado para executar a alteração.",
+            "durationMs": 0,
+        }
+
+    # Trabalha sempre num worktree isolado. Nunca toca em alterações não
+    # committed que possam existir no checkout principal do utilizador.
+    WORKTREE_ROOT.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    task_id = "".join(ch for ch in str(task.get("id") or "") if ch.isalnum())[-8:] or "task"
+    branch = f"centro/telegram-{stamp}-{task_id}"
+    worktree = WORKTREE_ROOT / f"{target}-{stamp}-{task_id}"
+
+    fetch = run_cmd(["git", "fetch", "origin", "main"], cwd=source, timeout=180)
+    if fetch["exitCode"] != 0:
+        return {
+            "exitCode": fetch["exitCode"],
+            "stdout": fetch["stdout"],
+            "stderr": "Falhou git fetch antes da alteração.\n" + fetch["stderr"],
+            "durationMs": int((time.time() - started) * 1000),
+        }
+
+    add = run_cmd(
+        ["git", "worktree", "add", "-b", branch, str(worktree), "origin/main"],
+        cwd=source,
+        timeout=120,
+    )
+    if add["exitCode"] != 0:
+        return {
+            "exitCode": add["exitCode"],
+            "stdout": add["stdout"],
+            "stderr": "Não foi possível criar worktree isolado.\n" + add["stderr"],
+            "durationMs": int((time.time() - started) * 1000),
+        }
+
+    pushed = False
+    remote_branch = ""
+    try:
+        system_note = (
+            "Estás a executar uma alteração pedida pelo dono do projecto através do Centro de Negócios no Telegram. "
+            "Trabalha APENAS dentro deste repositório. Faz a alteração pedida de forma completa e profissional. "
+            "Inspecciona primeiro os ficheiros relevantes e mantém o escopo mínimo. "
+            "Não alteres .env, tokens, chaves, secrets, credenciais, .git ou .github/workflows. "
+            "Não uses git reset --hard, force push, rm -rf, comandos destrutivos, deploy externo ou alterações de contas. "
+            "Podes editar ficheiros do projecto e executar verificações locais seguras. "
+            "Não faças commit nem push; o Centro trata disso depois de validar. "
+            "No fim resume em português de Portugal o que alteraste e o que verificaste."
+        )
+
+        cmd = [
+            claude,
+            "--permission-mode",
+            "auto",
+            "--append-system-prompt",
+            system_note,
+            "-p",
+            prompt,
+        ]
+        model = os.environ.get("CENTRO_CLAUDE_MODEL", "").strip()
+        if model:
+            cmd[1:1] = ["--model", model]
+
+        try:
+            proc = subprocess.run(
+                cmd,
+                cwd=str(worktree),
+                text=True,
+                capture_output=True,
+                timeout=max(CLAUDE_TIMEOUT, 600),
+                check=False,
+                env=os.environ.copy(),
+            )
+        except subprocess.TimeoutExpired:
+            return {
+                "exitCode": 124,
+                "stdout": "",
+                "stderr": "Tempo limite do executor de código excedido.",
+                "durationMs": int((time.time() - started) * 1000),
+            }
+
+        if proc.returncode != 0:
+            return {
+                "exitCode": proc.returncode,
+                "stdout": proc.stdout[-6000:],
+                "stderr": ("Executor de código terminou com erro.\n" + proc.stderr[-5000:]).strip(),
+                "durationMs": int((time.time() - started) * 1000),
+            }
+
+        paths, status = changed_paths(worktree)
+        if status["exitCode"] != 0:
+            return {
+                "exitCode": status["exitCode"],
+                "stdout": proc.stdout[-5000:],
+                "stderr": status["stderr"],
+                "durationMs": int((time.time() - started) * 1000),
+            }
+        if not paths:
+            return {
+                "exitCode": 0,
+                "stdout": "Executor concluiu sem alterações no repositório.\n\n" + proc.stdout[-5000:],
+                "stderr": "",
+                "durationMs": int((time.time() - started) * 1000),
+            }
+
+        protected = []
+        for rel in paths:
+            low = rel.lower().lstrip("./")
+            if (
+                low == ".env"
+                or low.startswith(".env.")
+                or low.startswith(".git/")
+                or low.startswith(".github/workflows/")
+                or "secret" in low
+                or "credential" in low
+                or low.endswith(".pem")
+                or low.endswith(".key")
+            ):
+                protected.append(rel)
+        if protected:
+            return {
+                "exitCode": 65,
+                "stdout": proc.stdout[-4000:],
+                "stderr": "Alteração bloqueada por tocar em caminhos protegidos: " + ", ".join(protected[:12]),
+                "durationMs": int((time.time() - started) * 1000),
+            }
+
+        if len(paths) > 30:
+            return {
+                "exitCode": 65,
+                "stdout": proc.stdout[-4000:],
+                "stderr": f"Alteração bloqueada: {len(paths)} ficheiros modificados (limite automático: 30).",
+                "durationMs": int((time.time() - started) * 1000),
+            }
+
+        checks, failures = validate_repo_change(worktree, paths)
+        if failures:
+            return {
+                "exitCode": 66,
+                "stdout": proc.stdout[-4000:] + "\n\nVERIFICAÇÕES:\n" + "\n".join(checks),
+                "stderr": "Validação falhou; nada foi publicado.\n" + "\n".join(failures)[-5000:],
+                "durationMs": int((time.time() - started) * 1000),
+            }
+
+        add_all = run_cmd(["git", "add", "-A"], cwd=worktree, timeout=60)
+        if add_all["exitCode"] != 0:
+            return {
+                "exitCode": add_all["exitCode"],
+                "stdout": proc.stdout[-4000:],
+                "stderr": add_all["stderr"],
+                "durationMs": int((time.time() - started) * 1000),
+            }
+
+        summary = prompt.replace("\n", " ").strip()
+        if len(summary) > 72:
+            summary = summary[:69].rstrip() + "..."
+        commit = run_cmd(
+            [
+                "git",
+                "-c", "user.name=Centro Agent",
+                "-c", "user.email=centro-agent@local",
+                "commit",
+                "-m", "auto: " + summary,
+            ],
+            cwd=worktree,
+            timeout=120,
+        )
+        if commit["exitCode"] != 0:
+            return {
+                "exitCode": commit["exitCode"],
+                "stdout": proc.stdout[-4000:],
+                "stderr": "Falhou commit automático.\n" + commit["stderr"],
+                "durationMs": int((time.time() - started) * 1000),
+            }
+
+        sha = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree, timeout=30)["stdout"].strip()
+        stat = run_cmd(["git", "show", "--stat", "--oneline", "--format=%h %s", "HEAD"], cwd=worktree, timeout=60)
+
+        push_main = run_cmd(["git", "push", "origin", "HEAD:main"], cwd=worktree, timeout=180)
+        if push_main["exitCode"] == 0:
+            pushed = True
+            remote_branch = "main"
+        else:
+            push_branch = run_cmd(["git", "push", "-u", "origin", branch], cwd=worktree, timeout=180)
+            if push_branch["exitCode"] == 0:
+                pushed = True
+                remote_branch = branch
+            else:
+                return {
+                    "exitCode": push_main["exitCode"] or push_branch["exitCode"],
+                    "stdout": (
+                        proc.stdout[-3000:]
+                        + "\n\nCOMMIT LOCAL: " + sha
+                        + "\n\n" + stat["stdout"][-3000:]
+                    ),
+                    "stderr": (
+                        "Alteração validada e committed, mas o push falhou.\n"
+                        + push_main["stderr"][-2500:]
+                        + "\n"
+                        + push_branch["stderr"][-2500:]
+                    ),
+                    "durationMs": int((time.time() - started) * 1000),
+                }
+
+        return {
+            "exitCode": 0,
+            "stdout": (
+                "ALTERAÇÃO AUTOMÁTICA CONCLUÍDA\n"
+                f"Projecto: {target}\n"
+                f"Commit: {sha}\n"
+                f"Publicado em: {remote_branch}\n"
+                f"Ficheiros: {len(paths)}\n"
+                + ("Verificações: " + "; ".join(checks) + "\n" if checks else "")
+                + "\n"
+                + stat["stdout"][-3500:]
+                + "\n\nEXECUTOR:\n"
+                + proc.stdout[-3500:]
+            ),
+            "stderr": "",
+            "durationMs": int((time.time() - started) * 1000),
+        }
+    finally:
+        # A cópia isolada deixa de consumir espaço. O commit já ficou remoto
+        # quando pushed=True; se o push falhar, a branch local permanece no repo.
+        run_cmd(["git", "worktree", "remove", "--force", str(worktree)], cwd=source, timeout=60)
+        if pushed:
+            run_cmd(["git", "branch", "-D", branch], cwd=source, timeout=30)
 
 
 
@@ -700,6 +1035,9 @@ def execute_action(task):
             "stderr": "",
             "durationMs": int((time.time() - started) * 1000),
         }
+
+    if action == "repo_change":
+        return action_repo_change(task)
 
     if action in {"git_status", "git_pull"}:
         if target not in REPOS:
