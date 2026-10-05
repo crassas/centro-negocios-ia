@@ -138,6 +138,7 @@ def capabilities():
             "station_status",
             "station_doctor",
             "agents_status",
+            "autonomy_selftest",
             "system_info",
             "site_check",
             "git_status",
@@ -1168,6 +1169,104 @@ def execute_action(task):
             "exitCode": 0 if core_ready == len(core) else 1,
             "stdout": "\n".join(lines),
             "stderr": "" if core_ready == len(core) else "Há componentes essenciais por recuperar.",
+            "durationMs": int((time.time() - started) * 1000),
+        }
+
+    if action == "autonomy_selftest":
+        started = time.time()
+        checks = []
+
+        def add(name, ok, detail=""):
+            checks.append((name, bool(ok), str(detail or "")[:300]))
+
+        # Control plane
+        try:
+            status, data = http_json(CLOUD_BASE + "/health", timeout=8)
+            add(
+                "Worker + TASKS",
+                status == 200 and data.get("ok") is True and data.get("operitQueue") is True,
+                f"HTTP {status}",
+            )
+        except Exception as exc:
+            add("Worker + TASKS", False, exc)
+
+        agent_active, _ = pid_running(AGENT_PID_FILE)
+        supervisor_active, _ = pid_running(SUPERVISOR_PID_FILE)
+        add("Centro Agent", agent_active)
+        add("Supervisor", supervisor_active)
+        add("Token Server", TOKEN_FILE.exists())
+        add("Token Operit", AGENT_TOKEN_FILE.exists())
+
+        # Ferramentas essenciais
+        git_bin = shutil.which("git")
+        add("Git", bool(git_bin), git_bin or "não encontrado")
+        add("Python 3", bool(shutil.which("python3")))
+        claude = find_claude()
+        add("Claude Code", bool(claude), claude or "não encontrado")
+        add("Ollama key", bool(read_secret(OLLAMA_KEY_FILE)))
+
+        # Escrita local necessária para worktrees temporários.
+        try:
+            WORKTREE_ROOT.mkdir(parents=True, exist_ok=True)
+            probe = WORKTREE_ROOT / (".selftest-" + secrets.token_hex(4))
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink()
+            add("Workspace temporário", True)
+        except Exception as exc:
+            add("Workspace temporário", False, exc)
+
+        # Acesso remoto real aos repositórios, sem clone nem escrita remota.
+        if git_bin:
+            for repo_name, remote in REPOS.items():
+                result = run_cmd(
+                    [git_bin, "ls-remote", "--heads", remote, "refs/heads/main"],
+                    timeout=25,
+                )
+                ok = result["exitCode"] == 0 and bool(result["stdout"].strip())
+                detail = (
+                    "main acessível"
+                    if ok
+                    else (result["stderr"] or result["stdout"] or f"exit {result['exitCode']}")
+                )
+                add("Repo " + repo_name, ok, detail)
+
+        # Agentes opcionais: medidos, mas não bloqueiam o núcleo.
+        openclaw_ok, _, _, _ = openclaw_http_health()
+        laya_ok, _, _, _ = laya_http_health()
+        optional = [
+            ("OpenClaw", openclaw_ok),
+            ("Laya", laya_ok),
+            ("Manus key", MANUS_KEY_FILE.exists()),
+        ]
+
+        essential_names = {
+            "Worker + TASKS",
+            "Centro Agent",
+            "Supervisor",
+            "Token Server",
+            "Token Operit",
+            "Git",
+            "Python 3",
+            "Workspace temporário",
+        }
+        essential = [(n, ok, d) for n, ok, d in checks if n in essential_names or n.startswith("Repo ")]
+        failures = [(n, d) for n, ok, d in essential if not ok]
+
+        lines = ["CENTRO · SELF-TEST AUTONOMIA", "", "CAMINHO ESSENCIAL"]
+        for name, ok, detail in checks:
+            lines.append(f"{'OK' if ok else 'FALHA'} · {name}" + (f" · {detail}" if detail else ""))
+        lines += ["", "AGENTES OPCIONAIS"]
+        for name, ok in optional:
+            lines.append(f"{'OK' if ok else 'OFF'} · {name}")
+        lines += [
+            "",
+            f"Essencial: {len(essential)-len(failures)}/{len(essential)}",
+            "Resultado: " + ("PRONTO" if not failures else "CORRIGIR " + str(len(failures)) + " FALHA(S)"),
+        ]
+        return {
+            "exitCode": 0 if not failures else 1,
+            "stdout": "\n".join(lines),
+            "stderr": "" if not failures else "\n".join(f"{n}: {d}" for n, d in failures),
             "durationMs": int((time.time() - started) * 1000),
         }
 
