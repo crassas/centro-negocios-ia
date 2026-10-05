@@ -6,7 +6,7 @@ const AI_DEFAULT_ENDPOINT='https://centro-negocios-ai.travisthejarvis.workers.de
 const APP_VERSION=3;
 const VAULT_LOCK_MS=5*60*1000;
 const EXTRA_PROJECTS=[
-  {id:'engomadoria',name:'Engomadoria Beatriz',area:'Morada por confirmar',url:''}
+  {id:'engomadoria',name:'Engomadoria Beatriz',area:'Praça das Flores',url:''}
 ];
 
 let sites=[];
@@ -144,8 +144,8 @@ function ageLabel(value){
 
 
 const PANEL_NAMES={
-  visao:'COMANDO',assistente:'INTELIGÊNCIA IA',radar:'RADAR',sites:'SITES',crm:'CRM',
-  leads:'LEADS',caixa:'CAIXA',seo:'SEARCH',cofre:'COFRE',ferramentas:'SISTEMA'
+  visao:'PAINEL',assistente:'AUTOMAÇÃO & IA',radar:'OPORTUNIDADES',sites:'SITES',crm:'CLIENTES',
+  leads:'LEADS',caixa:'FINANCEIRO',seo:'SEO LOCAL',cofre:'COFRE',ferramentas:'DEFINIÇÕES'
 };
 function openPanel(id,options={}){
   const target=document.querySelector('[data-panel="'+id+'"]');
@@ -738,6 +738,38 @@ function setupEvents(){
   }));
 
 }
+
+function setupDashboardChrome(){
+  const dateEl=$('dashboard-date');
+  if(dateEl){
+    const label=new Intl.DateTimeFormat('pt-PT',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(new Date());
+    dateEl.textContent=label.charAt(0).toUpperCase()+label.slice(1);
+  }
+  const search=$('global-search');
+  if(search){
+    search.addEventListener('keydown',event=>{
+      if(event.key!=='Enter')return;
+      event.preventDefault();
+      const q=search.value.trim().toLowerCase();
+      if(!q)return;
+      const routes=[
+        {terms:['cliente','clientes','projeto','projecto','pentehouse','pizza','kebab','irmãos','irmaos','beatriz'],panel:'crm'},
+        {terms:['site','sites','online','auditoria'],panel:'sites'},
+        {terms:['seo','google','search','posição','posicao','ranking'],panel:'seo'},
+        {terms:['automação','automacao','ia','inteligência','inteligencia','agente'],panel:'assistente'},
+        {terms:['oportunidade','oportunidades','radar','prospeção','prospecao'],panel:'radar'},
+        {terms:['lead','leads'],panel:'leads'},
+        {terms:['financeiro','caixa','saldo','pagamento','pagamentos'],panel:'caixa'},
+        {terms:['cofre','senha','password'],panel:'cofre'},
+        {terms:['definições','definicoes','sistema','backup'],panel:'ferramentas'}
+      ];
+      const route=routes.find(item=>item.terms.some(term=>q.includes(term)));
+      if(route){openPanel(route.panel);search.blur();return;}
+      toast('Não encontrei esse módulo. Pesquisa por cliente, site, SEO, IA, financeiro ou definições.');
+    });
+  }
+}
+
 function setupPWA(){
   if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('install-btn').hidden=false;});
@@ -745,7 +777,7 @@ function setupPWA(){
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
-  seedCRMDefaults();seedLeadDefaults();seedPaymentDefaults();setupEvents();setupPWA();
+  seedCRMDefaults();seedLeadDefaults();seedPaymentDefaults();setupEvents();setupDashboardChrome();setupPWA();
   $('finance-date').value=new Date().toISOString().slice(0,10);
   renderLeads();renderPayments();renderFinance();renderGsc();renderAgentState();setupVaultState();renderSystem();renderAIStatus();
   checkTelegramStatus(false);pollTelegramApprovals(false);loadExecutions();
