@@ -165,6 +165,15 @@ def capabilities():
 
 def run_cmd(args, cwd=None, timeout=CMD_TIMEOUT, env=None):
     started = time.time()
+    # Nunca deixa operações Git automáticas presas à espera de username/password.
+    # Credenciais já configuradas (credential helper, gh, token/SSH) continuam a
+    # funcionar; se faltarem, Git falha imediatamente e o self-test mostra a causa.
+    cmd_env = os.environ.copy() if env is None else env.copy()
+    if args:
+        command_name = Path(str(args[0])).name.lower()
+        if command_name in {"git", "git.exe"}:
+            cmd_env.setdefault("GIT_TERMINAL_PROMPT", "0")
+            cmd_env.setdefault("GCM_INTERACTIVE", "Never")
     try:
         proc = subprocess.run(
             args,
@@ -173,7 +182,7 @@ def run_cmd(args, cwd=None, timeout=CMD_TIMEOUT, env=None):
             capture_output=True,
             timeout=timeout,
             check=False,
-            env=env,
+            env=cmd_env,
         )
         return {
             "exitCode": proc.returncode,
@@ -1745,7 +1754,7 @@ def execute_action(task):
             params["bootstrapContextMode"] = "lightweight"
 
         started = time.time()
-        result = run_cmd(
+        result = run_cmd_retry(
             [
                 binary,
                 "gateway",
@@ -1759,6 +1768,8 @@ def execute_action(task):
                 "190000",
             ],
             timeout=OPENCLAW_TIMEOUT,
+            attempts=2,
+            delay=3,
         )
         if result["exitCode"] == 0:
             result["stdout"] = extract_openclaw_reply(result["stdout"])[-12000:]
