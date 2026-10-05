@@ -46,3 +46,10 @@ Configuração:
 6. No Centro, abrir **SEO > Google Search Console ligado ao Centro**, autorizar o dispositivo pelo Telegram e escolher a propriedade.
 
 O Worker transforma a chave da conta de serviço num token OAuth 2.0 de curta duração e consulta apenas os endpoints de leitura. O browser recebe apenas os dados necessários para o painel.
+
+## Operação autónoma sem OpenClaw
+
+<!-- CENTRO_OPERACAO_SEM_OPENCLAW -->
+O OpenClaw está temporariamente desactivado. O Centro mantém o Worker, a fila persistente, o Agent, o Server, o supervisor e o Laya. A publicação automática usa validação local antes de enviar alterações para o Git. O fallback pago automático permanece desactivado.
+
+Se o marcador já existir, não dupliques a secção. Não alteres qualquer outro ficheiro.
