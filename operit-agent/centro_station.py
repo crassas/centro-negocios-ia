@@ -50,6 +50,7 @@ OPENCLAW_AUTOSTART = os.environ.get("CENTRO_OPENCLAW_AUTOSTART", "1").strip().lo
 LAYA_AUTOSTART = os.environ.get("CENTRO_LAYA_AUTOSTART", "1").strip().lower() not in {"0", "false", "no", "off"}
 REMOTE_DESKTOP_AUTOSTART = os.environ.get("CENTRO_REMOTE_DESKTOP_AUTOSTART", "1").strip().lower() not in {"0", "false", "no", "off"}
 RAW_BASE = "https://raw.githubusercontent.com/crassas/centro-negocios-ia/main/operit-agent"
+MAIN_COMMIT_API = "https://api.github.com/repos/crassas/centro-negocios-ia/commits/main"
 RUNTIME_FILES = {
     "centro_server.py": HOME / "centro_server.py",
     "centro_agent.py": HOME / "centro_agent.py",
@@ -335,6 +336,20 @@ def run_ctl(path, command):
     return proc.returncode == 0, output
 
 
+def fetch_main_sha():
+    req = urllib.request.Request(
+        MAIN_COMMIT_API,
+        headers={
+            "User-Agent": "Centro-Station-Autoupdate/1.0",
+            "Accept": "application/vnd.github+json",
+            "Cache-Control": "no-cache",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=15) as res:
+        data = json.loads(res.read().decode("utf-8"))
+        return str(data.get("sha") or "")[:40]
+
+
 def download_runtime(name):
     req = urllib.request.Request(
         RAW_BASE + "/" + name + "?t=" + str(int(time.time())),
@@ -456,6 +471,7 @@ def main():
     last_update_attempt = 0
     last_update_ok = 0
     last_update_error = ""
+    last_update_sha = ""
     last_busy_seen = 0
     pending_server_restart = False
     pending_agent_restart = False
@@ -471,6 +487,10 @@ def main():
 
         if AUTOUPDATE_ENABLED and not (STATE_DIR / "maintenance").exists() and not busy and now - last_update_attempt >= AUTOUPDATE_INTERVAL_SECONDS:
             last_update_attempt = now
+            try:
+                candidate_sha = fetch_main_sha()
+            except Exception:
+                candidate_sha = ""
             changed, update_errors = sync_runtime()
             if changed:
                 if "centro_server.py" in changed:
@@ -487,6 +507,8 @@ def main():
             else:
                 last_update_ok = now
                 last_update_error = ""
+                if candidate_sha:
+                    last_update_sha = candidate_sha
 
         # Nunca reinicia Server/Agent a meio de uma execução. Depois de o lock
         # desaparecer, dá alguns segundos ao Agent para publicar o resultado.
@@ -629,6 +651,7 @@ def main():
                 "lastAttempt": last_update_attempt,
                 "lastOk": last_update_ok,
                 "lastError": last_update_error,
+                "mainSha": last_update_sha,
                 "serverBusy": busy,
                 "pendingServerRestart": pending_server_restart,
                 "pendingAgentRestart": pending_agent_restart,
