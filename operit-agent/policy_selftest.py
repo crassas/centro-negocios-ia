@@ -46,6 +46,22 @@ def test_protected_paths():
         expect(not module.protected_repo_path(path), f"não deveria bloquear: {path}")
 
 
+def test_remote_normalization():
+    expected = "crassas/centro-negocios-ia"
+    variants = [
+        "https://github.com/crassas/centro-negocios-ia.git",
+        "git@github.com:crassas/centro-negocios-ia.git",
+        "ssh://git@github.com/crassas/centro-negocios-ia.git",
+        "https://token@example.invalid/crassas/centro-negocios-ia.git",
+    ]
+    for remote in variants[:3]:
+        expect(module.canonical_github_repo(remote) == expected, f"remote equivalente falhou: {remote}")
+    expect(
+        module.canonical_github_repo(variants[3]) == "",
+        "host externo nunca pode ser normalizado como GitHub",
+    )
+
+
 def test_plan_is_atomic():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -79,6 +95,7 @@ def test_plan_is_atomic():
 
 def main():
     test_protected_paths()
+    test_remote_normalization()
     test_plan_is_atomic()
     print("policy_selftest: OK")
 
