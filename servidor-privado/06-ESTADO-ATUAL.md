@@ -1,70 +1,79 @@
 # 06 — Estado actual
 
-## Confirmado em funcionamento
+## Confirmado na arquitectura e no repositório
 
-### Telegram
-- webhook activo;
-- mensagens recebidas em tempo real;
-- confirmações por botão;
-- resultados devolvidos ao chat.
-
-### Cloudflare
-- Worker activo;
-- Workers AI activo;
+### Telegram / Cloudflare
+- webhook Telegram;
+- Worker Cloudflare;
 - Durable Object `TASKS`;
 - fila persistente;
-- emparelhamento;
-- resultados.
+- emparelhamento do Centro Agent;
+- resultados devolvidos ao Telegram;
+- grupo multi-LLM e Sala de Conselho;
+- retry automático de tarefas recuperáveis;
+- lease de execução para recuperar tarefas presas após queda do Android/PRoot.
 
 ### Operit / Linux
-- Python 3.12;
-- Node 24;
-- agente local;
-- execução em background.
+- Centro Agent;
+- Centro Server privado em `127.0.0.1:8765`;
+- supervisor Centro Station;
+- execução em background;
+- worktrees Git isolados;
+- actualização automática do runtime a partir de `main`;
+- workflow nativo do Operit para recuperação no `app_open` e de 15 em 15 minutos;
+- fallback adicional no `.profile` do Ubuntu/PRoot.
 
-### Centro Server
-- activo em `127.0.0.1:8765`;
-- privado;
-- token local;
-- health check;
-- status;
-- executor local;
-- histórico.
+### Execução de alterações
+A cadeia actual é:
 
-### Estação
-- supervisor criado;
-- comandos unificados;
-- diagnóstico.
+`Telegram → Worker → TASKS → Centro Agent → Centro Server → worktree isolado → planeador → validação → commit → push → Telegram`
 
-## Confirmado por teste remoto
+O planeador tenta vários modelos Workers AI. Se não produzir um plano aplicável, o Centro Server pode usar Claude Code ligado ao Ollama como segundo executor, mantendo `PAID_FALLBACK=false`.
 
-Foi executado via Telegram:
+Os planos estruturados são validados integralmente em memória antes de qualquer ficheiro ser escrito. Uma edição inválida não deixa uma alteração parcial no worktree.
 
-`/server`
+### Resiliência
+- timeout longo para alterações de repositório;
+- retry automático de falhas transitórias;
+- recuperação de tarefas cuja lease expirou;
+- supervisor para Server, Agent, OpenClaw e Laya;
+- auto-update do Server/Agent/Supervisor;
+- reinícios de auto-update adiados enquanto uma tarefa está em execução;
+- CI valida Python, shell e JavaScript antes de considerar a alteração saudável.
 
-Resultado devolvido:
-- Centro Server ACTIVO;
-- privado;
-- Centro Agent ACTIVO;
-- PIDs válidos.
+## Comandos de diagnóstico
+
+- `/server` — Server + Agent + Supervisor;
+- `/station` — estado da estação;
+- `/doctor` — diagnóstico do núcleo e extras;
+- `/agents`, `/agentes` ou `/autonomia` — matriz única de agentes, executores e prontidão.
 
 ## Claude Code
 
-Instalado e funcional localmente.
+Integração preparada para:
+- Claude Code local;
+- endpoint Ollama;
+- modelo por defeito `gpt-oss:120b`;
+- sem fallback automático para API Anthropic paga.
 
-Versão observada:
-`Claude Code v2.1.287`
+A chave é lida de `~/.centro-agent/ollama_api_key`.
 
-Modelo observado:
-`gpt-oss:120b`
+## Multi-agente
 
-A integração via Telegram existe, mas a autenticação Ollama precisa de ficar estabilizada de forma persistente.
+No Worker existem rotas multi-modelo reais:
+- GLM;
+- Qwen;
+- Llama;
+- Mistral;
+- Gemma;
+- GPT-OSS 120B como síntese/director em Conselho.
 
-## Limitações actuais
+No telemóvel existem também OpenClaw e Laya como serviços opcionais supervisionados. Manus continua opcional e só é usado quando configurado explicitamente.
 
-- Android pode matar o ambiente Proot.
-- Ainda não existe auto-arranque após reboot.
-- Ainda não existe router multi-agente.
-- Ainda não existe SQLite central.
-- Ainda não existe scheduler local completo.
-- Ainda não existe dashboard local da estação.
+## Limitações reais que permanecem
+
+- o Android/ColorOS pode suspender ou matar o processo em background;
+- não existe ainda SQLite central para memória operacional;
+- não existe ainda dashboard local completo;
+- o workflow do Operit reduz a dependência de arranque manual, mas não equivale a um daemon Linux de boot garantido pelo sistema operativo;
+- a primeira instalação/actualização do novo mecanismo no telemóvel exige um bootstrap do runtime.
