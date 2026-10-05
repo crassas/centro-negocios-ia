@@ -53,3 +53,6 @@ jobs:
 
       - name: Worker JavaScript syntax
         run: node --check cloudflare-ai-worker/src/index.js
+
+      - name: Worker queue and approval regression tests
+        run: node cloudflare-ai-worker/queue_selftest.mjs

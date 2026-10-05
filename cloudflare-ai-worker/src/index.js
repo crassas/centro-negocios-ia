@@ -1764,6 +1764,7 @@ function parseOperitInstruction(text){
     if(alias&&!repo)return null;
     const prompt=m[2].trim();
     if(!prompt)return null;
+    if(repo&&automaticRepoChange(prompt+' '+repo))return {action:'repo_change',target:repo,args:{prompt},label:'Alteração automática · '+repo};
     return {
       action:'claude_query',
       target:repo||'local',

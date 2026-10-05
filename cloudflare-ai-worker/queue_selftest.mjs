@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 let source=await fs.readFile(new URL('./src/index.js',import.meta.url),'utf8');
 source=source.replace('import { DurableObject } from "cloudflare:workers";','class DurableObject { constructor(ctx,env){this.ctx=ctx;this.env=env;} }');
-const {TaskQueue,default:worker}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+source+='\nexport {parseOperitInstruction,automaticRepoChange};';
+const {TaskQueue,default:worker,parseOperitInstruction,automaticRepoChange}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+assert.equal(parseOperitInstruction('/claude @2irmaos Faz o SEO da página').action,'repo_change');
+assert.equal(parseOperitInstruction('/claude @2irmaos Analisa o SEO da página').action,'claude_query');
+assert.equal(automaticRepoChange('Como melhorar o SEO dos dois irmãos?'),null);
 const values=new Map();
 const q=new TaskQueue({storage:{
  async get(k){return values.has(k)?structuredClone(values.get(k)):undefined;},
