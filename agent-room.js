@@ -7,7 +7,7 @@ window.CentroRoom=(()=>{
     {id:'claude',name:'Claude / fallback',role:'Planeamento e código',color:'#dd9870',home:[62,77],match:r=>/claude|repo_change/.test(String(r.action||''))},
     {id:'queue',name:'Coordenador',role:'Fila de tarefas',color:'#63aa92',home:[85,77],match:()=>true}
   ];
-  let rows=[],available=false,selected='executor',mounted=false,finance=null,conversationBusy=false;
+  let rows=[],available=false,selected='executor',mounted=false,finance=null,conversationBusy=false,lastDetailHTML='';
   const el=id=>document.getElementById(id);
   const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const short=(s,max=72)=>String(s??'').length>max?String(s).slice(0,max-1)+'…':String(s??'');
@@ -56,7 +56,8 @@ window.CentroRoom=(()=>{
     mount();if(!mounted)return;
     for(const r of roles){const m=model(r),b=document.querySelector('[data-room-agent="'+r.id+'"]'),p=position(r,m);b.dataset.state=m.state;b.dataset.zone=m.zone;b.style.left=p[0]+'%';b.style.top=p[1]+'%';b.setAttribute('aria-pressed',String(r.id===selected));b.querySelector('.room-bubble').textContent=m.speech;b.setAttribute('aria-label',r.name+': '+m.label);}
     document.querySelectorAll('[data-room-centre]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.roomCentre===selected)));
-    el('room-detail').innerHTML=detail();
+    const detailHTML=detail();
+    if(detailHTML!==lastDetailHTML){el('room-detail').innerHTML=detailHTML;lastDetailHTML=detailHTML;}
     el('room-feed').innerHTML=rows.slice(0,3).map(t=>'<li><i data-state="'+(t.status==='running'?'working':t.status==='completed'&&t.exitCode!=null&&Number(t.exitCode)!==0?'error':'idle')+'"></i><div><b>'+escape(short(t.label||t.action||'Tarefa',58))+'</b><span>'+escape(t.target||'Centro')+' · '+escape(t.status==='running'?'A executar':t.status==='completed'?(Number(t.exitCode)===0?'Feito':'Erro'):t.status==='queued'?'Na fila':'A aguardar')+'</span></div></li>').join('')||'<li>Sem tarefas recebidas.</li>';
     if(el('room-cash-value'))el('room-cash-value').textContent=finance?money(finance.balance):'Sem leitura';
   }
