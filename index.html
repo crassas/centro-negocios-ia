@@ -277,6 +277,40 @@
           <button class="btn ghost" id="clear-gsc-btn" type="button">Remover importação</button>
         </div>
 
+        <section class="gsc-live-card" id="gsc-live-card">
+          <div class="gsc-live-head">
+            <div>
+              <span class="sys-label">DIRECT API · READ ONLY</span>
+              <h2>Google Search Console ligado ao Centro</h2>
+              <p>Sem CSV: o Worker consulta a API oficial com uma conta de serviço e apenas permissão de leitura.</p>
+            </div>
+            <div class="gsc-live-state">
+              <i id="gsc-live-dot"></i>
+              <div><small>ESTADO</small><b id="gsc-live-status">A verificar</b><span id="gsc-live-note">A testar a ligação.</span></div>
+            </div>
+          </div>
+          <div class="gsc-live-controls">
+            <button class="btn gsc-authorize-btn" id="gsc-pair-btn" type="button">Autorizar este dispositivo</button>
+            <label class="search-context-field">
+              <span>Propriedade Search Console</span>
+              <select id="gsc-site-select" disabled>
+                <option value="">A carregar propriedades</option>
+              </select>
+            </label>
+            <label class="search-context-field">
+              <span>Período</span>
+              <select id="gsc-period-select">
+                <option value="28">Últimos 28 dias</option>
+                <option value="90" selected>Últimos 3 meses</option>
+                <option value="180">Últimos 6 meses</option>
+              </select>
+            </label>
+            <button class="btn primary gsc-sync-btn" id="gsc-sync-btn" type="button" disabled>Sincronizar agora</button>
+          </div>
+        </section>
+
+        <div class="gsc-manual-divider"><span>CSV manual continua disponível como alternativa</span></div>
+
         <div class="search-context-bar">
           <label class="search-context-field">
             <span>Projecto alvo</span>
