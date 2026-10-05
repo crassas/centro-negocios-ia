@@ -168,9 +168,14 @@ export class TaskQueue extends DurableObject {
     }
     return null;
   }
-  async completeTask(id,result){
+  async completeTask(id,result,attempt=0){
     const task=await this.getJson('task:'+id,null);
     if(!task)return {ok:false};
+    const delivery=Number(attempt)||Number(task.attempts)||1;
+    // A lost HTTP acknowledgement must not mutate a completed/requeued task again.
+    if(Number(attempt)>0&&delivery!==Number(task.attempts))return {ok:true,task,duplicate:true,stale:true};
+    if(task.status==='completed'||task.lastDelivery===delivery)return {ok:true,task,duplicate:true,retrying:task.status==='queued'};
+    task.lastDelivery=delivery;
 
     const code=Number(result?.exitCode);
     const attempts=Number(task.attempts)||1;
@@ -2120,6 +2125,20 @@ export default {
       }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
     }
 
+    // Authenticated, fixed read-only probe of the real queue -> local Git path.
+    if(url.pathname==='/api/operit/selftest'&&request.method==='POST'){
+      try{
+        const q=taskQueue(env);
+        if(!await q.authenticate(await sha256Hex(bearer(request))))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
+        const existing=await q.getJson('selftest:last',null);
+        if(existing&&Date.now()-existing.createdAt<60000)return json({ok:true,id:existing.id,reused:true},200,origin);
+        const task=await q.createTask({action:'git_status',target:'centro-negocios-ia',args:{},label:'Self-test ponta a ponta · Git'},'selftest');
+        await q.resolveTask(task.id,true);
+        await q.setJson('selftest:last',{id:task.id,createdAt:Date.now()});
+        return json({ok:true,id:task.id},200,origin);
+      }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
+    }
+
     if(url.pathname==='/api/operit/status'&&request.method==='GET'){
       try{
         await processTelegramUpdates(env);
@@ -2267,8 +2286,9 @@ export default {
           stderr:String(body?.stderr||'').slice(0,6000),
           durationMs:Number(body?.durationMs)||0
         };
-        const done=await q.completeTask(id,result);
+        const done=await q.completeTask(id,result,Number(body?.attempt)||0);
         if(!done.ok)return json({ok:false,error:'Tarefa não encontrada.'},404,origin);
+        if(done.duplicate)return json({ok:true,duplicate:true,retrying:Boolean(done.retrying)},200,origin);
         if(done.retrying){
           await telegramSend(env,'↻ RETRY AUTOMÁTICO\n\n'+done.task.label+
             '\n\nA tentativa '+String(done.task.attempts||1)+' falhou de forma recuperável. O Centro vai repetir automaticamente em ~20 segundos.');

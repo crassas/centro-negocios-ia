@@ -334,7 +334,7 @@ def work_once(token):
     print(f"[{task['id']}] {task.get('label', task.get('action'))}", flush=True)
     exit_code, stdout, stderr, duration = execute(task)
     save_outbox({"id": task["id"], "exitCode": exit_code, "stdout": stdout,
-                 "stderr": stderr, "durationMs": duration})
+                 "stderr": stderr, "durationMs": duration, "attempt": int(task.get("attempts") or 1)})
     flush_outbox(token)
     return True
 

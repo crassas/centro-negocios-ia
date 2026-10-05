@@ -984,14 +984,30 @@ def apply_repo_change_plan(worktree, plan):
 
     return applied
 
+def readonly_cloud_fallback(prompt, reason):
+    """Already-installed Workers AI route; no Anthropic/Manus paid fallback."""
+    try:
+        status, data = http_json(CLOUD_BASE+"/api/assist", method="POST",
+                                payload={"question": prompt, "context": {}}, timeout=60)
+        answer = str(data.get("answer") or "").strip()
+        model = str(data.get("model") or "")
+        if status != 200 or not data.get("ok") or not answer or model == "fallback-local":
+            raise RuntimeError("Workers AI sem resposta de modelo")
+        return {"exitCode": 0, "stdout": "FALLBACK WORKERS AI · "+model+"\n"+answer,
+                "stderr": "", "durationMs": 0}
+    except Exception as exc:
+        return {"exitCode": 78, "stdout": "", "stderr": reason+"; fallback: "+str(exc)[:500], "durationMs": 0}
+
+
 OLLAMA_AUTH_CACHE = {"at": 0, "ok": False, "detail": "", "keyHash": ""}
 def ollama_auth_check(key):
     digest = hashlib.sha256(key.encode()).hexdigest()
     if OLLAMA_AUTH_CACHE["keyHash"] == digest and time.monotonic()-OLLAMA_AUTH_CACHE["at"] < 60:
         return OLLAMA_AUTH_CACHE["ok"], OLLAMA_AUTH_CACHE["detail"]
     try:
-        status, data = http_json("https://ollama.com/api/tags",
-                                headers={"Authorization": "Bearer "+key}, timeout=12)
+        status, data = http_json("https://ollama.com/api/chat", method="POST",
+                                payload={"model": "gpt-oss:120b", "messages": [{"role": "user", "content": "OK"}], "stream": False, "options": {"num_predict": 1}},
+                                headers={"Authorization": "Bearer "+key}, timeout=30)
         ok, detail = status == 200, "Ollama HTTP "+str(status)
     except urllib.error.HTTPError as exc:
         ok, detail = False, "Ollama HTTP "+str(exc.code)+"; credencial recusada"
@@ -2072,7 +2088,7 @@ def execute_action(task):
 
         auth_ok, auth_detail = ollama_auth_check(key)
         if not auth_ok:
-            return {"exitCode": 78, "stdout": "", "stderr": auth_detail, "durationMs": 0}
+            return readonly_cloud_fallback(prompt, auth_detail)
         env = os.environ.copy()
         env["ANTHROPIC_BASE_URL"] = "https://ollama.com"
         env["ANTHROPIC_AUTH_TOKEN"] = key
@@ -2085,11 +2101,14 @@ def execute_action(task):
             "Esta chamada está em modo de análise: não alteres ficheiros nem executes acções destrutivas."
         )
 
-        return run_cmd(
+        result = run_cmd(
             [claude, "--model", "gpt-oss:120b", "--permission-mode", "plan",
              "--append-system-prompt", system_note, "-p", prompt],
             cwd=cwd, timeout=CLAUDE_TIMEOUT, env=env,
         )
+        if result["exitCode"] != 0:
+            return readonly_cloud_fallback(prompt, "Claude/Ollama exit="+str(result["exitCode"]))
+        return result
 
     return {
         "exitCode": 126,

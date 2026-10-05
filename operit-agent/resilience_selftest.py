@@ -20,15 +20,14 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         root=Path(tmp)
         pidfile=root/"child.pid"
-        child_code="import os,time;open("+repr(str(pidfile))+",'w').write(str(os.getpid()));time.sleep(60)"
+        stopped=root/"child.stopped"
+        child_code="import os,time,signal,sys;signal.signal(signal.SIGTERM,lambda *a:(open("+repr(str(stopped))+",'w').write('terminated'),sys.exit(0)));open("+repr(str(pidfile))+",'w').write(str(os.getpid()));time.sleep(60)"
         parent_code="import subprocess,sys,time;subprocess.Popen([sys.executable,'-c',"+repr(child_code)+"]);time.sleep(60)"
         import sys
         t=time.monotonic()
         result=server.run_cmd([sys.executable,"-c",parent_code],timeout=1)
         assert result["exitCode"]==124 and time.monotonic()-t<8,result
-        child=int(pidfile.read_text())
-        status=Path("/proc")/str(child)/"stat"
-        assert not status.exists() or status.read_text().split()[2]=="Z", "orphan executor still running"
+        assert stopped.exists(), "descendant did not receive executor group termination"
         print("OK timeout terminates executor process group")
         server.EXECUTION_STATE.deadline=time.monotonic()+0.3
         t=time.monotonic()
@@ -69,5 +68,18 @@ def main():
         assert not server.ollama_auth_check("dummy")[0]
         server.OLLAMA_AUTH_CACHE.update(old)
         print("OK rejected credential circuit breaker")
+        original_http=server.http_json
+        def denied(url, **kwargs):
+            assert url.endswith('/api/chat'), 'credential probe must test actual inference'
+            raise server.urllib.error.HTTPError(url,401,'Unauthorized',{},None)
+        server.http_json=denied
+        assert server.ollama_auth_check('invalid-key')[0] is False
+        server.http_json=lambda *a,**k:(200,{'ok':True,'model':'test-model','answer':'CENTRO_OK'})
+        assert server.readonly_cloud_fallback('probe','denied')['exitCode']==0
+        server.http_json=lambda *a,**k:(200,{'ok':True,'model':'fallback-local','answer':'unavailable'})
+        assert server.readonly_cloud_fallback('probe','denied')['exitCode']!=0
+        server.http_json=original_http
+        server.OLLAMA_AUTH_CACHE.update(old)
+        print('OK inference authentication and real model fallback validation')
     print("resilience_selftest: OK")
 if __name__=="__main__":main()
