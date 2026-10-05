@@ -13,6 +13,7 @@ window.CentroRoom=(()=>{
   const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const short=(s,max=72)=>String(s??'').length>max?String(s).slice(0,max-1)+'…':String(s??'');
   const money=n=>new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'}).format(Number(n)||0);
+  const background=t=>['benchmark','stability','selftest','publication-selftest'].includes(String(t.source||''));
   function sprite(color){return '<svg class="room-sprite" viewBox="0 0 24 32" aria-hidden="true" shape-rendering="crispEdges"><ellipse cx="12" cy="30" rx="9" ry="2" fill="#122331" opacity=".18"/><g class="sprite-person"><path d="M7 2h10v3h3v9h-3v3H7v-3H4V5h3z" fill="#e7b99a"/><path d="M7 1h10v2h3v5h-5V5H7v4H4V3h3z" fill="#293747"/><path d="M8 9h2v2H8zm6 0h2v2h-2z" fill="#293747"/><path d="M10 13h4v1h-4z" fill="#a66561"/><path d="M7 17h10v3h3v7H4v-7h3z" fill="'+color+'"/><path d="M4 21h3v5H4zm13 0h3v5h-3z" fill="#e7b99a"/><path d="M7 26h4v5H7zm6 0h4v5h-4z" fill="#293747"/></g></svg>';}
   function destination(role,task){
     if(role.id==='queue')return 'queue';
@@ -26,7 +27,7 @@ window.CentroRoom=(()=>{
     if(role.id==='claude'&&conversationBusy)return {state:'working',label:'A analisar o teu pedido',speech:'Estou a analisar.',task:null,zone:'plan'};
     if(!available)return {state:'unknown',label:connectionFailed?'Sem ligação':'A receber dados',speech:connectionFailed?'Não recebo dados.':'A ligar à equipa.',task:null,zone:'home'};
     const matches=rows.filter(role.match);
-    const task=matches.find(r=>r.id===trackedTask)||matches.find(r=>r.status==='running')||matches.find(r=>r.status==='queued')||matches[0];
+    const task=matches.find(r=>r.id===trackedTask)||matches.find(r=>r.status==='running')||matches.find(r=>r.status==='queued')||matches.find(r=>!background(r))||matches[0];
     if(!task)return {state:'idle',label:'Sem tarefas registadas',speech:'Aguardo uma tarefa.',task:null,zone:'home'};
     if(task.status==='running')return {state:'working',label:'A trabalhar',speech:role.id==='queue'?'Tarefa em curso.':destination(role,task)==='github'?'A tratar do projecto.':destination(role,task)==='finance'?'A tratar dos registos.':'A tratar do pedido.',task,zone:destination(role,task)};
     if(task.status==='queued')return {state:'waiting',label:'Na fila',speech:'Aguardo a minha vez.',task,zone:'queue'};
@@ -73,7 +74,8 @@ window.CentroRoom=(()=>{
       el('room-detail').innerHTML=detailHTML;lastDetailHTML=detailHTML;
       const result=el('room-detail').querySelector('details');if(result&&resultOpen)result.open=true;
     }
-    const feed=trackedTask?[...rows.filter(t=>t.id===trackedTask),...rows.filter(t=>t.id!==trackedTask)]:rows;
+    const requests=rows.filter(t=>!background(t)),history=requests.length?requests:rows;
+    const feed=trackedTask?[...history.filter(t=>t.id===trackedTask),...history.filter(t=>t.id!==trackedTask)]:history;
     const feedHTML=feed.slice(0,3).map(t=>'<li><i data-state="'+(t.status==='running'?'working':t.status==='completed'&&t.exitCode!=null&&Number(t.exitCode)!==0?'error':'idle')+'"></i><div><b>'+escape(short(t.label||t.action||'Tarefa',58))+'</b><span>'+escape(t.target||'Centro')+'</span>'+resultHTML(t)+'</div></li>').join('')||'<li>Sem tarefas recebidas.</li>';
     if(el('room-feed').dataset.content!==feedHTML){const opened=[...el('room-feed').querySelectorAll('details')].map(d=>d.open);el('room-feed').innerHTML=feedHTML;el('room-feed').dataset.content=feedHTML;el('room-feed').querySelectorAll('details').forEach((d,i)=>{d.open=Boolean(opened[i]);});}
     const overview=summary();

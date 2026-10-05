@@ -58,4 +58,7 @@ assert.ok(room.resultHTML({id:'pending',status:'pending'}).includes('Aguarda aut
 room.trackTask('seo');
 room.update({executions:[{id:'background',status:'running'},{id:'seo',action:'repo_change',status:'queued'}]});
 assert.equal(room.model(planner).task.id,'seo');
+room.trackTask('');
+room.update({executions:[{id:'probe',action:'git_status',source:'stability',status:'completed',exitCode:0},{id:'seo',action:'repo_change',source:'app',status:'completed',exitCode:0}]});
+assert.equal(room.model(executor).task.id,'seo','background probes must not hide the latest real user request');
 console.log('PASS: routing, live task priority, short speech, failures, connection loss, finance and movement bounds');
