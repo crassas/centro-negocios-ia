@@ -2141,6 +2141,7 @@ export default {
       return json({
         ok:true,
         service:'centro-negocios-ai',
+        buildSha:String(env.BUILD_SHA||''),
         model:MODEL,
         deepModel:DEEP_MODEL,
         agentModel:AGENT_MODEL,
