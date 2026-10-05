@@ -3,6 +3,8 @@ const LEGACY_KEY='centro_ia_real_v2';
 const VAULT_KEY='centro_negocios_vault_v1';
 const AI_ENDPOINT_KEY='centro_negocios_ai_endpoint_v1';
 const AI_DEFAULT_ENDPOINT='https://centro-negocios-ai.travisthejarvis.workers.dev';
+const GSC_DEVICE_TOKEN_KEY='centro_negocios_gsc_device_token_v1';
+const GSC_SITE_KEY='centro_negocios_gsc_site_v1';
 const APP_VERSION=3;
 const VAULT_LOCK_MS=5*60*1000;
 const EXTRA_PROJECTS=[
@@ -17,6 +19,7 @@ let vaultPassphrase=null;
 let vaultTimer=null;
 let installPrompt=null;
 let toastTimer=null;
+let gscPairPollTimer=null;
 
 function defaultState(){return {clients:{},leads:[],gsc:null,transactions:[],pendingPayments:[],agent:{opportunities:[],decisions:[],reports:[],telegramOffset:0}};}
 function loadState(){
@@ -321,6 +324,161 @@ function parseLocaleNumber(v){
   else if(s.includes(','))s=s.replace(',','.');return Number(s.replace('%',''));
 }
 function parsePercent(v){const n=parseLocaleNumber(v);if(!Number.isFinite(n))return null;return String(v).includes('%')?n/100:n;}
+function gscDeviceToken(){return localStorage.getItem(GSC_DEVICE_TOKEN_KEY)||'';}
+async function gscFetch(path,options={}){
+  const token=gscDeviceToken();
+  return aiFetch(path,{
+    ...options,
+    headers:{
+      ...(options.headers||{}),
+      ...(token?{authorization:'Bearer '+token}:{})
+    }
+  });
+}
+function setGscLiveStatus(status,note='',mode='idle'){
+  const label=$('gsc-live-status'),sub=$('gsc-live-note'),dot=$('gsc-live-dot');
+  if(label)label.textContent=status;
+  if(sub)sub.textContent=note;
+  if(dot){dot.className='';if(mode)dot.classList.add(mode);}
+}
+function dateYmd(date){return date.toISOString().slice(0,10);}
+function shiftDays(date,days){const d=new Date(date);d.setUTCDate(d.getUTCDate()+days);return d;}
+async function refreshGscConnection(){
+  if(!$('gsc-live-status'))return;
+  const pair=$('gsc-pair-btn'),sync=$('gsc-sync-btn'),site=$('gsc-site-select');
+  try{
+    setGscLiveStatus('A verificar','A testar o Worker.','checking');
+    const data=await gscFetch('/api/gsc/status',{method:'GET',headers:{}});
+    if(!data.configured){
+      setGscLiveStatus('Falta configurar Google','A conta de serviço ainda não está guardada no Worker.','warning');
+      if(pair){pair.disabled=true;pair.textContent='Falta conta de serviço';}
+      if(sync)sync.disabled=true;if(site)site.disabled=true;
+      return;
+    }
+    if(!data.authorized){
+      if(gscDeviceToken())localStorage.removeItem(GSC_DEVICE_TOKEN_KEY);
+      setGscLiveStatus('Pronto para autorizar','Confirma este dispositivo através do Telegram.','warning');
+      if(pair){pair.disabled=false;pair.textContent='Autorizar este dispositivo';}
+      if(sync)sync.disabled=true;if(site)site.disabled=true;
+      return;
+    }
+    setGscLiveStatus('Ligado','Conta de serviço + dispositivo autorizados.','online');
+    if(pair){pair.disabled=true;pair.textContent='Dispositivo autorizado';}
+    await loadGscSites();
+  }catch(err){
+    setGscLiveStatus('Sem ligação',String(err.message||err).slice(0,180),'error');
+    if(sync)sync.disabled=true;if(site)site.disabled=true;
+  }
+}
+async function pairGscDevice(){
+  const btn=$('gsc-pair-btn');if(!btn)return;
+  btn.disabled=true;btn.textContent='A enviar para o Telegram…';
+  try{
+    const data=await aiFetch('/api/gsc/pair',{method:'POST',body:JSON.stringify({})});
+    if(!data.pairId)throw new Error('O Worker não devolveu o código de autorização.');
+    setGscLiveStatus('Confirma no Telegram','Carrega em Autorizar na mensagem do Centro.','checking');
+    btn.textContent='À espera do Telegram…';
+    if(gscPairPollTimer)clearInterval(gscPairPollTimer);
+    const started=Date.now();
+    const poll=async()=>{
+      try{
+        const status=await aiFetch('/api/gsc/pair-status?id='+encodeURIComponent(data.pairId),{method:'GET',headers:{}});
+        if(status.status==='approved'&&status.token){
+          clearInterval(gscPairPollTimer);gscPairPollTimer=null;
+          localStorage.setItem(GSC_DEVICE_TOKEN_KEY,status.token);
+          toast('Dispositivo autorizado para o Search Console.');
+          await refreshGscConnection();
+          return;
+        }
+        if(status.status==='rejected'||status.status==='expired'||Date.now()-started>10*60*1000){
+          clearInterval(gscPairPollTimer);gscPairPollTimer=null;
+          btn.disabled=false;btn.textContent='Autorizar este dispositivo';
+          setGscLiveStatus(status.status==='rejected'?'Autorização recusada':'Autorização expirada','Podes tentar novamente.','warning');
+        }
+      }catch(err){
+        clearInterval(gscPairPollTimer);gscPairPollTimer=null;
+        btn.disabled=false;btn.textContent='Autorizar este dispositivo';
+        setGscLiveStatus('Erro na autorização',String(err.message||err).slice(0,160),'error');
+      }
+    };
+    await poll();
+    if(!gscPairPollTimer)gscPairPollTimer=setInterval(poll,1500);
+  }catch(err){
+    btn.disabled=false;btn.textContent='Autorizar este dispositivo';
+    setGscLiveStatus('Falha ao autorizar',String(err.message||err).slice(0,180),'error');
+    toast(err.message||'Falha ao autorizar.');
+  }
+}
+async function loadGscSites(){
+  const site=$('gsc-site-select'),sync=$('gsc-sync-btn');if(!site)return;
+  site.disabled=true;if(sync)sync.disabled=true;
+  site.innerHTML='<option value="">A carregar propriedades…</option>';
+  try{
+    const data=await gscFetch('/api/gsc/sites',{method:'GET',headers:{}});
+    const sites=Array.isArray(data.sites)?data.sites:[];
+    if(!sites.length){
+      site.innerHTML='<option value="">Sem propriedades acessíveis</option>';
+      setGscLiveStatus('Ligado, sem propriedades','Adiciona a conta de serviço como proprietária/utilizadora no Search Console.','warning');
+      return;
+    }
+    const saved=localStorage.getItem(GSC_SITE_KEY)||state.gsc?.siteUrl||'';
+    site.innerHTML=sites.map(row=>'<option value="'+esc(row.siteUrl)+'">'+esc(row.siteUrl)+' · '+esc(row.permissionLevel||'acesso')+'</option>').join('');
+    if(saved&&sites.some(row=>row.siteUrl===saved))site.value=saved;
+    else site.value=sites[0].siteUrl;
+    localStorage.setItem(GSC_SITE_KEY,site.value);
+    site.disabled=false;if(sync)sync.disabled=false;
+    setGscLiveStatus('Ligado',sites.length+' propriedade'+(sites.length===1?'':'s')+' disponível'+(sites.length===1?'':'eis')+'.','online');
+  }catch(err){
+    site.innerHTML='<option value="">Erro ao carregar propriedades</option>';
+    setGscLiveStatus('Erro do Search Console',String(err.message||err).slice(0,180),'error');
+  }
+}
+async function syncGscDirect(){
+  const site=$('gsc-site-select')?.value||'',projectId=$('gsc-project')?.value||'';
+  const days=Math.max(7,Math.min(Number($('gsc-period-select')?.value)||90,365));
+  const btn=$('gsc-sync-btn');
+  if(!site){toast('Escolhe uma propriedade do Search Console.');return;}
+  if(btn){btn.disabled=true;btn.textContent='A sincronizar…';}
+  try{
+    setGscLiveStatus('A sincronizar','A pedir consultas ao Google e a comparar períodos.','checking');
+    const end=shiftDays(new Date(),-2);
+    const start=shiftDays(end,-days+1);
+    const prevEnd=shiftDays(start,-1);
+    const prevStart=shiftDays(prevEnd,-days+1);
+    const payloadCurrent={siteUrl:site,startDate:dateYmd(start),endDate:dateYmd(end),rowLimit:5000};
+    const payloadPrevious={siteUrl:site,startDate:dateYmd(prevStart),endDate:dateYmd(prevEnd),rowLimit:5000};
+    const [current,previous]=await Promise.all([
+      gscFetch('/api/gsc/query',{method:'POST',body:JSON.stringify(payloadCurrent)}),
+      gscFetch('/api/gsc/query',{method:'POST',body:JSON.stringify(payloadPrevious)})
+    ]);
+    const rows=Array.isArray(current.rows)?current.rows:[];
+    const previousRows=Array.isArray(previous.rows)?previous.rows:[];
+    state.gsc={
+      source:'api',
+      fileName:'API Search Console',
+      siteUrl:site,
+      importedAt:new Date().toISOString(),
+      projectId,
+      periodDays:days,
+      startDate:payloadCurrent.startDate,
+      endDate:payloadCurrent.endDate,
+      previousStartDate:payloadPrevious.startDate,
+      previousEndDate:payloadPrevious.endDate,
+      rows,
+      previousRows
+    };
+    localStorage.setItem(GSC_SITE_KEY,site);
+    saveState();renderGsc();renderSystem();
+    setGscLiveStatus('Sincronizado',rows.length+' consultas · comparação com o período anterior concluída.','online');
+    toast(rows.length+' consultas sincronizadas directamente do Search Console.');
+  }catch(err){
+    setGscLiveStatus('Falha na sincronização',String(err.message||err).slice(0,180),'error');
+    toast(err.message||'Não foi possível sincronizar o Search Console.');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='Sincronizar agora';}
+  }
+}
+
 function parseCSV(text){
   text=text.replace(/^\uFEFF/,'');const first=text.split(/\r?\n/)[0]||'';const delim=(first.match(/;/g)||[]).length>(first.match(/,/g)||[]).length?';':',';
   const rows=[];let row=[],cell='',quote=false;
@@ -360,6 +518,7 @@ function gscActionForRow(row,project){
 }
 function gscOpportunityRows(){
   const rows=state.gsc?.rows||[];if(!rows.length)return [];
+  const previousMap=new Map((state.gsc?.previousRows||[]).map(r=>[String(r.query||''),r]));
   const maxImp=Math.max(1,...rows.map(r=>Math.max(0,r.impressions||0))),project=gscProjectHint();
   return rows.map(r=>{
     const ctr=r.ctr==null?(r.impressions?r.clicks/r.impressions:0):r.ctr;
@@ -376,13 +535,17 @@ function gscOpportunityRows(){
     const quickWin=r.position>=4&&r.position<=20&&score>=60;
     const ctrRisk=r.impressions>=20&&ctr<expected*.65;
     const priority=score>=72?'ALTA':score>=55?'MÉDIA':'OBSERVAR';
+    const prev=previousMap.get(String(r.query||''))||null;
+    const impressionDelta=prev&&Number(prev.impressions)>0?(Number(r.impressions)-Number(prev.impressions))/Number(prev.impressions):null;
+    const clicksDelta=prev&&Number(prev.clicks)>0?(Number(r.clicks)-Number(prev.clicks))/Number(prev.clicks):null;
+    const positionDelta=prev&&Number.isFinite(Number(prev.position))?Number(prev.position)-Number(r.position):null;
     let reason='Sinal fraco: precisa de mais dados antes de mexer.';
     if(quickWin)reason='Já está perto do topo e tem procura: pequena melhoria pode produzir ganho mais rápido.';
     else if(ctrRisk&&r.position<=20)reason='Tem visibilidade, mas o CTR está abaixo do esperado para esta posição.';
     else if(r.position<=10)reason='Já está na primeira página; vale reforçar relevância e snippet.';
     else if(r.position<=20)reason='Está perto da primeira página e pode subir com conteúdo e ligações internas.';
     else if(r.impressions>=maxImp*.45)reason='Tem procura relevante, mas ainda está longe; validar intenção antes de investir.';
-    return {...r,ctr,expectedCtr:expected,score,quickWin,ctrRisk,priority,reason,project:project.label,page:project.page,action:gscActionForRow({...r,ctr},project)};
+    return {...r,ctr,expectedCtr:expected,score,quickWin,ctrRisk,priority,reason,project:project.label,page:project.page,action:gscActionForRow({...r,ctr},project),impressionDelta,clicksDelta,positionDelta};
   }).sort((a,b)=>b.score-a.score||b.impressions-a.impressions);
 }
 function renderGscOpportunities(){
@@ -401,13 +564,18 @@ function renderGscOpportunities(){
   if(!rows.length){list.innerHTML='<div class="empty seo-empty">Nenhuma consulta corresponde a este filtro.</div>';return;}
   list.innerHTML=rows.slice(0,12).map(r=>{
     const cls=r.priority==='ALTA'?'high':r.priority==='MÉDIA'?'medium':'watch';
-    return '<article class="seo-opportunity-card '+cls+'"><div class="seo-opportunity-top"><div><span class="seo-priority">'+r.priority+(r.quickWin?' · QUICK WIN':'')+'</span><h3>'+esc(r.query)+'</h3></div><b class="seo-score">'+r.score+'</b></div><div class="seo-opportunity-metrics"><span><b>'+fmtNum(r.impressions)+'</b> impressões</span><span><b>'+fmtNum(r.position,1)+'</b> posição</span><span><b>'+fmtNum(r.ctr*100,2)+'%</b> CTR</span></div><p>'+esc(r.reason)+'</p><strong>'+esc(r.action)+'</strong><small>'+esc(r.project)+' · alvo sugerido: '+esc(r.page)+'</small></article>';
+    const trends=[];
+    if(Number.isFinite(r.impressionDelta))trends.push('impressões '+(r.impressionDelta>=0?'+':'')+fmtNum(r.impressionDelta*100,0)+'%');
+    if(Number.isFinite(r.positionDelta)&&Math.abs(r.positionDelta)>=.1)trends.push('posição '+(r.positionDelta>0?'+':'')+fmtNum(r.positionDelta,1));
+    const trendHtml=trends.length?'<div class="seo-trend">'+trends.map(x=>'<span>'+esc(x)+'</span>').join('')+'</div>':'';
+    return '<article class="seo-opportunity-card '+cls+'"><div class="seo-opportunity-top"><div><span class="seo-priority">'+r.priority+(r.quickWin?' · QUICK WIN':'')+'</span><h3>'+esc(r.query)+'</h3></div><b class="seo-score">'+r.score+'</b></div><div class="seo-opportunity-metrics"><span><b>'+fmtNum(r.impressions)+'</b> impressões</span><span><b>'+fmtNum(r.position,1)+'</b> posição</span><span><b>'+fmtNum(r.ctr*100,2)+'%</b> CTR</span></div>'+trendHtml+'<p>'+esc(r.reason)+'</p><strong>'+esc(r.action)+'</strong><small>'+esc(r.project)+' · alvo sugerido: '+esc(r.page)+'</small></article>';
   }).join('');
 }
 function renderGsc(){
   const g=state.gsc,s=gscSummary(),project=$('gsc-project');
   if(project&&g&&g.projectId!=null)project.value=g.projectId;
-  $('gsc-file-label').textContent=g?(g.fileName+' · '+fmtDate(g.importedAt)):'Nenhum ficheiro carregado';
+  $('gsc-file-label').textContent=g?((g.source==='api'?'Ligação directa · '+(g.siteUrl||'Search Console'):g.fileName)+' · '+fmtDate(g.importedAt)):'Nenhum ficheiro carregado';
+  if($('gsc-site-select')&&g?.siteUrl&&!$('gsc-site-select').disabled)$('gsc-site-select').value=g.siteUrl;
   $('gsc-clicks').textContent=s?fmtNum(s.clicks):'—';$('gsc-impressions').textContent=s?fmtNum(s.impressions):'—';$('gsc-ctr').textContent=s?fmtNum(s.ctr*100,2)+'%':'—';$('gsc-position').textContent=s?fmtNum(s.position,2):'—';
   renderGscOpportunities();
   const tbody=$('gsc-table');if(!tbody)return;
@@ -416,7 +584,7 @@ function renderGsc(){
   tbody.innerHTML=g.rows.slice().sort((a,b)=>(scoreByQuery.get(b.query)||0)-(scoreByQuery.get(a.query)||0)||b.impressions-a.impressions).slice(0,80).map(r=>'<tr><td>'+esc(r.query||'—')+'</td><td><b class="table-score">'+(scoreByQuery.get(r.query)||0)+'</b></td><td>'+fmtNum(r.clicks)+'</td><td>'+fmtNum(r.impressions)+'</td><td>'+fmtNum((r.ctr==null?(r.impressions?r.clicks/r.impressions:0):r.ctr)*100,2)+'%</td><td>'+fmtNum(r.position,2)+'</td></tr>').join('');
 }
 function downloadGscOpportunities(){
-  const rows=gscOpportunityRows();if(!rows.length){toast('Importa primeiro um CSV de Consultas do Search Console.');return;}
+  const rows=gscOpportunityRows();if(!rows.length){toast('Sincroniza o Search Console ou importa primeiro um CSV de Consultas.');return;}
   const data=[['score','prioridade','quick_win','consulta','cliques','impressoes','ctr','posicao','projecto','pagina_sugerida','motivo','proxima_accao']];
   rows.forEach(r=>data.push([r.score,r.priority,r.quickWin?'sim':'nao',r.query,r.clicks,r.impressions,(r.ctr*100).toFixed(2)+'%',r.position.toFixed(2),r.project,r.page,r.reason,r.action]));
   const csv=data.map(row=>row.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(',')).join('\n');
@@ -471,7 +639,7 @@ function fillProjectSelects(){
 function download(name,content,type='text/plain;charset=utf-8'){
   const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),500);
 }
-function reportObject(){return {exportedAt:new Date().toISOString(),monitor:live,crm:state.clients,leads:state.leads,agent:state.agent,finance:{transactions:state.transactions,pendingPayments:state.pendingPayments,pendingTotals:pendingPaymentTotals(),totals:financeTotals()},gsc:state.gsc?{fileName:state.gsc.fileName,importedAt:state.gsc.importedAt,projectId:state.gsc.projectId||'',summary:gscSummary(),opportunities:gscOpportunityRows().slice(0,30),rows:state.gsc.rows}:null};}
+function reportObject(){return {exportedAt:new Date().toISOString(),monitor:live,crm:state.clients,leads:state.leads,agent:state.agent,finance:{transactions:state.transactions,pendingPayments:state.pendingPayments,pendingTotals:pendingPaymentTotals(),totals:financeTotals()},gsc:state.gsc?{source:state.gsc.source||'csv',fileName:state.gsc.fileName,siteUrl:state.gsc.siteUrl||'',importedAt:state.gsc.importedAt,projectId:state.gsc.projectId||'',periodDays:state.gsc.periodDays||null,summary:gscSummary(),opportunities:gscOpportunityRows().slice(0,30),rows:state.gsc.rows,previousRows:state.gsc.previousRows||[]}:null};}
 function sitesCsv(){
   const rows=[['site','url','online','http','response_ms','changed','title','h1_count','sitemap_urls','issues']];
   sites.forEach(s=>{const r=siteResult(s.id)||{};rows.push([s.name,s.url,r.online,r.status,r.responseTimeMs,r.changed,r.title,r.h1Count,r.sitemapUrls,(r.issues||[]).map(x=>x.message).join(' | ')]);});
@@ -777,7 +945,7 @@ async function loadExecutions(){
 function renderSystem(){
   const age=ageMinutes(live.generatedAt);$('sys-monitor').textContent=live.generatedAt?(age!=null&&age>40?'Leitura atrasada':'Activo · '+ageLabel(live.generatedAt)):'Sem leitura';
   try{const t='__centro_test';localStorage.setItem(t,'1');localStorage.removeItem(t);$('sys-storage').textContent='Disponível';}catch{$('sys-storage').textContent='Bloqueado';}
-  $('sys-gsc').textContent=state.gsc?fmtDate(state.gsc.importedAt):'Sem importação';$('sys-ocr').textContent=window.Tesseract?'Disponível':'Motor indisponível';$('sys-pwa').textContent=('serviceWorker'in navigator)?'Suportado':'Não suportado';setupVaultState();
+  $('sys-gsc').textContent=state.gsc?((state.gsc.source==='api'?'API · ':'')+fmtDate(state.gsc.importedAt)):'Sem dados';$('sys-ocr').textContent=window.Tesseract?'Disponível':'Motor indisponível';$('sys-pwa').textContent=('serviceWorker'in navigator)?'Suportado':'Não suportado';setupVaultState();
 }
 
 function setupEvents(){
@@ -811,11 +979,14 @@ function setupEvents(){
     state.transactions.push({id:uid('txn'),date:$('finance-date').value,type:$('finance-type').value,amount,category:$('finance-category').value.trim(),projectId:$('finance-project').value,description:$('finance-description').value.trim(),createdAt:new Date().toISOString()});
     saveState();e.target.reset();$('finance-date').value=new Date().toISOString().slice(0,10);renderFinance();toast('Movimento registado.');
   });
+  $('gsc-pair-btn')?.addEventListener('click',pairGscDevice);
+  $('gsc-sync-btn')?.addEventListener('click',syncGscDirect);
+  $('gsc-site-select')?.addEventListener('change',event=>{if(event.target.value)localStorage.setItem(GSC_SITE_KEY,event.target.value);});
   $('gsc-input')?.addEventListener('change',async event=>{
     const file=event.target.files?.[0];if(!file)return;
     try{
       const rows=parseCSV(await file.text());if(!rows.length)throw new Error('O CSV não tem consultas válidas.');
-      state.gsc={fileName:file.name,importedAt:new Date().toISOString(),projectId:$('gsc-project')?.value||'',rows};
+      state.gsc={source:'csv',fileName:file.name,importedAt:new Date().toISOString(),projectId:$('gsc-project')?.value||'',rows,previousRows:[]};
       saveState();renderGsc();renderSystem();toast(rows.length+' consultas importadas. O radar SEO já está calculado.');
     }catch(err){event.target.value='';toast(err.message||'Não foi possível ler o CSV.');}
   });
@@ -878,7 +1049,7 @@ function setupPWA(){
 document.addEventListener('DOMContentLoaded',()=>{
   seedCRMDefaults();seedLeadDefaults();seedPaymentDefaults();setupEvents();setupDashboardChrome();setupPWA();
   $('finance-date').value=new Date().toISOString().slice(0,10);
-  renderLeads();renderPayments();renderFinance();renderGsc();renderAgentState();setupVaultState();renderSystem();renderAIStatus();
+  renderLeads();renderPayments();renderFinance();renderGsc();renderAgentState();setupVaultState();renderSystem();renderAIStatus();refreshGscConnection();
   checkTelegramStatus(false);pollTelegramApprovals(false);loadExecutions();
   setInterval(()=>pollTelegramApprovals(false),30000);
   setInterval(()=>loadExecutions(),3000);
