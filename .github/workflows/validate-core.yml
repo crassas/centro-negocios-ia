@@ -35,6 +35,14 @@ jobs:
           mkdir -p "$HOME"
           python3 operit-agent/policy_selftest.py
 
+      - name: Resilience self-test
+        shell: bash
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/centro-home-resilience"
+          mkdir -p "$HOME"
+          python3 operit-agent/resilience_selftest.py
+
       - name: Shell syntax
         shell: bash
         run: |
