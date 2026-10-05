@@ -3,6 +3,7 @@ import json
 import hashlib
 import threading
 import os
+import re
 import secrets
 import signal
 import shutil
@@ -1232,6 +1233,16 @@ def action_repo_change(task):
                     "durationMs": int((time.time() - started) * 1000),
                 }
 
+        seo_checks = []
+        if re.search(r"\bseo\b", prompt, re.I) and (worktree / "seo.config.json").is_file() and (worktree / "scripts/seo-engine.mjs").is_file():
+            # Materialise and audit the repository's existing SEO configuration
+            # before enumerating changes, so generated files pass the same policy.
+            seo = run_cmd(["node", "scripts/seo-engine.mjs", "all"], cwd=worktree, timeout=120)
+            seo_checks.append(f"SEO generate + audit: {seo['exitCode']}")
+            executor_output += "\n\nSEO:\n" + seo["stdout"][-4000:]
+            if seo["exitCode"] != 0:
+                return {"exitCode": 66, "stdout": executor_output, "stderr": "Auditoria SEO falhou; nada publicado.\n" + seo["stderr"][-2500:], "durationMs": int((time.time()-started)*1000)}
+
         paths, status = changed_paths(worktree)
         allowed_paths = (task.get("args") or {}).get("allowedPaths")
         if allowed_paths is not None and (not isinstance(allowed_paths, list) or any(rel not in allowed_paths for rel in paths)):
@@ -1269,6 +1280,7 @@ def action_repo_change(task):
             }
 
         checks, failures = validate_repo_change(worktree, paths)
+        checks = seo_checks + checks
         if failures:
             return {
                 "exitCode": 66,
