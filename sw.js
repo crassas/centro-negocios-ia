@@ -1,4 +1,4 @@
-const CACHE='centro-negocios-v9-gsc-live';
+const CACHE='centro-negocios-v10-canonical-health';
 const SHELL=['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./icon.svg','./data/sites.json'];
 
 self.addEventListener('install',event=>{
