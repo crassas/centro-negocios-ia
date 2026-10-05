@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import errno
+import fcntl
 import json
 import os
 import signal
@@ -14,6 +15,8 @@ HOME = Path.home()
 STATE_DIR = HOME / ".centro-station"
 STATUS_FILE = STATE_DIR / "status.json"
 HEARTBEAT_FILE = STATE_DIR / "heartbeat"
+SUPERVISOR_PID_FILE = STATE_DIR / "supervisor.pid"
+SUPERVISOR_LOCK_FILE = STATE_DIR / "supervisor.lock"
 SERVER_PID_FILE = HOME / ".centro-server" / "server.pid"
 AGENT_PID_FILE = HOME / ".centro-agent" / "agent.pid"
 SERVER_BUSY_FILE = HOME / ".centro-server" / "busy.json"
@@ -83,6 +86,19 @@ def safe_mkdir(path):
         if exc.errno == errno.ENOSYS and path.exists():
             return True
         raise
+
+
+def acquire_singleton_lock():
+    """Impede dois supervisores de concorrerem sobre os mesmos PID/status files."""
+    safe_mkdir(STATE_DIR)
+    handle = SUPERVISOR_LOCK_FILE.open("a+")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        return None
+    SUPERVISOR_PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
+    return handle
 
 
 def server_busy():
@@ -438,7 +454,7 @@ def write_heartbeat():
     """Sinal mínimo para o WorkManager distinguir processo vivo de PID fantasma."""
     try:
         safe_mkdir(STATE_DIR)
-        tmp = HEARTBEAT_FILE.with_suffix(".tmp")
+        tmp = HEARTBEAT_FILE.with_name(HEARTBEAT_FILE.name + f".tmp.{os.getpid()}")
         tmp.write_text(str(int(time.time())), encoding="utf-8")
         tmp.replace(HEARTBEAT_FILE)
         return True
@@ -453,7 +469,7 @@ def write_status(payload):
     # no stdout e tenta novamente no ciclo seguinte.
     try:
         safe_mkdir(STATE_DIR)
-        tmp = STATUS_FILE.with_suffix(".tmp")
+        tmp = STATUS_FILE.with_name(STATUS_FILE.name + f".tmp.{os.getpid()}")
         tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(STATUS_FILE)
         return True
@@ -464,7 +480,11 @@ def write_status(payload):
 
 def main():
     safe_mkdir(STATE_DIR)
-    print("Centro Station supervisor activo. Ctrl+C para parar.", flush=True)
+    singleton_lock = acquire_singleton_lock()
+    if singleton_lock is None:
+        print("Centro Station: outro supervisor já está activo; este processo termina.", flush=True)
+        return
+    print(f"Centro Station supervisor activo. PID {os.getpid()}. Ctrl+C para parar.", flush=True)
     last_openclaw_attempt = 0
     last_laya_attempt = 0
     last_remote_attempt = 0
