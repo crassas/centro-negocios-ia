@@ -67,4 +67,27 @@ try{
  const probe=await response.json();
  assert.equal((await q.getJson('task:'+probe.id)).source,'stability');
  console.log('OK quiet selftest HTTP route reads request before creating stability task');
+ const originalFetch=globalThis.fetch;
+ try{
+  let notifications=0;
+  globalThis.fetch=async()=>{notifications++;return new Response(JSON.stringify({ok:true,result:{message_id:1}}),{headers:{'content-type':'application/json'}});};
+  const env={TASKS:{getByName:()=>q},TELEGRAM_BOT_TOKEN:'test-only',TELEGRAM_CHAT_ID:'42'};
+  const body={question:'Faz o SEO da página dos dois irmãos',requestId:'seo-request-test-01'};
+  const send=()=>worker.fetch(new Request('https://test/api/agent',{method:'POST',body:JSON.stringify(body)}),env,{});
+  const first=await send();assert.equal(first.status,200,await first.clone().text());
+  const data=await first.json();
+  const created=await q.getJson('task:'+data.taskId);
+  assert.equal(created.action,'repo_change');assert.equal(created.target,'restaurante-2-irmaos');assert.equal(created.status,'pending');
+  assert.equal((await (await send()).json()).taskId,data.taskId);assert.equal(notifications,1);
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(env.TELEGRAM_BOT_TOKEN));
+  const secret=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+  const approve=()=>worker.fetch(new Request('https://test/telegram/webhook',{method:'POST',headers:{'x-telegram-bot-api-secret-token':secret},body:JSON.stringify({update_id:999999,callback_query:{id:'cb',data:'taskapprove:'+data.taskId,message:{chat:{id:42}}}})}),env,{});
+  assert.equal((await approve()).status,200);await approve();
+  assert.equal((await q.getJson('task:'+data.taskId)).status,'queued');
+  assert.equal((await q.getJson('task:ids')).filter(id=>id===data.taskId).length,1);
+  q.authenticate=async()=>false;
+  const unauthorised=await worker.fetch(new Request('https://test/api/operit/submit',{method:'POST',body:JSON.stringify(body)}),env,{});
+  assert.equal(unauthorised.status,401);
+  console.log('OK SEO conversation -> pending task -> Telegram approval -> queue; duplicate request/callback creates no second task; submit requires authentication');
+ }finally{globalThis.fetch=originalFetch;}
 }finally{Date.now=realNow;}

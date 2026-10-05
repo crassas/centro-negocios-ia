@@ -892,10 +892,11 @@ async function askAI(questionOverride){
   btn.disabled=true;btn.textContent='A PROCESSAR';
   answer.classList.add('loading');answer.textContent='A cruzar sinais da operação…';
   try{
-    const data=await aiFetch('/api/agent',{method:'POST',body:JSON.stringify({question,context:aiContext()})});
+    const data=await aiFetch('/api/agent',{method:'POST',body:JSON.stringify({question,context:aiContext(),requestId:crypto.randomUUID()})});
     const added=queueAgentActions(data.actions,question);
     answer.textContent=(data.summary||'Análise concluída.')+(added?'\\n\\n'+added+' proposta'+(added===1?'':'s')+' aguarda'+(added===1?'':'m')+' confirmação.':'');
     $('ai-status').textContent='ONLINE';
+    if(data.taskId){window.CentroRoom?.trackTask(data.taskId);loadExecutions(true);}
   }catch(err){
     answer.textContent='Falha: '+err.message;$('ai-status').textContent='ERRO';
   }finally{answer.classList.remove('loading');btn.disabled=false;btn.textContent='EXECUTAR';}
@@ -1093,5 +1094,4 @@ document.addEventListener('DOMContentLoaded',()=>{
   setInterval(()=>loadExecutions(),3000);
   loadLive();
 });
-
 

@@ -50,5 +50,12 @@ assert.equal(room.model(planner).zone,'plan');
 room.setConversationBusy(false);
 assert.equal(room.model(planner).state,'idle');
 room.setFinance({balance:0,income:0,expense:0,pending:25});
+const evidence=room.resultHTML({id:'seo',target:'restaurante-2-irmaos',status:'completed',exitCode:0,output:'Commit: '+ 'a'.repeat(40)+'\nVerificações: SEO audit: 0\n<script>alert(1)</script>'});
+assert.ok(evidence.includes('/commit/'+ 'a'.repeat(40)));
+assert.ok(evidence.includes('SEO audit: 0'));
+assert.ok(!evidence.includes('<script>'));
+assert.ok(room.resultHTML({id:'pending',status:'pending'}).includes('Aguarda autorização'));
+room.trackTask('seo');
+room.update({executions:[{id:'background',status:'running'},{id:'seo',action:'repo_change',status:'queued'}]});
+assert.equal(room.model(planner).task.id,'seo');
 console.log('PASS: routing, live task priority, short speech, failures, connection loss, finance and movement bounds');
-

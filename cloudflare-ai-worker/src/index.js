@@ -123,6 +123,18 @@ export class TaskQueue extends DurableObject {
     await this.setJson('task:ids',ids.slice(-200));
     return task;
   }
+  async createRepoRequest(requestId,spec){
+    const key='repo-request:'+requestId;
+    const previous=await this.getJson(key,null);
+    if(previous){
+      const task=await this.getJson('task:'+previous.id,null);
+      if(task&&task.target===spec.target&&task.args.prompt===spec.args.prompt)return {task,reused:true};
+      throw new Error('Identificador já usado por outro pedido.');
+    }
+    const task=await this.createTask(spec,'app');
+    await this.setJson(key,{id:task.id});
+    return {task,reused:false};
+  }
   async resolveTask(id,approved){
     const task=await this.getJson('task:'+id,null);
     if(!task||task.status!=='pending')return {ok:false};
@@ -993,7 +1005,7 @@ function projectFromTopic(text){
   const lower=String(text||'').toLowerCase();
   if(lower.includes('pentehouse')||lower.includes('pente house')||lower.includes('penthouse'))return 'pentehouse';
   if(lower.includes('best pizza')||lower.includes('pizza')||lower.includes('kebab'))return 'pizza';
-  if(lower.includes('2 irmãos')||lower.includes('dois irmãos')||lower.includes('doisirmaos'))return 'doisirmaos';
+  if(/2 irm[aã]os|dois irm[aã]os|doisirmaos|restaurante-2-irmaos/.test(lower))return 'doisirmaos';
   if(lower.includes('beatriz')||lower.includes('engomadoria'))return 'beatriz';
   if(lower.includes('centro de negócios')||lower.includes('centro negocios')||lower.includes('centro'))return 'centro';
   return 'local';
@@ -1813,7 +1825,8 @@ function automaticRepoChange(text){
   // Se há projecto identificado + verbo inequívoco de execução, executa mesmo
   // quando a frase começa por "Na Beatriz...", "No Centro...", etc.
   if(questionOnly.test(raw))return null;
-  if(!(direct.test(raw)||requested.test(raw)||imperative.test(raw)))return null;
+  const improve=/\b(?:melhora|melhore|optimiza|otimiza)\b|\bquero\s+(?:que\s+)?(?:melhores|melhorar|optimizar|otimizar|o seo)\b/i;
+  if(!(direct.test(raw)||requested.test(raw)||imperative.test(raw)||improve.test(raw)))return null;
 
   return {
     action:'repo_change',
@@ -2352,6 +2365,21 @@ export default {
       try{body=await request.json();}catch{return json({ok:false,error:'Pedido inválido.'},400,origin);}
     }
 
+    // A paired executor can submit an explicitly authorised repository request.
+    // Public conversation requests always require the existing Telegram approval.
+    if(url.pathname==='/api/operit/submit'&&request.method==='POST'){
+      try{
+        const q=taskQueue(env);
+        if(!await q.authenticate(await sha256Hex(bearer(request))))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
+        const requestId=String(body?.requestId||'');
+        const spec=automaticRepoChange(String(body?.question||''));
+        if(!/^[a-zA-Z0-9_-]{8,80}$/.test(requestId)||!spec||spec.args.prompt.length>4000)return json({ok:false,error:'Pedido de alteração inválido.'},400,origin);
+        const result=await q.createRepoRequest(requestId,spec);
+        await q.resolveTask(result.task.id,true);
+        return json({ok:true,taskId:result.task.id,reused:result.reused},200,origin);
+      }catch(error){return json({ok:false,error:String(error?.message||error)},409,origin);}
+    }
+
     if(url.pathname==='/api/gpu/pair'&&request.method==='POST'){
       try{
         const q=taskQueue(env);
@@ -2548,6 +2576,23 @@ export default {
 
       try{
         if(url.pathname==='/api/agent'){
+          const spec=automaticRepoChange(question);
+          if(spec){
+            const requestId=String(body?.requestId||'');
+            if(!/^[a-zA-Z0-9_-]{8,80}$/.test(requestId))return json({ok:false,error:'Identificador do pedido em falta.'},400,origin);
+            if(!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_CHAT_ID)return json({ok:false,error:'Telegram não configurado. A alteração não foi executada.'},409,origin);
+            const q=taskQueue(env),result=await q.createRepoRequest(requestId,spec),task=result.task;
+            if(!result.reused){
+              const sent=await telegramSend(env,'ALTERAÇÃO DO SITE\n\n'+task.target+'\n'+question.slice(0,1500)+'\n\nID: '+task.id+'\nConfirmar execução, testes e publicação?',{
+                reply_markup:{inline_keyboard:[[
+                  {text:'✅ Executar',callback_data:'taskapprove:'+task.id},
+                  {text:'❌ Recusar',callback_data:'taskreject:'+task.id}
+                ]]}
+              });
+              if(!sent.ok){await q.resolveTask(task.id,false);return json({ok:false,error:'Falha ao enviar a autorização. Nada foi executado.'},502,origin);}
+            }
+            return json({ok:true,taskId:task.id,status:task.status,actions:[],summary:'Pedido '+task.id+' registado para '+task.target+'. Confirma no Telegram; depois acompanha a execução e o resultado aqui.'},200,origin);
+          }
           let result=null,usedModel=AGENT_MODEL,parsed=null;
           try{
             result=await runAgent(env,question,context);
@@ -2615,5 +2660,3 @@ export default {
     return json({ok:false,error:'Rota não encontrada.'},404,origin);
   }
 };
-
-

@@ -4,11 +4,11 @@ window.CentroRoom=(()=>{
   const roles=[
     {id:'executor',name:'Operit',role:'Execução e Git',color:'#6384eb',home:[15,77],match:r=>!/^laya|^claude/.test(String(r.action||''))},
     {id:'laya',name:'Laya',role:'Decisão e encaminhamento',color:'#ac79cf',home:[38,77],match:r=>String(r.action||'').startsWith('laya')},
-    {id:'claude',name:'Claude / fallback',role:'Planeamento e código',color:'#dd9870',home:[62,77],match:r=>/claude|repo_change/.test(String(r.action||''))},
+    {id:'claude',name:'Planeador / fallback',role:'Planeamento e código',color:'#dd9870',home:[62,77],match:r=>/claude|repo_change/.test(String(r.action||''))},
     {id:'queue',name:'Coordenador',role:'Fila de tarefas',color:'#63aa92',home:[85,77],match:()=>true}
   ];
   let taskStats=null,connectionFailed=false;
-  let rows=[],available=false,selected='executor',mounted=false,finance=null,conversationBusy=false,lastDetailHTML='';
+  let rows=[],available=false,selected='executor',mounted=false,finance=null,conversationBusy=false,lastDetailHTML='',trackedTask='';
   const el=id=>document.getElementById(id);
   const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const short=(s,max=72)=>String(s??'').length>max?String(s).slice(0,max-1)+'…':String(s??'');
@@ -26,7 +26,7 @@ window.CentroRoom=(()=>{
     if(role.id==='claude'&&conversationBusy)return {state:'working',label:'A analisar o teu pedido',speech:'Estou a analisar.',task:null,zone:'plan'};
     if(!available)return {state:'unknown',label:connectionFailed?'Sem ligação':'A receber dados',speech:connectionFailed?'Não recebo dados.':'A ligar à equipa.',task:null,zone:'home'};
     const matches=rows.filter(role.match);
-    const task=matches.find(r=>r.status==='running')||matches.find(r=>r.status==='queued')||matches[0];
+    const task=matches.find(r=>r.id===trackedTask)||matches.find(r=>r.status==='running')||matches.find(r=>r.status==='queued')||matches[0];
     if(!task)return {state:'idle',label:'Sem tarefas registadas',speech:'Aguardo uma tarefa.',task:null,zone:'home'};
     if(task.status==='running')return {state:'working',label:'A trabalhar',speech:role.id==='queue'?'Tarefa em curso.':destination(role,task)==='github'?'A tratar do projecto.':destination(role,task)==='finance'?'A tratar dos registos.':'A tratar do pedido.',task,zone:destination(role,task)};
     if(task.status==='queued')return {state:'waiting',label:'Na fila',speech:'Aguardo a minha vez.',task,zone:'queue'};
@@ -53,7 +53,12 @@ window.CentroRoom=(()=>{
     if(selected==='finance')return '<span class="room-centre-icon">€</span><span class="room-eyebrow">CAIXA</span><h2>O teu financeiro</h2><p>Dinheiro registado na aplicação.</p><strong class="room-money">'+(finance?money(finance.balance):'Sem leitura')+'</strong><div class="room-finance-lines"><span>Entradas <b>'+(finance?money(finance.income):'—')+'</b></span><span>Saídas <b>'+(finance?money(finance.expense):'—')+'</b></span><span>Por receber <b>'+(finance?money(finance.pending):'—')+'</b></span></div><button class="btn" data-room-open="caixa" type="button">Abrir financeiro →</button><p class="room-truth">Registos locais. Esta zona não guarda fundos nem movimenta uma conta bancária.</p>';
     if(selected==='plan')return '<span class="room-centre-icon">▤</span><span class="room-eyebrow">MESA DE PLANEAMENTO</span><h2>Do pedido ao plano</h2><p>Diz o projecto e o que queres alcançar. A equipa analisa e apresenta propostas.</p><button class="btn" data-room-open="assistente" type="button">Ver propostas →</button><p class="room-truth">O papel é uma representação visual. Só os resultados registados comprovam a execução.</p>';
     const r=roles.find(r=>r.id===selected)||roles[0],m=model(r),t=m.task;
-    return '<div class="room-detail-avatar">'+sprite(r.color)+'</div><span class="room-eyebrow">'+escape(r.role)+'</span><h2>'+r.name+'</h2><strong class="room-detail-state" data-state="'+m.state+'">'+m.speech+'</strong><div class="room-task"><small>'+(t?'TAREFA REGISTADA':'ACTIVIDADE')+'</small><b>'+escape(short(t?.label||t?.action||'A aguardar dados'))+'</b><span>'+escape(t?.target||'')+'</span>'+(t?'<details><summary>Ver resultado</summary><p>'+escape(m.label)+' · '+escape(t.exitCode==null?'Resultado pendente':'exit '+t.exitCode)+'</p><p>'+escape(t.id||'')+'</p></details>':'')+'</div>';
+    return '<div class="room-detail-avatar">'+sprite(r.color)+'</div><span class="room-eyebrow">'+escape(r.role)+'</span><h2>'+r.name+'</h2><strong class="room-detail-state" data-state="'+m.state+'">'+m.speech+'</strong><div class="room-task"><small>'+(t?'TAREFA REGISTADA':'ACTIVIDADE')+'</small><b>'+escape(short(t?.label||t?.action||'A aguardar dados'))+'</b><span>'+escape(t?.target||'')+'</span>'+(t?resultHTML(t):'')+'</div>';
+  }
+  function resultHTML(t){
+    const output=String(t.output||''),commit=output.match(/Commit: ([a-f0-9]{40})\b/),safeRepo=['centro-negocios-ia','pente_houselanding','best-pizza-kebab','restaurante-2-irmaos','engomadoria-beatriz'].includes(t.target);
+    const status=t.status==='pending'?'Aguarda autorização no Telegram':t.status==='queued'?'Na fila':t.status==='running'?'Execução em curso':t.status==='rejected'?'Pedido recusado':Number(t.exitCode)===0?'Execução terminada':'Execução com erro';
+    return '<details><summary>Ver resultado · '+escape(status)+'</summary><p>ID '+escape(t.id)+' · '+escape(t.exitCode==null?'Resultado pendente':'exit '+t.exitCode)+'</p>'+(commit&&safeRepo?'<a href="https://github.com/crassas/'+escape(t.target)+'/commit/'+commit[1]+'" target="_blank" rel="noopener">Ver alteração no GitHub ↗</a>':'')+'<pre class="room-result-output">'+escape(output||'Ainda não há resultado do executor. A actividade visual não comprova alterações.')+'</pre></details>';
   }
   function summary(){
     if(!available)return {label:connectionFailed?'Actividade sem ligação':'A receber actividade',running:null,queued:null};
@@ -68,7 +73,9 @@ window.CentroRoom=(()=>{
       el('room-detail').innerHTML=detailHTML;lastDetailHTML=detailHTML;
       const result=el('room-detail').querySelector('details');if(result&&resultOpen)result.open=true;
     }
-    el('room-feed').innerHTML=rows.slice(0,3).map(t=>'<li><i data-state="'+(t.status==='running'?'working':t.status==='completed'&&t.exitCode!=null&&Number(t.exitCode)!==0?'error':'idle')+'"></i><div><b>'+escape(short(t.label||t.action||'Tarefa',58))+'</b><span>'+escape(t.target||'Centro')+' · '+escape(t.status==='running'?'A executar':t.status==='completed'?(Number(t.exitCode)===0?'Feito':'Erro'):t.status==='queued'?'Na fila':'A aguardar')+'</span></div></li>').join('')||'<li>Sem tarefas recebidas.</li>';
+    const feed=trackedTask?[...rows.filter(t=>t.id===trackedTask),...rows.filter(t=>t.id!==trackedTask)]:rows;
+    const feedHTML=feed.slice(0,3).map(t=>'<li><i data-state="'+(t.status==='running'?'working':t.status==='completed'&&t.exitCode!=null&&Number(t.exitCode)!==0?'error':'idle')+'"></i><div><b>'+escape(short(t.label||t.action||'Tarefa',58))+'</b><span>'+escape(t.target||'Centro')+'</span>'+resultHTML(t)+'</div></li>').join('')||'<li>Sem tarefas recebidas.</li>';
+    if(el('room-feed').dataset.content!==feedHTML){const opened=[...el('room-feed').querySelectorAll('details')].map(d=>d.open);el('room-feed').innerHTML=feedHTML;el('room-feed').dataset.content=feedHTML;el('room-feed').querySelectorAll('details').forEach((d,i)=>{d.open=Boolean(opened[i]);});}
     const overview=summary();
     if(el('room-operation-state')){el('room-operation-state').textContent=overview.label;el('room-operation-state').dataset.connected=String(available);}
     if(el('room-running-count'))el('room-running-count').textContent=overview.running??'—';
@@ -80,6 +87,6 @@ window.CentroRoom=(()=>{
   function setFinance(value){finance=value;paint();}
   function setConversationBusy(value){conversationBusy=Boolean(value);paint();}
   document.addEventListener('DOMContentLoaded',()=>{paint();el('room-detail-scrim')?.addEventListener('click',closeDetail);document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDetail();});});
-  return {update,offline,model,destination,position,setFinance,setConversationBusy,summary};
+  function trackTask(id){trackedTask=String(id||'');selected='claude';paint();}
+  return {update,offline,model,destination,position,setFinance,setConversationBusy,summary,trackTask,resultHTML};
 })();
-
