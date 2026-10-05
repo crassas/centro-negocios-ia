@@ -465,8 +465,13 @@ def request_openclaw_repo_change_plan(target, prompt, worktree, repair_note=""):
         "timeout": 180,
         "idempotencyKey": secrets.token_hex(16),
         "label": "Centro Planner Fallback",
-        "promptMode": "minimal",
+        # Raw model run do OpenClaw: sem tools, sem workspace e sem políticas
+        # de prompt da conversa. O único efeito permitido é produzir texto JSON.
+        "modelRun": True,
+        "promptMode": "none",
         "bootstrapContextMode": "lightweight",
+        "suppressPromptPersistence": True,
+        "sessionEffects": "internal",
     }
     result = run_cmd(
         [
