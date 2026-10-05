@@ -108,7 +108,7 @@ export class TaskQueue extends DurableObject {
       target:String(safeSpec.target||'').slice(0,120),
       args:safeSpec.args&&typeof safeSpec.args==='object'?safeSpec.args:{},
       label:String(safeSpec.label||safeSpec.action||'Tarefa Operit').slice(0,200),
-      source,status:'pending',createdAt:Date.now()
+      source,status:'pending',createdAt:Date.now(),attempts:0,retryAfter:0
     };
     await this.setJson('task:'+id,task);
     const ids=await this.getJson('task:ids',[]);
@@ -126,10 +126,42 @@ export class TaskQueue extends DurableObject {
   }
   async pullTask(){
     const ids=await this.getJson('task:ids',[]);
+    const now=Date.now();
+    const leaseMs=20*60*1000;
+    const maxAttempts=2;
+
+    // Se o Android/Proot morrer depois de receber uma tarefa, a fila deixa de
+    // a perder para sempre. Uma lease expirada volta a disponibilizá-la uma vez.
     for(const id of ids){
       const task=await this.getJson('task:'+id,null);
-      if(task&&task.status==='queued'){
-        task.status='running';task.startedAt=Date.now();
+      if(!task||task.status!=='running')continue;
+      const started=Number(task.startedAt)||0;
+      if(!started||now-started<=leaseMs)continue;
+      const attempts=Number(task.attempts)||1;
+      if(attempts<maxAttempts){
+        task.status='queued';
+        task.retryAfter=now;
+        task.recoveredAt=now;
+        task.lastError='Execução interrompida/lease expirada; tarefa recuperada automaticamente.';
+      }else{
+        task.status='completed';
+        task.completedAt=now;
+        task.result={
+          exitCode:124,
+          stdout:'',
+          stderr:'Execução abandonada após expirar a lease automática.',
+          durationMs:0
+        };
+      }
+      await this.setJson('task:'+id,task);
+    }
+
+    for(const id of ids){
+      const task=await this.getJson('task:'+id,null);
+      if(task&&task.status==='queued'&&Number(task.retryAfter||0)<=now){
+        task.status='running';
+        task.startedAt=now;
+        task.attempts=(Number(task.attempts)||0)+1;
         await this.setJson('task:'+id,task);
         return task;
       }
@@ -139,9 +171,24 @@ export class TaskQueue extends DurableObject {
   async completeTask(id,result){
     const task=await this.getJson('task:'+id,null);
     if(!task)return {ok:false};
-    task.status='completed';task.completedAt=Date.now();task.result=result;
+
+    const code=Number(result?.exitCode);
+    const attempts=Number(task.attempts)||1;
+    const retryable=[67,69,71,124,500,502,503,504].includes(code);
+    if(retryable&&attempts<2){
+      task.status='queued';
+      task.retryAfter=Date.now()+20000;
+      task.lastFailedAt=Date.now();
+      task.lastResult=result;
+      await this.setJson('task:'+id,task);
+      return {ok:true,task,retrying:true};
+    }
+
+    task.status='completed';
+    task.completedAt=Date.now();
+    task.result=result;
     await this.setJson('task:'+id,task);
-    return {ok:true,task};
+    return {ok:true,task,retrying:false};
   }
   async createGpuPair(meta={}){
     const now=Date.now();
@@ -2218,6 +2265,11 @@ export default {
         };
         const done=await q.completeTask(id,result);
         if(!done.ok)return json({ok:false,error:'Tarefa não encontrada.'},404,origin);
+        if(done.retrying){
+          await telegramSend(env,'↻ RETRY AUTOMÁTICO\n\n'+done.task.label+
+            '\n\nA tentativa '+String(done.task.attempts||1)+' falhou de forma recuperável. O Centro vai repetir automaticamente em ~20 segundos.');
+          return json({ok:true,retrying:true},200,origin);
+        }
         const output=(result.stdout||result.stderr||'(sem saída)').slice(0,2800);
         if(done.task.action==='council_run'){
           await telegramSend(env,result.exitCode===0?'✅ SALA DE CONSELHO CONCLUÍDA':'⚠️ SALA DE CONSELHO TERMINOU COM ERRO');
