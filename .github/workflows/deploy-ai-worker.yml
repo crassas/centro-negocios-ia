@@ -8,6 +8,10 @@ on:
       - "cloudflare-ai-worker/**"
       - ".github/workflows/deploy-ai-worker.yml"
 
+concurrency:
+  group: centro-worker-production
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -45,6 +49,12 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: "22"
+
+      - name: Test Worker before publication
+        if: steps.cloudflare.outputs.ready == 'true'
+        run: |
+          node --check cloudflare-ai-worker/src/index.js
+          node cloudflare-ai-worker/queue_selftest.mjs
 
       - name: Deploy Worker
         if: steps.cloudflare.outputs.ready == 'true'
