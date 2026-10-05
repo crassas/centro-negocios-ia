@@ -1151,6 +1151,7 @@ async function planRepoChange(env,project,prompt,providedContext=null){
     'Formato exacto: {"summary":"...","edits":[{"path":"...","operation":"replace|append|create","search":"...","content":"..."}]}.',
     'Faz alterações mínimas, profissionais e coerentes com o código existente.',
     'Para operation=replace, search tem de ser uma sequência EXACTA e suficientemente específica copiada literalmente de um dos ficheiros fornecidos; deve ocorrer uma única vez.',
+    'Mantém cada search curto e único (idealmente abaixo de 900 caracteres) e cada content apenas com o bloco necessário, para evitar respostas truncadas.',
     'Para operation=append, deixa search vazio e usa apenas quando um override/adendo no fim do ficheiro é tecnicamente correcto.',
     'Para operation=create, o path tem de ser novo.',
     'Nunca edites .env, secrets, credenciais, chaves, .git ou .github/workflows.',
@@ -1169,15 +1170,19 @@ async function planRepoChange(env,project,prompt,providedContext=null){
   ];
 
   const errors=[];
+  // JSON Schema só é usado no modelo que a Cloudflare documenta como
+  // compatível com JSON Mode. Qwen/GLM/Mistral ficam em JSON textual para
+  // evitar falhas 500 por response_format não suportado.
   const attempts=[
-    [QWEN_MODEL,true],
-    [MODEL,true],
-    [FAST_MODEL,false]
+    [MODEL,true,2800],
+    [QWEN_MODEL,false,2600],
+    [FAST_MODEL,false,2200],
+    [MISTRAL_MODEL,false,2200]
   ];
 
-  for(const [model,useSchema] of attempts){
+  for(const [model,useSchema,maxTokens] of attempts){
     try{
-      const plan=await runRepoPlannerModel(env,model,messages,1600,useSchema);
+      const plan=await runRepoPlannerModel(env,model,messages,maxTokens,useSchema);
       if(validRepoEditPlan(plan)){
         return {
           ok:true,
