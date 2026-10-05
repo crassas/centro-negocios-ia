@@ -552,7 +552,9 @@ def main():
 
         server_active, server_pid = pid_running(SERVER_PID_FILE)
         healthy = server_active and server_healthy() and not server_stale()
-        if not healthy:
+        # Uma resposta health lenta não autoriza interromper uma tarefa válida.
+        # Execuções expiradas continuam abrangidas pela recuperação aos 960 s.
+        if not healthy and not (server_active and server_busy() and not server_stale()):
             ok, output = run_ctl(SERVER_CTL, "restart" if server_active else "start")
             actions.append({"service": "server", "ok": ok, "output": output})
             time.sleep(2)

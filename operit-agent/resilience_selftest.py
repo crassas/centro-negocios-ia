@@ -56,6 +56,25 @@ def main():
         assert agent.work_once("dummy")
         assert executed==["test-delivery"] and len(delivered)==2 and not agent.OUTBOX_FILE.exists()
         print("OK outbox survives upload failure without re-execution")
+        original_save=agent.save_outbox
+        save_calls=[]
+        def unreliable_save(payload):
+            save_calls.append(payload["id"])
+            if len(save_calls)==1:
+                raise OSError(38,"PRoot transient filesystem failure")
+            original_save(payload)
+        agent.save_outbox=unreliable_save
+        executed.clear();delivered.clear()
+        try:agent.work_once("dummy")
+        except OSError:pass
+        else:raise AssertionError("expected filesystem failure")
+        assert agent.PENDING_RESULT["id"]=="test-delivery"
+        assert agent.work_once("dummy")
+        assert executed==["test-delivery"] and delivered==["test-delivery"]
+        assert agent.PENDING_RESULT is None and not agent.OUTBOX_FILE.exists()
+        agent.save_outbox=original_save
+        print("OK filesystem retry retains result without pulling or re-executing")
+
         station.SERVER_BUSY_FILE=root/"busy.json"
         station.SERVER_BUSY_FILE.write_text(json.dumps({"pid":os.getpid(),"startedAt":time.time()-1000}))
         assert station.server_stale() and not station.server_busy()

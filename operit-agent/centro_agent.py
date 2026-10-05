@@ -19,6 +19,7 @@ TOKEN_FILE = STATE_DIR / "token"
 OLLAMA_KEY_FILE = STATE_DIR / "ollama_api_key"
 SERVER_TOKEN_FILE = HOME / ".centro-server" / "token"
 OUTBOX_FILE = STATE_DIR / "result-outbox.json"
+PENDING_RESULT = None
 POLL_SECONDS = 2
 CMD_TIMEOUT = 120
 CLAUDE_TIMEOUT = 300
@@ -325,6 +326,14 @@ def flush_outbox(token):
 
 
 def work_once(token):
+    global PENDING_RESULT
+    # Retém o resultado se o filesystem PRoot recusar temporariamente a escrita.
+    # Antes de pedir outra tarefa, repete apenas a persistência e a entrega.
+    if PENDING_RESULT is not None:
+        save_outbox(PENDING_RESULT)
+        PENDING_RESULT = None
+        flush_outbox(token)
+        return True
     if flush_outbox(token):
         return True
     response = api("/api/operit/pull", token=token)
@@ -333,8 +342,10 @@ def work_once(token):
         return False
     print(f"[{task['id']}] {task.get('label', task.get('action'))}", flush=True)
     exit_code, stdout, stderr, duration = execute(task)
-    save_outbox({"id": task["id"], "exitCode": exit_code, "stdout": stdout,
-                 "stderr": stderr, "durationMs": duration, "attempt": int(task.get("attempts") or 1)})
+    PENDING_RESULT = {"id": task["id"], "exitCode": exit_code, "stdout": stdout,
+                      "stderr": stderr, "durationMs": duration, "attempt": int(task.get("attempts") or 1)}
+    save_outbox(PENDING_RESULT)
+    PENDING_RESULT = None
     flush_outbox(token)
     return True
 
