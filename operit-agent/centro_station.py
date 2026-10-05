@@ -52,6 +52,13 @@ RUNTIME_FILES = {
     "centro_server.py": HOME / "centro_server.py",
     "centro_agent.py": HOME / "centro_agent.py",
     "centro_station.py": SUPERVISOR_PATH,
+    "centroctl.sh": AGENT_CTL,
+    "serverctl.sh": SERVER_CTL,
+    "stationctl.sh": locate_ctl("centrostation"),
+    "openclawctl.sh": OPENCLAW_CTL,
+    "layactl.sh": LAYA_CTL,
+    "install_laya.sh": locate_ctl("layainstall"),
+    "operit-workflows/centro-station-resilience.json": HOME / "centro-station-resilience.json",
 }
 
 
@@ -315,12 +322,50 @@ def download_runtime(name):
         return res.read().decode("utf-8")
 
 
-def atomic_write(path, text):
+def atomic_write(path, text, mode=0o700):
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".centro-new")
     tmp.write_text(text, encoding="utf-8")
-    os.chmod(tmp, 0o700)
+    os.chmod(tmp, mode)
     tmp.replace(path)
+
+
+def validate_runtime_text(name, text, dest):
+    if name.endswith(".py"):
+        compile(text, str(dest), "exec")
+        return
+    if name.endswith(".json"):
+        json.loads(text)
+        return
+    if name.endswith(".sh"):
+        check = subprocess.run(
+            ["sh", "-n"],
+            input=text,
+            text=True,
+            capture_output=True,
+            timeout=15,
+            check=False,
+        )
+        if check.returncode != 0:
+            raise RuntimeError((check.stderr or check.stdout or "shell inválido")[-500:])
+
+
+def sync_operit_workflow(local_path):
+    copied = ""
+    for storage_root in (Path("/sdcard"), Path("/storage/emulated/0")):
+        download = storage_root / "Download"
+        if not download.is_dir():
+            continue
+        dest_dir = download / "Operit" / "workflow"
+        try:
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest = dest_dir / "centro-station-resilience.json"
+            dest.write_text(local_path.read_text(encoding="utf-8"), encoding="utf-8")
+            copied = str(dest)
+            break
+        except Exception:
+            continue
+    return copied
 
 
 def sync_runtime():
@@ -333,11 +378,14 @@ def sync_runtime():
     for name, dest in RUNTIME_FILES.items():
         try:
             remote = download_runtime(name)
-            compile(remote, str(dest), "exec")
+            validate_runtime_text(name, remote, dest)
             current = dest.read_text(encoding="utf-8") if dest.exists() else ""
             if current == remote:
                 continue
-            atomic_write(dest, remote)
+            mode = 0o600 if name.endswith(".json") else 0o700
+            atomic_write(dest, remote, mode=mode)
+            if name.endswith("centro-station-resilience.json"):
+                sync_operit_workflow(dest)
             changed.append(name)
         except Exception as exc:
             errors.append(name + ": " + str(exc)[:300])
