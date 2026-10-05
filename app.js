@@ -146,13 +146,14 @@ function ageLabel(value){
 }
 
 
+const DEFAULT_PANEL='agentes';
 const PANEL_NAMES={
   agentes:'SALA DOS AGENTES',visao:'PAINEL',assistente:'AUTOMAÇÃO & IA',radar:'OPORTUNIDADES',sites:'SITES',crm:'CLIENTES',
   leads:'LEADS',caixa:'FINANCEIRO',seo:'OPORTUNIDADES SEO',cofre:'COFRE',ferramentas:'DEFINIÇÕES'
 };
 function openPanel(id,options={}){
   const target=document.querySelector('[data-panel="'+id+'"]');
-  if(!target)id='visao';
+  if(!target)id=DEFAULT_PANEL;
   document.querySelectorAll('.panel-view').forEach(panel=>panel.classList.toggle('is-active',panel.dataset.panel===id));
   document.querySelectorAll('[data-panel-target]').forEach(control=>control.classList.toggle('active',control.dataset.panelTarget===id));
   if($('active-panel-name'))$('active-panel-name').textContent=PANEL_NAMES[id]||String(id).toUpperCase();
@@ -172,10 +173,10 @@ function setupPanelNavigation(){
   $('return-top')?.addEventListener('click',()=>openPanel('visao'));
   window.addEventListener('popstate',()=>{
     const id=location.hash.replace('#','');
-    openPanel(PANEL_NAMES[id]?id:'visao',{instant:true,history:false});
+    openPanel(PANEL_NAMES[id]?id:DEFAULT_PANEL,{instant:true,history:false});
   });
   const initial=location.hash.replace('#','');
-  openPanel(PANEL_NAMES[initial]?initial:'visao',{instant:true,history:false});
+  openPanel(PANEL_NAMES[initial]?initial:DEFAULT_PANEL,{instant:true,history:false});
 }
 function startDictation(targetId){
   const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -942,16 +943,28 @@ function renderExecutions(payload){
       '</article>';
   }).join('');
 }
-async function loadExecutions(){
-  if(!$('execution-list'))return;
-  try{
-    const data=await aiFetch('/api/executions?limit=20',{method:'GET',headers:{}});
-    renderExecutions(data);
-    window.CentroRoom?.update(data);
-  }catch(err){
-    window.CentroRoom?.offline();
-    const summary=$('execution-summary');if(summary)summary.textContent='SEM LIGAÇÃO';
-  }
+let executionPollInFlight=null;
+let executionPollFailures=0;
+let executionNextPollAt=0;
+function loadExecutions(force=false){
+  if(!$('execution-list')||(!force&&document.hidden))return Promise.resolve();
+  if(executionPollInFlight)return executionPollInFlight;
+  if(!force&&Date.now()<executionNextPollAt)return Promise.resolve();
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),12000);
+  executionPollInFlight=(async()=>{
+    try{
+      const data=await aiFetch('/api/executions?limit=20',{method:'GET',headers:{},signal:controller.signal});
+      executionPollFailures=0;executionNextPollAt=0;
+      renderExecutions(data);window.CentroRoom?.update(data);
+    }catch(err){
+      executionPollFailures=Math.min(5,executionPollFailures+1);
+      executionNextPollAt=Date.now()+Math.min(30000,3000*2**executionPollFailures);
+      window.CentroRoom?.offline();
+      const summary=$('execution-summary');if(summary)summary.textContent='SEM LIGAÇÃO';
+    }finally{clearTimeout(timer);}
+  })().finally(()=>{executionPollInFlight=null;});
+  return executionPollInFlight;
 }
 
 function renderSystem(){
@@ -962,7 +975,8 @@ function renderSystem(){
 
 function setupEvents(){
   setupPanelNavigation();
-  $('room-refresh')?.addEventListener('click',loadExecutions);
+  $('room-refresh')?.addEventListener('click',()=>loadExecutions(true));
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadExecutions(true);});
   document.addEventListener('centro-room-open',e=>{if(PANEL_NAMES[e.detail])openPanel(e.detail);});
   $('room-talk-form')?.addEventListener('submit',async e=>{
     e.preventDefault();const input=$('room-talk-input'),button=$('room-talk-send'),reply=$('room-reply');
@@ -1079,4 +1093,5 @@ document.addEventListener('DOMContentLoaded',()=>{
   setInterval(()=>loadExecutions(),3000);
   loadLive();
 });
+
 

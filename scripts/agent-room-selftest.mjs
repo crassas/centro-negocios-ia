@@ -7,6 +7,12 @@ const context={window:{},document:{addEventListener(){},getElementById(id){retur
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(new URL('../agent-room.js',import.meta.url),'utf8'),context);
 const room=context.window.CentroRoom;
+assert.equal(room.summary().running,null);
+room.update({executions:[],stats:{running:2,queued:3}});
+assert.equal(room.summary().running,2);
+assert.equal(room.summary().queued,3);
+room.offline();
+assert.equal(room.summary().running,null);
 const executor={id:'executor',home:[15,77],match:()=>true};
 const planner={id:'claude',home:[62,77],match:r=>r.action==='repo_change'};
 assert.equal(room.model(executor).state,'unknown');
@@ -45,3 +51,4 @@ room.setConversationBusy(false);
 assert.equal(room.model(planner).state,'idle');
 room.setFinance({balance:0,income:0,expense:0,pending:25});
 console.log('PASS: routing, live task priority, short speech, failures, connection loss, finance and movement bounds');
+
