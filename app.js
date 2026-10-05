@@ -602,6 +602,7 @@ function pendingPaymentTotals(){
   return {count:pending.length,total:pending.reduce((sum,p)=>sum+Math.abs(Number(p.amount)||0),0)};
 }
 function renderPayments(){
+  syncRoomFinance();
   if(!Array.isArray(state.pendingPayments))state.pendingPayments=[];
   const totals=pendingPaymentTotals();
   if($('payment-pending-total'))$('payment-pending-total').textContent=fmtMoney(totals.total);
@@ -625,7 +626,11 @@ function renderPayments(){
 }
 
 function financeTotals(){return state.transactions.reduce((a,t)=>{const n=Math.abs(Number(t.amount)||0);if(t.type==='income')a.income+=n;else a.expense+=n;a.balance=a.income-a.expense;return a;},{income:0,expense:0,balance:0});}
+function syncRoomFinance(){
+  window.CentroRoom?.setFinance({...financeTotals(),pending:pendingPaymentTotals().total});
+}
 function renderFinance(){
+  syncRoomFinance();
   const t=financeTotals();$('finance-income').textContent=fmtMoney(t.income);$('finance-expense').textContent=fmtMoney(t.expense);$('finance-balance').textContent=fmtMoney(t.balance);
   const tbody=$('finance-table');
   if(!state.transactions.length){tbody.innerHTML='<tr><td colspan="7" class="empty-cell">Sem movimentos registados.</td></tr>';renderLocalSummary();return;}
@@ -958,6 +963,17 @@ function renderSystem(){
 function setupEvents(){
   setupPanelNavigation();
   $('room-refresh')?.addEventListener('click',loadExecutions);
+  document.addEventListener('centro-room-open',e=>{if(PANEL_NAMES[e.detail])openPanel(e.detail);});
+  $('room-talk-form')?.addEventListener('submit',async e=>{
+    e.preventDefault();const input=$('room-talk-input'),button=$('room-talk-send'),reply=$('room-reply');
+    const question=input.value.trim();if(!question||button.disabled)return;
+    button.disabled=true;reply.textContent='Vou analisar o pedido.';
+    try{
+      await askAI(question+'\nResponde em português de Portugal, em até 3 frases curtas. Não afirmes que executaste alterações sem provas.');
+      const full=$('ai-answer').textContent.trim();reply.textContent=full.length>360?full.slice(0,357)+'…':full;
+    }catch{reply.textContent='Não consegui receber a resposta. Tenta novamente.';}
+    finally{button.disabled=false;}
+  });
   $('refresh-btn').addEventListener('click',loadLive);
   $('backup-top-btn').addEventListener('click',exportBackup);
   $('export-backup').addEventListener('click',exportBackup);
@@ -1063,3 +1079,4 @@ document.addEventListener('DOMContentLoaded',()=>{
   setInterval(()=>loadExecutions(),3000);
   loadLive();
 });
+

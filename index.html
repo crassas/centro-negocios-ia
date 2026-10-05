@@ -145,9 +145,21 @@
       </section>
 
       <section class="panel-view" id="agentes" data-panel="agentes">
-        <div class="room-heading"><div><span class="room-eyebrow">CENTRO DE NEGÓCIOS · OPERAÇÃO</span><h1>A tua equipa, em acção.</h1><p>Uma sala para acompanhar o trabalho. Toca num agente para ver a actividade.</p></div><button class="btn" id="room-refresh" type="button">↻ Actualizar</button></div>
-        <div class="room-layout"><article class="agent-office"><div class="office-top"><span>◈ SALA DOS AGENTES</span><small id="room-sync">A receber dados…</small></div><div class="office-floor"><div class="office-window"></div><div class="office-board"><b>CENTRO</b><span>Ideias → execução</span></div><div class="office-plant plant-one">♣</div><div class="office-plant plant-two">♣</div><div class="office-rug"></div><div id="room-stations"></div><div class="office-door"><span>OPERAÇÃO</span></div></div><div class="room-legend"><span><i data-state="working"></i>A trabalhar</span><span><i data-state="waiting"></i>Na fila</span><span><i data-state="error"></i>Erro</span><span><i data-state="unknown"></i>Sem ligação</span></div></article><aside class="room-detail" id="room-detail"></aside></div>
-        <article class="room-activity"><div><span class="room-eyebrow">REGISTO REAL</span><h2>O que está a acontecer</h2></div><ul id="room-feed"></ul><button class="text-link" data-panel-target="ferramentas" type="button">Ver execuções completas →</button></article>
+        <div class="room-heading"><div><span class="room-eyebrow">A TUA EQUIPA DIGITAL</span><h1>O trabalho ganha vida.</h1><p>Projectos, planos e caixa. Tudo na mesma sala.</p></div><button class="btn" id="room-refresh" type="button">↻ Actualizar</button></div>
+        <div class="room-layout"><article class="agent-office"><div class="office-top"><span>◈ CENTRO DE NEGÓCIOS</span><small id="room-sync">A receber dados…</small></div>
+          <div class="office-floor office-expanded">
+            <div class="office-window"></div><div class="office-board"><b>CENTRO</b><span>Ideias → execução</span></div>
+            <div class="office-zone zone-github"><button class="room-centre" type="button" data-room-centre="github"><span class="zone-title">GITHUB</span><span class="pixel-server"><i></i><i></i><i></i></span><small>5 projectos ↗</small></button></div>
+            <div class="office-zone zone-plan"><button class="room-centre" type="button" data-room-centre="plan"><span class="zone-title">PLANEAMENTO</span><span class="pixel-plan-table"><span class="pixel-sheet">▤</span><span class="pixel-pencil"></span></span><small>Ideias e propostas</small></button></div>
+            <div class="office-zone zone-finance"><button class="room-centre" type="button" data-room-centre="finance"><span class="zone-title">CAIXA</span><span class="pixel-safe"><i>€</i></span><small id="room-cash-value">Sem leitura</small></button></div>
+            <div class="office-corridor"><span>RECEBER → PLANEAR → EXECUTAR</span></div>
+            <div class="team-workbenches" aria-hidden="true"><span><i></i></span><span><i></i></span><span><i></i></span><span><i></i></span></div>
+            <div class="office-plant plant-one">♣</div><div class="office-plant plant-two">♣</div><div id="room-stations"></div><div class="office-door"><span>ENTRADA</span></div>
+          </div><div class="room-legend"><span><i data-state="working"></i>A trabalhar</span><span><i data-state="waiting"></i>Na fila</span><span><i data-state="error"></i>Precisa de atenção</span><span><i data-state="unknown"></i>Sem ligação</span></div>
+        </article><aside class="room-detail" id="room-detail"></aside></div>
+        <div class="room-bottom"><article class="room-conversation"><span class="room-eyebrow">FALA COM A EQUIPA</span><h2>O que fazemos a seguir?</h2><p id="room-reply" role="status" aria-live="polite">Diz o projecto e o objectivo. Respondo de forma curta.</p><form id="room-talk-form"><label class="sr-only" for="room-talk-input">Pedido à equipa</label><input id="room-talk-input" required maxlength="2000" placeholder="Ex.: analisa a Pentehouse e propõe 3 melhorias"><button type="submit" id="room-talk-send" aria-label="Enviar pedido">↑</button></form><button class="text-link" data-panel-target="assistente" type="button">Ver resposta completa e propostas →</button></article>
+        <article class="room-activity"><div><span class="room-eyebrow">ACTIVIDADE REAL</span><h2>Os últimos passos</h2></div><ul id="room-feed"></ul><button class="text-link" data-panel-target="ferramentas" type="button">Ver execuções →</button></article></div>
+        <p class="room-footnote">Os movimentos representam as tarefas registadas. O saldo corresponde aos registos locais da aplicação.</p>
       </section>
 
       <section class="panel-view" id="assistente" data-panel="assistente">
@@ -461,3 +473,4 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>
+

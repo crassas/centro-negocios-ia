@@ -1,0 +1,41 @@
+import vm from 'node:vm';
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+
+const sync={};
+const context={window:{},document:{addEventListener(){},getElementById(id){return id==='room-sync'?sync:null;}},Date,Intl};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(new URL('../agent-room.js',import.meta.url),'utf8'),context);
+const room=context.window.CentroRoom;
+const executor={id:'executor',home:[15,77],match:()=>true};
+const planner={id:'claude',home:[62,77],match:r=>r.action==='repo_change'};
+assert.equal(room.model(executor).state,'unknown');
+room.update({executions:[{action:'git_status',status:'running',id:'one'}]});
+assert.equal(room.model(executor).zone,'github');
+assert.equal(room.model(executor).state,'working');
+room.update({executions:[{action:'repo_change',status:'running',id:'two'}]});
+assert.equal(room.model(planner).zone,'plan');
+assert.ok(room.model(planner).speech.length<32);
+room.update({executions:[{action:'git_status',status:'completed',exitCode:0},{action:'git_status',status:'running',id:'active'}]});
+assert.equal(room.model(executor).task.id,'active','active work wins over recent completed history');
+room.update({executions:[{action:'git_status',status:'queued'}]});
+assert.equal(room.model(executor).zone,'queue');
+assert.equal(room.model(executor).state,'waiting');
+room.update({executions:[{status:'completed',exitCode:67}]});
+assert.equal(room.model(executor).state,'error');
+room.offline();
+assert.equal(room.model(executor).state,'unknown','connection loss must not show work as live');
+assert.equal(room.model(executor).task,null);
+room.update({executions:[]});
+assert.equal(room.model(executor).state,'idle');
+assert.equal(room.model(executor).task,null);
+assert.equal(room.destination(executor,{action:'payment_record'}),'finance');
+assert.equal(room.destination(executor,{action:'system_status'}),'queue');
+for(const zone of ['github','plan','finance','queue','home']){
+  for(const role of [executor,planner]){
+    const p=room.position(role,{zone});
+    assert.ok(p.every(n=>Number.isFinite(n)&&n>=0&&n<=100));
+  }
+}
+room.setFinance({balance:0,income:0,expense:0,pending:25});
+console.log('PASS: routing, live task priority, short speech, failures, connection loss, finance and movement bounds');

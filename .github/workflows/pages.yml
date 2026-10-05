@@ -30,6 +30,8 @@ jobs:
       - name: Verificar JavaScript
         run: |
           node --check app.js
+          node --check agent-room.js
+          node scripts/agent-room-selftest.mjs
           node --check scripts/monitor.mjs
           node -e "JSON.parse(require('fs').readFileSync('data/sites.json','utf8')); JSON.parse(require('fs').readFileSync('manifest.webmanifest','utf8'));"
       - name: Setup Pages

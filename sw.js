@@ -1,4 +1,4 @@
-const CACHE='centro-negocios-v11-agent-room';
+const CACHE='centro-negocios-v12-agent-world';
 const SHELL=['./','./index.html','./styles.css','./app.js','./agent-room.js','./agent-room.css','./manifest.webmanifest','./icon.svg','./data/sites.json'];
 
 self.addEventListener('install',event=>{
@@ -55,3 +55,4 @@ self.addEventListener('fetch',event=>{
     })
   );
 });
+
