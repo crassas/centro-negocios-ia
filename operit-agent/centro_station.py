@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -30,6 +31,10 @@ OPENCLAW_CTL = locate_ctl("openclawctl")
 LAYA_CTL = locate_ctl("layactl")
 OPENCLAW_HEALTH = "http://127.0.0.1:18789/healthz"
 LAYA_HEALTH = "http://127.0.0.1:18790/health"
+REMOTE_STATE_DIR = HOME / ".centro-remote"
+REMOTE_PID_FILE = REMOTE_STATE_DIR / "remote.pid"
+REMOTE_LOG_FILE = REMOTE_STATE_DIR / "remote.log"
+REMOTE_DEVICE_FILE = HOME / ".desktop-commander-device" / "device.json"
 INTERVAL = 3
 OPTIONAL_RETRY_SECONDS = 45
 AUTOUPDATE_INTERVAL_SECONDS = max(
@@ -39,6 +44,7 @@ AUTOUPDATE_INTERVAL_SECONDS = max(
 AUTOUPDATE_ENABLED = os.environ.get("CENTRO_AUTOUPDATE", "1").strip().lower() not in {"0", "false", "no", "off"}
 OPENCLAW_AUTOSTART = os.environ.get("CENTRO_OPENCLAW_AUTOSTART", "1").strip().lower() not in {"0", "false", "no", "off"}
 LAYA_AUTOSTART = os.environ.get("CENTRO_LAYA_AUTOSTART", "1").strip().lower() not in {"0", "false", "no", "off"}
+REMOTE_DESKTOP_AUTOSTART = os.environ.get("CENTRO_REMOTE_DESKTOP_AUTOSTART", "1").strip().lower() not in {"0", "false", "no", "off"}
 RAW_BASE = "https://raw.githubusercontent.com/crassas/centro-negocios-ia/main/operit-agent"
 RUNTIME_FILES = {
     "centro_server.py": HOME / "centro_server.py",
@@ -83,6 +89,86 @@ def laya_healthy():
             return res.status == 200
     except Exception:
         return False
+
+
+def process_alive(pid):
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except Exception:
+        return False
+
+
+def remote_desktop_pid():
+    try:
+        pid = int(REMOTE_PID_FILE.read_text(encoding="utf-8").strip())
+        if process_alive(pid):
+            return pid
+    except Exception:
+        pass
+
+    proc_root = Path("/proc")
+    try:
+        entries = list(proc_root.iterdir())
+    except Exception:
+        return None
+
+    for entry in entries:
+        if not entry.name.isdigit():
+            continue
+        try:
+            raw = (entry / "cmdline").read_bytes().replace(b"\x00", b" ")
+            cmd = raw.decode("utf-8", errors="replace").lower()
+        except Exception:
+            continue
+        if "desktop-commander" in cmd and " remote" in cmd:
+            pid = int(entry.name)
+            try:
+                REMOTE_STATE_DIR.mkdir(parents=True, exist_ok=True)
+                REMOTE_PID_FILE.write_text(str(pid), encoding="utf-8")
+            except Exception:
+                pass
+            return pid
+    return None
+
+
+def remote_desktop_healthy():
+    pid = remote_desktop_pid()
+    return bool(pid), pid
+
+
+def start_remote_desktop():
+    if not REMOTE_DEVICE_FILE.exists():
+        return False, "dispositivo ainda não emparelhado"
+
+    current = remote_desktop_pid()
+    if current:
+        return True, f"já activo · PID {current}"
+
+    binary = shutil.which("desktop-commander")
+    if binary:
+        command = [binary, "remote"]
+    else:
+        npx = shutil.which("npx")
+        if not npx:
+            return False, "falta desktop-commander e npx"
+        command = [npx, "-y", "@wonderwhy-er/desktop-commander@latest", "remote"]
+
+    try:
+        REMOTE_STATE_DIR.mkdir(parents=True, exist_ok=True)
+        log = REMOTE_LOG_FILE.open("ab", buffering=0)
+        proc = subprocess.Popen(
+            command,
+            cwd=str(HOME),
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        REMOTE_PID_FILE.write_text(str(proc.pid), encoding="utf-8")
+        return True, f"arranque solicitado · PID {proc.pid}"
+    except Exception as exc:
+        return False, str(exc)
 
 
 def run_ctl(path, command):
@@ -157,6 +243,7 @@ def main():
     print("Centro Station supervisor activo. Ctrl+C para parar.", flush=True)
     last_openclaw_attempt = 0
     last_laya_attempt = 0
+    last_remote_attempt = 0
     last_update_attempt = 0
     last_update_ok = 0
     last_update_error = ""
@@ -260,6 +347,20 @@ def main():
             except Exception as exc:
                 actions.append({"service": "laya", "ok": False, "output": str(exc)})
 
+        remote_ok, remote_pid = remote_desktop_healthy()
+        if (
+            REMOTE_DESKTOP_AUTOSTART
+            and not remote_ok
+            and REMOTE_DEVICE_FILE.exists()
+            and now - last_remote_attempt >= OPTIONAL_RETRY_SECONDS
+        ):
+            last_remote_attempt = now
+            ok, output = start_remote_desktop()
+            actions.append({"service": "remote-desktop", "ok": ok, "output": output})
+            if ok:
+                time.sleep(2)
+                remote_ok, remote_pid = remote_desktop_healthy()
+
         write_status({
             "ok": bool(healthy and agent_active),
             "timestamp": now,
@@ -281,6 +382,12 @@ def main():
                 "healthy": laya_ok,
                 "autostart": LAYA_AUTOSTART,
                 "endpoint": "127.0.0.1:18790",
+            },
+            "remoteDesktop": {
+                "healthy": remote_ok,
+                "autostart": REMOTE_DESKTOP_AUTOSTART,
+                "configured": REMOTE_DEVICE_FILE.exists(),
+                "pid": remote_pid,
             },
             "autoupdate": {
                 "enabled": AUTOUPDATE_ENABLED,
