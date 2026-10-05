@@ -1,4 +1,4 @@
-const CACHE='centro-negocios-v7-presentation-ui';
+const CACHE='centro-negocios-v8-seo-opportunities';
 const SHELL=['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./icon.svg','./data/sites.json'];
 
 self.addEventListener('install',event=>{
