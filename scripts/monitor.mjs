@@ -97,14 +97,47 @@ async function pageSnapshot(url){
 }
 async function endpoint(url){try{const x=await fetchTimed(url,{accept:'application/xml,text/plain,text/html,*/*'});return {ok:x.res.ok,status:x.res.status,text:x.res.ok?await x.res.text():''};}catch(e){return {ok:false,status:null,text:'',error:e.name==='AbortError'?'timeout':String(e.message||e)};}}
 function sameCanonical(canonical,finalUrl){try{const a=new URL(canonical,finalUrl);const b=new URL(finalUrl);return a.origin===b.origin;}catch{return false;}}
+function normalizePageUrl(value,base=''){
+  try{
+    const u=new URL(value,base||undefined);
+    u.hash='';
+    u.search='';
+    const path=(u.pathname||'/').replace(/\/+$/,'')||'/';
+    return u.protocol.toLowerCase()+'//'+u.hostname.toLowerCase()+(u.port?':'+u.port:'')+path;
+  }catch{return '';}
+}
+function sameCanonicalPage(canonical,finalUrl){
+  const a=normalizePageUrl(canonical,finalUrl),b=normalizePageUrl(finalUrl);
+  return Boolean(a&&b&&a===b);
+}
+async function inspectHttpVariant(url){
+  try{
+    const original=new URL(url);
+    if(original.protocol!=='https:')return null;
+    const httpUrl=new URL(url);httpUrl.protocol='http:';
+    const probe=await fetchTimed(httpUrl.href,{accept:'text/html,application/xhtml+xml'});
+    const finalUrl=probe.res.url||'';
+    const final=new URL(finalUrl);
+    return {
+      requestedUrl:httpUrl.href,
+      status:probe.res.status,
+      ok:probe.res.ok,
+      finalUrl,
+      redirected:normalizePageUrl(httpUrl.href)!==normalizePageUrl(finalUrl),
+      redirectedToHttps:final.protocol==='https:'&&final.hostname.toLowerCase()===original.hostname.toLowerCase()
+    };
+  }catch(error){
+    return {requestedUrl:String(url||'').replace(/^https:/i,'http:'),status:null,ok:false,finalUrl:'',redirected:false,redirectedToHttps:false,error:String(error?.message||error)};
+  }
+}
 async function inspect(site){
-  const base={id:site.id,name:site.name,url:site.url,area:site.area||'',checkedAt:now,online:false,status:null,responseTimeMs:null,renderMode:'html',finalUrl:null,title:'',description:'',h1Count:0,firstH1:'',canonical:'',robotsMeta:'',schemaCount:0,sitemapUrls:null,checks:{title:false,description:false,h1:false,canonical:false,robots:false,sitemap:false,schema:false},issues:[]};
+  const base={id:site.id,name:site.name,url:site.url,area:site.area||'',checkedAt:now,online:false,status:null,responseTimeMs:null,renderMode:'html',finalUrl:null,title:'',description:'',h1Count:0,firstH1:'',canonical:'',robotsMeta:'',schemaCount:0,sitemapUrls:null,httpVariant:null,checks:{title:false,description:false,h1:false,canonical:false,canonicalSelf:false,robots:false,sitemap:false,schema:false},issues:[],seoSignals:[]};
   try{
     const snap=await pageSnapshot(site.url);base.status=snap.status;base.responseTimeMs=snap.responseTimeMs;base.renderMode=snap.renderMode;base.finalUrl=snap.finalUrl;base.online=snap.ok;Object.assign(base,snap.extracted);
     const normalized=snap.html.replace(/\s+/g,' ').trim();base.contentHash=crypto.createHash('sha256').update(normalized).digest('hex');const prev=previousById.get(site.id);base.changed=prev&&prev.contentHash?prev.contentHash!==base.contentHash:null;base.changedAt=base.changed===true?now:(prev&&prev.changedAt)||null;
-    const origin=new URL(base.finalUrl||site.url).origin;const [robots,sitemap]=await Promise.all([endpoint(origin+'/robots.txt'),endpoint(origin+'/sitemap.xml')]);base.robotsStatus=robots.status;base.sitemapStatus=sitemap.status;
+    const origin=new URL(base.finalUrl||site.url).origin;const [robots,sitemap,httpVariant]=await Promise.all([endpoint(origin+'/robots.txt'),endpoint(origin+'/sitemap.xml'),inspectHttpVariant(site.url)]);base.robotsStatus=robots.status;base.sitemapStatus=sitemap.status;base.httpVariant=httpVariant;
     if(sitemap.ok){base.sitemapUrls=(sitemap.text.match(/<url>/gi)||[]).length;if(base.sitemapUrls===0)base.sitemapUrls=(sitemap.text.match(/<sitemap>/gi)||[]).length;}
-    base.checks={title:Boolean(base.title),description:Boolean(base.description),h1:base.h1Count===1,canonical:Boolean(base.canonical)&&sameCanonical(base.canonical,base.finalUrl||site.url),robots:robots.ok,sitemap:sitemap.ok,schema:base.schemaCount>0};
+    base.checks={title:Boolean(base.title),description:Boolean(base.description),h1:base.h1Count===1,canonical:Boolean(base.canonical)&&sameCanonical(base.canonical,base.finalUrl||site.url),canonicalSelf:Boolean(base.canonical)&&sameCanonicalPage(base.canonical,base.finalUrl||site.url),robots:robots.ok,sitemap:sitemap.ok,schema:base.schemaCount>0};
     if(!base.online)base.issues.push({level:'danger',message:'Homepage respondeu HTTP '+base.status+'.'});
     if(!base.title)base.issues.push({level:'danger',message:'Title em falta na homepage.'});
     if(!base.description)base.issues.push({level:'warn',message:'Meta description em falta na homepage.'});
@@ -112,6 +145,14 @@ async function inspect(site){
     if(base.h1Count>1)base.issues.push({level:'warn',message:base.h1Count+' H1 detectados na homepage.'});
     if(!base.canonical)base.issues.push({level:'warn',message:'Canonical em falta na homepage.'});
     else if(!sameCanonical(base.canonical,base.finalUrl||site.url))base.issues.push({level:'warn',message:'Canonical aponta para outro domínio.'});
+    else if(!base.checks.canonicalSelf)base.issues.push({level:'warn',message:'Canonical não aponta para a própria homepage.'});
+    if(base.httpVariant){
+      if(base.httpVariant.redirectedToHttps&&base.checks.canonicalSelf){
+        base.seoSignals.push({level:'good',code:'http-duplicate-consolidated',message:'HTTP duplicado → HTTPS canonical correcto → sem intervenção necessária.'});
+      }else if(!base.httpVariant.redirectedToHttps){
+        base.issues.push({level:'warn',message:'A versão HTTP não consolidou automaticamente na versão HTTPS.'});
+      }
+    }
     if(/noindex/i.test(base.robotsMeta))base.issues.push({level:'danger',message:'Meta robots contém noindex.'});
     if(!robots.ok)base.issues.push({level:'warn',message:'robots.txt não respondeu com sucesso.'});
     if(!sitemap.ok)base.issues.push({level:'warn',message:'sitemap.xml não respondeu com sucesso.'});
