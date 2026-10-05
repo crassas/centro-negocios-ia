@@ -13,6 +13,7 @@ from pathlib import Path
 HOME = Path.home()
 STATE_DIR = HOME / ".centro-station"
 STATUS_FILE = STATE_DIR / "status.json"
+HEARTBEAT_FILE = STATE_DIR / "heartbeat"
 SERVER_PID_FILE = HOME / ".centro-server" / "server.pid"
 AGENT_PID_FILE = HOME / ".centro-agent" / "agent.pid"
 SERVER_BUSY_FILE = HOME / ".centro-server" / "busy.json"
@@ -418,6 +419,19 @@ def sync_runtime():
     return changed, errors
 
 
+def write_heartbeat():
+    """Sinal mínimo para o WorkManager distinguir processo vivo de PID fantasma."""
+    try:
+        safe_mkdir(STATE_DIR)
+        tmp = HEARTBEAT_FILE.with_suffix(".tmp")
+        tmp.write_text(str(int(time.time())), encoding="utf-8")
+        tmp.replace(HEARTBEAT_FILE)
+        return True
+    except OSError as exc:
+        print(f"[auto] heartbeat · FALHA TRANSITÓRIA · {exc}", flush=True)
+        return False
+
+
 def write_status(payload):
     # Estado é telemetria; uma falha transitória do PRoot nunca pode matar
     # o supervisor. Se nem o directório existente estiver utilizável, regista
@@ -448,6 +462,7 @@ def main():
 
     while True:
         now = int(time.time())
+        write_heartbeat()
         actions = []
         reexec_station = False
         busy = server_busy()
