@@ -160,6 +160,7 @@
             <button type="button" data-ai-question="Procura sinais para futuras prospecções e propõe oportunidades concretas." class="ai-chip">PROSPECÇÃO</button>
             <button type="button" data-ai-question="Faz um relatório executivo curto, com factos, riscos e próximos passos." class="ai-chip">RELATÓRIO</button>
             <button type="button" data-ai-question="Procura conexões invisíveis entre sites, CRM, leads e Search Console." class="ai-chip">CONEXÕES</button>
+            <button type="button" data-ai-question="Analisa as oportunidades do Search Console. Prioriza quick wins, CTR desperdiçado e consultas entre as posições 4 e 20. Dá-me alterações concretas sem keyword stuffing." class="ai-chip">SEO WINS</button>
             <button class="ai-chip subtle" id="ai-clear-btn" type="button">LIMPAR</button>
           </div>
         </div>
@@ -267,12 +268,77 @@
       </section>
 
       <section class="panel-view" id="seo" data-panel="seo">
-        <div class="panel-title"><div><span class="sys-label">GOOGLE SEARCH CONSOLE</span><h1>SEARCH INTELLIGENCE</h1></div><button class="btn ghost" id="clear-gsc-btn" type="button">Remover importação</button></div>
-        <div class="upload-row">
-          <label class="drop compact"><input id="gsc-input" type="file" accept=".csv,text/csv"><strong>IMPORTAR CSV</strong><span id="gsc-file-label">Nenhum ficheiro carregado</span></label>
-          <div class="mini-kpis"><div><b id="gsc-clicks">—</b><span>Cliques</span></div><div><b id="gsc-impressions">—</b><span>Impressões</span></div><div><b id="gsc-ctr">—</b><span>CTR</span></div><div><b id="gsc-position">—</b><span>Posição média</span></div></div>
+        <div class="panel-title">
+          <div>
+            <span class="sys-label">GOOGLE SEARCH CONSOLE + OPPORTUNITY ENGINE</span>
+            <h1>OPORTUNIDADES SEO</h1>
+            <p>Importa as consultas do Search Console. O Centro cruza posição, impressões e CTR e transforma os dados em próximas acções.</p>
+          </div>
+          <button class="btn ghost" id="clear-gsc-btn" type="button">Remover importação</button>
         </div>
-        <div class="table-wrap"><table><thead><tr><th>Consulta</th><th>Cliques</th><th>Impressões</th><th>CTR</th><th>Posição</th></tr></thead><tbody id="gsc-table"><tr><td colspan="5" class="empty-cell">Importa a tabela de desempenho do Search Console.</td></tr></tbody></table></div>
+
+        <div class="search-context-bar">
+          <label class="search-context-field">
+            <span>Projecto alvo</span>
+            <select id="gsc-project">
+              <option value="">Escolher projecto</option>
+              <option value="pentehouse">Pentehouse Barbearia</option>
+              <option value="best-pizza">Best Pizza &amp; Kebab</option>
+              <option value="dois-irmaos">2 Irmãos</option>
+              <option value="engomadoria">Engomadoria Beatriz</option>
+            </select>
+          </label>
+          <label class="search-context-field">
+            <span>Mostrar</span>
+            <select id="gsc-opportunity-filter">
+              <option value="all">Todas as oportunidades</option>
+              <option value="high">Prioridade alta</option>
+              <option value="quick">Quick wins · posições 4–20</option>
+              <option value="ctr">CTR a perder cliques</option>
+            </select>
+          </label>
+          <button class="btn search-export-btn" id="gsc-export-opportunities" type="button">Exportar oportunidades</button>
+        </div>
+
+        <div class="upload-row">
+          <label class="drop compact">
+            <input id="gsc-input" type="file" accept=".csv,text/csv">
+            <strong>IMPORTAR CSV DO GSC</strong>
+            <span id="gsc-file-label">Nenhum ficheiro carregado</span>
+          </label>
+          <div class="mini-kpis">
+            <div><b id="gsc-clicks">—</b><span>Cliques</span></div>
+            <div><b id="gsc-impressions">—</b><span>Impressões</span></div>
+            <div><b id="gsc-ctr">—</b><span>CTR</span></div>
+            <div><b id="gsc-position">—</b><span>Posição média</span></div>
+          </div>
+        </div>
+
+        <div class="seo-score-strip" aria-label="Resumo de oportunidades">
+          <article><span>OPP</span><b id="gsc-opportunity-count">—</b><small>oportunidades</small></article>
+          <article><span>HIGH</span><b id="gsc-high-count">—</b><small>prioridade alta</small></article>
+          <article><span>QW</span><b id="gsc-quick-count">—</b><small>quick wins</small></article>
+          <article><span>MAX</span><b id="gsc-top-score">—</b><small>melhor score</small></article>
+        </div>
+
+        <div class="seo-opportunity-head">
+          <div><span class="sys-label">DECISION LAYER</span><h2>Onde mexer primeiro</h2></div>
+          <small>Score interno 0–100 · não é uma métrica do Google</small>
+        </div>
+        <div id="gsc-opportunity-list" class="seo-opportunity-grid">
+          <div class="empty seo-empty">Importa a tabela de Consultas do Search Console para gerar oportunidades.</div>
+        </div>
+
+        <div class="raw-query-head">
+          <div><span class="sys-label">RAW SIGNAL</span><h2>Consultas detectadas</h2></div>
+          <small>Ordenadas pela oportunidade calculada</small>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Consulta</th><th>Score</th><th>Cliques</th><th>Impressões</th><th>CTR</th><th>Posição</th></tr></thead>
+            <tbody id="gsc-table"><tr><td colspan="6" class="empty-cell">Importa a tabela de Consultas do Search Console.</td></tr></tbody>
+          </table>
+        </div>
       </section>
 
       <section class="panel-view" id="cofre" data-panel="cofre">
@@ -344,7 +410,7 @@
   <button class="active" data-panel-target="visao"><b>⌂</b><span>Comando</span></button>
   <button data-panel-target="assistente"><b>AI</b><span>IA</span></button>
   <button data-panel-target="radar"><b>◎</b><span>Radar</span></button>
-  <button data-panel-target="crm"><b>▦</b><span>CRM</span></button>
+  <button data-panel-target="seo"><b>⌖</b><span>SEO</span></button>
   <button data-panel-target="sites"><b>◫</b><span>Sites</span></button>
 </nav>
 
