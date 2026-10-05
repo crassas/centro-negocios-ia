@@ -43,6 +43,39 @@ export class TaskQueue extends DurableObject {
     const saved=await this.getJson('device:tokenHash','');
     return Boolean(saved&&hash&&saved===hash);
   }
+  async createGscPair(){
+    const active=await this.getJson('gsc:pair:active',null);
+    const now=Date.now();
+    if(active&&active.expiresAt>now&&active.status==='pending')return {id:active.id,expiresAt:active.expiresAt};
+    const id=crypto.randomUUID().replaceAll('-','').slice(0,12);
+    const bytes=crypto.getRandomValues(new Uint8Array(32));
+    const token=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
+    const pair={id,token,status:'pending',createdAt:now,expiresAt:now+10*60*1000};
+    await this.setJson('gsc:pair:active',pair);
+    return {id,expiresAt:pair.expiresAt};
+  }
+  async resolveGscPair(id,approved){
+    const pair=await this.getJson('gsc:pair:active',null);
+    if(!pair||pair.id!==id||pair.expiresAt<Date.now())return {ok:false};
+    pair.status=approved?'approved':'rejected';
+    if(approved){
+      const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pair.token));
+      pair.tokenHash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+      await this.setJson('gsc:device:tokenHash',pair.tokenHash);
+    }
+    await this.setJson('gsc:pair:active',pair);
+    return {ok:true,status:pair.status};
+  }
+  async gscPairStatus(id){
+    const pair=await this.getJson('gsc:pair:active',null);
+    if(!pair||pair.id!==id)return {status:'missing'};
+    if(pair.expiresAt<Date.now())return {status:'expired'};
+    return {status:pair.status,token:pair.status==='approved'?pair.token:undefined,expiresAt:pair.expiresAt};
+  }
+  async authenticateGsc(hash){
+    const saved=await this.getJson('gsc:device:tokenHash','');
+    return Boolean(saved&&hash&&saved===hash);
+  }
   async getTelegramOffset(){return Number(await this.getJson('telegram:offset',0))||0;}
   async claimTelegramUpdate(id){
     const last=await this.getTelegramOffset();
@@ -334,13 +367,140 @@ function cors(origin){
   return {
     'access-control-allow-origin':allowed?origin:ALLOWED_ORIGIN,
     'access-control-allow-methods':'GET,POST,OPTIONS',
-    'access-control-allow-headers':'content-type',
+    'access-control-allow-headers':'content-type, authorization',
     'vary':'Origin'
   };
 }
 function json(data,status=200,origin=''){
   return new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json;charset=UTF-8',...cors(origin)}});
 }
+let GSC_TOKEN_CACHE={token:'',expiresAt:0};
+
+function gscConfigured(env){
+  return Boolean(env.GSC_SERVICE_ACCOUNT_EMAIL&&env.GSC_SERVICE_ACCOUNT_PRIVATE_KEY);
+}
+function base64UrlBytes(bytes){
+  let binary='';
+  const data=bytes instanceof Uint8Array?bytes:new Uint8Array(bytes);
+  for(let i=0;i<data.length;i++)binary+=String.fromCharCode(data[i]);
+  return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function base64UrlText(value){
+  return base64UrlBytes(new TextEncoder().encode(String(value||'')));
+}
+function pkcs8FromPem(value){
+  const clean=String(value||'')
+    .replace(/\\n/g,'\n')
+    .replace(/-----BEGIN PRIVATE KEY-----/g,'')
+    .replace(/-----END PRIVATE KEY-----/g,'')
+    .replace(/\s+/g,'');
+  if(!clean)throw new Error('Chave privada da conta de serviço em falta.');
+  const raw=atob(clean),bytes=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+  return bytes.buffer;
+}
+async function gscAccessToken(env){
+  if(GSC_TOKEN_CACHE.token&&GSC_TOKEN_CACHE.expiresAt>Date.now()+60000)return GSC_TOKEN_CACHE.token;
+  if(!gscConfigured(env))throw new Error('Conta de serviço do Search Console ainda não configurada.');
+  const now=Math.floor(Date.now()/1000);
+  const header=base64UrlText(JSON.stringify({alg:'RS256',typ:'JWT'}));
+  const claims=base64UrlText(JSON.stringify({
+    iss:String(env.GSC_SERVICE_ACCOUNT_EMAIL),
+    scope:'https://www.googleapis.com/auth/webmasters.readonly',
+    aud:'https://oauth2.googleapis.com/token',
+    iat:now,
+    exp:now+3600
+  }));
+  const unsigned=header+'.'+claims;
+  const key=await crypto.subtle.importKey(
+    'pkcs8',
+    pkcs8FromPem(env.GSC_SERVICE_ACCOUNT_PRIVATE_KEY),
+    {name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},
+    false,
+    ['sign']
+  );
+  const signature=await crypto.subtle.sign(
+    {name:'RSASSA-PKCS1-v1_5'},
+    key,
+    new TextEncoder().encode(unsigned)
+  );
+  const assertion=unsigned+'.'+base64UrlBytes(signature);
+  const tokenRes=await fetch('https://oauth2.googleapis.com/token',{
+    method:'POST',
+    headers:{'content-type':'application/x-www-form-urlencoded'},
+    body:new URLSearchParams({
+      grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion
+    }).toString()
+  });
+  const tokenData=await tokenRes.json().catch(()=>({}));
+  if(!tokenRes.ok||!tokenData.access_token){
+    throw new Error('Google OAuth recusou a conta de serviço: '+String(tokenData.error_description||tokenData.error||tokenRes.status));
+  }
+  GSC_TOKEN_CACHE={
+    token:String(tokenData.access_token),
+    expiresAt:Date.now()+Math.max(60,(Number(tokenData.expires_in)||3600)-120)*1000
+  };
+  return GSC_TOKEN_CACHE.token;
+}
+async function gscGoogle(env,url,options={}){
+  const token=await gscAccessToken(env);
+  const res=await fetch(url,{
+    ...options,
+    headers:{
+      'authorization':'Bearer '+token,
+      'content-type':'application/json',
+      ...(options.headers||{})
+    }
+  });
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok){
+    const message=data?.error?.message||data?.error_description||('Google HTTP '+res.status);
+    throw new Error(String(message));
+  }
+  return data;
+}
+async function gscListSites(env){
+  const data=await gscGoogle(env,'https://www.googleapis.com/webmasters/v3/sites',{method:'GET'});
+  return (Array.isArray(data.siteEntry)?data.siteEntry:[]).map(row=>({
+    siteUrl:String(row.siteUrl||''),
+    permissionLevel:String(row.permissionLevel||'')
+  })).filter(row=>row.siteUrl);
+}
+async function gscQueryRows(env,{siteUrl,startDate,endDate,rowLimit=5000}){
+  if(!siteUrl||!startDate||!endDate)throw new Error('Propriedade e datas são obrigatórias.');
+  const safeLimit=Math.max(1,Math.min(Number(rowLimit)||5000,25000));
+  const data=await gscGoogle(
+    env,
+    'https://www.googleapis.com/webmasters/v3/sites/'+encodeURIComponent(siteUrl)+'/searchAnalytics/query',
+    {
+      method:'POST',
+      body:JSON.stringify({
+        startDate:String(startDate),
+        endDate:String(endDate),
+        dimensions:['query'],
+        type:'web',
+        dataState:'final',
+        rowLimit:safeLimit,
+        startRow:0
+      })
+    }
+  );
+  return (Array.isArray(data.rows)?data.rows:[]).map(row=>({
+    query:String(Array.isArray(row.keys)?row.keys[0]||'':''),
+    clicks:Number(row.clicks)||0,
+    impressions:Number(row.impressions)||0,
+    ctr:Number(row.ctr)||0,
+    position:Number(row.position)||0
+  })).filter(row=>row.query);
+}
+async function requireGscDashboard(request,env){
+  const token=bearer(request);
+  if(!token)return false;
+  const hash=await sha256Hex(token);
+  return taskQueue(env).authenticateGsc(hash);
+}
+
 function cleanContext(context){
   if(!context||typeof context!=='object')return {};
   return {
@@ -1690,6 +1850,14 @@ async function handleTelegramUpdate(env,update,ctx){
       if(resolved.ok)await telegramSend(env,approved?'🟢 GPU Colab autorizado. O notebook pode ligar-se.':'GPU Colab recusado.');
       return {ok:true};
     }
+    let gscm=data.match(/^gsc(approve|reject):(.+)$/);
+    if(gscm){
+      const approved=gscm[1]==='approve';
+      const resolved=await q.resolveGscPair(gscm[2],approved);
+      await telegramApi(env,'answerCallbackQuery',{callback_query_id:cb.id,text:approved?'Centro autorizado para Search Console.':'Ligação Search Console recusada.'});
+      if(resolved.ok)await telegramSend(env,approved?'🔐 Centro autorizado para consultar o Search Console neste dispositivo.':'Ligação Search Console recusada.');
+      return {ok:true};
+    }
     let m=data.match(/^task(approve|reject):(.+)$/);
     if(m){
       const approved=m[1]==='approve';
@@ -1768,6 +1936,7 @@ export default {
         fastModel:FAST_MODEL,
         councilCriticModel:COUNCIL_CRITIC_MODEL,
         telegramConfigured:Boolean(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID),
+        gscConfigured:gscConfigured(env),
         operitQueue:Boolean(env.TASKS),
         telegramFront:'v3-deterministic-projects'
       },200,origin);
@@ -1794,6 +1963,66 @@ export default {
         return json(result,result.ok?200:(result.configured?502:409),origin);
       }catch(error){
         return json({ok:false,error:'Falha Telegram: '+String(error?.message||error)},500,origin);
+      }
+    }
+
+    if(url.pathname==='/api/gsc/status'&&request.method==='GET'){
+      try{
+        const authorized=await requireGscDashboard(request,env);
+        return json({ok:true,configured:gscConfigured(env),authorized},200,origin);
+      }catch(error){
+        return json({ok:false,configured:gscConfigured(env),authorized:false,error:String(error?.message||error)},500,origin);
+      }
+    }
+
+    if(url.pathname==='/api/gsc/pair'&&request.method==='POST'){
+      try{
+        if(!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_CHAT_ID)return json({ok:false,error:'Telegram não configurado.'},409,origin);
+        const q=taskQueue(env);
+        const pair=await q.createGscPair();
+        const sent=await telegramSend(env,'CENTRO DE NEGÓCIOS · SEARCH CONSOLE\n\nAutorizar este dispositivo a consultar os dados privados do Google Search Console?',{
+          reply_markup:{inline_keyboard:[[
+            {text:'✅ Autorizar',callback_data:'gscapprove:'+pair.id},
+            {text:'❌ Recusar',callback_data:'gscreject:'+pair.id}
+          ]]}
+        });
+        if(!sent.ok)return json({ok:false,error:'Não consegui enviar confirmação ao Telegram.'},502,origin);
+        return json({ok:true,pairId:pair.id,expiresAt:pair.expiresAt},200,origin);
+      }catch(error){
+        return json({ok:false,error:'Falha ao autorizar o Centro: '+String(error?.message||error)},500,origin);
+      }
+    }
+
+    if(url.pathname==='/api/gsc/pair-status'&&request.method==='GET'){
+      try{
+        const status=await taskQueue(env).gscPairStatus(String(url.searchParams.get('id')||''));
+        return json({ok:true,...status},200,origin);
+      }catch(error){
+        return json({ok:false,error:String(error?.message||error)},500,origin);
+      }
+    }
+
+    if(url.pathname==='/api/gsc/sites'&&request.method==='GET'){
+      try{
+        if(!await requireGscDashboard(request,env))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
+        if(!gscConfigured(env))return json({ok:false,error:'Conta de serviço do Search Console ainda não configurada.'},409,origin);
+        const sites=await gscListSites(env);
+        return json({ok:true,sites},200,origin);
+      }catch(error){
+        return json({ok:false,error:'Search Console: '+String(error?.message||error).slice(0,1000)},502,origin);
+      }
+    }
+
+    if(url.pathname==='/api/gsc/query'&&request.method==='POST'){
+      try{
+        if(!await requireGscDashboard(request,env))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
+        if(!gscConfigured(env))return json({ok:false,error:'Conta de serviço do Search Console ainda não configurada.'},409,origin);
+        let gscBody={};
+        try{gscBody=await request.json();}catch{return json({ok:false,error:'Pedido GSC inválido.'},400,origin);}
+        const rows=await gscQueryRows(env,gscBody||{});
+        return json({ok:true,siteUrl:String(gscBody.siteUrl||''),startDate:String(gscBody.startDate||''),endDate:String(gscBody.endDate||''),rows},200,origin);
+      }catch(error){
+        return json({ok:false,error:'Search Console: '+String(error?.message||error).slice(0,1000)},502,origin);
       }
     }
 
