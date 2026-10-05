@@ -2290,7 +2290,8 @@ export default {
         if(!await q.authenticate(await sha256Hex(bearer(request))))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
         const existing=await q.getJson('selftest:last',null);
         if(existing&&Date.now()-existing.createdAt<60000)return json({ok:true,id:existing.id,reused:true},200,origin);
-        const task=await q.createTask({action:'git_status',target:'centro-negocios-ia',args:{},label:'Self-test ponta a ponta · Git'},body?.quiet?'stability':'selftest');
+        const probeBody=await request.json().catch(()=>({}));
+        const task=await q.createTask({action:'git_status',target:'centro-negocios-ia',args:{},label:'Self-test ponta a ponta · Git'},probeBody?.quiet?'stability':'selftest');
         await q.resolveTask(task.id,true);
         await q.setJson('selftest:last',{id:task.id,createdAt:Date.now()});
         return json({ok:true,id:task.id},200,origin);

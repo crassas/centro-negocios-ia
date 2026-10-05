@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 let source=await fs.readFile(new URL('./src/index.js',import.meta.url),'utf8');
 source=source.replace('import { DurableObject } from "cloudflare:workers";','class DurableObject { constructor(ctx,env){this.ctx=ctx;this.env=env;} }');
-const {TaskQueue}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+const {TaskQueue,default:worker}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 const values=new Map();
 const q=new TaskQueue({storage:{
  async get(k){return values.has(k)?structuredClone(values.get(k)):undefined;},
@@ -59,4 +59,12 @@ try{
  assert.equal(publicationTask.target,'centro-negocios-ia');
  assert.deepEqual(publicationTask.args.allowedPaths,['README.md']);
  console.log('OK publication probe is fixed-scope and idempotent');
+ q.authenticate=async()=>true;
+ const response=await worker.fetch(new Request('https://test/api/operit/selftest',{
+   method:'POST',headers:{authorization:'Bearer test','content-type':'application/json'},body:JSON.stringify({quiet:true})
+ }),{TASKS:{getByName:()=>q}},{});
+ assert.equal(response.status,200,await response.clone().text());
+ const probe=await response.json();
+ assert.equal((await q.getJson('task:'+probe.id)).source,'stability');
+ console.log('OK quiet selftest HTTP route reads request before creating stability task');
 }finally{Date.now=realNow;}
