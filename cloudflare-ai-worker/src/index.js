@@ -1550,6 +1550,8 @@ function parseOperitInstruction(text){
   if(m)return {action:'station_doctor',target:'local',label:'Diagnóstico da Estação Centro'};
   m=raw.match(/^\/(?:agents|agentes|autonomia)$/i);
   if(m)return {action:'agents_status',target:'local',label:'Estado dos agentes e autonomia'};
+  m=raw.match(/^\/(?:selftest|teste-autonomia)$/i);
+  if(m)return {action:'autonomy_selftest',target:'local',label:'Self-test da autonomia'};
   m=raw.match(/^\/server$/i);
   if(m)return {action:'server_status',target:'local',label:'Estado do Centro Server privado'};
   m=raw.match(/^\/(?:openclaw|openclaw-status)$/i);
@@ -1804,7 +1806,7 @@ async function handleTelegramUpdate(env,update,ctx){
       const isLaya=instruction.action==='laya_decide'||instruction.action==='laya_status';
       const isManus=instruction.action==='manus_query'||instruction.action==='manus_status';
       const isReadOnly=[
-        'station_status','station_doctor','agents_status','server_status','system_info',
+        'station_status','station_doctor','agents_status','autonomy_selftest','server_status','system_info',
         'site_check','git_status'
       ].includes(instruction.action);
 
