@@ -39,12 +39,13 @@ def main():
             (11, b"openclaw\0gateway", str(root/".centro-openclaw/gateway.log")),
             (12, b"openclaw\0gateway", "/some/external/log"),
             (13, b"python\0unrelated.py", str(root/".centro-openclaw/gateway.log")),
+            (14, b"openclaw-gateway\0", str(root/".centro-openclaw/gateway.log")),
         ):
             entry=root/"proc"/str(pid)
             (entry/"fd").mkdir(parents=True)
             (entry/"cmdline").write_bytes(command)
             (entry/"fd/1").symlink_to(output)
-        assert set(station.centro_openclaw_processes(root/"proc")) == {11}
+        assert set(station.centro_openclaw_processes(root/"proc")) == {11,14}
         station.HOME = old_home
         print("OK OpenClaw cleanup excludes external processes and unrelated commands")
         saved = (server.HOME, server.run_cmd, server.pid_running, server.laya_http_health)

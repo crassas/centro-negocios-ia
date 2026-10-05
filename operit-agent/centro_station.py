@@ -490,7 +490,7 @@ def centro_openclaw_processes(proc_root=Path("/proc")):
         try:
             command = (entry / "cmdline").read_bytes().replace(b"\0", b" ").decode().strip()
             output = os.readlink(entry / "fd" / "1")
-            if output == expected_log and (command == "openclaw" or command.startswith("openclaw ") or "/openclaw/" in command):
+            if output == expected_log and (command.split(" ", 1)[0] in {"openclaw", "openclaw-gateway"} or "/openclaw/" in command):
                 owned[int(entry.name)] = (command, output)
         except (OSError, UnicodeError):
             continue
