@@ -6,10 +6,21 @@ STATE_DIR="$HOME_DIR/.centro-station"
 PID_FILE="$STATE_DIR/supervisor.pid"
 LOG_FILE="$STATE_DIR/supervisor.log"
 SUPERVISOR="$HOME_DIR/centro_station.py"
-SERVER_CTL="/usr/local/bin/centroserver"
-AGENT_CTL="/usr/local/bin/centroctl"
-OPENCLAW_CTL="/usr/local/bin/openclawctl"
-LAYA_CTL="/usr/local/bin/layactl"
+RAW="https://raw.githubusercontent.com/crassas/centro-negocios-ia/main/operit-agent"
+
+pick_ctl() {
+  NAME="$1"
+  if [ -x "/usr/local/bin/$NAME" ]; then
+    printf '%s\n' "/usr/local/bin/$NAME"
+  else
+    printf '%s\n' "$HOME_DIR/.local/bin/$NAME"
+  fi
+}
+
+SERVER_CTL="$(pick_ctl centroserver)"
+AGENT_CTL="$(pick_ctl centroctl)"
+OPENCLAW_CTL="$(pick_ctl openclawctl)"
+LAYA_CTL="$(pick_ctl layactl)"
 
 mkdir -p "$STATE_DIR"
 
@@ -24,7 +35,6 @@ start_station() {
   "$SERVER_CTL" start
   "$AGENT_CTL" start
 
-  # Extras: arrancam se estiverem instalados; nunca bloqueiam o núcleo.
   if [ -x "$OPENCLAW_CTL" ]; then
     "$OPENCLAW_CTL" start >/dev/null 2>&1 || true
   fi
@@ -91,6 +101,20 @@ status_station() {
     echo
     "$LAYA_CTL" status || true
   fi
+  if [ -f "$STATE_DIR/status.json" ]; then
+    echo
+    echo "Supervisor state:"
+    python3 - "$STATE_DIR/status.json" <<'PY' 2>/dev/null || true
+import json,sys
+d=json.load(open(sys.argv[1],encoding="utf-8"))
+a=d.get("autoupdate") or {}
+print("Auto-update:", "ON" if a.get("enabled") else "OFF",
+      "· intervalo", a.get("intervalSeconds","?"), "s",
+      "· último OK", a.get("lastOk",0))
+if a.get("lastError"):
+    print("Auto-update erro:", str(a["lastError"])[:500])
+PY
+  fi
 }
 
 doctor_station() {
@@ -127,7 +151,22 @@ doctor_station() {
   [ -f "$HOME_DIR/.centro-agent/manus_api_key" ] && echo "Manus: configurado" || echo "Manus: opcional / sem chave"
 
   echo
-  echo "Política: núcleo local-first · extras isolados · sem fallback pago automático"
+  echo "Política: núcleo local-first · auto-reparação activa · sem fallback pago automático"
+}
+
+update_station() {
+  TMP="${TMPDIR:-/tmp}/centro-install.$$"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$RAW/install.sh" -o "$TMP"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$TMP" "$RAW/install.sh"
+  else
+    echo "É necessário curl ou wget."
+    exit 1
+  fi
+  chmod 700 "$TMP"
+  sh "$TMP"
+  rm -f "$TMP"
 }
 
 logs_station() {
@@ -141,9 +180,10 @@ case "${1:-status}" in
   restart) restart_station ;;
   status) status_station ;;
   doctor) doctor_station ;;
+  update) update_station ;;
   logs) logs_station ;;
   *)
-    echo "Uso: centrostation {start|stop|restart|status|doctor|logs}"
+    echo "Uso: centrostation {start|stop|restart|status|doctor|update|logs}"
     exit 2
     ;;
 esac
