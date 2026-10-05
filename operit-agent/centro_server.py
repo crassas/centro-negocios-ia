@@ -1239,11 +1239,15 @@ def execute_action(task):
         except Exception as exc:
             worker_detail = "OFFLINE · " + str(exc)[:180]
 
+        station_state = {}
         autoupdate = {}
+        remote_state = {}
         try:
-            autoupdate = json.loads(
+            station_state = json.loads(
                 (HOME / ".centro-station" / "status.json").read_text(encoding="utf-8")
-            ).get("autoupdate") or {}
+            )
+            autoupdate = station_state.get("autoupdate") or {}
+            remote_state = station_state.get("remoteDesktop") or {}
         except Exception:
             pass
 
@@ -1284,6 +1288,11 @@ def execute_action(task):
             "CONTROLO",
             "Worker: " + worker_detail,
             f"Auto-update: {'ON' if auto_enabled else 'SEM ESTADO / OFF'}",
+            (
+                "Remote Desktop: "
+                + ("ONLINE" if remote_state.get("healthy") else "OFFLINE")
+                + (" · emparelhado" if remote_state.get("configured") else " · não emparelhado")
+            ),
             f"Execução ocupada: {'SIM' if BUSY_FILE.exists() else 'NÃO'}",
             "",
             f"Núcleo pronto: {core_ready}/{len(core)}",
@@ -1410,9 +1419,19 @@ def execute_action(task):
         # Agentes opcionais: medidos, mas não bloqueiam o núcleo.
         openclaw_ok, _, _, _ = openclaw_http_health()
         laya_ok, _, _, _ = laya_http_health()
+        remote_ok = False
+        try:
+            remote_ok = bool(
+                json.loads(
+                    (HOME / ".centro-station" / "status.json").read_text(encoding="utf-8")
+                ).get("remoteDesktop", {}).get("healthy")
+            )
+        except Exception:
+            pass
         optional = [
             ("OpenClaw", openclaw_ok),
             ("Laya", laya_ok),
+            ("Remote Desktop", remote_ok),
             ("Manus key", MANUS_KEY_FILE.exists()),
         ]
 
