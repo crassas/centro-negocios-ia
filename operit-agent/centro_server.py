@@ -20,6 +20,7 @@ TOKEN_FILE = STATE_DIR / "token"
 AGENT_PID_FILE = HOME / ".centro-agent" / "agent.pid"
 SUPERVISOR_PID_FILE = HOME / ".centro-station" / "supervisor.pid"
 HISTORY_FILE = STATE_DIR / "history.jsonl"
+BUSY_FILE = STATE_DIR / "busy.json"
 STARTED_AT = time.time()
 CMD_TIMEOUT = 120
 CLAUDE_TIMEOUT = 300
@@ -62,6 +63,30 @@ def ensure_token():
 
 
 TOKEN = ensure_token()
+
+
+def mark_busy(task):
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "pid": os.getpid(),
+            "startedAt": int(time.time()),
+            "action": str(task.get("action") or ""),
+            "target": str(task.get("target") or ""),
+            "id": str(task.get("id") or ""),
+        }
+        tmp = BUSY_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(BUSY_FILE)
+    except Exception:
+        pass
+
+
+def clear_busy():
+    try:
+        BUSY_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
 
 
 def pid_running(path):
@@ -1608,9 +1633,13 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(400, {"ok": False, "error": "JSON inválido."})
                 return
             task = task if isinstance(task, dict) else {}
-            result = execute_action(task)
-            append_history(task, result)
-            self.send_json(200, {"ok": True, "result": result})
+            mark_busy(task)
+            try:
+                result = execute_action(task)
+                append_history(task, result)
+                self.send_json(200, {"ok": True, "result": result})
+            finally:
+                clear_busy()
             return
 
         if path == "/echo":
@@ -1629,6 +1658,8 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     STATE_DIR.mkdir(parents=True, exist_ok=True)
+    # Um crash anterior pode deixar um lock órfão. O processo novo começa limpo.
+    clear_busy()
     httpd = ThreadingHTTPServer((HOST, PORT), Handler)
 
     def stop_server(signum, frame):
