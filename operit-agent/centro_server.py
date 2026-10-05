@@ -710,11 +710,10 @@ def build_local_repo_context(worktree, target, prompt):
     }
 
 
-def request_repo_change_plan(target, prompt, worktree):
+def request_repo_change_plan_with_context(target, prompt, context):
     token = read_secret(AGENT_TOKEN_FILE)
     if not token:
         raise RuntimeError("Centro Agent sem token para pedir plano de alteração.")
-    context = build_local_repo_context(worktree, target, prompt)
     payload = {"target": target, "prompt": prompt, "context": context}
     last_error = ""
 
@@ -731,7 +730,7 @@ def request_repo_change_plan(target, prompt, worktree):
                 plan = data.get("plan")
                 if not isinstance(plan, dict) or not isinstance(plan.get("edits"), list):
                     raise RuntimeError("Plano de alteração inválido.")
-                return plan
+                return plan, str(data.get("plannerModel") or "")
             last_error = str((data or {}).get("error") or f"Planeador HTTP {status}")
         except urllib.error.HTTPError as exc:
             try:
@@ -749,6 +748,12 @@ def request_repo_change_plan(target, prompt, worktree):
             time.sleep(2 * (attempt + 1))
 
     raise RuntimeError(last_error or "Planeador automático indisponível.")
+
+
+def request_repo_change_plan(target, prompt, worktree):
+    context = build_local_repo_context(worktree, target, prompt)
+    plan, _ = request_repo_change_plan_with_context(target, prompt, context)
+    return plan
 
 
 def protected_repo_path(rel):
@@ -1337,49 +1342,69 @@ def execute_action(task):
         # autenticação do Agent -> endpoint do planeador -> Workers AI -> JSON.
         planner_ok = False
         planner_detail = ""
-        agent_token = read_secret(AGENT_TOKEN_FILE)
-        if not agent_token:
-            planner_detail = "token Operit em falta"
-        else:
-            try:
-                status, data = http_json(
-                    CLOUD_BASE + "/api/repo/change-plan",
-                    method="POST",
-                    payload={
-                        "target": "centro-negocios-ia",
-                        "prompt": (
-                            "SELFTEST do planeador. Não existe alteração real pedida. "
-                            "Devolve um plano JSON válido; edits pode ficar vazio."
-                        ),
-                        "context": {
-                            "repo": "centro-negocios-ia",
-                            "branch": "main",
-                            "head": "selftest",
-                            "paths": ["SELFTEST.md"],
-                            "files": {
-                                "SELFTEST.md": "# SELFTEST\\nFicheiro sintético; não existe alteração a fazer.\\n"
-                            },
-                            "source": "centro-selftest",
-                        },
-                    },
-                    headers={"Authorization": "Bearer " + agent_token},
-                    timeout=180,
+        # Teste real do planeador + aplicação, sem tocar em nenhum repositório.
+        # O ficheiro é sintético e o worktree temporário é sempre eliminado.
+        planner_ok = False
+        planner_detail = ""
+        probe_dir = WORKTREE_ROOT / (".planner-selftest-" + secrets.token_hex(5))
+        try:
+            probe_dir.mkdir(parents=True, exist_ok=False)
+            probe_file = probe_dir / "SELFTEST.md"
+            original_probe = "# SELFTEST\\nALPHA\\n"
+            probe_file.write_text(original_probe, encoding="utf-8")
+            context = {
+                "repo": "centro-negocios-ia",
+                "branch": "main",
+                "head": "selftest",
+                "paths": ["SELFTEST.md"],
+                "files": {"SELFTEST.md": original_probe},
+                "source": "centro-selftest-dryrun",
+            }
+            repair = ""
+            model_used = ""
+            for round_no in range(3):
+                probe_file.write_text(original_probe, encoding="utf-8")
+                planner_prompt = (
+                    "SELFTEST técnico sem publicação. No ficheiro SELFTEST.md, "
+                    "substitui exactamente ALPHA por BETA. Faz a alteração mínima com operation=replace."
                 )
-                plan = data.get("plan") if isinstance(data, dict) else None
-                planner_ok = (
-                    status == 200
-                    and data.get("ok") is True
-                    and isinstance(plan, dict)
-                    and isinstance(plan.get("edits"), list)
-                )
-                planner_detail = str(
-                    data.get("plannerModel")
-                    or data.get("error")
-                    or f"HTTP {status}"
-                )
-            except Exception as exc:
-                planner_detail = str(exc)[:300]
-        add("Workers AI planner", planner_ok, planner_detail)
+                if repair:
+                    planner_prompt += (
+                        "\\n\\nO plano anterior foi rejeitado localmente: "
+                        + repair[-800:]
+                        + "\\nCorrige o plano e copia search literalmente do ficheiro fornecido."
+                    )
+                try:
+                    plan, model_used = request_repo_change_plan_with_context(
+                        "centro-negocios-ia", planner_prompt, context
+                    )
+                    edits = plan.get("edits") if isinstance(plan.get("edits"), list) else []
+                    if not edits:
+                        repair = "zero edições"
+                        continue
+                    apply_repo_change_plan(probe_dir, plan)
+                    final = probe_file.read_text(encoding="utf-8")
+                    extra = [
+                        p for p in probe_dir.rglob("*")
+                        if p.is_file() and p.name != "SELFTEST.md"
+                    ]
+                    if "BETA" in final and "ALPHA" not in final and not extra:
+                        planner_ok = True
+                        planner_detail = (
+                            (model_used or "modelo não identificado")
+                            + f" · dry-run aplicado na tentativa {round_no + 1}/3"
+                        )
+                        break
+                    repair = "resultado não produziu apenas ALPHA → BETA"
+                except Exception as exc:
+                    repair = str(exc)
+            if not planner_ok:
+                planner_detail = (repair or "dry-run sem resultado")[:500]
+        except Exception as exc:
+            planner_detail = str(exc)[:500]
+        finally:
+            shutil.rmtree(probe_dir, ignore_errors=True)
+        add("Workers AI planner + apply", planner_ok, planner_detail)
 
         # Ferramentas essenciais
         git_bin = shutil.which("git")
@@ -1444,7 +1469,7 @@ def execute_action(task):
             "Git",
             "Python 3",
             "Workspace temporário",
-            "Workers AI planner",
+            "Workers AI planner + apply",
         }
         essential = [(n, ok, d) for n, ok, d in checks if n in essential_names or n.startswith("Repo ")]
         failures = [(n, d) for n, ok, d in essential if not ok]
