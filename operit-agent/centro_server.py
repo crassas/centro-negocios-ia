@@ -1495,7 +1495,7 @@ def action_fault_openclaw_recovery(task):
         }
 
     # O Centro Station verifica extras periodicamente e deve recuperar sem ajuda.
-    deadline = time.time() + 80
+    deadline = time.time() + 180
     while time.time() < deadline:
         if openclaw_http_health()[0]:
             return {
@@ -1511,7 +1511,7 @@ def action_fault_openclaw_recovery(task):
     return {
         "exitCode": 1,
         "stdout": "",
-        "stderr": "Supervisor não recuperou o OpenClaw dentro de 80 s; arranque de segurança solicitado.",
+        "stderr": "Supervisor não recuperou o OpenClaw dentro de 180 s; arranque de segurança solicitado.",
         "durationMs": int((time.time() - started) * 1000),
     }
 
