@@ -436,11 +436,45 @@ def find_claude():
     return next((str(p) for p in candidates if p.exists()), None)
 
 
+def canonical_github_repo(remote):
+    value = str(remote or "").strip()
+    if not value:
+        return ""
+
+    host = ""
+    path = ""
+    if value.startswith("git@github.com:"):
+        host = "github.com"
+        path = value.split(":", 1)[1]
+    elif "://" in value:
+        try:
+            parsed = urlparse(value)
+            host = (parsed.hostname or "").lower()
+            path = parsed.path
+        except Exception:
+            return ""
+    elif value.startswith("github.com/"):
+        host = "github.com"
+        path = value[len("github.com/"):]
+    else:
+        return ""
+
+    if host != "github.com":
+        return ""
+    clean = path.strip("/")
+    if clean.lower().endswith(".git"):
+        clean = clean[:-4]
+    parts = [part for part in clean.split("/") if part]
+    if len(parts) != 2:
+        return ""
+    return (parts[0] + "/" + parts[1]).lower()
+
+
 def repo_origin_ok(path, target):
     origin = run_cmd(["git", "remote", "get-url", "origin"], cwd=path)
-    expected = REPOS[target].removesuffix(".git")
-    actual = origin["stdout"].strip().removesuffix(".git")
-    return origin["exitCode"] == 0 and actual == expected
+    expected = canonical_github_repo(REPOS[target])
+    actual = canonical_github_repo(origin["stdout"])
+    return origin["exitCode"] == 0 and bool(expected) and actual == expected
 
 
 def changed_paths(worktree):
@@ -1621,9 +1655,9 @@ def execute_action(task):
             return run_cmd(["git", "status", "--short", "--branch"], cwd=path)
 
         origin = run_cmd(["git", "remote", "get-url", "origin"], cwd=path)
-        expected = REPOS[target].removesuffix(".git")
-        actual = origin["stdout"].strip().removesuffix(".git")
-        if origin["exitCode"] != 0 or actual != expected:
+        expected = canonical_github_repo(REPOS[target])
+        actual = canonical_github_repo(origin["stdout"])
+        if origin["exitCode"] != 0 or not expected or actual != expected:
             return {
                 "exitCode": 4,
                 "stdout": "",
