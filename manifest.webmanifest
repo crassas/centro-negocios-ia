@@ -1,12 +1,12 @@
 {
-  "name": "Centro de Negócios · Command",
+  "name": "Centro de Negócios",
   "short_name": "Centro",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#080a0c",
-  "theme_color": "#080a0c",
-  "description": "Centro de comando para sites, CRM, prospecção, caixa e inteligência operacional.",
+  "background_color": "#f5f7fb",
+  "theme_color": "#f5f7fb",
+  "description": "Centro visual para clientes, sites, SEO local, automação e operação do negócio.",
   "icons": [
     {"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
   ]
