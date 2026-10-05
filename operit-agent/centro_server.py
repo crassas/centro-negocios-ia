@@ -1479,9 +1479,13 @@ def action_fault_openclaw_recovery(task):
     # Garante uma linha de base saudável antes de injectar a falha.
     if not openclaw_http_health()[0]:
         run_cmd([str(ctl), "start"], timeout=35)
-        deadline = time.time() + 25
+        # Em Android/PRoot o OpenClaw pode precisar de mais de dois minutos
+        # para inspeccionar/preparar a base SQLite antes de publicar o health.
+        # Não declarar falha de base enquanto o gateway ainda está legitimamente
+        # a arrancar.
+        deadline = time.time() + 210
         while time.time() < deadline and not openclaw_http_health()[0]:
-            time.sleep(1)
+            time.sleep(2)
     if not openclaw_http_health()[0]:
         return {"exitCode": 1, "stdout": "", "stderr": "OpenClaw já estava offline antes do teste.", "durationMs": int((time.time()-started)*1000)}
 
@@ -1495,7 +1499,7 @@ def action_fault_openclaw_recovery(task):
         }
 
     # O Centro Station verifica extras periodicamente e deve recuperar sem ajuda.
-    deadline = time.time() + 180
+    deadline = time.time() + 300
     while time.time() < deadline:
         if openclaw_http_health()[0]:
             return {
@@ -1511,7 +1515,7 @@ def action_fault_openclaw_recovery(task):
     return {
         "exitCode": 1,
         "stdout": "",
-        "stderr": "Supervisor não recuperou o OpenClaw dentro de 180 s; arranque de segurança solicitado.",
+        "stderr": "Supervisor não recuperou o OpenClaw dentro de 300 s; arranque de segurança solicitado.",
         "durationMs": int((time.time() - started) * 1000),
     }
 
