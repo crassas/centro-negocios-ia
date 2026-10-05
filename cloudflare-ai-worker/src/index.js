@@ -108,6 +108,13 @@ export class TaskQueue extends DurableObject {
       target:String(safeSpec.target||'').slice(0,120),
       args:safeSpec.args&&typeof safeSpec.args==='object'?safeSpec.args:{},
       label:String(safeSpec.label||safeSpec.action||'Tarefa Operit').slice(0,200),
+      benchmarkId:String(safeSpec.benchmarkId||'').slice(0,40),
+      benchmarkCase:String(safeSpec.benchmarkCase||'').slice(0,80),
+      benchmarkRequired:Boolean(safeSpec.benchmarkRequired),
+      expectedExitCodes:Array.isArray(safeSpec.expectedExitCodes)
+        ?safeSpec.expectedExitCodes.slice(0,6).map(Number).filter(Number.isFinite)
+        :[0],
+      fault:String(safeSpec.fault||'').slice(0,60),
       source,status:'pending',createdAt:Date.now(),attempts:0,retryAfter:0
     };
     await this.setJson('task:'+id,task);
@@ -195,6 +202,116 @@ export class TaskQueue extends DurableObject {
     await this.setJson('task:'+id,task);
     return {ok:true,task,retrying:false};
   }
+  async startAutonomyBenchmark(){
+    const activeId=String(await this.getJson('benchmark:active','')||'');
+    if(activeId){
+      const active=await this.autonomyBenchmarkStatus(activeId);
+      if(active&&active.ok&&!active.ready&&Date.now()-Number(active.createdAt||0)<2*60*60*1000){
+        return {...active,reused:true};
+      }
+    }
+
+    const id='bench-'+crypto.randomUUID().replaceAll('-','').slice(0,12);
+    const cases=[
+      {id:'core-system',required:true,spec:{action:'system_info',target:'local',label:'Benchmark 01 · sistema'}},
+      {id:'core-server',required:true,spec:{action:'server_status',target:'local',label:'Benchmark 02 · servidor'}},
+      {id:'core-station',required:true,spec:{action:'station_status',target:'local',label:'Benchmark 03 · estação'}},
+      {id:'core-agents',required:true,spec:{action:'agents_status',target:'local',label:'Benchmark 04 · agentes'}},
+      {id:'core-selftest',required:true,spec:{action:'autonomy_selftest',target:'local',label:'Benchmark 05 · self-test'}},
+      {id:'sites',required:false,spec:{action:'site_check',target:'all',label:'Benchmark 06 · sites'}},
+      {id:'git-centro',required:true,spec:{action:'git_status',target:'centro-negocios-ia',label:'Benchmark 07 · Git Centro'}},
+      {id:'git-pentehouse',required:true,spec:{action:'git_status',target:'pente_houselanding',label:'Benchmark 08 · Git Pentehouse'}},
+      {id:'git-pizza',required:true,spec:{action:'git_status',target:'best-pizza-kebab',label:'Benchmark 09 · Git Pizza'}},
+      {id:'git-irmaos',required:true,spec:{action:'git_status',target:'restaurante-2-irmaos',label:'Benchmark 10 · Git 2 Irmãos'}},
+      {id:'git-beatriz',required:true,spec:{action:'git_status',target:'engomadoria-beatriz',label:'Benchmark 11 · Git Beatriz'}},
+      {id:'git-write-matrix',required:true,spec:{action:'git_access_matrix',target:'all',label:'Benchmark 12 · leitura/escrita Git'}},
+      {id:'openclaw-status',required:false,spec:{action:'openclaw_status',target:'local',label:'Benchmark 13 · OpenClaw estado'}},
+      {id:'openclaw-query',required:false,spec:{action:'openclaw_query',target:'local',args:{prompt:'Responde apenas BENCHMARK_OK'},label:'Benchmark 14 · OpenClaw resposta'}},
+      {id:'claude-fallback',required:true,spec:{action:'claude_query',target:'local',args:{prompt:'Responde apenas BENCHMARK_OK'},label:'Benchmark 15 · Claude/fallback'}},
+      {id:'git-pull-centro',required:false,spec:{action:'git_pull',target:'centro-negocios-ia',label:'Benchmark 16 · pull Centro'}},
+      {id:'git-pull-irmaos',required:true,spec:{action:'git_pull',target:'restaurante-2-irmaos',label:'Benchmark 17 · pull 2 Irmãos'}},
+      {id:'fault-result-ack',required:true,fault:'result_503_once',spec:{action:'system_info',target:'local',label:'Benchmark 18 · falha de rede/ACK'}},
+      {id:'fault-timeout',required:true,expected:[124],spec:{action:'fault_timeout',target:'local',label:'Benchmark 19 · executor preso'}},
+      {id:'fault-service',required:true,spec:{action:'fault_openclaw_recovery',target:'local',label:'Benchmark 20 · recuperação de serviço'}}
+    ];
+
+    const stored=[];
+    for(const item of cases){
+      const expected=Array.isArray(item.expected)?item.expected:[0];
+      const task=await this.createTask({
+        ...item.spec,
+        benchmarkId:id,
+        benchmarkCase:item.id,
+        benchmarkRequired:Boolean(item.required),
+        expectedExitCodes:expected,
+        fault:String(item.fault||'')
+      },'benchmark');
+      await this.resolveTask(task.id,true);
+      stored.push({
+        id:item.id,
+        taskId:task.id,
+        required:Boolean(item.required),
+        expectedExitCodes:expected,
+        fault:String(item.fault||'')
+      });
+    }
+    const state={id,createdAt:Date.now(),cases:stored,total:stored.length};
+    await this.setJson('benchmark:'+id,state);
+    await this.setJson('benchmark:active',id);
+    return await this.autonomyBenchmarkStatus(id);
+  }
+
+  async autonomyBenchmarkStatus(id=''){
+    const benchmarkId=String(id||await this.getJson('benchmark:active','')||'');
+    if(!benchmarkId)return {ok:false,error:'Sem benchmark activo.'};
+    const state=await this.getJson('benchmark:'+benchmarkId,null);
+    if(!state)return {ok:false,error:'Benchmark não encontrado.',id:benchmarkId};
+
+    const rows=[];
+    let completed=0,passed=0;
+    const requiredFailures=[];
+    for(const item of (Array.isArray(state.cases)?state.cases:[])){
+      const task=await this.getJson('task:'+item.taskId,null);
+      const status=String(task?.status||'missing');
+      const exitCode=Number(task?.result?.exitCode);
+      const expected=Array.isArray(item.expectedExitCodes)?item.expectedExitCodes.map(Number):[0];
+      let ok=status==='completed'&&expected.includes(exitCode);
+
+      if(item.fault==='result_503_once'){
+        ok=ok&&Boolean(task?.faultInjectedAt);
+      }
+      if(item.id==='fault-timeout'){
+        ok=ok&&Number(task?.attempts||0)>=2;
+      }
+      if(status==='completed')completed++;
+      if(ok)passed++;
+      if(item.required&&status==='completed'&&!ok){
+        requiredFailures.push(item.id);
+      }
+      rows.push({
+        caseId:item.id,
+        taskId:item.taskId,
+        required:Boolean(item.required),
+        status,
+        attempts:Number(task?.attempts||0),
+        exitCode:Number.isFinite(exitCode)?exitCode:null,
+        expectedExitCodes:expected,
+        faultInjected:Boolean(task?.faultInjectedAt),
+        passed:ok
+      });
+    }
+
+    const total=rows.length;
+    const ready=total>0&&completed===total;
+    const score=total?Math.round((passed/total)*1000)/10:0;
+    const qualified=ready&&passed>=18&&requiredFailures.length===0;
+    return {
+      ok:true,id:benchmarkId,createdAt:Number(state.createdAt||0),
+      total,completed,passed,failed:completed-passed,
+      score,ready,qualified,requiredFailures,cases:rows
+    };
+  }
+
   async createGpuPair(meta={}){
     const now=Date.now();
     const active=await this.getJson('gpu:pair:active',null);
@@ -1802,6 +1919,39 @@ async function handleTelegramUpdate(env,update,ctx){
       return {ok:true};
     }
 
+    if(/^\/benchmark$/i.test(text)){
+      const benchmark=await q.startAutonomyBenchmark();
+      await telegramSend(env,[
+        'BENCHMARK AUTONOMIA · 20 TAREFAS',
+        '',
+        benchmark.reused?'Benchmark em curso reutilizado.':'Novo benchmark iniciado.',
+        'ID: '+String(benchmark.id||'-'),
+        'Critério: 18/20 + zero falhas obrigatórias.',
+        'Inclui Git read/write nos 5 repos e falhas controladas de ACK, timeout e serviço.',
+        '',
+        'Usa /benchmark-status para acompanhar.'
+      ].join('\n'));
+      return {ok:true};
+    }
+    if(/^\/benchmark-status$/i.test(text)){
+      const benchmark=await q.autonomyBenchmarkStatus();
+      if(!benchmark.ok){
+        await telegramSend(env,'BENCHMARK\n\n'+String(benchmark.error||'Sem benchmark.'));
+      }else{
+        const state=benchmark.ready?(benchmark.qualified?'APROVADO ≥90%':'CONCLUÍDO · NÃO APROVADO'):'EM CURSO';
+        await telegramSend(env,[
+          'BENCHMARK AUTONOMIA',
+          '',
+          'Estado: '+state,
+          'Concluídas: '+benchmark.completed+'/'+benchmark.total,
+          'Passaram: '+benchmark.passed+'/'+benchmark.total+' · '+benchmark.score+'%',
+          'Falhas obrigatórias: '+(benchmark.requiredFailures.length?benchmark.requiredFailures.join(', '):'0'),
+          'ID: '+benchmark.id
+        ].join('\n'));
+      }
+      return {ok:true};
+    }
+
     const instruction=parseOperitInstruction(text);
     if(instruction){
       const task=await q.createTask(instruction,'telegram');
@@ -1887,7 +2037,7 @@ async function handleTelegramUpdate(env,update,ctx){
       const stats=await q.taskStats();
       await telegramSend(env,'OPERIT\n\n'+(stats.paired?'Dispositivo: ligado':'Dispositivo: por emparelhar')+'\nFila: '+stats.queued+'\nEm execução: '+stats.running+'\nConcluídas: '+stats.completed);
     }else if(text==='/start'){
-      await telegramSend(env,'Centro de Negócios online.\n\nConversa normal = grupo multi-LLM\nSites/repos conhecidos são consultados automaticamente quando pedes análise\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/status — fila do executor\n/agents — agentes e prontidão\n/selftest — teste do caminho autónomo\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/openclaw — estado do OpenClaw\n/openclaw-models — modelos disponíveis\n/openclaw <pedido> — agente OpenClaw local\n/laya — estado do Laya\n/laya <pedido> — decisão rápida System 1\n/manus — estado do Manus\n/manus <pedido> — agente Manus\n/gpu-status — estado do Colab\n/gpu <pedido> — usar GPU Colab\n/fazer @beatriz <alteração> — editar, validar e publicar automaticamente\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro');
+      await telegramSend(env,'Centro de Negócios online.\n\nConversa normal = grupo multi-LLM\nSites/repos conhecidos são consultados automaticamente quando pedes análise\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/status — fila do executor\n/agents — agentes e prontidão\n/selftest — teste do caminho autónomo\n/benchmark — prova 20 tarefas (≥90%)\n/benchmark-status — progresso do benchmark\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/openclaw — estado do OpenClaw\n/openclaw-models — modelos disponíveis\n/openclaw <pedido> — agente OpenClaw local\n/laya — estado do Laya\n/laya <pedido> — decisão rápida System 1\n/manus — estado do Manus\n/manus <pedido> — agente Manus\n/gpu-status — estado do Colab\n/gpu <pedido> — usar GPU Colab\n/fazer @beatriz <alteração> — editar, validar e publicar automaticamente\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro');
     }else if(text){
       if(text.startsWith('/')){
         await telegramSend(env,'Centro disponível:\nConversa normal = grupo multi-LLM\n/mesa <tema> — análise formal\n/agents — agentes e prontidão\n/selftest — teste do caminho autónomo\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/repos — repositórios\n/openclaw — estado do OpenClaw\n/openclaw <pedido> — agente OpenClaw local\n/laya — estado do Laya\n/manus — estado do Manus\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos, beatriz\n/status — estado do executor');
@@ -2118,7 +2268,7 @@ export default {
         const q=taskQueue(env);
         if(!await q.authenticate(hash))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
         const task=await q.pullTask();
-        if(task){
+        if(task&&task.source!=='benchmark'){
           await telegramSend(env,'A EXECUTAR AGORA\n\n'+task.label+'\n\nO telemóvel já recebeu a tarefa.');
         }
         return json({ok:true,task},200,origin);
@@ -2136,6 +2286,22 @@ export default {
         await q.resolveTask(task.id,true);
         await q.setJson('selftest:last',{id:task.id,createdAt:Date.now()});
         return json({ok:true,id:task.id},200,origin);
+      }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
+    }
+
+    if(url.pathname==='/api/operit/benchmark'&&request.method==='POST'){
+      try{
+        const q=taskQueue(env);
+        if(!await q.authenticate(await sha256Hex(bearer(request))))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
+        return json(await q.startAutonomyBenchmark(),200,origin);
+      }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
+    }
+
+    if(url.pathname==='/api/operit/benchmark-status'&&request.method==='GET'){
+      try{
+        const q=taskQueue(env);
+        if(!await q.authenticate(await sha256Hex(bearer(request))))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
+        return json(await q.autonomyBenchmarkStatus(String(url.searchParams.get('id')||'')),200,origin);
       }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
     }
 
@@ -2208,6 +2374,12 @@ export default {
         if(!await q.authenticateGpu(hash))return json({ok:false,error:'GPU Node não autorizado.'},401,origin);
         await q.touchGpu(body?.meta&&typeof body.meta==='object'?body.meta:{});
         const id=String(body?.id||'');
+        const currentTask=await q.getJson('task:'+id,null);
+        if(currentTask?.fault==='result_503_once'&&!currentTask.faultInjectedAt){
+          currentTask.faultInjectedAt=Date.now();
+          await q.setJson('task:'+id,currentTask);
+          return json({ok:false,error:'BENCHMARK_INJECTED_RESULT_503'},503,origin);
+        }
         const result={
           text:String(body?.text||'').slice(0,12000),
           durationMs:Number(body?.durationMs)||0,
@@ -2290,9 +2462,25 @@ export default {
         if(!done.ok)return json({ok:false,error:'Tarefa não encontrada.'},404,origin);
         if(done.duplicate)return json({ok:true,duplicate:true,retrying:Boolean(done.retrying)},200,origin);
         if(done.retrying){
-          await telegramSend(env,'↻ RETRY AUTOMÁTICO\n\n'+done.task.label+
-            '\n\nA tentativa '+String(done.task.attempts||1)+' falhou de forma recuperável. O Centro vai repetir automaticamente em ~20 segundos.');
+          if(done.task.source!=='benchmark'){
+            await telegramSend(env,'↻ RETRY AUTOMÁTICO\n\n'+done.task.label+
+              '\n\nA tentativa '+String(done.task.attempts||1)+' falhou de forma recuperável. O Centro vai repetir automaticamente em ~20 segundos.');
+          }
           return json({ok:true,retrying:true},200,origin);
+        }
+        if(done.task.source==='benchmark'){
+          const benchmark=await q.autonomyBenchmarkStatus(done.task.benchmarkId);
+          if(benchmark.ok&&benchmark.ready){
+            await telegramSend(env,[
+              'BENCHMARK AUTONOMIA · RESULTADO FINAL',
+              '',
+              'Passaram: '+benchmark.passed+'/'+benchmark.total+' · '+benchmark.score+'%',
+              'Falhas obrigatórias: '+(benchmark.requiredFailures.length?benchmark.requiredFailures.join(', '):'0'),
+              'Resultado: '+(benchmark.qualified?'APROVADO ≥90%':'NÃO APROVADO'),
+              'ID: '+benchmark.id
+            ].join('\n'));
+          }
+          return json({ok:true,benchmark},200,origin);
         }
         const output=(result.stdout||result.stderr||'(sem saída)').slice(0,2800);
         if(done.task.action==='council_run'){
