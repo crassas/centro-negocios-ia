@@ -20,6 +20,8 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      GSC_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GSC_SERVICE_ACCOUNT_EMAIL }}
+      GSC_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.GSC_SERVICE_ACCOUNT_PRIVATE_KEY }}
     steps:
       - name: Verificar credenciais Cloudflare
         id: cloudflare
@@ -60,6 +62,20 @@ jobs:
             echo "Telegram sincronizado a partir dos GitHub secrets."
           else
             echo "Mantidas as credenciais Telegram já guardadas no Worker."
+          fi
+
+      - name: Sincronizar Google Search Console
+        if: steps.cloudflare.outputs.ready == 'true'
+        working-directory: cloudflare-ai-worker
+        shell: bash
+        run: |
+          if [ -n "$GSC_SERVICE_ACCOUNT_EMAIL" ] && [ -n "$GSC_SERVICE_ACCOUNT_PRIVATE_KEY" ]; then
+            node -e "require('fs').writeFileSync('/tmp/gsc-secrets.json', JSON.stringify({GSC_SERVICE_ACCOUNT_EMAIL:process.env.GSC_SERVICE_ACCOUNT_EMAIL,GSC_SERVICE_ACCOUNT_PRIVATE_KEY:process.env.GSC_SERVICE_ACCOUNT_PRIVATE_KEY}))"
+            npx --yes wrangler@latest secret bulk /tmp/gsc-secrets.json
+            rm -f /tmp/gsc-secrets.json
+            echo "Credenciais Search Console sincronizadas com o Worker."
+          else
+            echo "Search Console ainda sem credenciais; mantidas as secrets já existentes no Worker."
           fi
 
       - name: Configurar webhook Telegram
