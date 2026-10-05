@@ -15,10 +15,62 @@ def load(name):
 
 def main():
     server, agent, station = (load(n) for n in ("centro_server","centro_agent","centro_station"))
+    assert not server.OPENCLAW_ENABLED and not station.OPENCLAW_AUTOSTART
+    def forbidden_probe(*args, **kwargs):
+        raise AssertionError("disabled OpenClaw must never contact the gateway")
+    old_urlopen = server.urllib.request.urlopen
+    server.urllib.request.urlopen = forbidden_probe
+    try:
+        assert server.openclaw_http_health()[0] is False
+        assert station.openclaw_healthy() is False
+        for action in ("openclaw_query", "openclaw_models", "fault_openclaw_recovery"):
+            assert server.execute_action({"action": action})["exitCode"] == 78
+        assert not any("openclaw" in action for action in server.capabilities()["actions"])
+    finally:
+        server.urllib.request.urlopen = old_urlopen
+    print("OK disabled OpenClaw has no execution, health probes or advertised actions")
     for path in ("src/.env", "config/.env.production", "nested/.git/config", "./.env"):
         assert server.protected_repo_path(path), path
     with tempfile.TemporaryDirectory() as tmp:
         root=Path(tmp)
+        old_home = station.HOME
+        station.HOME = root
+        for pid, command, output in (
+            (11, b"openclaw\0gateway", str(root/".centro-openclaw/gateway.log")),
+            (12, b"openclaw\0gateway", "/some/external/log"),
+            (13, b"python\0unrelated.py", str(root/".centro-openclaw/gateway.log")),
+        ):
+            entry=root/"proc"/str(pid)
+            (entry/"fd").mkdir(parents=True)
+            (entry/"cmdline").write_bytes(command)
+            (entry/"fd/1").symlink_to(output)
+        assert set(station.centro_openclaw_processes(root/"proc")) == {11}
+        station.HOME = old_home
+        print("OK OpenClaw cleanup excludes external processes and unrelated commands")
+        saved = (server.HOME, server.run_cmd, server.pid_running, server.laya_http_health)
+        server.HOME = root
+        ctl=root/".local/bin/layactl"
+        ctl.parent.mkdir(parents=True)
+        ctl.touch()
+        calls=[]
+        def stopped_ctl(args, **kwargs):
+            calls.append(args[-1])
+            return {"exitCode":0,"stdout":"stopped","stderr":""}
+        server.run_cmd = stopped_ctl
+        health=iter([True,False,True])
+        server.laya_http_health=lambda:(next(health),None,None,None)
+        pids=iter([(True,77),(True,88)])
+        server.pid_running=lambda path:next(pids)
+        result=server.action_fault_laya_recovery({})
+        assert result["exitCode"]==0 and "oldPid=77 newPid=88" in result["stdout"]
+        assert calls == ["stop"], "test must not start service to manufacture recovery"
+        calls.clear()
+        server.laya_http_health=lambda:(True,None,None,None)
+        server.pid_running=lambda path:(True,77)
+        assert server.action_fault_laya_recovery({})["exitCode"]==1
+        assert calls==["stop"], "no-op stop must fail the test"
+        server.HOME, server.run_cmd, server.pid_running, server.laya_http_health = saved
+        print("OK service recovery requires actual outage and changed PID; manual start cannot pass")
         pidfile=root/"child.pid"
         stopped=root/"child.stopped"
         child_code="import os,time,signal,sys;signal.signal(signal.SIGTERM,lambda *a:(open("+repr(str(stopped))+",'w').write('terminated'),sys.exit(0)));open("+repr(str(pidfile))+",'w').write(str(os.getpid()));time.sleep(60)"

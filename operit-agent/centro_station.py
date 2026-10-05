@@ -49,7 +49,7 @@ AUTOUPDATE_INTERVAL_SECONDS = max(
     int(os.environ.get("CENTRO_AUTOUPDATE_INTERVAL", "600") or "600"),
 )
 AUTOUPDATE_ENABLED = os.environ.get("CENTRO_AUTOUPDATE", "1").strip().lower() not in {"0", "false", "no", "off"}
-OPENCLAW_AUTOSTART = os.environ.get("CENTRO_OPENCLAW_AUTOSTART", "1").strip().lower() not in {"0", "false", "no", "off"}
+OPENCLAW_AUTOSTART = False  # Suspenso por decisão do operador.
 LAYA_AUTOSTART = os.environ.get("CENTRO_LAYA_AUTOSTART", "1").strip().lower() not in {"0", "false", "no", "off"}
 REMOTE_DESKTOP_AUTOSTART = os.environ.get("CENTRO_REMOTE_DESKTOP_AUTOSTART", "1").strip().lower() not in {"0", "false", "no", "off"}
 RAW_BASE = "https://raw.githubusercontent.com/crassas/centro-negocios-ia/main/operit-agent"
@@ -129,6 +129,8 @@ def server_healthy():
 
 
 def openclaw_healthy():
+    if not OPENCLAW_AUTOSTART:
+        return False
     try:
         with urllib.request.urlopen(OPENCLAW_HEALTH, timeout=3) as res:
             return 200 <= res.status < 500
@@ -478,6 +480,41 @@ def write_status(payload):
         return False
 
 
+def centro_openclaw_processes(proc_root=Path("/proc")):
+    """Identifica apenas processos OpenClaw cujo stdout pertence ao Centro."""
+    owned = {}
+    expected_log = str(HOME / ".centro-openclaw" / "gateway.log")
+    for entry in proc_root.iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            command = (entry / "cmdline").read_bytes().replace(b"\0", b" ").decode().strip()
+            output = os.readlink(entry / "fd" / "1")
+            if output == expected_log and (command == "openclaw" or command.startswith("openclaw ") or "/openclaw/" in command):
+                owned[int(entry.name)] = (command, output)
+        except (OSError, UnicodeError):
+            continue
+    return owned
+
+
+def stop_disabled_openclaw():
+    owned = centro_openclaw_processes()
+    if (HOME / ".centro-openclaw" / "gateway.pid").exists():
+        run_ctl(OPENCLAW_CTL, "stop")
+    # O CLI pode deixar filhos órfãos. Revalida identidade e log antes de cada sinal.
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        current = centro_openclaw_processes()
+        for pid, identity in owned.items():
+            if current.get(pid) == identity:
+                try:
+                    os.kill(pid, sig)
+                except ProcessLookupError:
+                    pass
+        if sig == signal.SIGTERM and owned:
+            time.sleep(2)
+    return not centro_openclaw_processes()
+
+
 def main():
     safe_mkdir(STATE_DIR)
     singleton_lock = acquire_singleton_lock()
@@ -485,6 +522,13 @@ def main():
         print("Centro Station: outro supervisor já está activo; este processo termina.", flush=True)
         return
     print(f"Centro Station supervisor activo. PID {os.getpid()}. Ctrl+C para parar.", flush=True)
+    # Pára apenas o serviço gerido; mantém instalação e configuração para reactivação.
+    if not OPENCLAW_AUTOSTART:
+        try:
+            stopped = stop_disabled_openclaw()
+            print(f"[auto] openclaw-disabled · managedProcessesStopped={stopped}", flush=True)
+        except OSError as exc:
+            print(f"[auto] openclaw-disabled · limpeza pendente: {exc}", flush=True)
     last_openclaw_attempt = 0
     last_laya_attempt = 0
     last_remote_attempt = 0
@@ -678,6 +722,8 @@ def main():
                 "pid": agent_pid,
             },
             "openclaw": {
+                "enabled": False,
+                "state": "disabled-by-operator",
                 "healthy": openclaw_ok,
                 "autostart": OPENCLAW_AUTOSTART,
                 "endpoint": "127.0.0.1:18789",

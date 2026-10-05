@@ -29,6 +29,7 @@ RESULT_DIR = STATE_DIR / "completed"
 STARTED_AT = time.time()
 CMD_TIMEOUT = 120
 CLAUDE_TIMEOUT = 300
+OPENCLAW_ENABLED = False  # Suspenso por decisão do operador.
 OPENCLAW_TIMEOUT = 300
 OPENCLAW_PORT = 18789
 OPENCLAW_HEALTH = f"http://127.0.0.1:{OPENCLAW_PORT}/healthz"
@@ -155,12 +156,9 @@ def capabilities():
             "git_pull",
             "git_access_matrix",
             "fault_timeout",
-            "fault_openclaw_recovery",
+            "fault_laya_recovery",
             "repo_change",
             "claude_query",
-            "openclaw_status",
-            "openclaw_models",
-            "openclaw_query",
             "laya_status",
             "laya_decide",
             "manus_status",
@@ -332,6 +330,8 @@ def locate_openclaw():
 
 
 def openclaw_http_health():
+    if not OPENCLAW_ENABLED:
+        return False, None, "DESACTIVADO", "OpenClaw suspenso pelo operador."
     started = time.time()
     try:
         req = urllib.request.Request(
@@ -518,12 +518,11 @@ def laya_request(state):
             "instructions": "Escolhe o especialista principal para tratar este pedido.",
             "criteria": {
                 "fast_chat": "conversa simples, resposta curta ou esclarecimento imediato",
-                "code": "programação, arquitectura, repositórios, debugging ou implementação técnica",
                 "audit": "verificação, riscos, segurança, bugs ou controlo de qualidade",
                 "seo": "SEO, GEO, AEO, pesquisa local, indexação ou conteúdo para motores de busca",
                 "ux": "interface, experiência do utilizador, conversão ou mobile",
                 "research": "pesquisa externa, comparação ou validação de informação",
-                "openclaw": "execução local, ficheiros, terminal, ferramentas ou automação no dispositivo",
+                "code": "programação, repositórios, execução local, ficheiros, terminal ou automação no dispositivo",
                 "manus": "missão autónoma multi-etapa com pesquisa, browser, artefactos ou trabalho prolongado"
             }
         }
@@ -1185,7 +1184,7 @@ def action_repo_change(task):
                 plan = None
 
         openclaw_error = ""
-        if plan is None:
+        if plan is None and OPENCLAW_ENABLED:
             # Segundo planeador independente. O OpenClaw só devolve JSON; quem
             # escreve continua a ser o executor atómico e protegido do Centro.
             for openclaw_round in range(2):
@@ -1521,9 +1520,34 @@ def action_fault_openclaw_recovery(task):
 
 
 
+def action_fault_laya_recovery(task):
+    """Prova health → paragem efectiva → novo PID saudável sem arranque manual."""
+    started = time.monotonic()
+    ctl = next((p for p in (Path("/usr/local/bin/layactl"), HOME / ".local/bin/layactl") if p.exists()), None)
+    pidfile = HOME / ".centro-laya" / "laya.pid"
+    if not ctl or not laya_http_health()[0]:
+        return {"exitCode": 1, "stdout": "", "stderr": "Laya não está saudável antes do teste.", "durationMs": 0}
+    active, old_pid = pid_running(pidfile)
+    if not active:
+        return {"exitCode": 1, "stdout": "", "stderr": "Laya saudável mas sem PID gerido; falha não injectada.", "durationMs": 0}
+    stopped = run_cmd([str(ctl), "stop"], timeout=35)
+    if stopped["exitCode"] != 0 or laya_http_health()[0]:
+        return {"exitCode": 1, "stdout": stopped["stdout"], "stderr": "Paragem efectiva do Laya não comprovada.", "durationMs": int((time.monotonic()-started)*1000)}
+    deadline = time.monotonic() + 180
+    while time.monotonic() < deadline:
+        active, new_pid = pid_running(pidfile)
+        if active and new_pid != old_pid and laya_http_health()[0]:
+            return {"exitCode": 0, "stdout": f"FAULT_INJECTION_OK · Laya healthy-before=true offline-after-stop=true oldPid={old_pid} newPid={new_pid} recoveredBy=supervisor recoveryMs={int((time.monotonic()-started)*1000)}", "stderr": "", "durationMs": int((time.monotonic()-started)*1000)}
+        time.sleep(2)
+    run_cmd([str(ctl), "start"], timeout=35)
+    return {"exitCode": 1, "stdout": "", "stderr": "Supervisor não recuperou Laya em 180 s; arranque de segurança solicitado.", "durationMs": int((time.monotonic()-started)*1000)}
+
+
 def execute_action(task):
     action = str(task.get("action") or "")
     target = str(task.get("target") or "")
+    if not OPENCLAW_ENABLED and (action.startswith("openclaw_") or action == "fault_openclaw_recovery"):
+        return {"exitCode": 78, "stdout": "OpenClaw DESACTIVADO pelo operador.", "stderr": "", "durationMs": 0}
 
     if action == "server_status":
         agent_active, agent_pid = pid_running(AGENT_PID_FILE)
@@ -1558,7 +1582,7 @@ def execute_action(task):
             f"Servidor: ACTIVO · PID {os.getpid()}",
             f"Agente: {'ACTIVO' if agent_active else 'PARADO'} · PID {agent_pid if agent_pid else '-'}",
             f"Supervisor: {'ACTIVO' if supervisor_active else 'PARADO'} · PID {supervisor_pid if supervisor_pid else '-'}",
-            f"OpenClaw: {'ONLINE' if openclaw_ok else 'OFFLINE'}",
+            "OpenClaw: DESACTIVADO pelo operador",
             f"Laya: {'ONLINE' if laya_ok else 'OFFLINE'}",
             f"Manus: {'CONFIGURADO' if MANUS_KEY_FILE.exists() else 'SEM CHAVE / OPCIONAL'}",
             f"Capacidades: {len(capabilities()['actions'])}",
@@ -1614,7 +1638,6 @@ def execute_action(task):
         executors = [
             ("Claude Code", bool(claude)),
             ("Ollama para Claude", ollama_key),
-            ("OpenClaw", openclaw_ok),
             ("Laya", laya_ok),
         ]
         core_ready = sum(1 for _, ok in core if ok)
@@ -1831,7 +1854,6 @@ def execute_action(task):
         except Exception:
             pass
         optional = [
-            ("OpenClaw", openclaw_ok),
             ("Laya", laya_ok),
             ("Remote Desktop", remote_ok),
             ("Manus key", MANUS_KEY_FILE.exists()),
@@ -1886,8 +1908,6 @@ def execute_action(task):
             ("Token Operit", (HOME / ".centro-agent" / "token").exists()),
         ]
         optional = [
-            ("OpenClaw CLI", bool(locate_openclaw())),
-            ("OpenClaw Gateway", openclaw_http_health()[0]),
             ("Laya", laya_ok),
             ("Claude Code", bool(claude)),
             ("Manus API key", MANUS_KEY_FILE.exists()),
@@ -2217,8 +2237,8 @@ def execute_action(task):
     if action == "fault_timeout":
         return action_fault_timeout(task)
 
-    if action == "fault_openclaw_recovery":
-        return action_fault_openclaw_recovery(task)
+    if action == "fault_laya_recovery":
+        return action_fault_laya_recovery(task)
 
     if action in {"git_status", "git_pull"}:
         if target not in REPOS:

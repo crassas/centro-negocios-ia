@@ -34,5 +34,21 @@ try{
  assert.equal(await q.pullTask(),null);
  assert.equal((await q.getJson('task:'+abandoned.id)).result.exitCode,124);
  console.log('OK abandoned lease recovered once then terminated');
+ const benchmark=await q.startAutonomyBenchmark();
+ assert.equal(benchmark.profile,'core-no-openclaw-v1');
+ assert.equal(benchmark.total,20);
+ for(const item of benchmark.cases){
+   const task=await q.getJson('task:'+item.taskId);
+   assert.ok(!task.action.includes('openclaw'));
+   if(item.caseId==='fault-service')assert.equal(task.action,'fault_laya_recovery');
+ }
+ assert.equal((await q.startAutonomyBenchmark()).id,benchmark.id);
+ const state=await q.getJson('benchmark:'+benchmark.id);
+ delete state.profile;
+ await q.setJson('benchmark:'+benchmark.id,state);
+ const fresh=await q.startAutonomyBenchmark();
+ assert.notEqual(fresh.id,benchmark.id);
+ assert.equal(fresh.total,20);
+ console.log('OK new 20-task profile excludes OpenClaw and preserves real service recovery');
  console.log('queue_selftest: OK');
 }finally{Date.now=realNow;}

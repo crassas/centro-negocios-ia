@@ -206,7 +206,7 @@ export class TaskQueue extends DurableObject {
     const activeId=String(await this.getJson('benchmark:active','')||'');
     if(activeId){
       const active=await this.autonomyBenchmarkStatus(activeId);
-      if(active&&active.ok&&!active.ready&&Date.now()-Number(active.createdAt||0)<2*60*60*1000){
+      if(active&&active.ok&&active.profile==='core-no-openclaw-v1'&&!active.ready&&Date.now()-Number(active.createdAt||0)<2*60*60*1000){
         return {...active,reused:true};
       }
     }
@@ -225,14 +225,14 @@ export class TaskQueue extends DurableObject {
       {id:'git-irmaos',required:true,spec:{action:'git_status',target:'restaurante-2-irmaos',label:'Benchmark 10 · Git 2 Irmãos'}},
       {id:'git-beatriz',required:true,spec:{action:'git_status',target:'engomadoria-beatriz',label:'Benchmark 11 · Git Beatriz'}},
       {id:'git-write-matrix',required:true,spec:{action:'git_access_matrix',target:'all',label:'Benchmark 12 · leitura/escrita Git'}},
-      {id:'openclaw-status',required:false,spec:{action:'openclaw_status',target:'local',label:'Benchmark 13 · OpenClaw estado'}},
-      {id:'openclaw-query',required:false,spec:{action:'openclaw_query',target:'local',args:{prompt:'Responde apenas BENCHMARK_OK'},label:'Benchmark 14 · OpenClaw resposta'}},
+      {id:'laya-status',required:false,spec:{action:'laya_status',target:'local',label:'Benchmark 13 · Laya estado'}},
+      {id:'laya-decision',required:false,spec:{action:'laya_decide',target:'local',args:{prompt:'Classifica: verificar o estado Git de um repositório.'},label:'Benchmark 14 · Laya decisão'}},
       {id:'claude-fallback',required:true,spec:{action:'claude_query',target:'local',args:{prompt:'Responde apenas BENCHMARK_OK'},label:'Benchmark 15 · Claude/fallback'}},
       {id:'git-pull-centro',required:false,spec:{action:'git_pull',target:'centro-negocios-ia',label:'Benchmark 16 · pull Centro'}},
       {id:'git-pull-irmaos',required:true,spec:{action:'git_pull',target:'restaurante-2-irmaos',label:'Benchmark 17 · pull 2 Irmãos'}},
       {id:'fault-result-ack',required:true,fault:'result_503_once',spec:{action:'system_info',target:'local',label:'Benchmark 18 · falha de rede/ACK'}},
       {id:'fault-timeout',required:true,expected:[124],spec:{action:'fault_timeout',target:'local',label:'Benchmark 19 · executor preso'}},
-      {id:'fault-service',required:true,spec:{action:'fault_openclaw_recovery',target:'local',label:'Benchmark 20 · recuperação de serviço'}}
+      {id:'fault-service',required:true,spec:{action:'fault_laya_recovery',target:'local',label:'Benchmark 20 · recuperação automática Laya'}}
     ];
 
     const stored=[];
@@ -255,7 +255,7 @@ export class TaskQueue extends DurableObject {
         fault:String(item.fault||'')
       });
     }
-    const state={id,createdAt:Date.now(),cases:stored,total:stored.length};
+    const state={id,profile:'core-no-openclaw-v1',createdAt:Date.now(),cases:stored,total:stored.length};
     await this.setJson('benchmark:'+id,state);
     await this.setJson('benchmark:active',id);
     return await this.autonomyBenchmarkStatus(id);
@@ -306,7 +306,7 @@ export class TaskQueue extends DurableObject {
     const score=total?Math.round((passed/total)*1000)/10:0;
     const qualified=ready&&passed>=18&&requiredFailures.length===0;
     return {
-      ok:true,id:benchmarkId,createdAt:Number(state.createdAt||0),
+      ok:true,id:benchmarkId,profile:String(state.profile||'legacy'),createdAt:Number(state.createdAt||0),
       total,completed,passed,failed:completed-passed,
       score,ready,qualified,requiredFailures,cases:rows
     };
@@ -1676,21 +1676,6 @@ function parseOperitInstruction(text){
   if(m)return {action:'autonomy_selftest',target:'local',label:'Self-test da autonomia'};
   m=raw.match(/^\/server$/i);
   if(m)return {action:'server_status',target:'local',label:'Estado do Centro Server privado'};
-  m=raw.match(/^\/(?:openclaw|openclaw-status)$/i);
-  if(m)return {action:'openclaw_status',target:'local',label:'Estado do OpenClaw Gateway'};
-  m=raw.match(/^\/openclaw-models$/i);
-  if(m)return {action:'openclaw_models',target:'local',label:'Modelos disponíveis no OpenClaw'};
-  m=raw.match(/^\/openclaw\s+([\s\S]{1,5000})$/i);
-  if(m){
-    const prompt=m[1].trim();
-    if(!prompt)return null;
-    return {
-      action:'openclaw_query',
-      target:'local',
-      args:{prompt},
-      label:'OpenClaw · agente principal'
-    };
-  }
   m=raw.match(/^\/laya$/i);
   if(m)return {action:'laya_status',target:'local',label:'Estado do Laya local'};
   m=raw.match(/^\/laya\s+([\s\S]{1,5000})$/i);
@@ -1952,12 +1937,16 @@ async function handleTelegramUpdate(env,update,ctx){
       return {ok:true};
     }
 
+    if(/^\/openclaw(?:-status|-models)?(?:\s|$)/i.test(String(text||'').trim())){
+      await telegramSend(env,'OpenClaw desactivado. Usa /claude, /laya ou /fazer.');
+      return {ok:true};
+    }
+
     const instruction=parseOperitInstruction(text);
     if(instruction){
       const task=await q.createTask(instruction,'telegram');
       const isClaude=instruction.action==='claude_query';
       const isRepoChange=instruction.action==='repo_change';
-      const isOpenClaw=instruction.action==='openclaw_query'||instruction.action==='openclaw_status';
       const isLaya=instruction.action==='laya_decide'||instruction.action==='laya_status';
       const isManus=instruction.action==='manus_query'||instruction.action==='manus_status';
       const isReadOnly=[
@@ -1973,10 +1962,10 @@ async function handleTelegramUpdate(env,update,ctx){
       }else if(isRepoChange){
         await q.resolveTask(task.id,true);
         await telegramSend(env,'⚙️ AUTOMAÇÃO\n\n'+task.label+'\n\nTarefa aceite automaticamente. O executor vai trabalhar numa cópia isolada, validar e publicar apenas se tudo passar.');
-      }else if(isOpenClaw||isLaya||isManus){
+      }else if(isLaya||isManus){
         await q.resolveTask(task.id,true);
-        const heading=isOpenClaw?'⚡ OPENCLAW':(isLaya?'🟦 LAYA':'🛰️ MANUS');
-        const dest=isOpenClaw?'Gateway local':(isLaya?'motor local':'API v2');
+        const heading=isLaya?'🟦 LAYA':'🛰️ MANUS';
+        const dest=isLaya?'motor local':'API v2';
         await telegramSend(env,heading+'\n\n'+task.label+'\n\nEnviado directamente para '+dest+'.');
       }else{
         const heading=isClaude?'CLAUDE CODE':'ACÇÃO OPERIT';
@@ -2037,10 +2026,10 @@ async function handleTelegramUpdate(env,update,ctx){
       const stats=await q.taskStats();
       await telegramSend(env,'OPERIT\n\n'+(stats.paired?'Dispositivo: ligado':'Dispositivo: por emparelhar')+'\nFila: '+stats.queued+'\nEm execução: '+stats.running+'\nConcluídas: '+stats.completed);
     }else if(text==='/start'){
-      await telegramSend(env,'Centro de Negócios online.\n\nConversa normal = grupo multi-LLM\nSites/repos conhecidos são consultados automaticamente quando pedes análise\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/status — fila do executor\n/agents — agentes e prontidão\n/selftest — teste do caminho autónomo\n/benchmark — prova 20 tarefas (≥90%)\n/benchmark-status — progresso do benchmark\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/openclaw — estado do OpenClaw\n/openclaw-models — modelos disponíveis\n/openclaw <pedido> — agente OpenClaw local\n/laya — estado do Laya\n/laya <pedido> — decisão rápida System 1\n/manus — estado do Manus\n/manus <pedido> — agente Manus\n/gpu-status — estado do Colab\n/gpu <pedido> — usar GPU Colab\n/fazer @beatriz <alteração> — editar, validar e publicar automaticamente\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro');
+      await telegramSend(env,'Centro de Negócios online.\n\nConversa normal = grupo multi-LLM\nSites/repos conhecidos são consultados automaticamente quando pedes análise\n/mesa <tema> — análise formal\n/limpar — limpar memória do grupo\n/repos — repositórios\n/status — fila do executor\n/agents — agentes e prontidão\n/selftest — teste do caminho autónomo\n/benchmark — prova 20 tarefas (≥90%)\n/benchmark-status — progresso do benchmark\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/laya — estado do Laya\n/laya <pedido> — decisão rápida System 1\n/manus — estado do Manus\n/manus <pedido> — agente Manus\n/gpu-status — estado do Colab\n/gpu <pedido> — usar GPU Colab\n/fazer @beatriz <alteração> — editar, validar e publicar automaticamente\n/claude <pedido>\n/claude @pentehouse <pedido>\n\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro');
     }else if(text){
       if(text.startsWith('/')){
-        await telegramSend(env,'Centro disponível:\nConversa normal = grupo multi-LLM\n/mesa <tema> — análise formal\n/agents — agentes e prontidão\n/selftest — teste do caminho autónomo\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/repos — repositórios\n/openclaw — estado do OpenClaw\n/openclaw <pedido> — agente OpenClaw local\n/laya — estado do Laya\n/manus — estado do Manus\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos, beatriz\n/status — estado do executor');
+        await telegramSend(env,'Centro disponível:\nConversa normal = grupo multi-LLM\n/mesa <tema> — análise formal\n/agents — agentes e prontidão\n/selftest — teste do caminho autónomo\n/station — estação completa\n/doctor — diagnóstico\n/server — servidor privado\n/repos — repositórios\n/laya — estado do Laya\n/manus — estado do Manus\n/claude <pedido>\n/claude @pentehouse <pedido>\n\nOperit:\n/operit system\n/operit sites\n/operit git-status centro\n/operit git-pull centro\n\nProjectos: centro, pentehouse, pizza, kebab, doisirmaos, beatriz\n/status — estado do executor');
       }else{
         await telegramApi(env,'sendChatAction',{chat_id:env.TELEGRAM_CHAT_ID,action:'typing'});
         const job=runGroupChat(env,text,roomTurnId);
@@ -2606,3 +2595,4 @@ export default {
     return json({ok:false,error:'Rota não encontrada.'},404,origin);
   }
 };
+
