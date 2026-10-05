@@ -52,8 +52,20 @@ start_gateway() {
   fi
 
   if managed_running; then
-    echo "Processo OpenClaw existe mas o health check ainda não responde. PID $(cat "$PID_FILE")"
-    exit 1
+    PID="$(cat "$PID_FILE")"
+    NOW="$(date +%s 2>/dev/null || echo 0)"
+    MTIME="$(stat -c %Y "$PID_FILE" 2>/dev/null || echo 0)"
+    AGE=$((NOW - MTIME))
+    if [ "$NOW" -gt 0 ] && [ "$MTIME" -gt 0 ] && [ "$AGE" -ge 120 ]; then
+      echo "Processo OpenClaw preso há ${AGE}s; a reciclar PID $PID."
+      kill "$PID" 2>/dev/null || true
+      sleep 2
+      kill -9 "$PID" 2>/dev/null || true
+      rm -f "$PID_FILE"
+    else
+      echo "Processo OpenClaw existe mas ainda está a arrancar. PID $PID · idade ${AGE}s"
+      exit 1
+    fi
   fi
 
   rm -f "$PID_FILE"
