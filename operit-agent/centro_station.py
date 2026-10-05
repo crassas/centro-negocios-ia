@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import os
+import signal
 import shutil
 import subprocess
 import sys
@@ -34,6 +35,7 @@ LAYA_HEALTH = "http://127.0.0.1:18790/health"
 REMOTE_STATE_DIR = HOME / ".centro-remote"
 REMOTE_PID_FILE = REMOTE_STATE_DIR / "remote.pid"
 REMOTE_LOG_FILE = REMOTE_STATE_DIR / "remote.log"
+REMOTE_MANAGED_FILE = REMOTE_STATE_DIR / "managed.json"
 REMOTE_DEVICE_FILE = HOME / ".desktop-commander-device" / "device.json"
 INTERVAL = 3
 OPTIONAL_RETRY_SECONDS = 45
@@ -99,6 +101,49 @@ def process_alive(pid):
         return False
 
 
+def proc_cmdline(pid):
+    try:
+        raw = (Path("/proc") / str(int(pid)) / "cmdline").read_bytes().replace(b"\x00", b" ")
+        return raw.decode("utf-8", errors="replace").strip()
+    except Exception:
+        return ""
+
+
+def remote_command_pids():
+    rows = []
+    try:
+        entries = list(Path("/proc").iterdir())
+    except Exception:
+        return rows
+    for entry in entries:
+        if not entry.name.isdigit():
+            continue
+        cmd = proc_cmdline(entry.name)
+        low = cmd.lower()
+        if "desktop-commander" in low and (" remote" in low or low.endswith(" remote")):
+            rows.append(int(entry.name))
+    return sorted(set(rows))
+
+
+def remote_executor_pid():
+    # O processo filho MCP recebe esta variável explicitamente do Remote Device.
+    # É uma prova mais forte do que verificar apenas o processo npm/node pai.
+    try:
+        entries = list(Path("/proc").iterdir())
+    except Exception:
+        return None
+    for entry in entries:
+        if not entry.name.isdigit():
+            continue
+        try:
+            env = (entry / "environ").read_bytes()
+        except Exception:
+            continue
+        if b"DC_REMOTE_DEVICE=true" in env:
+            return int(entry.name)
+    return None
+
+
 def remote_desktop_pid():
     try:
         pid = int(REMOTE_PID_FILE.read_text(encoding="utf-8").strip())
@@ -107,56 +152,119 @@ def remote_desktop_pid():
     except Exception:
         pass
 
-    proc_root = Path("/proc")
-    try:
-        entries = list(proc_root.iterdir())
-    except Exception:
+    pids = remote_command_pids()
+    if not pids:
         return None
+    # Guarda o processo mais exterior; ao terminá-lo, npm/sh/node fecham a
+    # árvore normalmente sem tocar no shell interactivo do utilizador.
+    pid = pids[0]
+    try:
+        REMOTE_STATE_DIR.mkdir(parents=True, exist_ok=True)
+        REMOTE_PID_FILE.write_text(str(pid), encoding="utf-8")
+    except Exception:
+        pass
+    return pid
 
-    for entry in entries:
-        if not entry.name.isdigit():
-            continue
-        try:
-            raw = (entry / "cmdline").read_bytes().replace(b"\x00", b" ")
-            cmd = raw.decode("utf-8", errors="replace").lower()
-        except Exception:
-            continue
-        if "desktop-commander" in cmd and " remote" in cmd:
-            pid = int(entry.name)
-            try:
-                REMOTE_STATE_DIR.mkdir(parents=True, exist_ok=True)
-                REMOTE_PID_FILE.write_text(str(pid), encoding="utf-8")
-            except Exception:
-                pass
-            return pid
-    return None
+
+def remote_managed_state():
+    try:
+        data = json.loads(REMOTE_MANAGED_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def remote_log_health():
+    if not REMOTE_LOG_FILE.exists():
+        return None, "sem log gerido"
+    try:
+        with REMOTE_LOG_FILE.open("rb") as fh:
+            size = fh.seek(0, 2)
+            fh.seek(max(0, size - 48000))
+            text = fh.read().decode("utf-8", errors="replace").lower()
+    except Exception as exc:
+        return None, "log ilegível: " + str(exc)[:120]
+
+    success_markers = (
+        "desktop commander remote is connected",
+        "channel subscribed",
+        "device ready:",
+    )
+    failure_markers = (
+        "device registered, but not reachable",
+        "realtime channel is not open",
+        "increaseconnectionpool",
+        "channel error",
+        "remote channel subscription failed",
+    )
+    last_success = max([text.rfind(x) for x in success_markers] + [-1])
+    last_failure = max([text.rfind(x) for x in failure_markers] + [-1])
+    if last_failure > last_success:
+        tail = text[max(0, last_failure - 180):last_failure + 420].replace("\n", " ")
+        return False, tail[-600:]
+    if last_success >= 0:
+        return True, "canal remoto confirmado no log"
+    return None, "canal ainda sem confirmação no log"
 
 
 def remote_desktop_healthy():
     pid = remote_desktop_pid()
-    return bool(pid), pid
+    executor = remote_executor_pid()
+    log_ok, detail = remote_log_health()
+    # O executor MCP é indispensável. Para processos antigos arrancados à mão
+    # não existe log gerido; nesse caso o executor mantém o diagnóstico útil.
+    ok = bool(pid and executor and log_ok is not False)
+    return ok, pid, executor, detail
 
 
-def start_remote_desktop():
+def stop_remote_desktop():
+    pids = remote_command_pids()
+    if not pids:
+        REMOTE_PID_FILE.unlink(missing_ok=True)
+        return True, "já parado"
+    for pid in reversed(pids):
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except Exception:
+            pass
+    deadline = time.time() + 5
+    while time.time() < deadline and any(process_alive(pid) for pid in pids):
+        time.sleep(0.25)
+    for pid in reversed(pids):
+        if process_alive(pid):
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except Exception:
+                pass
+    REMOTE_PID_FILE.unlink(missing_ok=True)
+    return True, "processo remoto reciclado"
+
+
+def start_remote_desktop(force=False):
     if not REMOTE_DEVICE_FILE.exists():
         return False, "dispositivo ainda não emparelhado"
 
     current = remote_desktop_pid()
-    if current:
+    if current and not force:
         return True, f"já activo · PID {current}"
+    if current and force:
+        stop_remote_desktop()
+        time.sleep(1)
 
     binary = shutil.which("desktop-commander")
     if binary:
-        command = [binary, "remote"]
+        command = [binary, "remote", "--debug"]
     else:
         npx = shutil.which("npx")
         if not npx:
             return False, "falta desktop-commander e npx"
-        command = [npx, "-y", "@wonderwhy-er/desktop-commander@latest", "remote"]
+        command = [npx, "-y", "@wonderwhy-er/desktop-commander@latest", "remote", "--debug"]
 
     try:
         REMOTE_STATE_DIR.mkdir(parents=True, exist_ok=True)
-        log = REMOTE_LOG_FILE.open("ab", buffering=0)
+        # Cada arranque gerido começa um log limpo; assim uma falha antiga não
+        # mascara uma recuperação actual.
+        log = REMOTE_LOG_FILE.open("wb", buffering=0)
         proc = subprocess.Popen(
             command,
             cwd=str(HOME),
@@ -166,9 +274,14 @@ def start_remote_desktop():
             start_new_session=True,
         )
         REMOTE_PID_FILE.write_text(str(proc.pid), encoding="utf-8")
-        return True, f"arranque solicitado · PID {proc.pid}"
+        REMOTE_MANAGED_FILE.write_text(
+            json.dumps({"pid": proc.pid, "startedAt": int(time.time())}),
+            encoding="utf-8",
+        )
+        return True, f"arranque gerido solicitado · PID {proc.pid}"
     except Exception as exc:
         return False, str(exc)
+
 
 
 def run_ctl(path, command):
@@ -347,19 +460,40 @@ def main():
             except Exception as exc:
                 actions.append({"service": "laya", "ok": False, "output": str(exc)})
 
-        remote_ok, remote_pid = remote_desktop_healthy()
-        if (
-            REMOTE_DESKTOP_AUTOSTART
-            and not remote_ok
-            and REMOTE_DEVICE_FILE.exists()
-            and now - last_remote_attempt >= OPTIONAL_RETRY_SECONDS
-        ):
-            last_remote_attempt = now
-            ok, output = start_remote_desktop()
-            actions.append({"service": "remote-desktop", "ok": ok, "output": output})
-            if ok:
-                time.sleep(2)
-                remote_ok, remote_pid = remote_desktop_healthy()
+        remote_ok, remote_pid, remote_executor, remote_detail = remote_desktop_healthy()
+        remote_managed = remote_managed_state()
+        if REMOTE_DESKTOP_AUTOSTART and REMOTE_DEVICE_FILE.exists() and not busy:
+            # Primeira passagem após activar a gestão autónoma: assume o
+            # processo remoto já emparelhado e relança-o sob supervisão/log.
+            takeover = bool(remote_pid and not remote_managed)
+            managed_age = now - int(remote_managed.get("startedAt") or now)
+            broken_managed = bool(
+                remote_pid
+                and remote_managed
+                and managed_age >= 60
+                and not remote_ok
+            )
+            missing = not remote_pid
+            if (
+                (takeover or broken_managed or missing)
+                and now - last_remote_attempt >= OPTIONAL_RETRY_SECONDS
+            ):
+                last_remote_attempt = now
+                ok, output = start_remote_desktop(force=bool(remote_pid))
+                reason = (
+                    "takeover"
+                    if takeover
+                    else ("recuperação" if broken_managed else "arranque")
+                )
+                actions.append({
+                    "service": "remote-desktop/" + reason,
+                    "ok": ok,
+                    "output": output + (" · " + remote_detail if remote_detail else ""),
+                })
+                if ok:
+                    time.sleep(4)
+                    remote_ok, remote_pid, remote_executor, remote_detail = remote_desktop_healthy()
+                    remote_managed = remote_managed_state()
 
         write_status({
             "ok": bool(healthy and agent_active),
@@ -387,7 +521,10 @@ def main():
                 "healthy": remote_ok,
                 "autostart": REMOTE_DESKTOP_AUTOSTART,
                 "configured": REMOTE_DEVICE_FILE.exists(),
+                "managed": bool(remote_managed),
                 "pid": remote_pid,
+                "executorPid": remote_executor,
+                "detail": remote_detail,
             },
             "autoupdate": {
                 "enabled": AUTOUPDATE_ENABLED,
