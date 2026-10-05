@@ -281,7 +281,9 @@ def execute(task):
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=CLAUDE_TIMEOUT + 30) as res:
+        action_name = str(task.get("action") or "")
+        server_timeout = 900 if action_name == "repo_change" else CLAUDE_TIMEOUT + 120
+        with urllib.request.urlopen(req, timeout=server_timeout) as res:
             data = json.loads(res.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         return exc.code, "", f"Centro Server HTTP {exc.code}", 0
