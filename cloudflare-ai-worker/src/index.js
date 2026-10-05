@@ -202,6 +202,16 @@ export class TaskQueue extends DurableObject {
     await this.setJson('task:'+id,task);
     return {ok:true,task,retrying:false};
   }
+  async startPublicationSelftest(){
+    const old=await this.getJson('publication:selftest',null);
+    if(old){const task=await this.getJson('task:'+old.id,null);if(task)return {ok:true,id:task.id,reused:true};}
+    const prompt='Altera apenas README.md. Preserva todo o conteúdo existente. Acrescenta no fim, uma única vez, exactamente esta secção em Markdown:\n\n## Operação autónoma sem OpenClaw\n\n<!-- CENTRO_OPERACAO_SEM_OPENCLAW -->\nO OpenClaw está temporariamente desactivado. O Centro mantém o Worker, a fila persistente, o Agent, o Server, o supervisor e o Laya. A publicação automática usa validação local antes de enviar alterações para o Git. O fallback pago automático permanece desactivado.\n\nSe o marcador já existir, não dupliques a secção. Não alteres qualquer outro ficheiro.';
+    const task=await this.createTask({action:'repo_change',target:'centro-negocios-ia',args:{prompt,allowedPaths:['README.md']},label:'Prova real de publicação · documentação operacional'},'publication-selftest');
+    await this.resolveTask(task.id,true);
+    await this.setJson('publication:selftest',{id:task.id,createdAt:Date.now()});
+    return {ok:true,id:task.id,reused:false};
+  }
+
   async startAutonomyBenchmark(){
     const activeId=String(await this.getJson('benchmark:active','')||'');
     if(activeId){
@@ -2258,10 +2268,18 @@ export default {
         const q=taskQueue(env);
         if(!await q.authenticate(hash))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
         const task=await q.pullTask();
-        if(task&&task.source!=='benchmark'){
+        if(task&&task.source!=='benchmark'&&task.source!=='stability'){
           await telegramSend(env,'A EXECUTAR AGORA\n\n'+task.label+'\n\nO telemóvel já recebeu a tarefa.');
         }
         return json({ok:true,task},200,origin);
+      }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
+    }
+
+    if(url.pathname==='/api/operit/publication-selftest'&&request.method==='POST'){
+      try{
+        const q=taskQueue(env);
+        if(!await q.authenticate(await sha256Hex(bearer(request))))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
+        return json(await q.startPublicationSelftest(),200,origin);
       }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
     }
 
@@ -2272,7 +2290,7 @@ export default {
         if(!await q.authenticate(await sha256Hex(bearer(request))))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
         const existing=await q.getJson('selftest:last',null);
         if(existing&&Date.now()-existing.createdAt<60000)return json({ok:true,id:existing.id,reused:true},200,origin);
-        const task=await q.createTask({action:'git_status',target:'centro-negocios-ia',args:{},label:'Self-test ponta a ponta · Git'},'selftest');
+        const task=await q.createTask({action:'git_status',target:'centro-negocios-ia',args:{},label:'Self-test ponta a ponta · Git'},body?.quiet?'stability':'selftest');
         await q.resolveTask(task.id,true);
         await q.setJson('selftest:last',{id:task.id,createdAt:Date.now()});
         return json({ok:true,id:task.id},200,origin);
@@ -2461,7 +2479,7 @@ export default {
         if(!done.ok)return json({ok:false,error:'Tarefa não encontrada.'},404,origin);
         if(done.duplicate)return json({ok:true,duplicate:true,retrying:Boolean(done.retrying)},200,origin);
         if(done.retrying){
-          if(done.task.source!=='benchmark'){
+          if(done.task.source!=='benchmark'&&done.task.source!=='stability'){
             await telegramSend(env,'↻ RETRY AUTOMÁTICO\n\n'+done.task.label+
               '\n\nA tentativa '+String(done.task.attempts||1)+' falhou de forma recuperável. O Centro vai repetir automaticamente em ~20 segundos.');
           }
@@ -2481,6 +2499,7 @@ export default {
           }
           return json({ok:true,benchmark},200,origin);
         }
+        if(done.task.source==='stability')return json({ok:true},200,origin);
         const output=(result.stdout||result.stderr||'(sem saída)').slice(0,2800);
         if(done.task.action==='council_run'){
           await telegramSend(env,result.exitCode===0?'✅ SALA DE CONSELHO CONCLUÍDA':'⚠️ SALA DE CONSELHO TERMINOU COM ERRO');
@@ -2595,4 +2614,5 @@ export default {
     return json({ok:false,error:'Rota não encontrada.'},404,origin);
   }
 };
+
 

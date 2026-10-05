@@ -29,6 +29,14 @@ def main():
     finally:
         server.urllib.request.urlopen = old_urlopen
     print("OK disabled OpenClaw has no execution, health probes or advertised actions")
+    soak=load("centro_soak")
+    state={"deadline":1000,"lastSampleAt":1,"samples":0,"healthySamples":0,"gaps":0,"issues":0,"probesPassed":1,"probesFailed":0,"enabled":True}
+    soak.sample(state,1001,{"core":True})
+    assert state["phase"]=="completed-with-issues" and state["gaps"]==1 and not state["enabled"]
+    state.update(deadline=1100,lastSampleAt=1099,gaps=0,issues=0,enabled=True)
+    soak.sample(state,1101,{"core":True})
+    assert state["phase"]=="passed" and not state["enabled"]
+    print("OK soak deadline is bounded and monitoring gaps cannot pass")
     for path in ("src/.env", "config/.env.production", "nested/.git/config", "./.env"):
         assert server.protected_repo_path(path), path
     with tempfile.TemporaryDirectory() as tmp:

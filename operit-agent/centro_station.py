@@ -58,6 +58,7 @@ RUNTIME_FILES = {
     "centro_server.py": HOME / "centro_server.py",
     "centro_agent.py": HOME / "centro_agent.py",
     "centro_station.py": SUPERVISOR_PATH,
+    "centro_soak.py": HOME / "centro_soak.py",
     "centroctl.sh": AGENT_CTL,
     "serverctl.sh": SERVER_CTL,
     "stationctl.sh": locate_ctl("centrostation"),
@@ -263,7 +264,11 @@ def remote_log_health():
 def remote_desktop_healthy():
     pid = remote_desktop_pid()
     executor = remote_executor_pid()
-    log_ok, detail = remote_log_health()
+    managed = remote_managed_state()
+    if managed.get("pid") == pid and not managed.get("adopted"):
+        log_ok, detail = remote_log_health()
+    else:
+        log_ok, detail = None, "canal manual: executor activo; log gerido não aplicável"
     # O executor MCP é indispensável. Para processos antigos arrancados à mão
     # não existe log gerido; nesse caso o executor mantém o diagnóstico útil.
     ok = bool(pid and executor and log_ok is not False)
@@ -515,6 +520,24 @@ def stop_disabled_openclaw():
     return not centro_openclaw_processes()
 
 
+def ensure_soak_monitor():
+    try:
+        state = json.loads((STATE_DIR / "soak.json").read_text())
+        if not state.get("enabled"):
+            return
+        pid = state.get("pid")
+        runner = HOME / "centro_soak.py"
+        if pid and process_alive(pid) and str(runner) in proc_cmdline(pid):
+            return
+        if not runner.exists():
+            return
+        with (STATE_DIR / "soak.log").open("ab", buffering=0) as log:
+            subprocess.Popen([sys.executable, str(runner)], stdin=subprocess.DEVNULL,
+                             stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+    except Exception as exc:
+        print(f"[auto] soak · {type(exc).__name__}", flush=True)
+
+
 def main():
     safe_mkdir(STATE_DIR)
     singleton_lock = acquire_singleton_lock()
@@ -544,6 +567,7 @@ def main():
         now = int(time.time())
         write_heartbeat()
         actions = []
+        ensure_soak_monitor()
         reexec_station = False
         busy = server_busy()
         if busy:
@@ -653,7 +677,7 @@ def main():
             # "takeover" destrutivo: terminava exactamente o canal que acabara
             # de ficar ONLINE e só depois tentava criar outro em background.
             # Em Android/PRoot isso criava a sequência "connected -> Terminated".
-            takeover = bool(remote_pid and not remote_managed)
+            takeover = bool(remote_pid and (not remote_managed or remote_managed.get("pid") != remote_pid))
             if takeover and remote_ok:
                 try:
                     safe_mkdir(REMOTE_STATE_DIR)

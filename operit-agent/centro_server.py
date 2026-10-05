@@ -1233,6 +1233,9 @@ def action_repo_change(task):
                 }
 
         paths, status = changed_paths(worktree)
+        allowed_paths = (task.get("args") or {}).get("allowedPaths")
+        if allowed_paths is not None and (not isinstance(allowed_paths, list) or any(rel not in allowed_paths for rel in paths)):
+            return {"exitCode": 65, "stdout": "", "stderr": "Alteração fora dos ficheiros autorizados; nada publicado.", "durationMs": int((time.time()-started)*1000)}
         if status["exitCode"] != 0:
             return {
                 "exitCode": status["exitCode"],

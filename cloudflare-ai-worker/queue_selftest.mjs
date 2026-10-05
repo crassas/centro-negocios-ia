@@ -51,4 +51,12 @@ try{
  assert.equal(fresh.total,20);
  console.log('OK new 20-task profile excludes OpenClaw and preserves real service recovery');
  console.log('queue_selftest: OK');
+ const publication=await q.startPublicationSelftest();
+ const repeated=await q.startPublicationSelftest();
+ assert.equal(publication.id,repeated.id);
+ const publicationTask=await q.getJson('task:'+publication.id);
+ assert.equal(publicationTask.action,'repo_change');
+ assert.equal(publicationTask.target,'centro-negocios-ia');
+ assert.deepEqual(publicationTask.args.allowedPaths,['README.md']);
+ console.log('OK publication probe is fixed-scope and idempotent');
 }finally{Date.now=realNow;}
