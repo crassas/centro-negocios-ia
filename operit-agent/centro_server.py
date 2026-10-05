@@ -666,14 +666,23 @@ def request_repo_change_plan(target, prompt, worktree):
 
 
 def protected_repo_path(rel):
-    low = str(rel or "").replace("\\", "/").lstrip("./").lower()
+    raw = str(rel or "").strip().replace("\\", "/")
+    # Remove apenas prefixos relativos "./". str.lstrip("./") é proibido aqui:
+    # transformaria ".env" em "env" e ".git" em "git", anulando a protecção.
+    normalized = raw
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    low = normalized.lower()
     return (
         not low
+        or raw.startswith("/")
         or low.startswith("/")
         or ".." in Path(low).parts
         or low == ".env"
         or low.startswith(".env.")
+        or low == ".git"
         or low.startswith(".git/")
+        or low == ".github/workflows"
         or low.startswith(".github/workflows/")
         or "secret" in low
         or "credential" in low
@@ -925,20 +934,7 @@ def action_repo_change(task):
                 "durationMs": int((time.time() - started) * 1000),
             }
 
-        protected = []
-        for rel in paths:
-            low = rel.lower().lstrip("./")
-            if (
-                low == ".env"
-                or low.startswith(".env.")
-                or low.startswith(".git/")
-                or low.startswith(".github/workflows/")
-                or "secret" in low
-                or "credential" in low
-                or low.endswith(".pem")
-                or low.endswith(".key")
-            ):
-                protected.append(rel)
+        protected = [rel for rel in paths if protected_repo_path(rel)]
         if protected:
             return {
                 "exitCode": 65,
