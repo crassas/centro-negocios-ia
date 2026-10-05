@@ -1,31 +1,27 @@
 # 07 — Roadmap
 
-## Próxima fase: Estação Máxima
+## Estado da Estação Máxima
 
-### 1. Router de agentes
+### 1. Router de agentes — PARCIAL / OPERACIONAL
+Já existe routing no Worker para grupo multi-LLM, Conselho, repo changes e agentes locais por comando.
 
-Recebe linguagem natural e escolhe:
-- Director;
-- Coder;
-- SEO/GEO;
-- Auditor;
-- Research;
-- Business;
-- Executor.
+Falta:
+- política única de escolha entre cloud/local por custo, latência e confiança;
+- escalonamento automático para OpenClaw/Laya quando trouxer vantagem comprovada.
 
-### 2. Agent Registry
+### 2. Agent Registry — PARCIAL
+`/agents` fornece uma matriz de prontidão operacional.
 
-Tabela central com:
+Falta persistir um registry central com:
 - nome;
 - função;
 - capacidades;
-- ferramenta/modelo;
+- modelo/ferramenta;
 - estado;
 - prioridade;
 - custo permitido.
 
-### 3. SQLite
-
+### 3. SQLite — POR FAZER
 Base local para:
 - projectos;
 - clientes;
@@ -36,35 +32,41 @@ Base local para:
 - resultados;
 - memória operacional.
 
-### 4. Scheduler
-
-Permitir:
-- tarefas periódicas;
-- verificações;
+### 4. Scheduler / recuperação — PARCIAL / OPERACIONAL
+Já existe:
+- fila persistente;
 - retries;
+- lease de tarefas;
 - timeouts;
-- dependências;
-- prioridades.
+- Operit WorkManager de 15 em 15 minutos;
+- recuperação no `app_open`;
+- supervisor de serviços.
 
-### 5. Auditor
+Falta scheduler local genérico com dependências, prioridades e calendário próprio.
 
-Antes de executar alterações:
-- validar;
-- testar;
-- comparar;
-- bloquear alterações perigosas.
+### 5. Auditor — PARCIAL / OPERACIONAL
+Já existe:
+- worktree isolado;
+- allowlist;
+- paths protegidos;
+- aplicação atómica do plano;
+- validação de sintaxe/build;
+- CI;
+- auditor Llama na Sala de Conselho.
 
-### 6. Auto-recuperação Android
+Falta avaliação automática de regressões visuais e testes específicos por projecto.
 
-Investigar:
-- keep-alive;
-- auto-start;
-- reinício após reboot;
-- redução de suspensão pelo Android.
+### 6. Auto-recuperação Android — IMPLEMENTADA EM CAMADAS
+- supervisor;
+- auto-update;
+- `.profile` Ubuntu/PRoot;
+- workflow Operit `app_open`;
+- WorkManager periódico.
 
-### 7. Dashboard local
+Limite externo: políticas de bateria/background do Android/ColorOS.
 
-Painel para:
+### 7. Dashboard local — POR FAZER
+Painel único para:
 - serviços;
 - tarefas;
 - agentes;
@@ -74,18 +76,16 @@ Painel para:
 - memória;
 - custo externo.
 
-### 8. Linguagem natural no Telegram
+### 8. Linguagem natural no Telegram — OPERACIONAL PARA ALTERAÇÕES EXPLÍCITAS
+Pedidos inequívocos por projecto podem criar `repo_change` automaticamente, validar e publicar sem segundo clique.
 
-Objectivo final:
-
+Próximo nível:
 `Vê a Pentehouse e melhora o que estiver mal.`
 
-O Director divide o trabalho, os agentes analisam e o Centro pede confirmação antes de alterações.
+Para pedidos abertos deste tipo, o Director deverá decompor o objectivo, recolher evidência, escolher agentes, validar o plano e só publicar alterações dentro da política autorizada.
 
-### 9. Política de custo
-
-Sempre:
+### 9. Política de custo — ACTIVA
 
 `PAID_FALLBACK=false`
 
-Sem chamadas pagas automáticas.
+Nenhum fallback pago automático.
