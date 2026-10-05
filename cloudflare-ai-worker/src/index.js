@@ -2453,6 +2453,15 @@ export default {
         const q=taskQueue(env);
         if(!await q.authenticate(hash))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
         const id=String(body?.id||'');
+        // Benchmark de perda de ACK no caminho real Operit -> Worker.
+        // A primeira entrega devolve 503 DEPOIS da execução local; o Agent
+        // mantém o resultado no outbox e deve reenviá-lo sem reexecutar.
+        const currentTask=await q.getJson('task:'+id,null);
+        if(currentTask?.fault==='result_503_once'&&!currentTask.faultInjectedAt){
+          currentTask.faultInjectedAt=Date.now();
+          await q.setJson('task:'+id,currentTask);
+          return json({ok:false,error:'BENCHMARK_INJECTED_RESULT_503'},503,origin);
+        }
         const result={
           exitCode:Number(body?.exitCode),
           stdout:String(body?.stdout||'').slice(0,12000),
