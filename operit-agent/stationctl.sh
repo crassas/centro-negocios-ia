@@ -5,6 +5,7 @@ HOME_DIR="${HOME:-/root}"
 STATE_DIR="$HOME_DIR/.centro-station"
 PID_FILE="$STATE_DIR/supervisor.pid"
 LOG_FILE="$STATE_DIR/supervisor.log"
+HEARTBEAT_FILE="$STATE_DIR/heartbeat"
 SUPERVISOR="$HOME_DIR/centro_station.py"
 RAW="https://raw.githubusercontent.com/crassas/centro-negocios-ia/main/operit-agent"
 
@@ -31,7 +32,28 @@ is_running() {
   kill -0 "$PID" 2>/dev/null
 }
 
+heartbeat_fresh() {
+  [ -f "$HEARTBEAT_FILE" ] || return 1
+  NOW="$(date +%s 2>/dev/null || echo 0)"
+  MTIME="$(stat -c %Y "$HEARTBEAT_FILE" 2>/dev/null || echo 0)"
+  [ "$NOW" -gt 0 ] && [ "$MTIME" -gt 0 ] || return 1
+  AGE=$((NOW - MTIME))
+  [ "$AGE" -ge 0 ] && [ "$AGE" -lt 90 ]
+}
+
+recycle_stale_supervisor() {
+  if is_running && ! heartbeat_fresh; then
+    PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+    echo "Supervisor sem heartbeat recente; a reciclar PID ${PID:-?}."
+    [ -n "$PID" ] && kill "$PID" 2>/dev/null || true
+    sleep 1
+    [ -n "$PID" ] && kill -9 "$PID" 2>/dev/null || true
+    rm -f "$PID_FILE"
+  fi
+}
+
 start_station() {
+  recycle_stale_supervisor
   "$SERVER_CTL" start
   "$AGENT_CTL" start
 
@@ -42,8 +64,8 @@ start_station() {
     "$LAYA_CTL" start >/dev/null 2>&1 &
   fi
 
-  if is_running; then
-    echo "Centro Station já está activo. PID $(cat "$PID_FILE")"
+  if is_running && heartbeat_fresh; then
+    echo "Centro Station já está activo. PID $(cat "$PID_FILE") · heartbeat OK"
     return 0
   fi
 
