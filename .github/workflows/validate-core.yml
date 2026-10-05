@@ -1,0 +1,39 @@
+name: Validate Centro Core
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - "operit-agent/**"
+      - "cloudflare-ai-worker/src/index.js"
+      - ".github/workflows/validate-core.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Python syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            python3 -m py_compile "$file"
+          done < <(find operit-agent -maxdepth 1 -type f -name '*.py' -print0)
+
+      - name: Shell syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            sh -n "$file"
+          done < <(find operit-agent -maxdepth 1 -type f -name '*.sh' -print0)
+
+      - name: Worker JavaScript syntax
+        run: node --check cloudflare-ai-worker/src/index.js
