@@ -328,20 +328,100 @@ function parseCSV(text){
   row.push(cell);if(row.some(x=>x.trim()!==''))rows.push(row);if(rows.length<2)return [];
   const headers=rows[0].map(normalizeHeader);const find=names=>headers.findIndex(h=>names.some(n=>h===n||h.includes(n)));
   const qi=find(['query','consulta','termo']),ci=find(['clicks','cliques']),ii=find(['impressions','impressoes']),ti=find(['ctr']),pi=find(['position','posicao']);
+  if(qi<0)throw new Error('Este CSV não tem a coluna Consulta/Query. No Search Console abre Desempenho > Consultas e exporta essa tabela.');
   if(ci<0||ii<0||pi<0)throw new Error('O CSV não tem as colunas de cliques, impressões e posição.');
-  return rows.slice(1).map(r=>({query:qi>=0?r[qi]:'',clicks:parseLocaleNumber(r[ci]),impressions:parseLocaleNumber(r[ii]),ctr:ti>=0?parsePercent(r[ti]):null,position:parseLocaleNumber(r[pi])})).filter(r=>Number.isFinite(r.clicks)&&Number.isFinite(r.impressions)&&Number.isFinite(r.position));
+  return rows.slice(1).map(r=>({query:String(r[qi]||'').trim(),clicks:parseLocaleNumber(r[ci]),impressions:parseLocaleNumber(r[ii]),ctr:ti>=0?parsePercent(r[ti]):null,position:parseLocaleNumber(r[pi])})).filter(r=>r.query&&Number.isFinite(r.clicks)&&Number.isFinite(r.impressions)&&Number.isFinite(r.position));
 }
 function gscSummary(){
   const g=state.gsc;if(!g||!Array.isArray(g.rows)||!g.rows.length)return null;
   const t=g.rows.reduce((a,r)=>{a.clicks+=r.clicks||0;a.impressions+=r.impressions||0;a.posWeight+=(r.position||0)*(r.impressions||1);a.weight+=(r.impressions||1);return a;},{clicks:0,impressions:0,posWeight:0,weight:0});
   return {clicks:t.clicks,impressions:t.impressions,ctr:t.impressions?t.clicks/t.impressions:0,position:t.weight?t.posWeight/t.weight:0};
 }
+const GSC_PROJECT_HINTS={
+  pentehouse:{label:'Pentehouse Barbearia',page:'/',focus:'barbearia, Marquês, Constituição, serviços, equipa e FAQs locais'},
+  'best-pizza':{label:'Best Pizza & Kebab',page:'/takeaway-campanha/',focus:'takeaway, kebab, pizza, halal, Campanhã e São Roque'},
+  'dois-irmaos':{label:'2 Irmãos',page:'/',focus:'comida portuguesa, pratos, Campanhã e intenção local'},
+  engomadoria:{label:'Engomadoria Beatriz',page:'/',focus:'engomadoria, packs, prazo, localização e serviços'}
+};
+function gscProjectHint(){
+  const id=(state.gsc&&state.gsc.projectId)||$('gsc-project')?.value||'';
+  return {id,label:GSC_PROJECT_HINTS[id]?.label||'Projecto por definir',page:GSC_PROJECT_HINTS[id]?.page||'página que já recebe estas impressões',focus:GSC_PROJECT_HINTS[id]?.focus||'intenção real da pesquisa'};
+}
+function expectedCtrForPosition(position){
+  if(position<=3)return .12;if(position<=5)return .08;if(position<=10)return .04;if(position<=20)return .02;if(position<=30)return .012;if(position<=50)return .007;return .004;
+}
+function gscActionForRow(row,project){
+  const q='"'+row.query+'"',page=project.page;
+  if(row.position<=3)return 'Melhorar title, meta description e resposta inicial para '+q+'. A posição já é forte: o ganho está sobretudo no clique.';
+  if(row.position<=10)return 'Reforçar '+q+' em '+page+': H2 claro, resposta curta, FAQ útil e ligação interna. Não repetir o termo sem contexto.';
+  if(row.position<=20)return 'Criar ou ampliar uma secção específica em '+page+' para '+q+' e ligar essa secção a partir de conteúdo relacionado.';
+  if(row.position<=40)return 'Validar se '+q+' encaixa em '+project.focus+'. Se encaixar, criar conteúdo dedicado; se não encaixar, não forçar.';
+  return 'Baixa prioridade. Confirmar relevância comercial de '+q+' antes de alterar conteúdo ou criar uma nova página.';
+}
+function gscOpportunityRows(){
+  const rows=state.gsc?.rows||[];if(!rows.length)return [];
+  const maxImp=Math.max(1,...rows.map(r=>Math.max(0,r.impressions||0))),project=gscProjectHint();
+  return rows.map(r=>{
+    const ctr=r.ctr==null?(r.impressions?r.clicks/r.impressions:0):r.ctr;
+    const expected=expectedCtrForPosition(r.position);
+    const gap=expected?Math.max(0,Math.min(1,(expected-ctr)/expected)):0;
+    let posScore=.15;
+    if(r.position>=4&&r.position<=10)posScore=1;
+    else if(r.position>10&&r.position<=20)posScore=.9;
+    else if(r.position<=3)posScore=.52;
+    else if(r.position<=30)posScore=.66;
+    else if(r.position<=50)posScore=.38;
+    const impScore=Math.log1p(Math.max(0,r.impressions||0))/Math.log1p(maxImp);
+    const score=Math.max(0,Math.min(100,Math.round(100*(.45*posScore+.35*impScore+.20*gap))));
+    const quickWin=r.position>=4&&r.position<=20&&score>=60;
+    const ctrRisk=r.impressions>=20&&ctr<expected*.65;
+    const priority=score>=72?'ALTA':score>=55?'MÉDIA':'OBSERVAR';
+    let reason='Sinal fraco: precisa de mais dados antes de mexer.';
+    if(quickWin)reason='Já está perto do topo e tem procura: pequena melhoria pode produzir ganho mais rápido.';
+    else if(ctrRisk&&r.position<=20)reason='Tem visibilidade, mas o CTR está abaixo do esperado para esta posição.';
+    else if(r.position<=10)reason='Já está na primeira página; vale reforçar relevância e snippet.';
+    else if(r.position<=20)reason='Está perto da primeira página e pode subir com conteúdo e ligações internas.';
+    else if(r.impressions>=maxImp*.45)reason='Tem procura relevante, mas ainda está longe; validar intenção antes de investir.';
+    return {...r,ctr,expectedCtr:expected,score,quickWin,ctrRisk,priority,reason,project:project.label,page:project.page,action:gscActionForRow({...r,ctr},project)};
+  }).sort((a,b)=>b.score-a.score||b.impressions-a.impressions);
+}
+function renderGscOpportunities(){
+  const all=gscOpportunityRows(),filter=$('gsc-opportunity-filter')?.value||'all';
+  const opportunityCount=all.filter(r=>r.score>=50).length,highCount=all.filter(r=>r.score>=72).length,quickCount=all.filter(r=>r.quickWin).length;
+  if($('gsc-opportunity-count'))$('gsc-opportunity-count').textContent=all.length?fmtNum(opportunityCount):'—';
+  if($('gsc-high-count'))$('gsc-high-count').textContent=all.length?fmtNum(highCount):'—';
+  if($('gsc-quick-count'))$('gsc-quick-count').textContent=all.length?fmtNum(quickCount):'—';
+  if($('gsc-top-score'))$('gsc-top-score').textContent=all.length?String(all[0].score):'—';
+  let rows=all;
+  if(filter==='high')rows=all.filter(r=>r.score>=72);
+  else if(filter==='quick')rows=all.filter(r=>r.quickWin);
+  else if(filter==='ctr')rows=all.filter(r=>r.ctrRisk);
+  const list=$('gsc-opportunity-list');if(!list)return;
+  if(!state.gsc||!all.length){list.innerHTML='<div class="empty seo-empty">Importa a tabela de Consultas do Search Console para gerar oportunidades.</div>';return;}
+  if(!rows.length){list.innerHTML='<div class="empty seo-empty">Nenhuma consulta corresponde a este filtro.</div>';return;}
+  list.innerHTML=rows.slice(0,12).map(r=>{
+    const cls=r.priority==='ALTA'?'high':r.priority==='MÉDIA'?'medium':'watch';
+    return '<article class="seo-opportunity-card '+cls+'"><div class="seo-opportunity-top"><div><span class="seo-priority">'+r.priority+(r.quickWin?' · QUICK WIN':'')+'</span><h3>'+esc(r.query)+'</h3></div><b class="seo-score">'+r.score+'</b></div><div class="seo-opportunity-metrics"><span><b>'+fmtNum(r.impressions)+'</b> impressões</span><span><b>'+fmtNum(r.position,1)+'</b> posição</span><span><b>'+fmtNum(r.ctr*100,2)+'%</b> CTR</span></div><p>'+esc(r.reason)+'</p><strong>'+esc(r.action)+'</strong><small>'+esc(r.project)+' · alvo sugerido: '+esc(r.page)+'</small></article>';
+  }).join('');
+}
 function renderGsc(){
-  const g=state.gsc,s=gscSummary();$('gsc-file-label').textContent=g?(g.fileName+' · '+fmtDate(g.importedAt)):'Nenhum ficheiro carregado';
+  const g=state.gsc,s=gscSummary(),project=$('gsc-project');
+  if(project&&g&&g.projectId!=null)project.value=g.projectId;
+  $('gsc-file-label').textContent=g?(g.fileName+' · '+fmtDate(g.importedAt)):'Nenhum ficheiro carregado';
   $('gsc-clicks').textContent=s?fmtNum(s.clicks):'—';$('gsc-impressions').textContent=s?fmtNum(s.impressions):'—';$('gsc-ctr').textContent=s?fmtNum(s.ctr*100,2)+'%':'—';$('gsc-position').textContent=s?fmtNum(s.position,2):'—';
-  const tbody=$('gsc-table');
-  if(!g||!g.rows.length){tbody.innerHTML='<tr><td colspan="5" class="empty-cell">Importa a tabela de desempenho do Search Console.</td></tr>';return;}
-  tbody.innerHTML=g.rows.slice().sort((a,b)=>b.clicks-a.clicks||b.impressions-a.impressions).slice(0,50).map(r=>'<tr><td>'+esc(r.query||'—')+'</td><td>'+fmtNum(r.clicks)+'</td><td>'+fmtNum(r.impressions)+'</td><td>'+fmtNum((r.ctr==null?(r.impressions?r.clicks/r.impressions:0):r.ctr)*100,2)+'%</td><td>'+fmtNum(r.position,2)+'</td></tr>').join('');
+  renderGscOpportunities();
+  const tbody=$('gsc-table');if(!tbody)return;
+  if(!g||!g.rows.length){tbody.innerHTML='<tr><td colspan="6" class="empty-cell">Importa a tabela de Consultas do Search Console.</td></tr>';return;}
+  const scoreByQuery=new Map(gscOpportunityRows().map(r=>[r.query,r.score]));
+  tbody.innerHTML=g.rows.slice().sort((a,b)=>(scoreByQuery.get(b.query)||0)-(scoreByQuery.get(a.query)||0)||b.impressions-a.impressions).slice(0,80).map(r=>'<tr><td>'+esc(r.query||'—')+'</td><td><b class="table-score">'+(scoreByQuery.get(r.query)||0)+'</b></td><td>'+fmtNum(r.clicks)+'</td><td>'+fmtNum(r.impressions)+'</td><td>'+fmtNum((r.ctr==null?(r.impressions?r.clicks/r.impressions:0):r.ctr)*100,2)+'%</td><td>'+fmtNum(r.position,2)+'</td></tr>').join('');
+}
+function downloadGscOpportunities(){
+  const rows=gscOpportunityRows();if(!rows.length){toast('Importa primeiro um CSV de Consultas do Search Console.');return;}
+  const data=[['score','prioridade','quick_win','consulta','cliques','impressoes','ctr','posicao','projecto','pagina_sugerida','motivo','proxima_accao']];
+  rows.forEach(r=>data.push([r.score,r.priority,r.quickWin?'sim':'nao',r.query,r.clicks,r.impressions,(r.ctr*100).toFixed(2)+'%',r.position.toFixed(2),r.project,r.page,r.reason,r.action]));
+  const csv=data.map(row=>row.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  download('oportunidades-seo-'+new Date().toISOString().slice(0,10)+'.csv',csv,'text/csv;charset=utf-8');
+  toast('Oportunidades SEO exportadas.');
 }
 
 function pendingPaymentTotals(){
@@ -391,7 +471,7 @@ function fillProjectSelects(){
 function download(name,content,type='text/plain;charset=utf-8'){
   const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),500);
 }
-function reportObject(){return {exportedAt:new Date().toISOString(),monitor:live,crm:state.clients,leads:state.leads,agent:state.agent,finance:{transactions:state.transactions,pendingPayments:state.pendingPayments,pendingTotals:pendingPaymentTotals(),totals:financeTotals()},gsc:state.gsc?{fileName:state.gsc.fileName,importedAt:state.gsc.importedAt,summary:gscSummary(),rows:state.gsc.rows}:null};}
+function reportObject(){return {exportedAt:new Date().toISOString(),monitor:live,crm:state.clients,leads:state.leads,agent:state.agent,finance:{transactions:state.transactions,pendingPayments:state.pendingPayments,pendingTotals:pendingPaymentTotals(),totals:financeTotals()},gsc:state.gsc?{fileName:state.gsc.fileName,importedAt:state.gsc.importedAt,projectId:state.gsc.projectId||'',summary:gscSummary(),opportunities:gscOpportunityRows().slice(0,30),rows:state.gsc.rows}:null};}
 function sitesCsv(){
   const rows=[['site','url','online','http','response_ms','changed','title','h1_count','sitemap_urls','issues']];
   sites.forEach(s=>{const r=siteResult(s.id)||{};rows.push([s.name,s.url,r.online,r.status,r.responseTimeMs,r.changed,r.title,r.h1Count,r.sitemapUrls,(r.issues||[]).map(x=>x.message).join(' | ')]);});
@@ -490,7 +570,7 @@ function aiContext(){
     projects,
     leads:state.leads.slice(-50).map(lead=>({name:lead.name,status:lead.status,contact:lead.contact||'',createdAt:lead.createdAt||null})),
     finance:{...financeTotals(),movements:state.transactions.length,pending:pendingPaymentTotals(),pendingPayments:(state.pendingPayments||[]).filter(p=>p.status==='pending')},
-    searchConsole:g?{summary:g,topQueries:(state.gsc.rows||[]).slice().sort((a,b)=>b.clicks-a.clicks||b.impressions-a.impressions).slice(0,20)}:null,
+    searchConsole:g?{summary:g,project:gscProjectHint(),topQueries:(state.gsc.rows||[]).slice().sort((a,b)=>b.clicks-a.clicks||b.impressions-a.impressions).slice(0,20),opportunities:gscOpportunityRows().slice(0,20)}:null,
     opportunities:(state.agent?.opportunities||[]).slice(-50),
     pendingDecisions:(state.agent?.decisions||[]).filter(x=>x.status==='pending').slice(-30).map(x=>({type:x.type,title:x.title,reason:x.reason,payload:x.payload}))
   };
@@ -730,6 +810,25 @@ function setupEvents(){
     const amount=Math.abs(Number($('finance-amount').value)||0);if(!amount){toast('Indica um valor válido.');return;}
     state.transactions.push({id:uid('txn'),date:$('finance-date').value,type:$('finance-type').value,amount,category:$('finance-category').value.trim(),projectId:$('finance-project').value,description:$('finance-description').value.trim(),createdAt:new Date().toISOString()});
     saveState();e.target.reset();$('finance-date').value=new Date().toISOString().slice(0,10);renderFinance();toast('Movimento registado.');
+  });
+  $('gsc-input')?.addEventListener('change',async event=>{
+    const file=event.target.files?.[0];if(!file)return;
+    try{
+      const rows=parseCSV(await file.text());if(!rows.length)throw new Error('O CSV não tem consultas válidas.');
+      state.gsc={fileName:file.name,importedAt:new Date().toISOString(),projectId:$('gsc-project')?.value||'',rows};
+      saveState();renderGsc();renderSystem();toast(rows.length+' consultas importadas. O radar SEO já está calculado.');
+    }catch(err){event.target.value='';toast(err.message||'Não foi possível ler o CSV.');}
+  });
+  $('gsc-project')?.addEventListener('change',event=>{
+    if(state.gsc){state.gsc.projectId=event.target.value;saveState();}
+    renderGsc();
+  });
+  $('gsc-opportunity-filter')?.addEventListener('change',renderGscOpportunities);
+  $('gsc-export-opportunities')?.addEventListener('click',downloadGscOpportunities);
+  $('clear-gsc-btn')?.addEventListener('click',()=>{
+    if(!state.gsc)return;
+    if(!confirm('Remover a importação actual do Search Console?'))return;
+    state.gsc=null;saveState();if($('gsc-input'))$('gsc-input').value='';renderGsc();renderSystem();toast('Importação removida.');
   });
   $('telegram-check-btn').addEventListener('click',async()=>{await checkTelegramStatus(true);await pollTelegramApprovals(true);});
   document.querySelectorAll('[data-ai-question]').forEach(btn=>btn.addEventListener('click',()=>{
