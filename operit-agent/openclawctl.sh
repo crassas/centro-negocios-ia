@@ -56,8 +56,8 @@ start_gateway() {
     NOW="$(date +%s 2>/dev/null || echo 0)"
     MTIME="$(stat -c %Y "$PID_FILE" 2>/dev/null || echo 0)"
     AGE=$((NOW - MTIME))
-    if [ "$NOW" -gt 0 ] && [ "$MTIME" -gt 0 ] && [ "$AGE" -ge 120 ]; then
-      echo "Processo OpenClaw preso há ${AGE}s; a reciclar PID $PID."
+    if [ "$NOW" -gt 0 ] && [ "$MTIME" -gt 0 ] && [ "$AGE" -ge 300 ]; then
+      echo "Processo OpenClaw sem health há ${AGE}s; a reciclar PID $PID."
       kill "$PID" 2>/dev/null || true
       sleep 2
       kill -9 "$PID" 2>/dev/null || true
