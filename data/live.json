@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-05T06:58:58.787Z",
+  "generatedAt": "2026-10-05T08:03:40.071Z",
   "source": "github-actions",
   "intervalMinutes": 15,
   "sites": [
@@ -8,10 +8,10 @@
       "name": "Pentehouse",
       "url": "https://pentehouse.pt/",
       "area": "Marquês / Constituição",
-      "checkedAt": "2026-10-05T06:58:58.787Z",
+      "checkedAt": "2026-10-05T08:03:40.071Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 862,
+      "responseTimeMs": 305,
       "renderMode": "html",
       "finalUrl": "https://pentehouse.pt/",
       "title": "Pentehouse | Barbearia no Marquês, Porto",
@@ -22,16 +22,32 @@
       "robotsMeta": "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1",
       "schemaCount": 2,
       "sitemapUrls": 8,
+      "httpVariant": {
+        "requestedUrl": "http://pentehouse.pt/",
+        "status": 200,
+        "ok": true,
+        "finalUrl": "https://pentehouse.pt/",
+        "redirected": true,
+        "redirectedToHttps": true
+      },
       "checks": {
         "title": true,
         "description": true,
         "h1": true,
         "canonical": true,
+        "canonicalSelf": true,
         "robots": true,
         "sitemap": true,
         "schema": true
       },
       "issues": [],
+      "seoSignals": [
+        {
+          "level": "good",
+          "code": "http-duplicate-consolidated",
+          "message": "HTTP duplicado → HTTPS canonical correcto → sem intervenção necessária."
+        }
+      ],
       "contentHash": "310f9fea2a592121d710264b0eb1555dfdfadc9a9e50af5228903d915754d9b8",
       "changed": false,
       "changedAt": "2026-10-01T20:20:24.726Z",
@@ -43,10 +59,10 @@
       "name": "Best Pizza & Kebab",
       "url": "https://bestpizzaandkebab.pt/",
       "area": "Campanhã / São Roque",
-      "checkedAt": "2026-10-05T06:58:58.787Z",
+      "checkedAt": "2026-10-05T08:03:40.071Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 295,
+      "responseTimeMs": 172,
       "renderMode": "browser",
       "finalUrl": "https://bestpizzaandkebab.pt/",
       "title": "Kebab e Pizza em São Roque da Lameira, Porto | Best Pizza & Kebab",
@@ -57,16 +73,31 @@
       "robotsMeta": "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1",
       "schemaCount": 2,
       "sitemapUrls": 5,
+      "httpVariant": {
+        "requestedUrl": "http://bestpizzaandkebab.pt/",
+        "status": 200,
+        "ok": true,
+        "finalUrl": "http://bestpizzaandkebab.pt/",
+        "redirected": false,
+        "redirectedToHttps": false
+      },
       "checks": {
         "title": true,
         "description": true,
         "h1": true,
         "canonical": true,
+        "canonicalSelf": true,
         "robots": true,
         "sitemap": true,
         "schema": true
       },
-      "issues": [],
+      "issues": [
+        {
+          "level": "warn",
+          "message": "A versão HTTP não consolidou automaticamente na versão HTTPS."
+        }
+      ],
+      "seoSignals": [],
       "contentHash": "c3e19af4aae30f59ae9867de7071c252acffec6def7cc1285ee76a6b60c7b958",
       "changed": false,
       "changedAt": "2026-10-05T01:04:06.648Z",
@@ -78,25 +109,34 @@
       "name": "Restaurante 2 Irmãos",
       "url": "https://restaurantedoisirmaos.pt/",
       "area": "Campanhã / São Roque",
-      "checkedAt": "2026-10-05T06:58:58.787Z",
+      "checkedAt": "2026-10-05T08:03:40.071Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 133,
-      "renderMode": "html",
+      "responseTimeMs": 192,
+      "renderMode": "browser",
       "finalUrl": "https://restaurantedoisirmaos.pt/",
       "title": "Restaurante 2 Irmãos | Comida Caseira em São Roque, Porto",
       "description": "Comida caseira portuguesa na Rua de São Roque da Lameira, Porto. Restaurante 2 Irmãos — “Os Miúdos do Aleixo” — com pratos de tacho, francesinha, tripas e bacalhau.",
-      "h1Count": 0,
-      "firstH1": "",
+      "h1Count": 1,
+      "firstH1": "Restaurante 2 Irmãos",
       "canonical": "https://restaurantedoisirmaos.pt/",
       "robotsMeta": "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1",
       "schemaCount": 1,
       "sitemapUrls": 10,
+      "httpVariant": {
+        "requestedUrl": "http://restaurantedoisirmaos.pt/",
+        "status": 200,
+        "ok": true,
+        "finalUrl": "http://restaurantedoisirmaos.pt/",
+        "redirected": false,
+        "redirectedToHttps": false
+      },
       "checks": {
         "title": true,
         "description": true,
-        "h1": false,
+        "h1": true,
         "canonical": true,
+        "canonicalSelf": true,
         "robots": true,
         "sitemap": true,
         "schema": true
@@ -104,12 +144,13 @@
       "issues": [
         {
           "level": "warn",
-          "message": "Nenhum H1 detectado após duas leituras."
+          "message": "A versão HTTP não consolidou automaticamente na versão HTTPS."
         }
       ],
-      "contentHash": "13809a5dcb050b9148660c6842f6cb355223e70fde2c725b5966f213a95118e2",
+      "seoSignals": [],
+      "contentHash": "4861c055bec2ab8b79e519a229b5945ad1ba70ccbe0b010ba974e02c8c648647",
       "changed": true,
-      "changedAt": "2026-10-05T06:58:58.787Z",
+      "changedAt": "2026-10-05T08:03:40.071Z",
       "robotsStatus": 200,
       "sitemapStatus": 200
     }
