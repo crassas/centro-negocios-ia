@@ -137,6 +137,7 @@ def capabilities():
             "server_status",
             "station_status",
             "station_doctor",
+            "agents_status",
             "system_info",
             "site_check",
             "git_status",
@@ -1087,6 +1088,88 @@ def execute_action(task):
             f"Sites monitorizados: {len(SITES)}",
         ]
         return {"exitCode": 0, "stdout": "\n".join(lines), "stderr": "", "durationMs": 0}
+
+    if action == "agents_status":
+        started = time.time()
+        agent_active, _ = pid_running(AGENT_PID_FILE)
+        supervisor_active, _ = pid_running(SUPERVISOR_PID_FILE)
+        claude = find_claude()
+        ollama_key = bool(read_secret(OLLAMA_KEY_FILE))
+        openclaw_ok, _, _, _ = openclaw_http_health()
+        laya_ok, _, _, _ = laya_http_health()
+        git_ok = bool(shutil.which("git"))
+        python_ok = bool(shutil.which("python3"))
+        worker_ok = False
+        worker_detail = "OFFLINE"
+        try:
+            status, data = http_json(CLOUD_BASE + "/health", timeout=8)
+            worker_ok = status == 200 and data.get("ok") is True
+            worker_detail = (
+                "ONLINE · fila " + ("OK" if data.get("operitQueue") else "FALHA")
+                + " · Telegram " + ("OK" if data.get("telegramConfigured") else "OFF")
+            )
+        except Exception as exc:
+            worker_detail = "OFFLINE · " + str(exc)[:180]
+
+        autoupdate = {}
+        try:
+            autoupdate = json.loads(
+                (HOME / ".centro-station" / "status.json").read_text(encoding="utf-8")
+            ).get("autoupdate") or {}
+        except Exception:
+            pass
+
+        core = [
+            ("Cloudflare/Telegram", worker_ok),
+            ("Centro Server", True),
+            ("Centro Agent", agent_active),
+            ("Supervisor", supervisor_active),
+            ("Git", git_ok),
+            ("Python", python_ok),
+        ]
+        executors = [
+            ("Claude Code", bool(claude)),
+            ("Ollama para Claude", ollama_key),
+            ("OpenClaw", openclaw_ok),
+            ("Laya", laya_ok),
+        ]
+        core_ready = sum(1 for _, ok in core if ok)
+        executor_ready = sum(1 for _, ok in executors if ok)
+        auto_enabled = bool(autoupdate.get("enabled"))
+
+        lines = [
+            "CENTRO · AGENTES / AUTONOMIA",
+            "",
+            "NÚCLEO",
+        ]
+        for name, ok in core:
+            lines.append(f"{'OK' if ok else 'FALHA'} · {name}")
+        lines += [
+            "",
+            "EXECUTORES / REDUNDÂNCIA",
+        ]
+        for name, ok in executors:
+            lines.append(f"{'OK' if ok else 'OFF'} · {name}")
+        lines += [
+            f"{'OK' if MANUS_KEY_FILE.exists() else 'OFF'} · Manus (opcional)",
+            "",
+            "CONTROLO",
+            "Worker: " + worker_detail,
+            f"Auto-update: {'ON' if auto_enabled else 'SEM ESTADO / OFF'}",
+            f"Execução ocupada: {'SIM' if BUSY_FILE.exists() else 'NÃO'}",
+            "",
+            f"Núcleo pronto: {core_ready}/{len(core)}",
+            f"Executores prontos: {executor_ready}/{len(executors)}",
+        ]
+
+        # O comando é diagnóstico: componentes opcionais OFF não transformam
+        # um núcleo funcional em erro.
+        return {
+            "exitCode": 0 if core_ready == len(core) else 1,
+            "stdout": "\n".join(lines),
+            "stderr": "" if core_ready == len(core) else "Há componentes essenciais por recuperar.",
+            "durationMs": int((time.time() - started) * 1000),
+        }
 
     if action == "station_doctor":
         agent_active, _ = pid_running(AGENT_PID_FILE)
