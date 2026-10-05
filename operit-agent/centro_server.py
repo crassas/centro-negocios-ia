@@ -656,16 +656,25 @@ def protected_repo_path(rel):
 
 
 def apply_repo_change_plan(worktree, plan):
+    """
+    Valida o plano inteiro em memória antes de tocar no worktree.
+    Um search errado deixa assim o worktree intacto e permite outro executor.
+    """
     edits = plan.get("edits") if isinstance(plan, dict) else []
     if not isinstance(edits, list):
         raise RuntimeError("Plano sem lista de edições.")
     if len(edits) > 12:
         raise RuntimeError("Plano excede o limite de 12 edições.")
 
+    root = worktree.resolve()
+    buffers = {}
+    created = set()
     applied = []
+
     for edit in edits:
         if not isinstance(edit, dict):
             raise RuntimeError("Edição inválida no plano.")
+
         rel = str(edit.get("path") or "").strip().replace("\\", "/")
         op = str(edit.get("operation") or "").strip().lower()
         search = str(edit.get("search") or "")
@@ -677,27 +686,29 @@ def apply_repo_change_plan(worktree, plan):
             raise RuntimeError("Operação não permitida: " + op)
 
         path = (worktree / rel).resolve()
-        root = worktree.resolve()
         if root != path and root not in path.parents:
             raise RuntimeError("Path fora do worktree: " + rel)
 
         if op == "create":
-            if path.exists():
+            if path.exists() or path in buffers:
                 raise RuntimeError("Plano tentou criar ficheiro já existente: " + rel)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(content, encoding="utf-8")
+            buffers[path] = content
+            created.add(path)
             applied.append("create " + rel)
             continue
 
-        if not path.exists() or not path.is_file():
-            raise RuntimeError("Ficheiro do plano não existe: " + rel)
+        if path not in buffers:
+            if not path.exists() or not path.is_file():
+                raise RuntimeError("Ficheiro do plano não existe: " + rel)
+            buffers[path] = path.read_text(encoding="utf-8")
 
-        original = path.read_text(encoding="utf-8")
+        original = buffers[path]
+
         if op == "append":
             if not content.strip():
                 raise RuntimeError("Append vazio em " + rel)
             suffix = "" if original.endswith("\n") else "\n"
-            path.write_text(original + suffix + content.rstrip() + "\n", encoding="utf-8")
+            buffers[path] = original + suffix + content.rstrip() + "\n"
             applied.append("append " + rel)
             continue
 
@@ -708,11 +719,17 @@ def apply_repo_change_plan(worktree, plan):
             raise RuntimeError(
                 f"Replace inseguro em {rel}: bloco esperado ocorre {count} vez(es), deveria ocorrer exactamente 1."
             )
-        path.write_text(original.replace(search, content, 1), encoding="utf-8")
+        buffers[path] = original.replace(search, content, 1)
         applied.append("replace " + rel)
 
-    return applied
+    # Só chegamos aqui se todas as operações tiverem sido validadas.
+    for path, text in buffers.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".centro-" + secrets.token_hex(4) + ".tmp")
+        tmp.write_text(text, encoding="utf-8")
+        tmp.replace(path)
 
+    return applied
 
 def run_claude_repo_executor(worktree, prompt):
     """Fallback gratuito/local-first: Claude Code ligado ao Ollama, nunca Anthropic pago."""
@@ -830,18 +847,14 @@ def action_repo_change(task):
             if edits:
                 try:
                     applied = apply_repo_change_plan(worktree, plan)
+                    executor_output = (
+                        "WORKERS AI · PLANO APLICADO\n"
+                        + (plan_summary + "\n" if plan_summary else "")
+                        + "\n".join(applied)
+                    )
                 except Exception as exc:
-                    return {
-                        "exitCode": 67,
-                        "stdout": "",
-                        "stderr": "Plano recebido, mas a aplicação segura falhou: " + str(exc),
-                        "durationMs": int((time.time() - started) * 1000),
-                    }
-                executor_output = (
-                    "WORKERS AI · PLANO APLICADO\n"
-                    + (plan_summary + "\n" if plan_summary else "")
-                    + "\n".join(applied)
-                )
+                    planner_error = "Plano Workers AI rejeitado localmente: " + str(exc)
+                    plan = None
             else:
                 planner_error = "Planeador devolveu zero edições. " + plan_summary
                 plan = None
