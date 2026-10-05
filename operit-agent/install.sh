@@ -122,3 +122,16 @@ echo
 # A Estação Centro arranca todos os componentes já instalados.
 # OpenClaw/Laya são best-effort: uma falha neles não derruba Server/Agent.
 "$STATION_CTL" restart
+
+echo
+echo "Verificação após bootstrap:"
+sleep 2
+"$STATION_CTL" doctor || true
+
+echo
+if [ -n "$WORKFLOW_DEST" ]; then
+  echo "Bootstrap concluído. Fecha e volta a abrir o Operit uma vez para recarregar o workflow de recuperação."
+else
+  echo "Bootstrap do núcleo concluído. O workflow ficou em $WORKFLOW_LOCAL; copia-o para Download/Operit/workflow se o storage Android não aparecer automaticamente."
+fi
+echo "Depois confirma no Telegram com: /selftest"
