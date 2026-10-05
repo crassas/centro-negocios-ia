@@ -278,6 +278,11 @@ function renderConnections(){
   const signals=[];
   (live.sites||[]).forEach(r=>{
     const c=r.checks||{};
+    (r.seoSignals||[]).forEach(signal=>signals.push({
+      title:r.name+' · '+(signal.code==='http-duplicate-consolidated'?'canonical consolidado':'sinal SEO'),
+      text:signal.message||String(signal),
+      level:signal.level||'good'
+    }));
     if(r.changed===true)signals.push({title:r.name+' · HTML alterado',text:'O conteúdo da homepage mudou desde a auditoria anterior. Confirma title, H1, canonical e páginas do sitemap.'});
     if(r.responseTimeMs>1800)signals.push({title:r.name+' · resposta '+humanMs(r.responseTimeMs),text:'O servidor ultrapassou 1,8 s nesta leitura. Cruza este sinal com Core Web Vitals e desempenho mobile.'});
     if(r.h1Count>1)signals.push({title:r.name+' · '+r.h1Count+' H1',text:'A homepage tem mais de um H1 detectado. Confirma a hierarquia antes de novas alterações SEO.'});
@@ -285,7 +290,7 @@ function renderConnections(){
     if(c.schema&&!c.description)signals.push({title:r.name+' · schema sem description',text:'Há dados estruturados, mas falta meta description na homepage.'});
     if(r.robotsMeta&&/noindex/i.test(r.robotsMeta))signals.push({title:r.name+' · noindex detectado',text:'A meta robots contém noindex. Confirma se a exclusão da pesquisa é intencional.'});
   });
-  $('connections-list').innerHTML=signals.length?signals.map(s=>'<div class="stack-item"><b>'+esc(s.title)+'</b><p>'+esc(s.text)+'</p></div>').join(''):(live.generatedAt?'<div class="stack-item good"><b>Sem sinais cruzados</b><p>Nesta leitura não há combinações técnicas que exijam acção adicional.</p></div>':'<div class="empty">Sem auditoria.</div>');
+  $('connections-list').innerHTML=signals.length?signals.map(s=>'<div class="stack-item '+(s.level==='good'?'good':s.level==='danger'?'danger':s.level==='warn'?'warn':'')+'"><b>'+esc(s.title)+'</b><p>'+esc(s.text)+'</p></div>').join(''):(live.generatedAt?'<div class="stack-item good"><b>Sem sinais cruzados</b><p>Nesta leitura não há combinações técnicas que exijam acção adicional.</p></div>':'<div class="empty">Sem auditoria.</div>');
 }
 
 function renderCRM(){
