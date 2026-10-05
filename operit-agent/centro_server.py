@@ -131,7 +131,7 @@ def capabilities():
     }
 
 
-def run_cmd(args, cwd=None, timeout=CMD_TIMEOUT):
+def run_cmd(args, cwd=None, timeout=CMD_TIMEOUT, env=None):
     started = time.time()
     try:
         proc = subprocess.run(
@@ -141,6 +141,7 @@ def run_cmd(args, cwd=None, timeout=CMD_TIMEOUT):
             capture_output=True,
             timeout=timeout,
             check=False,
+            env=env,
         )
         return {
             "exitCode": proc.returncode,
@@ -607,7 +608,7 @@ def request_repo_change_plan(target, prompt, worktree):
     payload = {"target": target, "prompt": prompt, "context": context}
     last_error = ""
 
-    for attempt in range(2):
+    for attempt in range(1):
         try:
             status, data = http_json(
                 CLOUD_BASE + "/api/repo/change-plan",
@@ -633,9 +634,6 @@ def request_repo_change_plan(target, prompt, worktree):
                 break
         except Exception as exc:
             last_error = str(exc)
-
-        if attempt == 0:
-            time.sleep(2)
 
     raise RuntimeError(last_error or "Planeador automático indisponível.")
 
@@ -716,6 +714,53 @@ def apply_repo_change_plan(worktree, plan):
     return applied
 
 
+def run_claude_repo_executor(worktree, prompt):
+    """Fallback gratuito/local-first: Claude Code ligado ao Ollama, nunca Anthropic pago."""
+    claude = find_claude()
+    if not claude:
+        raise RuntimeError("Claude Code não foi encontrado para fallback local.")
+
+    key = read_secret(OLLAMA_KEY_FILE)
+    if not key:
+        raise RuntimeError("Fallback Claude/Ollama sem chave validada em ~/.centro-agent/ollama_api_key.")
+
+    env = os.environ.copy()
+    env["ANTHROPIC_BASE_URL"] = "https://ollama.com"
+    env["ANTHROPIC_AUTH_TOKEN"] = key
+    env["OLLAMA_API_KEY"] = key
+    env.pop("ANTHROPIC_API_KEY", None)
+
+    model = os.environ.get("CENTRO_CLAUDE_MODEL", "").strip() or "gpt-oss:120b"
+    system_note = (
+        "Estás a executar uma alteração pedida pelo dono através do Centro de Negócios. "
+        "Trabalha APENAS dentro do repositório/worktree actual. Inspecciona os ficheiros relevantes "
+        "e faz a alteração completa com o menor escopo possível. Podes editar ficheiros e executar "
+        "verificações locais seguras. Não alteres .env, tokens, chaves, secrets, credenciais, .git "
+        "ou .github/workflows. Não uses git reset --hard, force push, rm -rf, deploy externo nem "
+        "alterações de contas. Não faças commit nem push; o Centro valida e publica depois."
+    )
+    result = run_cmd(
+        [
+            claude,
+            "--model", model,
+            "--permission-mode", "auto",
+            "--append-system-prompt", system_note,
+            "-p", prompt,
+        ],
+        cwd=worktree,
+        timeout=max(CLAUDE_TIMEOUT, 600),
+        env=env,
+    )
+    if result["exitCode"] != 0:
+        detail = (result["stderr"] or result["stdout"] or "falha sem detalhe")[-3500:]
+        raise RuntimeError("Fallback Claude/Ollama falhou: " + detail)
+
+    return (
+        "CLAUDE/OLLAMA · FALLBACK LOCAL APLICADO\n"
+        + (result["stdout"] or "Executor concluiu sem mensagem.")[-4500:]
+    )
+
+
 def action_repo_change(task):
     prompt = str((task.get("args") or {}).get("prompt") or "").strip()
     target = str(task.get("target") or "")
@@ -772,30 +817,51 @@ def action_repo_change(task):
     pushed = False
     remote_branch = ""
     try:
+        plan = None
+        planner_error = ""
         try:
             plan = request_repo_change_plan(target, prompt, worktree)
+        except Exception as exc:
+            planner_error = str(exc)
+
+        if plan is not None:
             plan_summary = str(plan.get("summary") or "").strip()
             edits = plan.get("edits") if isinstance(plan.get("edits"), list) else []
-            if not edits:
+            if edits:
+                try:
+                    applied = apply_repo_change_plan(worktree, plan)
+                except Exception as exc:
+                    return {
+                        "exitCode": 67,
+                        "stdout": "",
+                        "stderr": "Plano recebido, mas a aplicação segura falhou: " + str(exc),
+                        "durationMs": int((time.time() - started) * 1000),
+                    }
+                executor_output = (
+                    "WORKERS AI · PLANO APLICADO\n"
+                    + (plan_summary + "\n" if plan_summary else "")
+                    + "\n".join(applied)
+                )
+            else:
+                planner_error = "Planeador devolveu zero edições. " + plan_summary
+                plan = None
+
+        if plan is None:
+            try:
+                executor_output = run_claude_repo_executor(worktree, prompt)
+                if planner_error:
+                    executor_output += "\n\nFALLBACK ACTIVADO POR: " + planner_error[-1800:]
+            except Exception as fallback_exc:
                 return {
-                    "exitCode": 0,
-                    "stdout": "Planeador concluiu que não há alteração segura a aplicar.\n\n" + plan_summary,
-                    "stderr": "",
+                    "exitCode": 67,
+                    "stdout": "",
+                    "stderr": (
+                        "Todos os executores automáticos falharam. "
+                        "Workers AI: " + (planner_error or "sem plano válido")[-2200:]
+                        + "\nClaude/Ollama: " + str(fallback_exc)[-2200:]
+                    ),
                     "durationMs": int((time.time() - started) * 1000),
                 }
-            applied = apply_repo_change_plan(worktree, plan)
-            executor_output = (
-                "WORKERS AI · PLANO APLICADO\n"
-                + (plan_summary + "\n" if plan_summary else "")
-                + "\n".join(applied)
-            )
-        except Exception as exc:
-            return {
-                "exitCode": 67,
-                "stdout": "",
-                "stderr": "Planeamento/aplicação automática falhou com segurança: " + str(exc),
-                "durationMs": int((time.time() - started) * 1000),
-            }
 
         paths, status = changed_paths(worktree)
         if status["exitCode"] != 0:
