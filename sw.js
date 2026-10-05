@@ -1,5 +1,5 @@
-const CACHE='centro-negocios-v12-agent-world';
-const SHELL=['./','./index.html','./styles.css','./app.js','./agent-room.js','./agent-room.css','./manifest.webmanifest','./icon.svg','./data/sites.json'];
+const CACHE='centro-negocios-v13-agent-world';
+const SHELL=['./','./index.html','./styles.css','./app.js?v=world-3','./agent-room.js?v=world-3','./agent-room.css?v=world-3','./manifest.webmanifest','./icon.svg','./data/sites.json'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));

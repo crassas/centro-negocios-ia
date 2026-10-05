@@ -56,8 +56,11 @@ window.CentroRoom=(()=>{
     mount();if(!mounted)return;
     for(const r of roles){const m=model(r),b=document.querySelector('[data-room-agent="'+r.id+'"]'),p=position(r,m);b.dataset.state=m.state;b.dataset.zone=m.zone;b.style.left=p[0]+'%';b.style.top=p[1]+'%';b.setAttribute('aria-pressed',String(r.id===selected));b.querySelector('.room-bubble').textContent=m.speech;b.setAttribute('aria-label',r.name+': '+m.label);}
     document.querySelectorAll('[data-room-centre]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.roomCentre===selected)));
-    const detailHTML=detail();
-    if(detailHTML!==lastDetailHTML){el('room-detail').innerHTML=detailHTML;lastDetailHTML=detailHTML;}
+    const detailHTML=detail(),resultOpen=Boolean(el('room-detail').querySelector('details')?.open);
+    if(detailHTML!==lastDetailHTML){
+      el('room-detail').innerHTML=detailHTML;lastDetailHTML=detailHTML;
+      const result=el('room-detail').querySelector('details');if(result&&resultOpen)result.open=true;
+    }
     el('room-feed').innerHTML=rows.slice(0,3).map(t=>'<li><i data-state="'+(t.status==='running'?'working':t.status==='completed'&&t.exitCode!=null&&Number(t.exitCode)!==0?'error':'idle')+'"></i><div><b>'+escape(short(t.label||t.action||'Tarefa',58))+'</b><span>'+escape(t.target||'Centro')+' · '+escape(t.status==='running'?'A executar':t.status==='completed'?(Number(t.exitCode)===0?'Feito':'Erro'):t.status==='queued'?'Na fila':'A aguardar')+'</span></div></li>').join('')||'<li>Sem tarefas recebidas.</li>';
     if(el('room-cash-value'))el('room-cash-value').textContent=finance?money(finance.balance):'Sem leitura';
   }
