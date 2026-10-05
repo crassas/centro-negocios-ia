@@ -147,7 +147,7 @@ function ageLabel(value){
 
 
 const PANEL_NAMES={
-  visao:'PAINEL',assistente:'AUTOMAÇÃO & IA',radar:'OPORTUNIDADES',sites:'SITES',crm:'CLIENTES',
+  agentes:'SALA DOS AGENTES',visao:'PAINEL',assistente:'AUTOMAÇÃO & IA',radar:'OPORTUNIDADES',sites:'SITES',crm:'CLIENTES',
   leads:'LEADS',caixa:'FINANCEIRO',seo:'OPORTUNIDADES SEO',cofre:'COFRE',ferramentas:'DEFINIÇÕES'
 };
 function openPanel(id,options={}){
@@ -942,7 +942,9 @@ async function loadExecutions(){
   try{
     const data=await aiFetch('/api/executions?limit=20',{method:'GET',headers:{}});
     renderExecutions(data);
+    window.CentroRoom?.update(data);
   }catch(err){
+    window.CentroRoom?.offline();
     const summary=$('execution-summary');if(summary)summary.textContent='SEM LIGAÇÃO';
   }
 }
@@ -955,6 +957,7 @@ function renderSystem(){
 
 function setupEvents(){
   setupPanelNavigation();
+  $('room-refresh')?.addEventListener('click',loadExecutions);
   $('refresh-btn').addEventListener('click',loadLive);
   $('backup-top-btn').addEventListener('click',exportBackup);
   $('export-backup').addEventListener('click',exportBackup);

@@ -13,7 +13,9 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./agent-room.css">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
+  <script src="./agent-room.js" defer></script>
   <script src="./app.js" defer></script>
 </head>
 <body>
@@ -26,6 +28,7 @@
     </div>
     <nav class="command-nav nav" aria-label="Módulos">
       <a class="active" href="#visao" data-panel-target="visao"><span class="nav-icon">⌂</span><span>Painel</span></a>
+      <a href="#agentes" data-panel-target="agentes"><span class="nav-icon">♟</span><span>Sala dos Agentes</span></a>
       <a href="#crm" data-panel-target="crm"><span class="nav-icon">♙</span><span>Clientes</span></a>
       <a href="#sites" data-panel-target="sites"><span class="nav-icon">▣</span><span>Sites</span></a>
       <a href="#seo" data-panel-target="seo"><span class="nav-icon">⌖</span><span>SEO Local</span></a>
@@ -72,7 +75,7 @@
       <section class="panel-view is-active" id="visao" data-panel="visao">
         <div class="dashboard-heading">
           <div><h1>Visão Geral</h1><p id="headline-status">Tudo o que precisa, num só lugar. Mais controlo, mais resultados.</p></div>
-          <div class="dashboard-date" id="dashboard-date">Hoje</div>
+          <button class="btn" data-panel-target="agentes" type="button">♟ Abrir sala dos agentes</button><div class="dashboard-date" id="dashboard-date">Hoje</div>
         </div>
 
         <div class="dashboard-kpis" aria-label="Resumo da operação">
@@ -139,6 +142,12 @@
           <button data-ai-question="Procura oportunidades de prospeção nos dados atuais e diz-me onde devo olhar a seguir." data-open-ai="1"><span>02</span><b>Caçar oportunidades</b></button>
           <button data-ai-question="Faz um relatório executivo curto do estado de todos os projetos, riscos e próximos passos." data-open-ai="1"><span>03</span><b>Relatório</b></button>
         </div>
+      </section>
+
+      <section class="panel-view" id="agentes" data-panel="agentes">
+        <div class="room-heading"><div><span class="room-eyebrow">CENTRO DE NEGÓCIOS · OPERAÇÃO</span><h1>A tua equipa, em acção.</h1><p>Uma sala para acompanhar o trabalho. Toca num agente para ver a actividade.</p></div><button class="btn" id="room-refresh" type="button">↻ Actualizar</button></div>
+        <div class="room-layout"><article class="agent-office"><div class="office-top"><span>◈ SALA DOS AGENTES</span><small id="room-sync">A receber dados…</small></div><div class="office-floor"><div class="office-window"></div><div class="office-board"><b>CENTRO</b><span>Ideias → execução</span></div><div class="office-plant plant-one">♣</div><div class="office-plant plant-two">♣</div><div class="office-rug"></div><div id="room-stations"></div><div class="office-door"><span>OPERAÇÃO</span></div></div><div class="room-legend"><span><i data-state="working"></i>A trabalhar</span><span><i data-state="waiting"></i>Na fila</span><span><i data-state="error"></i>Erro</span><span><i data-state="unknown"></i>Sem ligação</span></div></article><aside class="room-detail" id="room-detail"></aside></div>
+        <article class="room-activity"><div><span class="room-eyebrow">REGISTO REAL</span><h2>O que está a acontecer</h2></div><ul id="room-feed"></ul><button class="text-link" data-panel-target="ferramentas" type="button">Ver execuções completas →</button></article>
       </section>
 
       <section class="panel-view" id="assistente" data-panel="assistente">
@@ -443,7 +452,7 @@
 <nav class="mobile-dock" aria-label="Navegação móvel">
   <button class="active" data-panel-target="visao"><b>⌂</b><span>Comando</span></button>
   <button data-panel-target="assistente"><b>AI</b><span>IA</span></button>
-  <button data-panel-target="radar"><b>◎</b><span>Radar</span></button>
+  <button data-panel-target="agentes"><b>♟</b><span>Agentes</span></button>
   <button data-panel-target="seo"><b>⌖</b><span>SEO</span></button>
   <button data-panel-target="sites"><b>◫</b><span>Sites</span></button>
 </nav>
