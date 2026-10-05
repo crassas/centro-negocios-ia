@@ -153,6 +153,9 @@ def capabilities():
             "site_check",
             "git_status",
             "git_pull",
+            "git_access_matrix",
+            "fault_timeout",
+            "fault_openclaw_recovery",
             "repo_change",
             "claude_query",
             "openclaw_status",
@@ -1369,6 +1372,150 @@ def action_repo_change(task):
             run_cmd(["git", "branch", "-D", branch], cwd=source, timeout=30)
 
 
+def action_git_access_matrix(task):
+    """Prova leitura + escrita Git nos cinco repositórios sem tocar na main."""
+    started = time.time()
+    git_bin = shutil.which("git")
+    if not git_bin:
+        return {"exitCode": 127, "stdout": "", "stderr": "Git não encontrado.", "durationMs": 0}
+
+    rows = []
+    failures = []
+    for name in REPOS:
+        source, repo_error = ensure_repo(name)
+        if repo_error:
+            detail = str(repo_error.get("stderr") or repo_error.get("stdout") or "clone/acesso falhou")
+            rows.append(f"FALHA · {name} · {detail[:500]}")
+            failures.append(name)
+            continue
+        if not repo_origin_ok(source, name):
+            rows.append(f"FALHA · {name} · origin não autorizado")
+            failures.append(name)
+            continue
+
+        fetch = run_cmd_retry(
+            [git_bin, "fetch", "origin", "main"],
+            cwd=source, timeout=90, attempts=2, delay=2,
+        )
+        if fetch["exitCode"] != 0:
+            detail = (fetch["stderr"] or fetch["stdout"] or f"exit {fetch['exitCode']}")[-500:]
+            rows.append(f"FALHA · {name} · fetch · {detail}")
+            failures.append(name)
+            continue
+
+        branch = "centro-access-probe-" + secrets.token_hex(5)
+        ref = "refs/heads/" + branch
+        push = run_cmd_retry(
+            [git_bin, "push", "origin", "refs/remotes/origin/main:" + ref],
+            cwd=source, timeout=120, attempts=2, delay=2,
+        )
+        if push["exitCode"] != 0:
+            detail = (push["stderr"] or push["stdout"] or f"exit {push['exitCode']}")[-500:]
+            rows.append(f"FALHA · {name} · push temporário · {detail}")
+            failures.append(name)
+            continue
+
+        verify = run_cmd_retry(
+            [git_bin, "ls-remote", "--heads", "origin", ref],
+            cwd=source, timeout=45, attempts=2, delay=1,
+        )
+        verified = verify["exitCode"] == 0 and bool(verify["stdout"].strip())
+
+        cleanup = run_cmd_retry(
+            [git_bin, "push", "origin", "--delete", branch],
+            cwd=source, timeout=120, attempts=2, delay=2,
+        )
+        cleaned = cleanup["exitCode"] == 0
+
+        if verified and cleaned:
+            rows.append(f"OK · {name} · leitura/escrita/remocao temporária")
+        else:
+            detail = []
+            if not verified:
+                detail.append("ref remoto não confirmado")
+            if not cleaned:
+                detail.append("cleanup remoto falhou")
+            rows.append(f"FALHA · {name} · " + ", ".join(detail))
+            failures.append(name)
+
+    return {
+        "exitCode": 0 if not failures else 1,
+        "stdout": "GIT ACCESS MATRIX\n" + "\n".join(rows),
+        "stderr": "" if not failures else "Sem acesso completo: " + ", ".join(failures),
+        "durationMs": int((time.time() - started) * 1000),
+    }
+
+
+def action_fault_timeout(task):
+    """Falha controlada: prova timeout, kill do grupo e retry da fila."""
+    started = time.time()
+    python = shutil.which("python3") or "python3"
+    result = run_cmd([python, "-c", "import time; time.sleep(3)"], timeout=0.6)
+    if result["exitCode"] == 124:
+        return {
+            "exitCode": 124,
+            "stdout": "FAULT_INJECTION_OK · executor preso foi terminado dentro do limite.",
+            "stderr": "BENCHMARK_TIMEOUT_INJECTED",
+            "durationMs": int((time.time() - started) * 1000),
+        }
+    return {
+        "exitCode": 1,
+        "stdout": result.get("stdout", ""),
+        "stderr": "A injecção de timeout não produziu exit 124. " + result.get("stderr", ""),
+        "durationMs": int((time.time() - started) * 1000),
+    }
+
+
+def action_fault_openclaw_recovery(task):
+    """Termina o OpenClaw gerido e prova que o supervisor o levanta sozinho."""
+    started = time.time()
+    ctl = next(
+        (p for p in (Path("/usr/local/bin/openclawctl"), HOME / ".local/bin/openclawctl") if p.exists()),
+        None,
+    )
+    if not ctl:
+        return {"exitCode": 127, "stdout": "", "stderr": "openclawctl não encontrado.", "durationMs": 0}
+
+    # Garante uma linha de base saudável antes de injectar a falha.
+    if not openclaw_http_health()[0]:
+        run_cmd([str(ctl), "start"], timeout=35)
+        deadline = time.time() + 25
+        while time.time() < deadline and not openclaw_http_health()[0]:
+            time.sleep(1)
+    if not openclaw_http_health()[0]:
+        return {"exitCode": 1, "stdout": "", "stderr": "OpenClaw já estava offline antes do teste.", "durationMs": int((time.time()-started)*1000)}
+
+    stopped = run_cmd([str(ctl), "stop"], timeout=35)
+    if stopped["exitCode"] != 0:
+        return {
+            "exitCode": stopped["exitCode"],
+            "stdout": stopped["stdout"],
+            "stderr": "Não foi possível terminar o OpenClaw para o teste. " + stopped["stderr"],
+            "durationMs": int((time.time()-started)*1000),
+        }
+
+    # O Centro Station verifica extras periodicamente e deve recuperar sem ajuda.
+    deadline = time.time() + 80
+    while time.time() < deadline:
+        if openclaw_http_health()[0]:
+            return {
+                "exitCode": 0,
+                "stdout": "FAULT_INJECTION_OK · OpenClaw terminou e o supervisor recuperou-o automaticamente.",
+                "stderr": "",
+                "durationMs": int((time.time() - started) * 1000),
+            }
+        time.sleep(2)
+
+    # Nunca deixa o serviço deliberadamente em baixo se a prova falhar.
+    run_cmd([str(ctl), "start"], timeout=35)
+    return {
+        "exitCode": 1,
+        "stdout": "",
+        "stderr": "Supervisor não recuperou o OpenClaw dentro de 80 s; arranque de segurança solicitado.",
+        "durationMs": int((time.time() - started) * 1000),
+    }
+
+
 
 def execute_action(task):
     action = str(task.get("action") or "")
@@ -2025,6 +2172,15 @@ def execute_action(task):
 
     if action == "repo_change":
         return action_repo_change(task)
+
+    if action == "git_access_matrix":
+        return action_git_access_matrix(task)
+
+    if action == "fault_timeout":
+        return action_fault_timeout(task)
+
+    if action == "fault_openclaw_recovery":
+        return action_fault_openclaw_recovery(task)
 
     if action in {"git_status", "git_pull"}:
         if target not in REPOS:
