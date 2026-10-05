@@ -12,6 +12,7 @@ STATE_DIR = HOME / ".centro-station"
 STATUS_FILE = STATE_DIR / "status.json"
 SERVER_PID_FILE = HOME / ".centro-server" / "server.pid"
 AGENT_PID_FILE = HOME / ".centro-agent" / "agent.pid"
+SERVER_BUSY_FILE = HOME / ".centro-server" / "busy.json"
 SUPERVISOR_PATH = Path(__file__).resolve()
 
 
@@ -53,6 +54,10 @@ def pid_running(path):
         return True, pid
     except Exception:
         return False, None
+
+
+def server_busy():
+    return SERVER_BUSY_FILE.exists()
 
 
 def server_healthy():
@@ -155,22 +160,28 @@ def main():
     last_update_attempt = 0
     last_update_ok = 0
     last_update_error = ""
+    last_busy_seen = 0
+    pending_server_restart = False
+    pending_agent_restart = False
 
     while True:
         now = int(time.time())
         actions = []
         reexec_station = False
+        busy = server_busy()
+        if busy:
+            last_busy_seen = now
 
         if AUTOUPDATE_ENABLED and now - last_update_attempt >= AUTOUPDATE_INTERVAL_SECONDS:
             last_update_attempt = now
             changed, update_errors = sync_runtime()
             if changed:
                 if "centro_server.py" in changed:
-                    ok, output = run_ctl(SERVER_CTL, "restart")
-                    actions.append({"service": "autoupdate/server", "ok": ok, "output": output})
+                    pending_server_restart = True
+                    actions.append({"service": "autoupdate/server", "ok": True, "output": "actualização validada e preparada"})
                 if "centro_agent.py" in changed:
-                    ok, output = run_ctl(AGENT_CTL, "restart")
-                    actions.append({"service": "autoupdate/agent", "ok": ok, "output": output})
+                    pending_agent_restart = True
+                    actions.append({"service": "autoupdate/agent", "ok": True, "output": "actualização validada e preparada"})
                 if "centro_station.py" in changed:
                     actions.append({"service": "autoupdate/station", "ok": True, "output": "nova versão validada"})
                     reexec_station = True
@@ -179,6 +190,26 @@ def main():
             else:
                 last_update_ok = now
                 last_update_error = ""
+
+        # Nunca reinicia Server/Agent a meio de uma execução. Depois de o lock
+        # desaparecer, dá alguns segundos ao Agent para publicar o resultado.
+        busy = server_busy()
+        if busy:
+            last_busy_seen = now
+        idle_after_task = (now - last_busy_seen) if last_busy_seen else 999999
+        if not busy and idle_after_task >= 12:
+            if pending_server_restart:
+                ok, output = run_ctl(SERVER_CTL, "restart")
+                actions.append({"service": "autoupdate/server-restart", "ok": ok, "output": output})
+                if ok:
+                    pending_server_restart = False
+                    time.sleep(2)
+            if pending_agent_restart:
+                ok, output = run_ctl(AGENT_CTL, "restart")
+                actions.append({"service": "autoupdate/agent-restart", "ok": ok, "output": output})
+                if ok:
+                    pending_agent_restart = False
+                    time.sleep(1)
 
         server_active, server_pid = pid_running(SERVER_PID_FILE)
         healthy = server_active and server_healthy()
@@ -257,6 +288,9 @@ def main():
                 "lastAttempt": last_update_attempt,
                 "lastOk": last_update_ok,
                 "lastError": last_update_error,
+                "serverBusy": busy,
+                "pendingServerRestart": pending_server_restart,
+                "pendingAgentRestart": pending_agent_restart,
             },
             "actions": actions,
         })
