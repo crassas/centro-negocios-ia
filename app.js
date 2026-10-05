@@ -967,12 +967,12 @@ function setupEvents(){
   $('room-talk-form')?.addEventListener('submit',async e=>{
     e.preventDefault();const input=$('room-talk-input'),button=$('room-talk-send'),reply=$('room-reply');
     const question=input.value.trim();if(!question||button.disabled)return;
-    button.disabled=true;reply.textContent='Vou analisar o pedido.';
+    button.disabled=true;reply.textContent='Vou analisar o pedido.';window.CentroRoom?.setConversationBusy(true);
     try{
       await askAI(question+'\nResponde em português de Portugal, em até 3 frases curtas. Não afirmes que executaste alterações sem provas.');
       const full=$('ai-answer').textContent.trim();reply.textContent=full.length>360?full.slice(0,357)+'…':full;
     }catch{reply.textContent='Não consegui receber a resposta. Tenta novamente.';}
-    finally{button.disabled=false;}
+    finally{button.disabled=false;window.CentroRoom?.setConversationBusy(false);}
   });
   $('refresh-btn').addEventListener('click',loadLive);
   $('backup-top-btn').addEventListener('click',exportBackup);

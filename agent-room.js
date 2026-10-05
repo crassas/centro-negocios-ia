@@ -7,7 +7,7 @@ window.CentroRoom=(()=>{
     {id:'claude',name:'Claude / fallback',role:'Planeamento e código',color:'#dd9870',home:[62,77],match:r=>/claude|repo_change/.test(String(r.action||''))},
     {id:'queue',name:'Coordenador',role:'Fila de tarefas',color:'#63aa92',home:[85,77],match:()=>true}
   ];
-  let rows=[],available=false,selected='executor',mounted=false,finance=null;
+  let rows=[],available=false,selected='executor',mounted=false,finance=null,conversationBusy=false;
   const el=id=>document.getElementById(id);
   const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const short=(s,max=72)=>String(s??'').length>max?String(s).slice(0,max-1)+'…':String(s??'');
@@ -22,6 +22,7 @@ window.CentroRoom=(()=>{
     return 'queue';
   }
   function model(role){
+    if(role.id==='claude'&&conversationBusy)return {state:'working',label:'A analisar o teu pedido',speech:'Estou a analisar.',task:null,zone:'plan'};
     if(!available)return {state:'unknown',label:'Sem ligação',speech:'Não recebo dados.',task:null,zone:'home'};
     const matches=rows.filter(role.match);
     const task=matches.find(r=>r.status==='running')||matches.find(r=>r.status==='queued')||matches[0];
@@ -62,6 +63,7 @@ window.CentroRoom=(()=>{
   function update(payload){rows=Array.isArray(payload?.executions)?payload.executions:[];available=true;paint();if(el('room-sync'))el('room-sync').textContent='Actualizado às '+new Date().toLocaleTimeString('pt-PT');}
   function offline(){available=false;paint();if(el('room-sync'))el('room-sync').textContent='Sem ligação · actividade anterior';}
   function setFinance(value){finance=value;paint();}
+  function setConversationBusy(value){conversationBusy=Boolean(value);paint();}
   document.addEventListener('DOMContentLoaded',paint);
-  return {update,offline,model,destination,position,setFinance};
+  return {update,offline,model,destination,position,setFinance,setConversationBusy};
 })();

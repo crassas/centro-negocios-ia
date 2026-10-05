@@ -37,5 +37,11 @@ for(const zone of ['github','plan','finance','queue','home']){
     assert.ok(p.every(n=>Number.isFinite(n)&&n>=0&&n<=100));
   }
 }
+room.setConversationBusy(true);
+assert.equal(room.model(planner).state,'working');
+assert.equal(room.model(planner).task,null,'conversation must not invent a queue task');
+assert.equal(room.model(planner).zone,'plan');
+room.setConversationBusy(false);
+assert.equal(room.model(planner).state,'idle');
 room.setFinance({balance:0,income:0,expense:0,pending:25});
 console.log('PASS: routing, live task priority, short speech, failures, connection loss, finance and movement bounds');
