@@ -582,9 +582,37 @@ def main():
         remote_ok, remote_pid, remote_executor, remote_detail = remote_desktop_healthy()
         remote_managed = remote_managed_state()
         if REMOTE_DESKTOP_AUTOSTART and REMOTE_DEVICE_FILE.exists() and not busy:
-            # Primeira passagem após activar a gestão autónoma: assume o
-            # processo remoto já emparelhado e relança-o sob supervisão/log.
+            # Se o utilizador arrancou manualmente um Remote que já está
+            # saudável, adopta-o sem o matar. A versão anterior fazia um
+            # "takeover" destrutivo: terminava exactamente o canal que acabara
+            # de ficar ONLINE e só depois tentava criar outro em background.
+            # Em Android/PRoot isso criava a sequência "connected -> Terminated".
             takeover = bool(remote_pid and not remote_managed)
+            if takeover and remote_ok:
+                try:
+                    safe_mkdir(REMOTE_STATE_DIR)
+                    REMOTE_PID_FILE.write_text(str(remote_pid), encoding="utf-8")
+                    REMOTE_MANAGED_FILE.write_text(
+                        json.dumps({
+                            "pid": remote_pid,
+                            "startedAt": now,
+                            "adopted": True,
+                        }),
+                        encoding="utf-8",
+                    )
+                    remote_managed = remote_managed_state()
+                    actions.append({
+                        "service": "remote-desktop/adopção",
+                        "ok": True,
+                        "output": f"canal manual saudável adoptado sem reinício · PID {remote_pid}",
+                    })
+                except Exception as exc:
+                    actions.append({
+                        "service": "remote-desktop/adopção",
+                        "ok": False,
+                        "output": str(exc),
+                    })
+
             managed_age = now - int(remote_managed.get("startedAt") or now)
             broken_managed = bool(
                 remote_pid
@@ -593,15 +621,16 @@ def main():
                 and not remote_ok
             )
             missing = not remote_pid
+            needs_takeover_repair = bool(takeover and not remote_ok)
             if (
-                (takeover or broken_managed or missing)
+                (needs_takeover_repair or broken_managed or missing)
                 and now - last_remote_attempt >= OPTIONAL_RETRY_SECONDS
             ):
                 last_remote_attempt = now
                 ok, output = start_remote_desktop(force=bool(remote_pid))
                 reason = (
-                    "takeover"
-                    if takeover
+                    "takeover-repair"
+                    if needs_takeover_repair
                     else ("recuperação" if broken_managed else "arranque")
                 )
                 actions.append({
