@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0b1929">
+  <meta name="theme-color" content="#f5f7fb">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="format-detection" content="telephone=no">
   <meta name="description" content="Centro de comando para sites, CRM, prospecção, caixa e inteligência operacional.">
-  <title>Centro de Negócios · Command Deck</title>
+  <title>Centro de Negócios</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
@@ -18,109 +18,126 @@
 </head>
 <body>
 <div class="shell">
+  
   <aside class="rail" aria-label="Navegação principal">
     <div class="rail-brand">
-      <div class="brand-core">CN</div>
-      <div><strong>CENTRO</strong><span>COMMAND // 01</span></div>
+      <div class="brand-mark" aria-hidden="true"><span></span></div>
+      <div class="brand-copy"><strong>Centro de</strong><b>Negócios</b></div>
     </div>
-
-    <div class="rail-health" id="monitor-pill"><i></i><span id="monitor-label">A sincronizar</span></div>
-
-    <nav class="command-nav nav">
-      <a class="active" href="#visao" data-panel-target="visao"><b>01</b><span>Comando</span></a>
-      <a href="#assistente" data-panel-target="assistente"><b>02</b><span>IA</span></a>
-      <a href="#radar" data-panel-target="radar"><b>03</b><span>Radar</span></a>
-      <a href="#sites" data-panel-target="sites"><b>04</b><span>Sites</span></a>
-      <a href="#crm" data-panel-target="crm"><b>05</b><span>CRM</span></a>
-      <a href="#leads" data-panel-target="leads"><b>06</b><span>Leads</span></a>
-      <a href="#caixa" data-panel-target="caixa"><b>07</b><span>Caixa</span></a>
-      <a href="#seo" data-panel-target="seo"><b>08</b><span>Search</span></a>
-      <a href="#cofre" data-panel-target="cofre"><b>09</b><span>Cofre</span></a>
-      <a href="#ferramentas" data-panel-target="ferramentas"><b>10</b><span>Sistema</span></a>
+    <nav class="command-nav nav" aria-label="Módulos">
+      <a class="active" href="#visao" data-panel-target="visao"><span class="nav-icon">⌂</span><span>Painel</span></a>
+      <a href="#crm" data-panel-target="crm"><span class="nav-icon">♙</span><span>Clientes</span></a>
+      <a href="#sites" data-panel-target="sites"><span class="nav-icon">▣</span><span>Sites</span></a>
+      <a href="#seo" data-panel-target="seo"><span class="nav-icon">⌖</span><span>SEO Local</span></a>
+      <a href="#assistente" data-panel-target="assistente"><span class="nav-icon">ϟ</span><span>Automação & IA</span><span class="nav-badge" id="decision-count">0</span></a>
+      <a href="#radar" data-panel-target="radar"><span class="nav-icon">◎</span><span>Oportunidades</span></a>
+      <a href="#leads" data-panel-target="leads"><span class="nav-icon">◇</span><span>Leads</span></a>
+      <a href="#caixa" data-panel-target="caixa"><span class="nav-icon">▥</span><span>Financeiro</span></a>
+      <a href="#cofre" data-panel-target="cofre"><span class="nav-icon">⌑</span><span>Cofre</span></a>
+      <a href="#ferramentas" data-panel-target="ferramentas"><span class="nav-icon">⚙</span><span>Definições</span></a>
     </nav>
-
+    <div class="rail-growth">
+      <div class="growth-crown">♛</div>
+      <strong>Crescemos<br>negócios locais</strong>
+      <p>Sites. Visibilidade.<br>Resultados.</p>
+    </div>
     <div class="rail-foot">
-      <span>LOCAL-FIRST</span>
-      <b>v2 · AGENT CORE</b>
+      <span>v3.0</span><b>Centro de Negócios</b><small>Operação local-first</small>
     </div>
   </aside>
 
   <main class="workspace">
+    
     <header class="command-bar">
-      <div class="command-location">
+      <div class="global-search">
+        <span aria-hidden="true">⌕</span>
+        <input id="global-search" type="search" placeholder="Pesquisar clientes, projetos, tarefas..." aria-label="Pesquisar">
+      </div>
+      <div class="command-location" aria-live="polite">
         <span class="pulse-dot"></span>
-        <div><small>ÁREA ACTIVA</small><b id="active-panel-name">COMANDO</b></div>
+        <div><small>Área ativa</small><b id="active-panel-name">PAINEL</b></div>
       </div>
       <div class="command-bar-actions">
-        <button class="icon-btn" id="nav-home" type="button" title="Voltar ao comando">⌂</button>
-        <button class="icon-btn" id="refresh-btn" type="button" title="Actualizar dados">↻</button>
+        <button class="top-primary" data-panel-target="crm" type="button"><span>＋</span>Novo projeto</button>
+        <div class="rail-health" id="monitor-pill"><i></i><span id="monitor-label">A sincronizar</span></div>
+        <button class="icon-btn" id="nav-home" type="button" title="Voltar ao painel">⌂</button>
+        <button class="icon-btn" id="refresh-btn" type="button" title="Atualizar dados">↻</button>
         <button class="icon-btn" id="install-btn" type="button" hidden title="Instalar aplicação">↓</button>
         <button class="icon-btn" id="backup-top-btn" type="button" title="Criar backup">◫</button>
       </div>
     </header>
 
     <div class="panel-stage">
+      
       <section class="panel-view is-active" id="visao" data-panel="visao">
-        <div class="command-hero">
-          <div class="hero-copy">
-            <span class="sys-label">OPERATIONAL INTELLIGENCE</span>
-            <h1>CENTRO<span>//</span>NEGÓCIOS</h1>
-            <p id="headline-status">A carregar estado dos projectos.</p>
-          </div>
-          <div class="core-status">
-            <div class="core-orbit"><span>AI</span></div>
-            <div><small>NÚCLEO</small><b>ONLINE</b><span>Cloudflare Workers AI</span></div>
-          </div>
+        <div class="dashboard-heading">
+          <div><h1>Visão Geral</h1><p id="headline-status">Tudo o que precisa, num só lugar. Mais controlo, mais resultados.</p></div>
+          <div class="dashboard-date" id="dashboard-date">Hoje</div>
         </div>
 
-        <div class="command-actions">
-          <button data-ai-question="O que tenho de fazer agora? Dá-me apenas as 3 prioridades mais importantes, com acção concreta." data-open-ai="1">
-            <span>01</span><b>PLANO DE AGORA</b><small>3 acções prioritárias</small>
-          </button>
-          <button data-ai-question="Procura oportunidades de prospecção nos dados actuais e diz-me onde devo olhar a seguir." data-open-ai="1">
-            <span>02</span><b>CAÇAR OPORTUNIDADES</b><small>Radar comercial</small>
-          </button>
-          <button data-ai-question="Faz um relatório executivo curto do estado de todos os projectos, riscos e próximos passos." data-open-ai="1">
-            <span>03</span><b>RELATÓRIO</b><small>Estado da operação</small>
-          </button>
-          <button data-panel-target="assistente" data-focus-decisions="1">
-            <span>04</span><b>DECISÕES PENDENTES</b><small><strong id="decision-count">0</strong> aguardam confirmação</small>
-          </button>
+        <div class="dashboard-kpis" aria-label="Resumo da operação">
+          <article class="summary-card"><div class="summary-icon">◉</div><div class="summary-body"><span>Sites online</span><strong id="kpi-online">—</strong><small id="kpi-online-note">A verificar</small></div></article>
+          <article class="summary-card"><div class="summary-icon">✓</div><div class="summary-body"><span>Alertas técnicos</span><strong id="kpi-issues">—</strong><small id="kpi-issues-note">A verificar</small></div></article>
+          <article class="summary-card"><div class="summary-icon">◇</div><div class="summary-body"><span>Leads abertos</span><strong id="kpi-leads">0</strong><small id="kpi-leads-note">Pipeline local</small></div></article>
+          <article class="summary-card"><div class="summary-icon">€</div><div class="summary-body"><span>Saldo registado</span><strong class="money" id="kpi-balance">0,00 €</strong><small id="kpi-balance-note">Entradas − saídas</small></div></article>
         </div>
 
-        <div class="kpis" aria-label="Resumo">
-          <article class="kpi"><span class="kpi-code">NET</span><div class="value" id="kpi-online">—</div><div class="label">Sites online</div><div class="delta" id="kpi-online-note">A verificar</div></article>
-          <article class="kpi"><span class="kpi-code">SYS</span><div class="value" id="kpi-issues">—</div><div class="label">Alertas técnicos</div><div class="delta" id="kpi-issues-note">A verificar</div></article>
-          <article class="kpi"><span class="kpi-code">CRM</span><div class="value" id="kpi-leads">0</div><div class="label">Leads abertos</div><div class="delta" id="kpi-leads-note">Pipeline local</div></article>
-          <article class="kpi"><span class="kpi-code">EUR</span><div class="value money" id="kpi-balance">0,00 €</div><div class="label">Saldo registado</div><div class="delta" id="kpi-balance-note">Entradas − saídas</div></article>
-        </div>
-
-        <div class="module-launcher" aria-label="Módulos">
-          <button data-panel-target="sites"><span>04</span><b>SITES</b></button>
-          <button data-panel-target="crm"><span>05</span><b>CRM</b></button>
-          <button data-panel-target="leads"><span>06</span><b>LEADS</b></button>
-          <button data-panel-target="caixa"><span>07</span><b>CAIXA</b></button>
-          <button data-panel-target="seo"><span>08</span><b>SEARCH</b></button>
-          <button data-panel-target="cofre"><span>09</span><b>COFRE</b></button>
-          <button data-panel-target="ferramentas"><span>10</span><b>SISTEMA</b></button>
-        </div>
-
-        <div class="overview-grid">
-          <article class="module">
-            <div class="module-head"><div><span class="sys-label">PRIORIDADE</span><h2>Alertas</h2></div><button data-panel-target="sites" class="mini-link">VER SITES →</button></div>
-            <div id="alerts-list" class="stack"><div class="empty">A analisar.</div></div>
+        <div class="dashboard-main-grid">
+          <article class="dashboard-card projects-panel">
+            <div class="dashboard-card-head">
+              <div><h2>Clientes e Projetos</h2><p>Acompanhe o estado dos negócios e aceda rapidamente a cada projeto.</p></div>
+              <button class="text-link" data-panel-target="crm" type="button">Ver todos →</button>
+            </div>
+            <div class="project-grid">
+              <article class="project-card">
+                <div class="project-media"><img src="https://pentehouse.pt/og-image.jpg" alt="Pentehouse Barbearia, Marquês, Porto"><span class="project-status live">Publicado</span></div>
+                <div class="project-card-body"><div class="project-meta"><h3>Pentehouse Barbearia</h3><span>▣ Site + SEO Local</span><span>⌖ Marquês, Porto</span></div><div class="project-next"><small>Próxima ação</small><b>Revisão de conteúdos</b></div></div>
+                <div class="project-actions"><a class="project-open" href="https://pentehouse.pt/" target="_blank" rel="noopener">Aceder</a><button data-panel-target="crm" type="button">•••</button></div>
+              </article>
+              <article class="project-card">
+                <div class="project-media"><img src="https://bestpizzaandkebab.pt/og.jpg" alt="Best Pizza & Kebab, Campanhã, Porto"><span class="project-status live">Publicado</span></div>
+                <div class="project-card-body"><div class="project-meta"><h3>Best Pizza & Kebab</h3><span>▣ Site + SEO Local</span><span>⌖ Campanhã, Porto</span></div><div class="project-next"><small>Próxima ação</small><b>Atualizar takeaway</b></div></div>
+                <div class="project-actions"><a class="project-open" href="https://bestpizzaandkebab.pt/" target="_blank" rel="noopener">Aceder</a><button data-panel-target="crm" type="button">•••</button></div>
+              </article>
+              <article class="project-card">
+                <div class="project-media"><img src="https://restaurantedoisirmaos.pt/assets/optimized/hero-restaurante-2-irmaos-v3-800.webp" alt="Restaurante 2 Irmãos, Campanhã, Porto"><span class="project-status live">Publicado</span></div>
+                <div class="project-card-body"><div class="project-meta"><h3>Restaurante 2 Irmãos</h3><span>▣ Site + SEO Local</span><span>⌖ Campanhã, Porto</span></div><div class="project-next"><small>Próxima ação</small><b>Atualizar menu</b></div></div>
+                <div class="project-actions"><a class="project-open" href="https://restaurantedoisirmaos.pt/" target="_blank" rel="noopener">Aceder</a><button data-panel-target="crm" type="button">•••</button></div>
+              </article>
+              <article class="project-card">
+                <div class="project-media beatriz-visual"><div><span>♧</span><b>Engomadoria</b><strong>Beatriz</strong><small>ROUPA COM MAIS VIDA</small></div><span class="project-status build">Em desenvolvimento</span></div>
+                <div class="project-card-body"><div class="project-meta"><h3>Engomadoria Beatriz</h3><span>▣ Site em desenvolvimento</span><span>⌖ Praça das Flores</span></div><div class="project-next"><small>Próxima ação</small><b>Finalizar páginas</b></div></div>
+                <div class="project-actions"><a class="project-open" href="https://github.com/crassas/engomadoria-beatriz" target="_blank" rel="noopener">Abrir GitHub</a><button data-panel-target="crm" type="button">•••</button></div>
+              </article>
+            </div>
           </article>
-          <article class="module">
-            <div class="module-head"><div><span class="sys-label">CROSS-SIGNAL</span><h2>Conexões invisíveis</h2></div></div>
-            <div id="connections-list" class="stack"><div class="empty">A cruzar sinais técnicos.</div></div>
-          </article>
+
+          <aside class="dashboard-side-stack">
+            <article class="dashboard-card seo-local-card">
+              <div class="dashboard-card-head compact"><div><h2>SEO Local · Porto</h2></div><button class="text-link" data-panel-target="seo" type="button">Ver relatório →</button></div>
+              <div class="seo-map-wrap"><iframe title="Mapa do Porto" src="https://www.openstreetmap.org/export/embed.html?bbox=-8.652%2C41.138%2C-8.566%2C41.185&amp;layer=mapnik" loading="lazy"></iframe><span class="map-pin pin-1">1</span><span class="map-pin pin-2">2</span><span class="map-pin pin-3">3</span><span class="map-pin pin-4">4</span></div>
+              <div class="local-list"><div><span class="local-dot p"></span><b>Pentehouse Barbearia</b><small>Marquês</small></div><div><span class="local-dot b"></span><b>Best Pizza & Kebab</b><small>Campanhã</small></div><div><span class="local-dot d"></span><b>Restaurante 2 Irmãos</b><small>Campanhã</small></div><div><span class="local-dot e"></span><b>Engomadoria Beatriz</b><small>Praça das Flores</small></div></div>
+            </article>
+            <article class="dashboard-card priority-card">
+              <div class="dashboard-card-head compact"><div><h2>Ações Prioritárias</h2></div><button class="text-link" data-panel-target="crm" type="button">Ver todas →</button></div>
+              <button class="priority-row" data-panel-target="crm" type="button"><span class="priority-check done">✓</span><b>Revisão de conteúdos — Pentehouse</b><small>CRM</small></button>
+              <button class="priority-row" data-panel-target="sites" type="button"><span class="priority-check">○</span><b>Atualizar takeaway — Best Pizza</b><small>Sites</small></button>
+              <button class="priority-row" data-panel-target="seo" type="button"><span class="priority-check">○</span><b>Reforçar SEO — 2 Irmãos</b><small>SEO</small></button>
+              <button class="priority-row" data-panel-target="crm" type="button"><span class="priority-check">○</span><b>Finalizar páginas — Beatriz</b><small>CRM</small></button>
+            </article>
+          </aside>
         </div>
 
-        <div class="status-strip" aria-label="Estado das fontes">
-          <div><span>MONITOR</span><b>15 MIN</b></div>
-          <div><span>WORKERS AI</span><b>ACTIVO</b></div>
-          <div><span>CRM / CAIXA</span><b>LOCAL</b></div>
-          <div><span>COFRE</span><b>AES-256</b></div>
+        <div class="dashboard-bottom-grid">
+          <article class="dashboard-card"><div class="dashboard-card-head compact"><div><h2>Alertas Recentes</h2></div><button class="text-link" data-panel-target="sites" type="button">Ver sites →</button></div><div id="alerts-list" class="friendly-stack"><div class="empty">A analisar.</div></div></article>
+          <article class="dashboard-card"><div class="dashboard-card-head compact"><div><h2>Conexões e Oportunidades</h2></div><button class="text-link" data-panel-target="radar" type="button">Abrir radar →</button></div><div id="connections-list" class="friendly-stack"><div class="empty">A cruzar sinais técnicos.</div></div></article>
+          <article class="growth-banner"><div><span>PORTO · NEGÓCIOS LOCAIS</span><h2>Negócios locais<br>ganham mais longe.</h2><p>Sites, SEO e automação num só centro.</p><button data-panel-target="crm" type="button">Novo projeto →</button></div></article>
+        </div>
+
+        <div class="dashboard-quick-actions" aria-label="Ações rápidas">
+          <button data-ai-question="O que tenho de fazer agora? Dá-me apenas as 3 prioridades mais importantes, com ação concreta." data-open-ai="1"><span>01</span><b>Plano de agora</b></button>
+          <button data-ai-question="Procura oportunidades de prospeção nos dados atuais e diz-me onde devo olhar a seguir." data-open-ai="1"><span>02</span><b>Caçar oportunidades</b></button>
+          <button data-ai-question="Faz um relatório executivo curto do estado de todos os projetos, riscos e próximos passos." data-open-ai="1"><span>03</span><b>Relatório</b></button>
         </div>
       </section>
 
