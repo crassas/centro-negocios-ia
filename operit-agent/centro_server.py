@@ -1233,6 +1233,54 @@ def execute_action(task):
         add("Token Server", TOKEN_FILE.exists())
         add("Token Operit", AGENT_TOKEN_FILE.exists())
 
+        # Prova real do caminho que estava a devolver HTTP 500:
+        # autenticação do Agent -> endpoint do planeador -> Workers AI -> JSON.
+        planner_ok = False
+        planner_detail = ""
+        agent_token = read_secret(AGENT_TOKEN_FILE)
+        if not agent_token:
+            planner_detail = "token Operit em falta"
+        else:
+            try:
+                status, data = http_json(
+                    CLOUD_BASE + "/api/repo/change-plan",
+                    method="POST",
+                    payload={
+                        "target": "centro-negocios-ia",
+                        "prompt": (
+                            "SELFTEST do planeador. Não existe alteração real pedida. "
+                            "Devolve um plano JSON válido; edits pode ficar vazio."
+                        ),
+                        "context": {
+                            "repo": "centro-negocios-ia",
+                            "branch": "main",
+                            "head": "selftest",
+                            "paths": ["SELFTEST.md"],
+                            "files": {
+                                "SELFTEST.md": "# SELFTEST\\nFicheiro sintético; não existe alteração a fazer.\\n"
+                            },
+                            "source": "centro-selftest",
+                        },
+                    },
+                    headers={"Authorization": "Bearer " + agent_token},
+                    timeout=180,
+                )
+                plan = data.get("plan") if isinstance(data, dict) else None
+                planner_ok = (
+                    status == 200
+                    and data.get("ok") is True
+                    and isinstance(plan, dict)
+                    and isinstance(plan.get("edits"), list)
+                )
+                planner_detail = str(
+                    data.get("plannerModel")
+                    or data.get("error")
+                    or f"HTTP {status}"
+                )
+            except Exception as exc:
+                planner_detail = str(exc)[:300]
+        add("Workers AI planner", planner_ok, planner_detail)
+
         # Ferramentas essenciais
         git_bin = shutil.which("git")
         add("Git", bool(git_bin), git_bin or "não encontrado")
@@ -1284,6 +1332,7 @@ def execute_action(task):
             "Git",
             "Python 3",
             "Workspace temporário",
+            "Workers AI planner",
         }
         essential = [(n, ok, d) for n, ok, d in checks if n in essential_names or n.startswith("Repo ")]
         failures = [(n, d) for n, ok, d in essential if not ok]
