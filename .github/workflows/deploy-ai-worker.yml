@@ -20,6 +20,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      GSC_SERVICE_ACCOUNT_JSON: ${{ secrets.GSC_SERVICE_ACCOUNT_JSON }}
       GSC_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GSC_SERVICE_ACCOUNT_EMAIL }}
       GSC_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.GSC_SERVICE_ACCOUNT_PRIVATE_KEY }}
     steps:
@@ -69,7 +70,12 @@ jobs:
         working-directory: cloudflare-ai-worker
         shell: bash
         run: |
-          if [ -n "$GSC_SERVICE_ACCOUNT_EMAIL" ] && [ -n "$GSC_SERVICE_ACCOUNT_PRIVATE_KEY" ]; then
+          if [ -n "$GSC_SERVICE_ACCOUNT_JSON" ]; then
+            node -e "const fs=require('fs');const x=JSON.parse(process.env.GSC_SERVICE_ACCOUNT_JSON);if(!x.client_email||!x.private_key)process.exit(2);fs.writeFileSync('/tmp/gsc-secrets.json',JSON.stringify({GSC_SERVICE_ACCOUNT_EMAIL:x.client_email,GSC_SERVICE_ACCOUNT_PRIVATE_KEY:x.private_key}))"
+            npx --yes wrangler@latest secret bulk /tmp/gsc-secrets.json
+            rm -f /tmp/gsc-secrets.json
+            echo "Credenciais Search Console sincronizadas a partir do JSON da conta de serviço."
+          elif [ -n "$GSC_SERVICE_ACCOUNT_EMAIL" ] && [ -n "$GSC_SERVICE_ACCOUNT_PRIVATE_KEY" ]; then
             node -e "require('fs').writeFileSync('/tmp/gsc-secrets.json', JSON.stringify({GSC_SERVICE_ACCOUNT_EMAIL:process.env.GSC_SERVICE_ACCOUNT_EMAIL,GSC_SERVICE_ACCOUNT_PRIVATE_KEY:process.env.GSC_SERVICE_ACCOUNT_PRIVATE_KEY}))"
             npx --yes wrangler@latest secret bulk /tmp/gsc-secrets.json
             rm -f /tmp/gsc-secrets.json
