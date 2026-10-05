@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import errno
 import json
 import os
 import signal
@@ -69,6 +70,17 @@ def pid_running(path):
         return True, pid
     except Exception:
         return False, None
+
+
+def safe_mkdir(path):
+    """Cria directórios tolerando o ENOSYS intermitente observado no PRoot."""
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        return True
+    except OSError as exc:
+        if exc.errno == errno.ENOSYS and path.exists():
+            return True
+        raise
 
 
 def server_busy():
@@ -166,7 +178,7 @@ def remote_desktop_pid():
     # árvore normalmente sem tocar no shell interactivo do utilizador.
     pid = pids[0]
     try:
-        REMOTE_STATE_DIR.mkdir(parents=True, exist_ok=True)
+        safe_mkdir(REMOTE_STATE_DIR)
         REMOTE_PID_FILE.write_text(str(pid), encoding="utf-8")
     except Exception:
         pass
@@ -268,7 +280,7 @@ def start_remote_desktop(force=False):
         command = [npx, "-y", "@wonderwhy-er/desktop-commander@latest", "remote", "--debug"]
 
     try:
-        REMOTE_STATE_DIR.mkdir(parents=True, exist_ok=True)
+        safe_mkdir(REMOTE_STATE_DIR)
         # Cada arranque gerido começa um log limpo; assim uma falha antiga não
         # mascara uma recuperação actual.
         log = REMOTE_LOG_FILE.open("wb", buffering=0)
@@ -323,7 +335,7 @@ def download_runtime(name):
 
 
 def atomic_write(path, text, mode=0o700):
-    path.parent.mkdir(parents=True, exist_ok=True)
+    safe_mkdir(path.parent)
     tmp = path.with_name(path.name + ".centro-new")
     tmp.write_text(text, encoding="utf-8")
     os.chmod(tmp, mode)
@@ -393,14 +405,22 @@ def sync_runtime():
 
 
 def write_status(payload):
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = STATUS_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.replace(STATUS_FILE)
+    # Estado é telemetria; uma falha transitória do PRoot nunca pode matar
+    # o supervisor. Se nem o directório existente estiver utilizável, regista
+    # no stdout e tenta novamente no ciclo seguinte.
+    try:
+        safe_mkdir(STATE_DIR)
+        tmp = STATUS_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.replace(STATUS_FILE)
+        return True
+    except OSError as exc:
+        print(f"[auto] status · FALHA TRANSITÓRIA · {exc}", flush=True)
+        return False
 
 
 def main():
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    safe_mkdir(STATE_DIR)
     print("Centro Station supervisor activo. Ctrl+C para parar.", flush=True)
     last_openclaw_attempt = 0
     last_laya_attempt = 0
