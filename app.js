@@ -145,7 +145,7 @@ function ageLabel(value){
 
 const PANEL_NAMES={
   visao:'PAINEL',assistente:'AUTOMAÇÃO & IA',radar:'OPORTUNIDADES',sites:'SITES',crm:'CLIENTES',
-  leads:'LEADS',caixa:'FINANCEIRO',seo:'SEO LOCAL',cofre:'COFRE',ferramentas:'DEFINIÇÕES'
+  leads:'LEADS',caixa:'FINANCEIRO',seo:'OPORTUNIDADES SEO',cofre:'COFRE',ferramentas:'DEFINIÇÕES'
 };
 function openPanel(id,options={}){
   const target=document.querySelector('[data-panel="'+id+'"]');
