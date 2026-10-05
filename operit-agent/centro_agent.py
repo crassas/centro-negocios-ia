@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import random
 import os
 import platform
 import shutil
@@ -17,7 +18,8 @@ STATE_DIR = HOME / ".centro-agent"
 TOKEN_FILE = STATE_DIR / "token"
 OLLAMA_KEY_FILE = STATE_DIR / "ollama_api_key"
 SERVER_TOKEN_FILE = HOME / ".centro-server" / "token"
-POLL_SECONDS = 0.75
+OUTBOX_FILE = STATE_DIR / "result-outbox.json"
+POLL_SECONDS = 2
 CMD_TIMEOUT = 120
 CLAUDE_TIMEOUT = 300
 
@@ -302,26 +304,38 @@ def execute(task):
     )
 
 
+def save_outbox(payload):
+    STATE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    tmp = OUTBOX_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    os.chmod(tmp, 0o600)
+    tmp.replace(OUTBOX_FILE)
+
+
+def flush_outbox(token):
+    if not OUTBOX_FILE.exists():
+        return False
+    payload = json.loads(OUTBOX_FILE.read_text(encoding="utf-8"))
+    response = api("/api/operit/result", method="POST", token=token, payload=payload)
+    if not isinstance(response, dict) or not response.get("ok"):
+        raise RuntimeError("Resultado ainda não confirmado pelo Worker.")
+    OUTBOX_FILE.unlink()
+    print(f"Resultado entregue · {payload['id']} · exit={payload['exitCode']}", flush=True)
+    return True
+
+
 def work_once(token):
+    if flush_outbox(token):
+        return True
     response = api("/api/operit/pull", token=token)
     task = response.get("task")
     if not task:
         return False
     print(f"[{task['id']}] {task.get('label', task.get('action'))}", flush=True)
     exit_code, stdout, stderr, duration = execute(task)
-    api(
-        "/api/operit/result",
-        method="POST",
-        token=token,
-        payload={
-            "id": task["id"],
-            "exitCode": exit_code,
-            "stdout": stdout,
-            "stderr": stderr,
-            "durationMs": duration,
-        },
-    )
-    print(f"Concluído · exit={exit_code}", flush=True)
+    save_outbox({"id": task["id"], "exitCode": exit_code, "stdout": stdout,
+                 "stderr": stderr, "durationMs": duration})
+    flush_outbox(token)
     return True
 
 
@@ -339,25 +353,30 @@ def main():
         return
 
     print("Centro Agent activo. Ctrl+C para parar.", flush=True)
+    failures = 0
     while True:
         try:
             if not work_once(token):
                 time.sleep(POLL_SECONDS)
+            failures = 0
         except urllib.error.HTTPError as exc:
             if exc.code == 401:
                 print("Autorização inválida. Apaga ~/.centro-agent/token e reinicia.", file=sys.stderr)
                 return
             print(f"HTTP {exc.code}", file=sys.stderr)
-            time.sleep(2)
+            failures += 1
+            time.sleep(min(60, 2 ** min(failures, 5)) + random.random())
         except (urllib.error.URLError, TimeoutError) as exc:
             print(f"Ligação: {exc}", file=sys.stderr)
-            time.sleep(2)
+            failures += 1
+            time.sleep(min(60, 2 ** min(failures, 5)) + random.random())
         except KeyboardInterrupt:
             print("\nCentro Agent parado.")
             return
         except Exception as exc:
             print(f"Erro: {exc}", file=sys.stderr)
-            time.sleep(5)
+            failures += 1
+            time.sleep(min(60, 2 ** min(failures, 5)) + random.random())
 
 
 if __name__ == "__main__":

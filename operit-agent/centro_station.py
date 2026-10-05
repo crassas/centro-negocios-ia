@@ -84,7 +84,21 @@ def safe_mkdir(path):
 
 
 def server_busy():
-    return SERVER_BUSY_FILE.exists()
+    try:
+        state = json.loads(SERVER_BUSY_FILE.read_text())
+        return time.time()-float(state.get("startedAt") or 0) < 960 and process_alive(int(state.get("pid") or 0))
+    except FileNotFoundError:
+        return False
+    except Exception:
+        return SERVER_BUSY_FILE.exists()
+
+
+def server_stale():
+    try:
+        state = json.loads(SERVER_BUSY_FILE.read_text())
+        return time.time()-float(state.get("startedAt") or 0) > 960
+    except Exception:
+        return False
 
 
 def server_healthy():
@@ -440,7 +454,7 @@ def main():
         if busy:
             last_busy_seen = now
 
-        if AUTOUPDATE_ENABLED and now - last_update_attempt >= AUTOUPDATE_INTERVAL_SECONDS:
+        if AUTOUPDATE_ENABLED and not (STATE_DIR / "maintenance").exists() and not busy and now - last_update_attempt >= AUTOUPDATE_INTERVAL_SECONDS:
             last_update_attempt = now
             changed, update_errors = sync_runtime()
             if changed:
@@ -480,13 +494,13 @@ def main():
                     time.sleep(1)
 
         server_active, server_pid = pid_running(SERVER_PID_FILE)
-        healthy = server_active and server_healthy()
+        healthy = server_active and server_healthy() and not server_stale()
         if not healthy:
             ok, output = run_ctl(SERVER_CTL, "restart" if server_active else "start")
             actions.append({"service": "server", "ok": ok, "output": output})
             time.sleep(2)
             server_active, server_pid = pid_running(SERVER_PID_FILE)
-            healthy = server_active and server_healthy()
+            healthy = server_active and server_healthy() and not server_stale()
 
         agent_active, agent_pid = pid_running(AGENT_PID_FILE)
         if not agent_active and healthy:

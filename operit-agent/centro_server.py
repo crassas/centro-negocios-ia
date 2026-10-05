@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import json
+import hashlib
+import threading
 import os
 import secrets
 import signal
@@ -21,6 +23,9 @@ AGENT_PID_FILE = HOME / ".centro-agent" / "agent.pid"
 SUPERVISOR_PID_FILE = HOME / ".centro-station" / "supervisor.pid"
 HISTORY_FILE = STATE_DIR / "history.jsonl"
 BUSY_FILE = STATE_DIR / "busy.json"
+EXECUTION_LOCK = threading.Lock()
+EXECUTION_STATE = threading.local()
+RESULT_DIR = STATE_DIR / "completed"
 STARTED_AT = time.time()
 CMD_TIMEOUT = 120
 CLAUDE_TIMEOUT = 300
@@ -174,36 +179,36 @@ def run_cmd(args, cwd=None, timeout=CMD_TIMEOUT, env=None):
         if command_name in {"git", "git.exe"}:
             cmd_env.setdefault("GIT_TERMINAL_PROMPT", "0")
             cmd_env.setdefault("GCM_INTERACTIVE", "Never")
+    deadline = getattr(EXECUTION_STATE, "deadline", None)
+    if deadline is not None:
+        timeout = min(timeout, max(0.1, deadline - time.monotonic()))
+    proc = None
     try:
-        proc = subprocess.run(
-            args,
-            cwd=str(cwd) if cwd else None,
-            text=True,
-            capture_output=True,
-            timeout=timeout,
-            check=False,
-            env=cmd_env,
+        proc = subprocess.Popen(
+            args, cwd=str(cwd) if cwd else None, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            env=cmd_env, start_new_session=True,
         )
-        return {
-            "exitCode": proc.returncode,
-            "stdout": proc.stdout[-12000:],
-            "stderr": proc.stderr[-6000:],
-            "durationMs": int((time.time() - started) * 1000),
-        }
+        out, err = proc.communicate(timeout=timeout)
+        return {"exitCode": proc.returncode, "stdout": out[-12000:],
+                "stderr": err[-6000:], "durationMs": int((time.time()-started)*1000)}
     except FileNotFoundError:
-        return {
-            "exitCode": 127,
-            "stdout": "",
-            "stderr": f"Comando não encontrado: {args[0]}",
-            "durationMs": int((time.time() - started) * 1000),
-        }
+        return {"exitCode": 127, "stdout": "", "stderr": f"Comando não encontrado: {args[0]}",
+                "durationMs": int((time.time()-started)*1000)}
     except subprocess.TimeoutExpired:
-        return {
-            "exitCode": 124,
-            "stdout": "",
-            "stderr": "Tempo limite excedido.",
-            "durationMs": int((time.time() - started) * 1000),
-        }
+        # Termina também os filhos criados pelo executor; nunca processos externos.
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+            out, err = proc.communicate(timeout=2)
+        except (ProcessLookupError, subprocess.TimeoutExpired):
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            out, err = proc.communicate(timeout=3)
+        return {"exitCode": 124, "stdout": out[-12000:],
+                "stderr": "Tempo limite excedido. Grupo do executor terminado.\n"+err[-5000:],
+                "durationMs": int((time.time()-started)*1000)}
 
 
 def transient_command_failure(result):
@@ -233,8 +238,10 @@ def transient_command_failure(result):
 
 def run_cmd_retry(args, cwd=None, timeout=CMD_TIMEOUT, env=None, attempts=3, delay=2):
     last = None
-    attempts = max(1, int(attempts))
+    attempts = min(3, max(1, int(attempts)))
     for attempt in range(1, attempts + 1):
+        if time.monotonic() >= getattr(EXECUTION_STATE, "deadline", float("inf")):
+            break
         last = run_cmd(args, cwd=cwd, timeout=timeout, env=env)
         if last["exitCode"] == 0 or not transient_command_failure(last):
             return last
@@ -389,6 +396,7 @@ def http_json(url, method="GET", payload=None, headers=None, timeout=30):
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         req_headers["Content-Type"] = "application/json"
     req = urllib.request.Request(url, data=data, headers=req_headers, method=method)
+    timeout = min(timeout, max(0.1, getattr(EXECUTION_STATE, "deadline", float("inf")) - time.monotonic()))
     with urllib.request.urlopen(req, timeout=timeout) as res:
         raw = res.read().decode("utf-8", errors="replace")
         return res.status, json.loads(raw) if raw else {}
@@ -833,6 +841,8 @@ def request_repo_change_plan_with_context(target, prompt, context):
     last_error = ""
 
     for attempt in range(3):
+        if time.monotonic() >= getattr(EXECUTION_STATE, "deadline", float("inf")):
+            break
         try:
             status, data = http_json(
                 CLOUD_BASE + "/api/repo/change-plan",
@@ -884,6 +894,7 @@ def protected_repo_path(rel):
         or raw.startswith("/")
         or low.startswith("/")
         or ".." in Path(low).parts
+        or any(part == ".git" or part == ".env" or part.startswith(".env.") for part in Path(low).parts)
         or low == ".env"
         or low.startswith(".env.")
         or low == ".git"
@@ -973,6 +984,23 @@ def apply_repo_change_plan(worktree, plan):
 
     return applied
 
+OLLAMA_AUTH_CACHE = {"at": 0, "ok": False, "detail": "", "keyHash": ""}
+def ollama_auth_check(key):
+    digest = hashlib.sha256(key.encode()).hexdigest()
+    if OLLAMA_AUTH_CACHE["keyHash"] == digest and time.monotonic()-OLLAMA_AUTH_CACHE["at"] < 60:
+        return OLLAMA_AUTH_CACHE["ok"], OLLAMA_AUTH_CACHE["detail"]
+    try:
+        status, data = http_json("https://ollama.com/api/tags",
+                                headers={"Authorization": "Bearer "+key}, timeout=12)
+        ok, detail = status == 200, "Ollama HTTP "+str(status)
+    except urllib.error.HTTPError as exc:
+        ok, detail = False, "Ollama HTTP "+str(exc.code)+"; credencial recusada"
+    except Exception as exc:
+        ok, detail = False, "Ollama indisponível: "+str(exc)[:300]
+    OLLAMA_AUTH_CACHE.update(at=time.monotonic(), ok=ok, detail=detail, keyHash=digest)
+    return ok, detail
+
+
 def run_claude_repo_executor(worktree, prompt):
     """Fallback gratuito/local-first: Claude Code ligado ao Ollama, nunca Anthropic pago."""
     claude = find_claude()
@@ -983,6 +1011,9 @@ def run_claude_repo_executor(worktree, prompt):
     if not key:
         raise RuntimeError("Fallback Claude/Ollama sem chave validada em ~/.centro-agent/ollama_api_key.")
 
+    auth_ok, auth_detail = ollama_auth_check(key)
+    if not auth_ok:
+        raise RuntimeError(auth_detail)
     env = os.environ.copy()
     env["ANTHROPIC_BASE_URL"] = "https://ollama.com"
     env["ANTHROPIC_AUTH_TOKEN"] = key
@@ -2039,6 +2070,9 @@ def execute_action(task):
                 "durationMs": 0,
             }
 
+        auth_ok, auth_detail = ollama_auth_check(key)
+        if not auth_ok:
+            return {"exitCode": 78, "stdout": "", "stderr": auth_detail, "durationMs": 0}
         env = os.environ.copy()
         env["ANTHROPIC_BASE_URL"] = "https://ollama.com"
         env["ANTHROPIC_AUTH_TOKEN"] = key
@@ -2051,40 +2085,11 @@ def execute_action(task):
             "Esta chamada está em modo de análise: não alteres ficheiros nem executes acções destrutivas."
         )
 
-        started = time.time()
-        try:
-            proc = subprocess.run(
-                [
-                    claude,
-                    "--model",
-                    "gpt-oss:120b",
-                    "--permission-mode",
-                    "plan",
-                    "--append-system-prompt",
-                    system_note,
-                    "-p",
-                    prompt,
-                ],
-                cwd=str(cwd),
-                text=True,
-                capture_output=True,
-                timeout=CLAUDE_TIMEOUT,
-                check=False,
-                env=env,
-            )
-            return {
-                "exitCode": proc.returncode,
-                "stdout": proc.stdout[-12000:],
-                "stderr": proc.stderr[-6000:],
-                "durationMs": int((time.time() - started) * 1000),
-            }
-        except subprocess.TimeoutExpired:
-            return {
-                "exitCode": 124,
-                "stdout": "",
-                "stderr": "Tempo limite do Claude Code excedido.",
-                "durationMs": int((time.time() - started) * 1000),
-            }
+        return run_cmd(
+            [claude, "--model", "gpt-oss:120b", "--permission-mode", "plan",
+             "--append-system-prompt", system_note, "-p", prompt],
+            cwd=cwd, timeout=CLAUDE_TIMEOUT, env=env,
+        )
 
     return {
         "exitCode": 126,
@@ -2186,13 +2191,36 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(400, {"ok": False, "error": "JSON inválido."})
                 return
             task = task if isinstance(task, dict) else {}
-            mark_busy(task)
+            if not EXECUTION_LOCK.acquire(blocking=False):
+                self.send_json(503, {"ok": False, "error": "Executor ocupado; repetir mais tarde."})
+                return
             try:
-                result = execute_action(task)
+                task_id = str(task.get("id") or "")
+                identity = json.dumps({k: task.get(k) for k in ("id","action","target","args")},
+                                      sort_keys=True, ensure_ascii=False)
+                cache = RESULT_DIR / (hashlib.sha256(identity.encode()).hexdigest()+".json")
+                if task_id and cache.exists():
+                    self.send_json(200, {"ok": True, "result": json.loads(cache.read_text())})
+                    return
+                mark_busy(task)
+                # Termina antes da lease de 20 minutos da fila; deixa margem para entregar.
+                EXECUTION_STATE.deadline = time.monotonic()+840
+                try:
+                    result = execute_action(task)
+                except Exception as exc:
+                    result = {"exitCode": 1, "stdout": "", "stderr": type(exc).__name__+": "+str(exc)[:1500], "durationMs": 0}
                 append_history(task, result)
+                if task_id and int(result.get("exitCode",1)) == 0:
+                    RESULT_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+                    tmp = cache.with_suffix(".tmp")
+                    tmp.write_text(json.dumps(result, ensure_ascii=False))
+                    os.chmod(tmp, 0o600)
+                    tmp.replace(cache)
                 self.send_json(200, {"ok": True, "result": result})
             finally:
+                EXECUTION_STATE.deadline = float("inf")
                 clear_busy()
+                EXECUTION_LOCK.release()
             return
 
         if path == "/echo":
