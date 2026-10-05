@@ -49,7 +49,7 @@ jobs:
       - name: Deploy Worker
         if: steps.cloudflare.outputs.ready == 'true'
         working-directory: cloudflare-ai-worker
-        run: npx --yes wrangler@latest deploy
+        run: npx --yes wrangler@latest deploy --var BUILD_SHA:$GITHUB_SHA
 
       - name: Sincronizar Telegram
         if: steps.cloudflare.outputs.ready == 'true'
