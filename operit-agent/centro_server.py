@@ -787,7 +787,13 @@ def run_claude_repo_executor(worktree, prompt):
         [
             claude,
             "--model", model,
-            "--permission-mode", "auto",
+            # Auto mode depende de modelos suportados pelo classificador do
+            # Claude Code. O fallback usa Ollama/gpt-oss, por isso usamos
+            # acceptEdits e recusamos prompts sem host: edição não bloqueia e
+            # comandos que pediriam autorização são negados em vez de ficar
+            # pendurados numa execução unattended.
+            "--permission-mode", "acceptEdits",
+            "--permission-prompts", "none",
             "--append-system-prompt", system_note,
             "-p", prompt,
         ],
