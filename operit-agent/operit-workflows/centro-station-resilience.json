@@ -1,0 +1,100 @@
+{
+  "id": "centro-station-resilience",
+  "name": "Centro Station · recuperação automática",
+  "description": "Arranca/repara a Estação Centro ao abrir o Operit e de 15 em 15 minutos via WorkManager.",
+  "nodes": [
+    {
+      "__type": "com.ai.assistance.operit.data.model.TriggerNode",
+      "id": "centro_trigger_app_open",
+      "type": "trigger",
+      "name": "Ao abrir o Operit",
+      "description": "Cold start do Operit",
+      "position": {"x": 80.0, "y": 80.0},
+      "triggerType": "app_open",
+      "triggerConfig": {}
+    },
+    {
+      "__type": "com.ai.assistance.operit.data.model.TriggerNode",
+      "id": "centro_trigger_schedule",
+      "type": "trigger",
+      "name": "Recuperação periódica",
+      "description": "Verifica a estação de 15 em 15 minutos",
+      "position": {"x": 80.0, "y": 260.0},
+      "triggerType": "schedule",
+      "triggerConfig": {
+        "schedule_type": "interval",
+        "interval_ms": "900000",
+        "repeat": "true",
+        "enabled": "true"
+      }
+    },
+    {
+      "__type": "com.ai.assistance.operit.data.model.ExecuteNode",
+      "id": "centro_exec_start",
+      "type": "execute",
+      "name": "Arrancar Centro Station",
+      "description": "Arranque idempotente do supervisor, Server, Agent e extras instalados",
+      "position": {"x": 520.0, "y": 170.0},
+      "actionType": "execute_hidden_terminal_command",
+      "actionConfig": {
+        "command": {
+          "__type": "com.ai.assistance.operit.data.model.ParameterValue.StaticValue",
+          "value": "sh -lc 'if [ -x /usr/local/bin/centrostation ]; then /usr/local/bin/centrostation start; elif [ -x \"$HOME/.local/bin/centrostation\" ]; then \"$HOME/.local/bin/centrostation\" start; else echo CENTROSTATION_EM_FALTA; exit 127; fi'"
+        },
+        "executor_key": {
+          "__type": "com.ai.assistance.operit.data.model.ParameterValue.StaticValue",
+          "value": "centro-station"
+        },
+        "timeout_ms": {
+          "__type": "com.ai.assistance.operit.data.model.ParameterValue.StaticValue",
+          "value": "120000"
+        }
+      },
+      "jsCode": null
+    },
+    {
+      "__type": "com.ai.assistance.operit.data.model.ExecuteNode",
+      "id": "centro_exec_notify_failure",
+      "type": "execute",
+      "name": "Avisar falha",
+      "description": "Só notifica quando o arranque automático falha",
+      "position": {"x": 900.0, "y": 320.0},
+      "actionType": "send_notification",
+      "actionConfig": {
+        "message": {
+          "__type": "com.ai.assistance.operit.data.model.ParameterValue.StaticValue",
+          "value": "Centro Station: o arranque automático falhou. Abre o Operit e executa centrostation doctor."
+        }
+      },
+      "jsCode": null
+    }
+  ],
+  "connections": [
+    {
+      "id": "centro_conn_app_start",
+      "sourceNodeId": "centro_trigger_app_open",
+      "targetNodeId": "centro_exec_start",
+      "condition": "on_success"
+    },
+    {
+      "id": "centro_conn_schedule_start",
+      "sourceNodeId": "centro_trigger_schedule",
+      "targetNodeId": "centro_exec_start",
+      "condition": "on_success"
+    },
+    {
+      "id": "centro_conn_failure_notify",
+      "sourceNodeId": "centro_exec_start",
+      "targetNodeId": "centro_exec_notify_failure",
+      "condition": "on_error"
+    }
+  ],
+  "createdAt": 0,
+  "updatedAt": 0,
+  "enabled": true,
+  "lastExecutionTime": null,
+  "lastExecutionStatus": null,
+  "totalExecutions": 0,
+  "successfulExecutions": 0,
+  "failedExecutions": 0
+}
