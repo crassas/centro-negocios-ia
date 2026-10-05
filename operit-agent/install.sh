@@ -65,6 +65,38 @@ chmod 700 "$LAYA_CTL"
 fetch_to "$RAW/install_laya.sh" "$LAYA_INSTALL"
 chmod 700 "$LAYA_INSTALL"
 
+# Recuperação fora do próprio supervisor:
+# 1) workflow nativo do Operit (app_open + WorkManager a cada 15 min);
+# 2) hook de login do Ubuntu/PRoot.
+WORKFLOW_LOCAL="$HOME_DIR/centro-station-resilience.json"
+fetch_to "$RAW/operit-workflows/centro-station-resilience.json" "$WORKFLOW_LOCAL"
+chmod 600 "$WORKFLOW_LOCAL"
+WORKFLOW_DEST=""
+for STORAGE_ROOT in /sdcard /storage/emulated/0; do
+  if [ -d "$STORAGE_ROOT/Download" ]; then
+    DEST_DIR="$STORAGE_ROOT/Download/Operit/workflow"
+    if mkdir -p "$DEST_DIR" 2>/dev/null && cp "$WORKFLOW_LOCAL" "$DEST_DIR/centro-station-resilience.json" 2>/dev/null; then
+      WORKFLOW_DEST="$DEST_DIR/centro-station-resilience.json"
+      break
+    fi
+  fi
+done
+
+PROFILE="$HOME_DIR/.profile"
+touch "$PROFILE"
+if ! grep -q "CENTRO_STATION_AUTOSTART_V1" "$PROFILE" 2>/dev/null; then
+  cat >>"$PROFILE" <<'EOF'
+
+# CENTRO_STATION_AUTOSTART_V1
+# Segunda linha de recuperação quando o Ubuntu/PRoot volta a abrir.
+if [ -x /usr/local/bin/centrostation ]; then
+  (/usr/local/bin/centrostation start >/dev/null 2>&1 || true) &
+elif [ -x "$HOME/.local/bin/centrostation" ]; then
+  ("$HOME/.local/bin/centrostation" start >/dev/null 2>&1 || true) &
+fi
+EOF
+fi
+
 echo "Agente instalado:"
 echo "  $AGENT"
 echo "Servidor privado:"
@@ -78,6 +110,13 @@ echo "  $STATION_CTL"
 echo "  $OPENCLAW_CTL"
 echo "  $LAYA_CTL"
 echo "  $LAYA_INSTALL"
+echo "Recuperação automática:"
+if [ -n "$WORKFLOW_DEST" ]; then
+  echo "  Workflow Operit: $WORKFLOW_DEST"
+else
+  echo "  Workflow Operit: guardado em $WORKFLOW_LOCAL (storage Android não acessível nesta sessão)"
+fi
+echo "  Hook Ubuntu: $PROFILE"
 echo
 
 # A Estação Centro arranca todos os componentes já instalados.
