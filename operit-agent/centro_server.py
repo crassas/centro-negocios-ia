@@ -1574,10 +1574,12 @@ def execute_action(task):
         git_ok = bool(shutil.which("git"))
         python_ok = bool(shutil.which("python3"))
         worker_ok = False
+        worker_build = ""
         worker_detail = "OFFLINE"
         try:
             status, data = http_json(CLOUD_BASE + "/health", timeout=8)
             worker_ok = status == 200 and data.get("ok") is True
+            worker_build = str(data.get("buildSha") or "")
             worker_detail = (
                 "ONLINE · fila " + ("OK" if data.get("operitQueue") else "FALHA")
                 + " · Telegram " + ("OK" if data.get("telegramConfigured") else "OFF")
@@ -1634,6 +1636,7 @@ def execute_action(task):
             "CONTROLO",
             "Worker: " + worker_detail,
             f"Auto-update: {'ON' if auto_enabled else 'SEM ESTADO / OFF'}",
+            "Runtime main: " + (str(autoupdate.get("mainSha") or "")[:12] or "ainda sem SHA"),
             (
                 "Remote Desktop: "
                 + ("ONLINE" if remote_state.get("healthy") else "OFFLINE")
@@ -1669,8 +1672,37 @@ def execute_action(task):
                 status == 200 and data.get("ok") is True and data.get("operitQueue") is True,
                 f"HTTP {status}",
             )
+            worker_build = str(data.get("buildSha") or "")
+            add("Worker build identificado", bool(worker_build), worker_build[:12] or "sem BUILD_SHA")
         except Exception as exc:
             add("Worker + TASKS", False, exc)
+            add("Worker build identificado", False, exc)
+
+        # Prova que o runtime local já sincronizou a main actual.
+        local_main = ""
+        try:
+            station_state = json.loads(
+                (HOME / ".centro-station" / "status.json").read_text(encoding="utf-8")
+            )
+            local_main = str((station_state.get("autoupdate") or {}).get("mainSha") or "")
+        except Exception:
+            pass
+        remote_main = ""
+        try:
+            _, commit_data = http_json(
+                "https://api.github.com/repos/crassas/centro-negocios-ia/commits/main",
+                headers={"Accept": "application/vnd.github+json"},
+                timeout=10,
+            )
+            remote_main = str(commit_data.get("sha") or "")
+        except Exception as exc:
+            remote_main = ""
+        aligned = bool(local_main and remote_main and local_main == remote_main)
+        add(
+            "Runtime main alinhado",
+            aligned,
+            "local " + (local_main[:12] or "-") + " · main " + (remote_main[:12] or "-"),
+        )
 
         agent_active, _ = pid_running(AGENT_PID_FILE)
         supervisor_active, _ = pid_running(SUPERVISOR_PID_FILE)
@@ -1803,6 +1835,8 @@ def execute_action(task):
 
         essential_names = {
             "Worker + TASKS",
+            "Worker build identificado",
+            "Runtime main alinhado",
             "Centro Agent",
             "Supervisor",
             "Token Server",
