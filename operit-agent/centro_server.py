@@ -385,6 +385,107 @@ def http_json(url, method="GET", payload=None, headers=None, timeout=30):
         return res.status, json.loads(raw) if raw else {}
 
 
+def parse_json_object_text(raw):
+    text = str(raw or "").strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines and lines[0].lstrip().startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+
+    try:
+        value = json.loads(text)
+        if isinstance(value, dict):
+            return value
+    except Exception:
+        pass
+
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(text):
+        if char != "{":
+            continue
+        try:
+            value, _ = decoder.raw_decode(text[index:])
+            if isinstance(value, dict):
+                return value
+        except Exception:
+            continue
+    raise RuntimeError("Resposta não contém um objecto JSON válido.")
+
+
+def request_openclaw_repo_change_plan(target, prompt, worktree, repair_note=""):
+    binary = locate_openclaw()
+    if not binary:
+        raise RuntimeError("OpenClaw CLI não encontrado.")
+    healthy, _, _, _ = openclaw_http_health()
+    if not healthy:
+        raise RuntimeError("Gateway OpenClaw offline.")
+
+    context = build_local_repo_context(worktree, target, prompt)
+    instruction = (
+        "És o planeador de código de fallback do Centro de Negócios. "
+        "NÃO alteres ficheiros e NÃO executes comandos: responde APENAS com JSON. "
+        "Schema exacto: "
+        '{"summary":"frase curta","edits":[{"path":"ficheiro relativo",'
+        '"operation":"replace|write|append|delete","search":"texto exacto para replace",'
+        '"content":"novo conteúdo"}]}. '
+        "Para replace, search TEM de ser copiado literalmente do conteúdo real fornecido, "
+        "ocorrer exactamente uma vez e ser curto. Usa apenas paths do repositório/contexto. "
+        "Nunca toques em .env, .git, .github/workflows, secrets, credenciais, chaves ou tokens. "
+        "Prefere alterações mínimas e coerentes.\n\n"
+        "PEDIDO:\n" + prompt[:5000] + "\n\n"
+    )
+    if repair_note:
+        instruction += (
+            "PLANO ANTERIOR REJEITADO:\n" + repair_note[-1600:]
+            + "\nCorrige especificamente este erro.\n\n"
+        )
+    instruction += (
+        "REPOSITÓRIO REAL:\n"
+        + json.dumps(context, ensure_ascii=False)[:28000]
+    )
+
+    params = {
+        "message": instruction,
+        "agentId": "main",
+        "sessionKey": "agent:main:centro-planner",
+        "thinking": "low",
+        "deliver": False,
+        "timeout": 180,
+        "idempotencyKey": secrets.token_hex(16),
+        "label": "Centro Planner Fallback",
+        "promptMode": "minimal",
+        "bootstrapContextMode": "lightweight",
+    }
+    result = run_cmd(
+        [
+            binary,
+            "gateway",
+            "call",
+            "agent",
+            "--params",
+            json.dumps(params, ensure_ascii=False),
+            "--expect-final",
+            "--json",
+            "--timeout",
+            "190000",
+        ],
+        cwd=worktree,
+        timeout=OPENCLAW_TIMEOUT,
+    )
+    if result["exitCode"] != 0:
+        detail = (result["stderr"] or result["stdout"] or "falha sem detalhe")[-2200:]
+        raise RuntimeError("OpenClaw planner falhou: " + detail)
+
+    reply = extract_openclaw_reply(result["stdout"])
+    plan = parse_json_object_text(reply)
+    if not isinstance(plan.get("edits"), list):
+        raise RuntimeError("OpenClaw devolveu plano sem edits.")
+    return plan
+
+
 def laya_request(state):
     questions = {
         "route": {
@@ -1019,19 +1120,51 @@ def action_repo_change(task):
                 repair_notes.append(planner_error)
                 plan = None
 
+        openclaw_error = ""
+        if plan is None:
+            # Segundo planeador independente. O OpenClaw só devolve JSON; quem
+            # escreve continua a ser o executor atómico e protegido do Centro.
+            for openclaw_round in range(2):
+                try:
+                    candidate = request_openclaw_repo_change_plan(
+                        target,
+                        prompt,
+                        worktree,
+                        repair_note=openclaw_error or planner_error,
+                    )
+                    edits = candidate.get("edits") if isinstance(candidate.get("edits"), list) else []
+                    if not edits:
+                        openclaw_error = "OpenClaw devolveu zero edições."
+                        continue
+                    applied = apply_repo_change_plan(worktree, candidate)
+                    plan = candidate
+                    executor_output = (
+                        "OPENCLAW · PLANO FALLBACK APLICADO"
+                        + f" · tentativa {openclaw_round + 1}/2\n"
+                        + str(candidate.get("summary") or "").strip()
+                        + ("\n" if candidate.get("summary") else "")
+                        + "\n".join(applied)
+                    )
+                    break
+                except Exception as exc:
+                    openclaw_error = str(exc)
+
         if plan is None:
             try:
                 executor_output = run_claude_repo_executor(worktree, prompt)
-                if planner_error:
-                    executor_output += "\n\nFALLBACK ACTIVADO POR: " + planner_error[-1800:]
+                reasons = "Workers AI: " + (planner_error or "sem plano válido")[-1200:]
+                if openclaw_error:
+                    reasons += "\nOpenClaw planner: " + openclaw_error[-1200:]
+                executor_output += "\n\nFALLBACK ACTIVADO POR:\n" + reasons
             except Exception as fallback_exc:
                 return {
                     "exitCode": 67,
                     "stdout": "",
                     "stderr": (
                         "Todos os executores automáticos falharam após reparação do plano. "
-                        "Workers AI: " + (planner_error or "sem plano válido")[-2200:]
-                        + "\nClaude/Ollama: " + str(fallback_exc)[-2200:]
+                        "Workers AI: " + (planner_error or "sem plano válido")[-1800:]
+                        + "\nOpenClaw planner: " + (openclaw_error or "indisponível")[-1800:]
+                        + "\nClaude/Ollama: " + str(fallback_exc)[-1800:]
                     ),
                     "durationMs": int((time.time() - started) * 1000),
                 }
