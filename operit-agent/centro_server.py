@@ -108,6 +108,11 @@ def append_history(task, result):
             "label": str(task.get("label") or ""),
             "exitCode": int(result.get("exitCode", 1)),
             "durationMs": int(result.get("durationMs", 0)),
+            "error": (
+                str(result.get("stderr") or "")[-1500:]
+                if int(result.get("exitCode", 1)) != 0
+                else ""
+            ),
         }
         with HISTORY_FILE.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
@@ -192,6 +197,48 @@ def run_cmd(args, cwd=None, timeout=CMD_TIMEOUT, env=None):
         }
 
 
+def transient_command_failure(result):
+    code = int(result.get("exitCode", 1))
+    text = ((result.get("stderr") or "") + "\n" + (result.get("stdout") or "")).lower()
+    markers = (
+        "temporary failure",
+        "could not resolve host",
+        "name or service not known",
+        "connection reset",
+        "connection refused",
+        "network is unreachable",
+        "timed out",
+        "timeout",
+        "remote end hung up",
+        "early eof",
+        "unexpected eof",
+        "tls",
+        "ssl",
+        "http 500",
+        "http 502",
+        "http 503",
+        "http 504",
+    )
+    return code == 124 or (code in {1, 128} and any(marker in text for marker in markers))
+
+
+def run_cmd_retry(args, cwd=None, timeout=CMD_TIMEOUT, env=None, attempts=3, delay=2):
+    last = None
+    attempts = max(1, int(attempts))
+    for attempt in range(1, attempts + 1):
+        last = run_cmd(args, cwd=cwd, timeout=timeout, env=env)
+        if last["exitCode"] == 0 or not transient_command_failure(last):
+            return last
+        if attempt < attempts:
+            time.sleep(delay * attempt)
+    return last or {
+        "exitCode": 1,
+        "stdout": "",
+        "stderr": "Comando não executado.",
+        "durationMs": 0,
+    }
+
+
 def locate_repo(name):
     candidates = [
         HOME / name,
@@ -231,10 +278,12 @@ def ensure_repo(name):
             "durationMs": 0,
         }
 
-    clone = run_cmd(
+    clone = run_cmd_retry(
         ["git", "clone", "--depth", "1", REPOS[name], str(dest)],
         cwd=root,
         timeout=240,
+        attempts=3,
+        delay=3,
     )
     if clone["exitCode"] != 0:
         return None, {
@@ -669,7 +718,7 @@ def request_repo_change_plan(target, prompt, worktree):
     payload = {"target": target, "prompt": prompt, "context": context}
     last_error = ""
 
-    for attempt in range(1):
+    for attempt in range(3):
         try:
             status, data = http_json(
                 CLOUD_BASE + "/api/repo/change-plan",
@@ -695,6 +744,9 @@ def request_repo_change_plan(target, prompt, worktree):
                 break
         except Exception as exc:
             last_error = str(exc)
+
+        if attempt < 2:
+            time.sleep(2 * (attempt + 1))
 
     raise RuntimeError(last_error or "Planeador automático indisponível.")
 
@@ -885,7 +937,13 @@ def action_repo_change(task):
     branch = f"centro/telegram-{stamp}-{task_id}"
     worktree = WORKTREE_ROOT / f"{target}-{stamp}-{task_id}"
 
-    fetch = run_cmd(["git", "fetch", "origin", "main"], cwd=source, timeout=180)
+    fetch = run_cmd_retry(
+        ["git", "fetch", "origin", "main"],
+        cwd=source,
+        timeout=180,
+        attempts=3,
+        delay=3,
+    )
     if fetch["exitCode"] != 0:
         return {
             "exitCode": fetch["exitCode"],
@@ -912,27 +970,48 @@ def action_repo_change(task):
     try:
         plan = None
         planner_error = ""
-        try:
-            plan = request_repo_change_plan(target, prompt, worktree)
-        except Exception as exc:
-            planner_error = str(exc)
+        executor_output = ""
+        repair_notes = []
 
-        if plan is not None:
-            plan_summary = str(plan.get("summary") or "").strip()
-            edits = plan.get("edits") if isinstance(plan.get("edits"), list) else []
-            if edits:
-                try:
-                    applied = apply_repo_change_plan(worktree, plan)
-                    executor_output = (
-                        "WORKERS AI · PLANO APLICADO\n"
-                        + (plan_summary + "\n" if plan_summary else "")
-                        + "\n".join(applied)
-                    )
-                except Exception as exc:
-                    planner_error = "Plano Workers AI rejeitado localmente: " + str(exc)
-                    plan = None
-            else:
+        # O plano estruturado é a via principal. Se o modelo inventar um bloco
+        # "search" que não existe exactamente no ficheiro, o validador rejeita-o
+        # sem escrever nada e damos ao planeador até duas rondas de correcção.
+        for plan_round in range(3):
+            plan_prompt = prompt
+            if repair_notes:
+                plan_prompt += (
+                    "\n\nCORRECÇÃO AUTOMÁTICA DO PLANO ANTERIOR:\n"
+                    + repair_notes[-1][-1800:]
+                    + "\nUsa apenas paths existentes. Em cada replace, copia search "
+                    "LITERALMENTE do conteúdo real fornecido e garante que ocorre exactamente uma vez."
+                )
+            try:
+                candidate = request_repo_change_plan(target, plan_prompt, worktree)
+            except Exception as exc:
+                planner_error = "Planeador indisponível: " + str(exc)
+                repair_notes.append(planner_error)
+                continue
+
+            plan_summary = str(candidate.get("summary") or "").strip()
+            edits = candidate.get("edits") if isinstance(candidate.get("edits"), list) else []
+            if not edits:
                 planner_error = "Planeador devolveu zero edições. " + plan_summary
+                repair_notes.append(planner_error)
+                continue
+
+            try:
+                applied = apply_repo_change_plan(worktree, candidate)
+                plan = candidate
+                executor_output = (
+                    "WORKERS AI · PLANO APLICADO"
+                    + f" · tentativa {plan_round + 1}/3\n"
+                    + (plan_summary + "\n" if plan_summary else "")
+                    + "\n".join(applied)
+                )
+                break
+            except Exception as exc:
+                planner_error = "Plano Workers AI rejeitado localmente: " + str(exc)
+                repair_notes.append(planner_error)
                 plan = None
 
         if plan is None:
@@ -945,7 +1024,7 @@ def action_repo_change(task):
                     "exitCode": 67,
                     "stdout": "",
                     "stderr": (
-                        "Todos os executores automáticos falharam. "
+                        "Todos os executores automáticos falharam após reparação do plano. "
                         "Workers AI: " + (planner_error or "sem plano válido")[-2200:]
                         + "\nClaude/Ollama: " + str(fallback_exc)[-2200:]
                     ),
@@ -1028,12 +1107,24 @@ def action_repo_change(task):
         sha = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree, timeout=30)["stdout"].strip()
         stat = run_cmd(["git", "show", "--stat", "--oneline", "--format=%h %s", "HEAD"], cwd=worktree, timeout=60)
 
-        push_main = run_cmd(["git", "push", "origin", "HEAD:main"], cwd=worktree, timeout=180)
+        push_main = run_cmd_retry(
+            ["git", "push", "origin", "HEAD:main"],
+            cwd=worktree,
+            timeout=180,
+            attempts=3,
+            delay=3,
+        )
         if push_main["exitCode"] == 0:
             pushed = True
             remote_branch = "main"
         else:
-            push_branch = run_cmd(["git", "push", "-u", "origin", branch], cwd=worktree, timeout=180)
+            push_branch = run_cmd_retry(
+                ["git", "push", "-u", "origin", branch],
+                cwd=worktree,
+                timeout=180,
+                attempts=3,
+                delay=3,
+            )
             if push_branch["exitCode"] == 0:
                 pushed = True
                 remote_branch = branch
@@ -1302,9 +1393,11 @@ def execute_action(task):
         # Acesso remoto real aos repositórios, sem clone nem escrita remota.
         if git_bin:
             for repo_name, remote in REPOS.items():
-                result = run_cmd(
+                result = run_cmd_retry(
                     [git_bin, "ls-remote", "--heads", remote, "refs/heads/main"],
                     timeout=25,
+                    attempts=3,
+                    delay=2,
                 )
                 ok = result["exitCode"] == 0 and bool(result["stdout"].strip())
                 detail = (
