@@ -7,7 +7,7 @@ window.CentroRoom=(()=>{
     {id:'claude',name:'Claude / fallback',role:'Planeamento e código',color:'#dd9870',home:[62,77],match:r=>/claude|repo_change/.test(String(r.action||''))},
     {id:'queue',name:'Coordenador',role:'Fila de tarefas',color:'#63aa92',home:[85,77],match:()=>true}
   ];
-  let taskStats=null;
+  let taskStats=null,connectionFailed=false;
   let rows=[],available=false,selected='executor',mounted=false,finance=null,conversationBusy=false,lastDetailHTML='';
   const el=id=>document.getElementById(id);
   const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -24,7 +24,7 @@ window.CentroRoom=(()=>{
   }
   function model(role){
     if(role.id==='claude'&&conversationBusy)return {state:'working',label:'A analisar o teu pedido',speech:'Estou a analisar.',task:null,zone:'plan'};
-    if(!available)return {state:'unknown',label:'Sem ligação',speech:'Não recebo dados.',task:null,zone:'home'};
+    if(!available)return {state:'unknown',label:connectionFailed?'Sem ligação':'A receber dados',speech:connectionFailed?'Não recebo dados.':'A ligar à equipa.',task:null,zone:'home'};
     const matches=rows.filter(role.match);
     const task=matches.find(r=>r.status==='running')||matches.find(r=>r.status==='queued')||matches[0];
     if(!task)return {state:'idle',label:'Sem tarefas registadas',speech:'Aguardo uma tarefa.',task:null,zone:'home'};
@@ -56,7 +56,7 @@ window.CentroRoom=(()=>{
     return '<div class="room-detail-avatar">'+sprite(r.color)+'</div><span class="room-eyebrow">'+escape(r.role)+'</span><h2>'+r.name+'</h2><strong class="room-detail-state" data-state="'+m.state+'">'+m.speech+'</strong><div class="room-task"><small>'+(t?'TAREFA REGISTADA':'ACTIVIDADE')+'</small><b>'+escape(short(t?.label||t?.action||'A aguardar dados'))+'</b><span>'+escape(t?.target||'')+'</span>'+(t?'<details><summary>Ver resultado</summary><p>'+escape(m.label)+' · '+escape(t.exitCode==null?'Resultado pendente':'exit '+t.exitCode)+'</p><p>'+escape(t.id||'')+'</p></details>':'')+'</div>';
   }
   function summary(){
-    if(!available)return {label:'Actividade sem ligação',running:null,queued:null};
+    if(!available)return {label:connectionFailed?'Actividade sem ligação':'A receber actividade',running:null,queued:null};
     return {label:!taskStats?'Registos de actividade recebidos':Number(taskStats.running)>0?'A executar tarefas':Number(taskStats.queued)>0?'Tarefas prontas para avançar':'À espera do próximo passo',running:taskStats?Number(taskStats.running)||0:null,queued:taskStats?Number(taskStats.queued)||0:null};
   }
   function paint(){
@@ -75,8 +75,8 @@ window.CentroRoom=(()=>{
     if(el('room-queued-count'))el('room-queued-count').textContent=overview.queued??'—';
     if(el('room-cash-value'))el('room-cash-value').textContent=finance?money(finance.balance):'Sem leitura';
   }
-  function update(payload){taskStats=payload?.stats&&typeof payload.stats==='object'?payload.stats:null;rows=Array.isArray(payload?.executions)?payload.executions:[];available=true;paint();if(el('room-sync'))el('room-sync').textContent='Actualizado às '+new Date().toLocaleTimeString('pt-PT');}
-  function offline(){available=false;paint();if(el('room-sync'))el('room-sync').textContent='Sem ligação · actividade anterior';}
+  function update(payload){connectionFailed=false;taskStats=payload?.stats&&typeof payload.stats==='object'?payload.stats:null;rows=Array.isArray(payload?.executions)?payload.executions:[];available=true;paint();if(el('room-sync'))el('room-sync').textContent='Actualizado às '+new Date().toLocaleTimeString('pt-PT');}
+  function offline(){available=false;connectionFailed=true;paint();if(el('room-sync'))el('room-sync').textContent='Sem ligação · actividade anterior';}
   function setFinance(value){finance=value;paint();}
   function setConversationBusy(value){conversationBusy=Boolean(value);paint();}
   document.addEventListener('DOMContentLoaded',()=>{paint();el('room-detail-scrim')?.addEventListener('click',closeDetail);document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDetail();});});
