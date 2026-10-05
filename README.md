@@ -29,3 +29,20 @@ O cofre usa PBKDF2-SHA256 (250.000 iterações) para derivar uma chave e AES-GCM
 Página: https://crassas.github.io/centro-negocios-ia/
 
 O workflow `.github/workflows/monitor.yml` executa a auditoria e publica a leitura actualizada. O workflow `.github/workflows/pages.yml` publica alterações da interface.
+
+## Search Console directo
+
+O painel SEO suporta duas fontes: CSV manual e ligação directa à Search Console API.
+
+A ligação directa usa uma conta de serviço Google com o scope apenas de leitura `webmasters.readonly`. A chave privada nunca é enviada para o browser nem guardada no repositório.
+
+Configuração:
+
+1. Criar um projecto no Google Cloud e activar **Google Search Console API**.
+2. Criar uma **Service Account** e gerar uma chave JSON.
+3. No Search Console, dar à conta de serviço acesso às propriedades pretendidas.
+4. Em **GitHub > Settings > Secrets and variables > Actions**, criar o secret `GSC_SERVICE_ACCOUNT_JSON` com o conteúdo integral do JSON.
+5. Executar o workflow **Deploy Cloudflare AI Worker**.
+6. No Centro, abrir **SEO > Google Search Console ligado ao Centro**, autorizar o dispositivo pelo Telegram e escolher a propriedade.
+
+O Worker transforma a chave da conta de serviço num token OAuth 2.0 de curta duração e consulta apenas os endpoints de leitura. O browser recebe apenas os dados necessários para o painel.
