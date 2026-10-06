@@ -1,5 +1,3 @@
-[Reading 71 lines from start (total: 71 lines, 0 remaining)]
-
 import fs from 'node:fs';
 
 const html=fs.readFileSync('index.html','utf8');
@@ -71,5 +69,3 @@ if(!css.includes('#travis-three-canvas')) throw new Error('Canvas 3D CSS em falt
 if(!sw.includes('travis-3d.mjs?v=2') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
 
 console.log('TRAVIS REAL 3D SELFTEST OK',glb.size,'bytes');
-
-[executed on device: localhost (8ad4e1a5-6b39-4f45-82a2-0253dd9519fb)]
