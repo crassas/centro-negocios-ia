@@ -1076,6 +1076,31 @@ def run_claude_repo_executor(worktree, prompt):
     )
 
 
+def report_task_progress(task, phase, detail=""):
+    """Publica a fase real da execução sem tornar a telemetria um bloqueio."""
+    task_id = str((task or {}).get("id") or "").strip()
+    if not task_id:
+        return
+    token = read_secret(AGENT_TOKEN_FILE)
+    if not token:
+        return
+    try:
+        http_json(
+            CLOUD_BASE + "/api/operit/progress",
+            method="POST",
+            payload={
+                "id": task_id,
+                "phase": str(phase or "received")[:40],
+                "detail": str(detail or "")[:500],
+            },
+            headers={"Authorization": "Bearer " + token},
+            timeout=8,
+        )
+    except Exception:
+        # A actividade visual nunca pode impedir a tarefa real.
+        pass
+
+
 def action_repo_change(task):
     prompt = str((task.get("args") or {}).get("prompt") or "").strip()
     target = str(task.get("target") or "")
@@ -1088,6 +1113,7 @@ def action_repo_change(task):
     if len(prompt) > 5000:
         return {"exitCode": 2, "stdout": "", "stderr": "Pedido demasiado longo.", "durationMs": 0}
 
+    report_task_progress(task, "received", f"Coordenador recebeu o pedido para {target}.")
     source, repo_error = ensure_repo(target)
     if repo_error:
         return repo_error
@@ -1138,6 +1164,7 @@ def action_repo_change(task):
     pushed = False
     remote_branch = ""
     try:
+        report_task_progress(task, "planning", "Planeador a ler o repositório e a preparar uma alteração segura.")
         plan = None
         planner_error = ""
         executor_output = ""
@@ -1147,6 +1174,11 @@ def action_repo_change(task):
         # "search" que não existe exactamente no ficheiro, o validador rejeita-o
         # sem escrever nada e damos ao planeador até duas rondas de correcção.
         for plan_round in range(3):
+            report_task_progress(
+                task,
+                "planning",
+                f"Planeamento automático · tentativa {plan_round + 1}/3."
+            )
             plan_prompt = prompt
             if repair_notes:
                 plan_prompt += (
@@ -1172,6 +1204,11 @@ def action_repo_change(task):
             try:
                 applied = apply_repo_change_plan(worktree, candidate)
                 plan = candidate
+                report_task_progress(
+                    task,
+                    "editing",
+                    "Operit aplicou o plano no worktree isolado: " + ", ".join(applied[:6])
+                )
                 executor_output = (
                     "WORKERS AI · PLANO APLICADO"
                     + f" · tentativa {plan_round + 1}/3\n"
@@ -1215,7 +1252,9 @@ def action_repo_change(task):
 
         if plan is None:
             try:
+                report_task_progress(task, "editing", "Fallback de código a trabalhar no worktree isolado.")
                 executor_output = run_claude_repo_executor(worktree, prompt)
+                report_task_progress(task, "editing", "Fallback concluiu a edição; segue para validação.")
                 reasons = "Workers AI: " + (planner_error or "sem plano válido")[-1200:]
                 if openclaw_error:
                     reasons += "\nOpenClaw planner: " + openclaw_error[-1200:]
@@ -1233,6 +1272,7 @@ def action_repo_change(task):
                     "durationMs": int((time.time() - started) * 1000),
                 }
 
+        report_task_progress(task, "validating", "Revisor a verificar ficheiros, testes e regras de segurança.")
         seo_checks = []
         if re.search(r"\bseo\b", prompt, re.I) and (worktree / "seo.config.json").is_file() and (worktree / "scripts/seo-engine.mjs").is_file():
             # Materialise and audit the repository's existing SEO configuration
@@ -1289,6 +1329,7 @@ def action_repo_change(task):
                 "durationMs": int((time.time() - started) * 1000),
             }
 
+        report_task_progress(task, "publishing", "Publicador a preparar commit e envio para o GitHub.")
         add_all = run_cmd(["git", "add", "-A"], cwd=worktree, timeout=60)
         if add_all["exitCode"] != 0:
             return {
@@ -1323,6 +1364,7 @@ def action_repo_change(task):
         sha = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree, timeout=30)["stdout"].strip()
         stat = run_cmd(["git", "show", "--stat", "--oneline", "--format=%h %s", "HEAD"], cwd=worktree, timeout=60)
 
+        report_task_progress(task, "publishing", "Commit validado. A publicar no repositório remoto.")
         push_main = run_cmd_retry(
             ["git", "push", "origin", "HEAD:main"],
             cwd=worktree,
@@ -1361,6 +1403,7 @@ def action_repo_change(task):
                     "durationMs": int((time.time() - started) * 1000),
                 }
 
+        report_task_progress(task, "completed", f"Publicado em {remote_branch} · commit {sha[:8]}.")
         return {
             "exitCode": 0,
             "stdout": (
