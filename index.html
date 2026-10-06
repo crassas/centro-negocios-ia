@@ -13,10 +13,10 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
-  <link rel="stylesheet" href="./agent-room.css?v=world-9">
+  <link rel="stylesheet" href="./agent-room.css?v=world-10">
   <link rel="stylesheet" href="./product.css?v=world-8">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
-  <script src="./agent-room.js?v=world-9" defer></script>
+  <script src="./agent-room.js?v=world-10" defer></script>
   <script src="./app.js?v=world-8" defer></script>
 </head>
 <body>
@@ -147,7 +147,7 @@
       </section>
 
       <section class="panel-view is-active" id="agentes" data-panel="agentes">
-        <div class="room-heading"><div><span class="room-eyebrow">A TUA EQUIPA DIGITAL</span><h1>A tua equipa. O teu comando.</h1><p>Um pedido de cada vez: receber, planear, executar, rever e publicar.</p></div><button class="btn" id="room-refresh" type="button">↻ Actualizar</button></div>
+        <div class="room-heading"><div><span class="room-eyebrow">ESCRITÓRIO AUTÓNOMO</span><h1>A tua equipa. Sempre em movimento.</h1><p>Pedidos teus têm prioridade. Entre pedidos, a equipa vigia, revê e procura novas oportunidades.</p></div><button class="btn" id="room-refresh" type="button">↻ Actualizar</button></div>
         <div class="room-operation-bar"><div><i></i><span id="room-operation-state" data-connected="false">A ligar à actividade</span></div><span><b id="room-running-count">—</b> em execução</span><span><b id="room-queued-count">—</b> na fila</span><button class="text-link" data-panel-target="visao" type="button">Visão do negócio ↗</button></div>
         <div class="room-layout"><article class="agent-office"><div class="office-top"><span>◈ CENTRO DE NEGÓCIOS</span><small id="room-sync">A receber dados…</small></div>
           <div class="office-floor office-expanded">
@@ -171,7 +171,7 @@
             </div><div class="office-lounge" aria-hidden="true"><i></i><i></i><span></span></div>
             <div class="team-workbenches" aria-hidden="true"><span><i></i></span><span><i></i></span><span><i></i></span><span><i></i></span><span><i></i></span></div>
             <div class="office-plant plant-one">♣</div><div class="office-plant plant-two">♣</div><div id="room-stations"></div><div class="office-door"><span>ENTRADA</span></div>
-          </div><div class="room-legend"><span><i data-state="working"></i>A trabalhar</span><span><i data-state="waiting"></i>Na fila</span><span><i data-state="error"></i>Precisa de atenção</span><span><i data-state="unknown"></i>Sem ligação</span></div>
+          </div><div class="room-legend"><span><i data-state="working"></i>A trabalhar</span><span><i data-state="monitoring"></i>Vigilância</span><span><i data-state="waiting"></i>Na fila</span><span><i data-state="error"></i>Precisa de atenção</span><span><i data-state="unknown"></i>Sem ligação</span></div>
         </article><button type="button" id="room-detail-scrim" class="room-detail-scrim" aria-label="Fechar detalhe"></button><aside class="room-detail" id="room-detail"></aside></div>
         <div class="room-bottom"><article class="room-conversation"><span class="room-eyebrow">FALA COM A EQUIPA</span><h2>O que fazemos a seguir?</h2><p id="room-reply" role="status" aria-live="polite">Diz o projecto e o objectivo. Respondo de forma curta.</p><form id="room-talk-form"><label class="sr-only" for="room-talk-input">Pedido à equipa</label><input id="room-talk-input" required maxlength="2000" placeholder="Ex.: analisa a Pentehouse e propõe 3 melhorias"><button type="submit" id="room-talk-send" aria-label="Enviar pedido">↑</button></form><button class="text-link" data-panel-target="assistente" type="button">Ver resposta completa e propostas →</button></article>
         <article class="room-activity"><div><span class="room-eyebrow">ACTIVIDADE REAL</span><h2>Os últimos passos</h2></div><ul id="room-feed"></ul><button class="text-link" data-panel-target="ferramentas" type="button">Ver execuções →</button></article></div>
