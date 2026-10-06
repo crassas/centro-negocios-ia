@@ -235,7 +235,11 @@ def remote_log_health():
         with REMOTE_LOG_FILE.open("rb") as fh:
             size = fh.seek(0, 2)
             fh.seek(max(0, size - 48000))
-            text = fh.read().decode("utf-8", errors="replace").lower()
+            raw_text = fh.read().decode("utf-8", errors="replace").lower()
+            # MCP echoes file contents: code containing failure markers is not a network event.
+            text = "\n".join(line for line in raw_text.splitlines()
+                if "\\n" not in line and len(line) < 1800
+                and not line.lstrip().startswith(("{", "[reading", "🔧", "✅ tool")))
     except Exception as exc:
         return None, "log ilegível: " + str(exc)[:120]
 
@@ -554,6 +558,7 @@ def main():
             print(f"[auto] openclaw-disabled · limpeza pendente: {exc}", flush=True)
     last_openclaw_attempt = 0
     last_laya_attempt = 0
+    last_jarvis_attempt = 0
     last_remote_attempt = 0
     last_update_attempt = 0
     last_update_ok = 0
@@ -669,6 +674,20 @@ def main():
             except Exception as exc:
                 actions.append({"service": "laya", "ok": False, "output": str(exc)})
 
+        jarvis_ok = False
+        jarvis_ctl = locate_ctl("jarvisctl")
+        jarvis_enabled = (HOME / ".centro-jarvis/enabled").exists()
+        if jarvis_enabled:
+            try:
+                with urllib.request.urlopen("http://127.0.0.1:8770/health", timeout=2) as response:
+                    jarvis_ok = json.loads(response.read()).get("ok") is True
+            except Exception:
+                pass
+            if not jarvis_ok and jarvis_ctl.exists() and now-last_jarvis_attempt >= 45:
+                last_jarvis_attempt = now
+                ok, output = run_ctl(jarvis_ctl, "start")
+                actions.append({"service":"jarvis", "ok":ok, "output":output})
+
         remote_ok, remote_pid, remote_executor, remote_detail = remote_desktop_healthy()
         remote_managed = remote_managed_state()
         if REMOTE_DESKTOP_AUTOSTART and REMOTE_DEVICE_FILE.exists() and not busy:
@@ -766,6 +785,7 @@ def main():
                 "executorPid": remote_executor,
                 "detail": remote_detail,
             },
+            "jarvis": {"enabled": jarvis_enabled, "healthy": jarvis_ok, "endpoint":"127.0.0.1:8770", "cloudFallback":False},
             "autoupdate": {
                 "enabled": AUTOUPDATE_ENABLED,
                 "intervalSeconds": AUTOUPDATE_INTERVAL_SECONDS,

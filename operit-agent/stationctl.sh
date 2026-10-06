@@ -57,9 +57,7 @@ start_station() {
   "$SERVER_CTL" start
   "$AGENT_CTL" start
 
-  if [ -x "$OPENCLAW_CTL" ]; then
-    "$OPENCLAW_CTL" start >/dev/null 2>&1 || true
-  fi
+  # OpenClaw permanece desactivado por decisão do operador.
   if [ -x "$LAYA_CTL" ]; then
     "$LAYA_CTL" start >/dev/null 2>&1 &
   fi

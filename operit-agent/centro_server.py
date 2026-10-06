@@ -837,6 +837,9 @@ def build_local_repo_context(worktree, target, prompt):
 
 
 def request_repo_change_plan_with_context(target, prompt, context):
+    if (HOME / ".centro-jarvis/planner_enabled").exists():
+        from jarvis_local import plan_change
+        return plan_change(target, prompt, context), "local_llama"
     token = read_secret(AGENT_TOKEN_FILE)
     if not token:
         raise RuntimeError("Centro Agent sem token para pedir plano de alteração.")
@@ -1239,7 +1242,7 @@ def action_repo_change(task):
                 plan = None
 
         openclaw_error = ""
-        if plan is None and OPENCLAW_ENABLED:
+        if plan is None and OPENCLAW_ENABLED and not (HOME / ".centro-jarvis/planner_enabled").exists():
             # Segundo planeador independente. O OpenClaw só devolve JSON; quem
             # escreve continua a ser o executor atómico e protegido do Centro.
             for openclaw_round in range(2):
@@ -1266,6 +1269,9 @@ def action_repo_change(task):
                     break
                 except Exception as exc:
                     openclaw_error = str(exc)
+
+        if plan is None and (HOME / ".centro-jarvis/planner_enabled").exists():
+            return {"exitCode":67,"stdout":"","stderr":"Planeador local indisponível; cloud desactivada. " + planner_error[-1000:],"durationMs":int((time.time()-started)*1000)}
 
         if plan is None:
             try:
