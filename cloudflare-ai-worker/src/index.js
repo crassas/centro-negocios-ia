@@ -1361,6 +1361,7 @@ async function planRepoChange(env,project,prompt,providedContext=null){
   ];
 
   const errors=[];
+  const zeroPlans=[];
   // JSON Schema só é usado no modelo que a Cloudflare documenta como
   // compatível com JSON Mode. Qwen/GLM/Mistral ficam em JSON textual para
   // evitar falhas 500 por response_format não suportado.
@@ -1373,19 +1374,52 @@ async function planRepoChange(env,project,prompt,providedContext=null){
 
   for(const [model,useSchema,maxTokens] of attempts){
     try{
-      const plan=await runRepoPlannerModel(env,model,messages,maxTokens,useSchema);
+      const retryMessages=zeroPlans.length
+        ? [...messages,{
+            role:'user',
+            content:'REAVALIAÇÃO INDEPENDENTE: outro planeador devolveu zero edições. '+
+              'Não assumes que essa decisão está correcta. Inspecciona novamente os paths e os ficheiros reais fornecidos. '+
+              'Se existir uma alteração concreta e segura que cumpra o pedido, devolve-a. '+
+              'Só devolve edits:[] se o pedido não contiver uma alteração concreta, se já estiver claramente satisfeito, '+
+              'ou se faltar literalmente o conteúdo necessário para construir um replace seguro. '+
+              'Motivos anteriores: '+zeroPlans.map(x=>x.model+': '+x.summary).join(' | ').slice(0,1800)
+          }]
+        : messages;
+      const plan=await runRepoPlannerModel(env,model,retryMessages,maxTokens,useSchema);
       if(validRepoEditPlan(plan)){
-        return {
-          ok:true,
-          plan,
-          plannerModel:model,
-          context:{repo:context.repo,head:context.head}
-        };
+        if(plan.edits.length>0){
+          return {
+            ok:true,
+            plan,
+            plannerModel:model,
+            context:{repo:context.repo,head:context.head},
+            previousZeroPlans:zeroPlans
+          };
+        }
+        const summary=String(plan.summary||'sem justificação').trim();
+        zeroPlans.push({model,summary});
+        errors.push(model+': zero edições · '+summary.slice(0,500));
+        continue;
       }
       errors.push(model+': resposta não era um plano JSON válido');
     }catch(error){
       errors.push(model+': '+String((error&&error.message)||error).slice(0,500));
     }
+  }
+
+  // Um plano vazio é válido como recusa segura, mas só depois de todos os
+  // planeadores terem tido oportunidade de analisar a mesma evidência.
+  if(zeroPlans.length){
+    return {
+      ok:true,
+      plan:{
+        summary:'Todos os planeadores recusaram uma edição segura. '+zeroPlans.map(x=>x.model+': '+x.summary).join(' | ').slice(0,2200),
+        edits:[]
+      },
+      plannerModel:'consensus-zero',
+      context:{repo:context.repo,head:context.head},
+      previousZeroPlans:zeroPlans
+    };
   }
 
   throw new Error('Planeadores falharam: '+errors.join(' | '));
