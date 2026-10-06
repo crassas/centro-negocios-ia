@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 STATE="${HOME}/.centro-jarvis"
-SOURCE="${JARVIS_SOURCE:-${HOME}/repos/centro-jarvis-local/operit-agent}"
+SCRIPT_ROOT="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
+SOURCE="${JARVIS_SOURCE:-$SCRIPT_ROOT}"
 mkdir -p "$STATE"
 case "${1:-doctor}" in
  start)

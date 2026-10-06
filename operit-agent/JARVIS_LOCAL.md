@@ -13,7 +13,7 @@ Implementação na branch feat/jarvis-local. A validação física do microfone 
 - Áudio sintético local → whisper.cpp → system_status real → áudio Piper, 36,79 s. A transcrição teve erros mas preservou a intenção.
 - Fixture Git isolada: modelo gerou plano, esquema restringiu os paths, executor criou note.txt e o teste de conteúdo passou.
 - Arranque principal com falha injectada → modelo fallback real → FALLBACK_OK.
-- Seis testes automáticos passaram; policy_selftest passou.
+- Oito testes automáticos passaram; policy_selftest passou.
 - Best Pizza respondeu HTTP 200 sem inferência na verificação inicial.
 - O teste de inferência/código bloqueou HTTP externo no cliente do teste. Não equivale a cortar toda a rede Android.
 Evidências locais em ~/.centro-jarvis/*-proof.json; não guardar gravações.
@@ -38,7 +38,7 @@ OpenClaw deixou de arrancar por centrostation start. Durante o trabalho, a recup
 O filtro do log Remote ignora conteúdo MCP com palavras de erro e preserva a detecção de eventos reais.
 ## Ainda falta verificar
 - Microfone/reprodução físicos, interrupção física de áudio.
-- Restart completo centrostation e prova de recuperação dos componentes.
+- Restart centrostation realizado: Server, Agent, Laya, LLM, router e SQLite íntegros.
 - Observação de estabilidade de duas horas: jarvis_soak.py grava resultados, sem inferência.
 - Modelo 4B e qualidade em alterações complexas; não activar por tamanho nominal.
 ## Rollback
