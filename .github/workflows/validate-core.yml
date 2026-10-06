@@ -42,6 +42,7 @@ jobs:
           export HOME="$RUNNER_TEMP/jarvis-selftest-home"
           mkdir -p "$HOME"
           PYTHONPATH=operit-agent python3 operit-agent/jarvis_selftest.py
+          node scripts/travis-voice-selftest.mjs
 
       - name: Executor policy self-test
         shell: bash

@@ -12,17 +12,48 @@ async function api(path,body,type="application/json",signal){const r=await fetch
 function stop(){browserRecognizer?.abort();browserRecognizer=null;replay.disabled=true;generation++;controller?.abort();busy=false;mic.disabled=send.disabled=false;if(audio){audio.pause();audio.src=""}if(objectUrl){URL.revokeObjectURL(objectUrl);objectUrl=null}status.textContent="Voz parada."}
 function openYouTube(){stop();answer.textContent="A abrir o YouTube.";const link=document.createElement("a");link.href="https://www.youtube.com/";link.textContent="Abrir YouTube";answer.append(document.createElement("br"),link);status.textContent="A abrir o YouTube…";window.location.assign(link.href)}
 function wantsYouTube(text){return /^(?:travis[, :]+)?(?:por favor[, ]+)?(?:(?:consegues|podes|poderias)\s+)?(?:abrir|abre)\s+(?:o\s+)?youtube[\s?.!]*(?:por favor[\s?.!]*)?$/i.test(String(text||"").trim())}
-async function result(r,id,signal){const d=await r.json();if(id!==generation)return;if(d.result?.action==="open_url"&&d.result.url==="https://www.youtube.com/"){openYouTube();return}answer.textContent=(d.text?"Ouvi: "+d.text+"\n\n":"")+d.reply;status.textContent="Resposta recebida. A preparar voz…";const wav=await (await api("/speak",{text:d.reply},"application/json",signal)).blob();if(id!==generation)return;if(objectUrl)URL.revokeObjectURL(objectUrl);objectUrl=URL.createObjectURL(wav);audio=new Audio(objectUrl);replay.disabled=false;audio.onended=()=>status.textContent="Resposta concluída. Podes ouvir novamente.";try{await audio.play();status.textContent="O Travis está a falar."}catch(e){status.textContent="Resposta pronta. Carrega em Ouvir resposta para ouvir o Travis."}}
+async function result(d,id,stage){
+ if(id!==generation)return;
+ if(d.result?.action==="open_url"&&d.result.url==="https://www.youtube.com/"){openYouTube();return}
+ if(!d.reply)throw Error("O Travis devolveu uma resposta vazia.");
+ answer.textContent=(d.text?"Ouvi: "+d.text+"\n\n":"")+d.reply;
+ try{
+  const wav=await stage("A preparar a voz",10000,async signal=>(await api("/speak",{text:d.reply},"application/json",signal)).blob());
+  if(id!==generation)return;
+  if(objectUrl)URL.revokeObjectURL(objectUrl);objectUrl=URL.createObjectURL(wav);audio=new Audio(objectUrl);const voice=audio;replay.disabled=false;
+  voice.onended=()=>{if(id===generation)status.textContent="Resposta concluída. Podes ouvir novamente."};
+  status.textContent="Resposta pronta.";
+  // A reprodução pode ficar pendente no Android. Não prende o próximo pedido.
+  voice.play().then(()=>{if(id===generation)status.textContent="O Travis está a falar."}).catch(()=>{if(id===generation)status.textContent="Carrega em Ouvir resposta para ouvir o Travis."});
+ }catch(e){if(id===generation)status.textContent="Resposta recebida. Voz indisponível: "+e.message}
+}
 async function request(path,body,type="application/json"){
  if(path==="/jarvis"&&wantsYouTube(body.text)){openYouTube();return}
- if(busy)return;stop();const id=generation;const ownController=new AbortController();controller=ownController;const signal=ownController.signal;busy=true;mic.disabled=send.disabled=true;
- const started=Date.now(),limit=path==="/listen"?90000:60000;
- const expire=()=>{if(id!==generation)return;stop();status.textContent="O pedido excedeu o prazo. Podes tentar novamente ou pedir o estado do Centro."};
- const deadline=setTimeout(expire,limit);
- const progress=setInterval(()=>{if(id!==generation)return;if(Date.now()-started>=limit){expire();return}if(replay.disabled)status.textContent="A tratar do pedido · "+Math.floor((Date.now()-started)/1000)+" s. Podes cancelar em Parar voz."},1000);
- status.textContent="A tratar do pedido…";answer.textContent="À espera da resposta do Travis.";
- try{await result(await api(path,body,type,signal),id,signal)}catch(e){if(id===generation)status.textContent=e.name==="AbortError"?"Pedido cancelado.":e.message}
- finally{clearTimeout(deadline);clearInterval(progress);if(id===generation){busy=false;mic.disabled=send.disabled=false;controller=null}}
+ if(busy)return;stop();const id=generation;const ownController=new AbortController();controller=ownController;busy=true;mic.disabled=send.disabled=true;
+ let phase="A verificar a ligação",started=Date.now(),expires=0;
+ const showProgress=()=>{if(id===generation)status.textContent=phase+" · "+Math.floor((Date.now()-started)/1000)+" s."};
+ const stage=async(label,limit,work)=>{
+  phase=label;started=Date.now();expires=started+limit;showProgress();let timer;
+  try{return await Promise.race([work(ownController.signal),new Promise((_,reject)=>{timer=setTimeout(()=>{ownController.abort();reject(Error(label+": o prazo de espera terminou. Podes tentar novamente."))},limit)})])}
+  finally{clearTimeout(timer)}
+ };
+ const progress=setInterval(showProgress,1000);
+ const resumed=()=>{if(id===generation&&expires&&Date.now()>expires)ownController.abort()};
+ document.addEventListener("visibilitychange",resumed);
+ answer.textContent="À espera da resposta do Travis.";
+ try{
+  await stage("A verificar a ligação",4000,async signal=>{const r=await fetch("/health",{signal,cache:"no-store"});if(!r.ok||!(await r.json()).ok)throw Error("O servidor do Travis não está disponível.")});
+  let heard="";
+  if(path==="/listen"){
+   const d=await stage("A transcrever a tua voz",25000,async signal=>(await api("/transcribe",body,type,signal)).json());
+   if(id!==generation)return;heard=String(d.text||"").trim();if(!heard)throw Error("Não consegui perceber a voz. Tenta novamente ou escreve o pedido.");
+   document.querySelector("#text").value=heard;answer.textContent="Ouvi: "+heard;path="/jarvis";body={text:heard};type="application/json";
+   if(wantsYouTube(heard)){openYouTube();return}
+  }
+  const d=await stage("O Travis está a responder",30000,async signal=>(await api(path,body,type,signal)).json());
+  if(heard)d.text=heard;await result(d,id,stage);
+ }catch(e){if(id===generation)status.textContent=e.name==="AbortError"?"A ligação foi interrompida. Podes tentar novamente.":e.message}
+ finally{clearInterval(progress);document.removeEventListener("visibilitychange",resumed);if(id===generation){busy=false;mic.disabled=send.disabled=false;controller=null}}
 }
 mic.onclick=async()=>{
  if(browserRecognizer){browserRecognizer.stop();return}

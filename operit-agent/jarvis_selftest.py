@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Regression tests for routing, secret protection and local memory."""
-import importlib.util, json, tempfile, unittest
+import importlib.util, json, tempfile, unittest, threading, http.client
 from pathlib import Path
 from unittest.mock import patch
 spec=importlib.util.spec_from_file_location("jarvis",Path(__file__).with_name("jarvis_local.py"))
@@ -25,7 +25,7 @@ class Tests(unittest.TestCase):
  def test_chat_timeout_does_not_restart_model(self):
   with patch.object(j,"http",side_effect=[{"status":"ok"},TimeoutError()]) as http,patch.object(j,"llm_start",side_effect=AssertionError("restart")):
    with self.assertRaisesRegex(RuntimeError,"prazo"):j.infer("pedido")
-   self.assertEqual(http.call_args.kwargs["timeout"],45)
+   self.assertEqual(http.call_args.kwargs["timeout"],20)
  def test_shared_context_for_reasoning(self):
   with patch.object(j,"infer",return_value="Resposta") as inference:
    j.route("Analisa o meu negócio",{"projects":[{"name":"Pentehouse"}]})
@@ -87,6 +87,16 @@ class Tests(unittest.TestCase):
     self.assertTrue(first.startswith(b"RIFF"));self.assertTrue(second.startswith(b"RIFF"))
    process=worker.process;worker.stop();self.assertIsNotNone(process.poll())
   finally:worker.stop()
+ def test_transcription_endpoint_returns_before_reasoning(self):
+  server=j.ThreadingHTTPServer(("127.0.0.1",0),j.Handler)
+  thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+  connection=http.client.HTTPConnection("127.0.0.1",server.server_port,timeout=3)
+  try:
+   with patch.object(j,"transcribe",return_value="estás aí?") as transcription,patch.object(j,"route",side_effect=AssertionError("reasoning during transcription")):
+    connection.request("POST","/transcribe",body=b"audio",headers={"Host":"127.0.0.1:8770","X-Jarvis-Key":j.KEY,"Content-Type":"audio/webm"})
+    response=connection.getresponse();self.assertEqual(response.status,200)
+    self.assertEqual(json.loads(response.read()),{"ok":True,"text":"estás aí?"});transcription.assert_called_once_with(b"audio")
+  finally:connection.close();server.shutdown();server.server_close();thread.join()
  def test_unknown_tool(self):
   with self.assertRaises(ValueError):j.execute("shell",{"command":"rm -rf /"})
  def test_cloud_off(self):

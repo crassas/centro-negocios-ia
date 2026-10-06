@@ -125,7 +125,7 @@ def infer(text,system="És o Travis, assistente do Centro de Negócios. Responde
   if json_mode:data["response_format"]={"type":"json_object"}
   if schema:data["response_format"]={"type":"json_object","schema":schema}
   start=time.monotonic()
-  try:r=http("http://127.0.0.1:8771/v1/chat/completions",data,timeout=240 if json_mode else 45)
+  try:r=http("http://127.0.0.1:8771/v1/chat/completions",data,timeout=240 if json_mode else 20)
   except Exception:
    if not json_mode:raise RuntimeError("O modelo não respondeu no prazo. Podes pedir o estado do Centro ou tentar novamente.")
    if not (ROOT/"llm.model").exists() or (ROOT/"llm.model").read_text()=="fallback":raise
@@ -378,8 +378,10 @@ class Handler(BaseHTTPRequestHandler):
    n=int(self.headers.get("Content-Length","0"))
    if not 0<n<=12*1024*1024:raise ValueError("Tamanho inválido")
    data=self.rfile.read(n)
-   if self.path=="/listen":
-    text=transcribe(data);return self.send({"text":text,**route(text)})
+   if self.path in {"/transcribe","/listen"}:
+    text=transcribe(data)
+    if self.path=="/transcribe":return self.send({"ok":True,"text":text})
+    return self.send({"text":text,**route(text)})
    obj=json.loads(data)
    if self.path=="/activity":return self.send(centro_activity())
    if self.path=="/jarvis":return self.send(route(obj.get("text","")))
