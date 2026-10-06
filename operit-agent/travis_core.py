@@ -6,10 +6,14 @@ from dataclasses import asdict,dataclass,field
 from pathlib import Path
 from typing import Any,Callable,Dict,Iterable
 
-CORE_VERSION="1.0"
+CORE_VERSION="1.1"
 PRIORITIES={"CRITICAL","HIGH","MEDIUM","LOW"}
 ACTION_TYPES={"READ","WRITE_FILE","RUN_COMMAND","API_CALL","DB_MUTATION","REPO_CHANGE","INFERENCE"}
 COMPLETION_STATUSES=("DOCUMENTED","PLANNED","PARTIALLY_IMPLEMENTED","IMPLEMENTED_NOT_VERIFIED","VERIFIED","REGRESSION_TESTED","RELEASE_CANDIDATE","PRODUCTION_READY")
+NEURON_TYPES={"CONCEPT","DECISION","FACT","RULE"}
+SYNAPSE_TYPES={"DEPENDS_ON","CONTRADICTS","EXTENDS","SIMILAR_TO"}
+TRUSTED_MEMORY_SOURCES={"explicit_user","verified_result","system_config"}
+MEMORY_STOPWORDS={"sobre","muito","entao","quando","como","para","esta","estou","este","esta","uma","uns","umas","pelo","pela","pelos","elas","eles","com","sem","sob","por","que","dos","das","nos","nas","the","and","from"}
 
 def _norm(s):
  return "".join(c for c in unicodedata.normalize("NFD",str(s).lower()) if not unicodedata.combining(c))
@@ -51,7 +55,7 @@ def register_capability(tool_id,owner,action_type,mutation=False,requires_eviden
  CAPABILITIES[tool_id]=Capability(tool_id,owner,action_type.upper(),mutation,True,requires_evidence,fallback)
 def _bootstrap():
  defs={
- "presence":("jarvis","READ",0,0,"none"),"open_youtube":("jarvis","READ",0,1,"none"),"stop":("jarvis","READ",0,0,"none"),"system_status":("jarvis","READ",0,1,"none"),"repo_access":("jarvis","READ",0,1,"none"),"site_check":("jarvis","API_CALL",0,1,"none"),"git_status":("jarvis","RUN_COMMAND",0,1,"none"),"git_diff":("jarvis","RUN_COMMAND",0,1,"none"),"git_pull_ff_only":("jarvis","RUN_COMMAND",1,1,"none"),"read_file":("jarvis","READ",0,1,"none"),"search_repo":("jarvis","READ",0,1,"none"),"sqlite_query":("jarvis","READ",0,1,"none"),"create_task":("jarvis","DB_MUTATION",1,1,"none"),"update_task":("jarvis","DB_MUTATION",1,1,"none"),"task_list":("jarvis","READ",0,1,"none"),"note_fact":("jarvis","DB_MUTATION",1,1,"none"),"pause_project":("jarvis","DB_MUTATION",1,1,"none"),"laya_status":("laya","API_CALL",0,1,"none"),"laya_decide":("laya","API_CALL",0,1,"none"),"local_llm":("jarvis","INFERENCE",0,0,"local_model_fallback"),"repo_change":("centro-server","REPO_CHANGE",1,1,"local_only"),"jarvis_query":("centro-server","INFERENCE",0,0,"local_model_fallback"),"server_status":("centro-server","READ",0,1,"none"),"station_status":("centro-server","READ",0,1,"none"),"station_doctor":("centro-server","READ",0,1,"none"),"agents_status":("centro-server","READ",0,1,"none"),"autonomy_selftest":("centro-server","RUN_COMMAND",0,1,"none"),"fault_timeout":("centro-server","RUN_COMMAND",0,1,"none"),"fault_laya_recovery":("centro-server","RUN_COMMAND",0,1,"none"),"system_info":("centro-server","READ",0,1,"none"),"git_pull":("centro-server","RUN_COMMAND",1,1,"none"),"git_access_matrix":("centro-server","READ",0,1,"none"),"claude_query":("centro-server","INFERENCE",0,0,"workers_ai_readonly"),"manus_status":("centro-server","READ",0,1,"none"),"manus_query":("centro-server","API_CALL",0,1,"none")}
+ "presence":("jarvis","READ",0,0,"none"),"open_youtube":("jarvis","READ",0,1,"none"),"stop":("jarvis","READ",0,0,"none"),"system_status":("jarvis","READ",0,1,"none"),"repo_access":("jarvis","READ",0,1,"none"),"site_check":("jarvis","API_CALL",0,1,"none"),"git_status":("jarvis","RUN_COMMAND",0,1,"none"),"git_diff":("jarvis","RUN_COMMAND",0,1,"none"),"git_pull_ff_only":("jarvis","RUN_COMMAND",1,1,"none"),"read_file":("jarvis","READ",0,1,"none"),"search_repo":("jarvis","READ",0,1,"none"),"sqlite_query":("jarvis","READ",0,1,"none"),"create_task":("jarvis","DB_MUTATION",1,1,"none"),"update_task":("jarvis","DB_MUTATION",1,1,"none"),"task_list":("jarvis","READ",0,1,"none"),"note_fact":("jarvis","DB_MUTATION",1,1,"none"),"neural_status":("jarvis","READ",0,1,"none"),"neural_recall":("jarvis","READ",0,1,"none"),"neural_consolidate":("jarvis","DB_MUTATION",1,1,"none"),"pause_project":("jarvis","DB_MUTATION",1,1,"none"),"laya_status":("laya","API_CALL",0,1,"none"),"laya_decide":("laya","API_CALL",0,1,"none"),"local_llm":("jarvis","INFERENCE",0,0,"local_model_fallback"),"repo_change":("centro-server","REPO_CHANGE",1,1,"local_only"),"jarvis_query":("centro-server","INFERENCE",0,0,"local_model_fallback"),"server_status":("centro-server","READ",0,1,"none"),"station_status":("centro-server","READ",0,1,"none"),"station_doctor":("centro-server","READ",0,1,"none"),"agents_status":("centro-server","READ",0,1,"none"),"autonomy_selftest":("centro-server","RUN_COMMAND",0,1,"none"),"fault_timeout":("centro-server","RUN_COMMAND",0,1,"none"),"fault_laya_recovery":("centro-server","RUN_COMMAND",0,1,"none"),"system_info":("centro-server","READ",0,1,"none"),"git_pull":("centro-server","RUN_COMMAND",1,1,"none"),"git_access_matrix":("centro-server","READ",0,1,"none"),"claude_query":("centro-server","INFERENCE",0,0,"workers_ai_readonly"),"manus_status":("centro-server","READ",0,1,"none"),"manus_query":("centro-server","API_CALL",0,1,"none")}
  for k,v in defs.items():register_capability(k,v[0],v[1],bool(v[2]),bool(v[3]),v[4])
 _bootstrap()
 def registry_snapshot():return {"version":CORE_VERSION,"localFirst":True,"paidFallback":False,"capabilities":[asdict(CAPABILITIES[k]) for k in sorted(CAPABILITIES)]}
@@ -74,6 +78,10 @@ def classify_local_intent(text,project_id=""):
  if t in {"para","cancela","silencio","jarvis para","travis para"}:return "stop",{}
  if any(w in t for w in ["cria uma tarefa","criar tarefa","adiciona uma tarefa"]):return "create_task",{"title":text}
  if any(w in t for w in ["que tarefas","lista de tarefas","tarefas pendentes","que trabalho tens"]):return "task_list",{}
+ if any(w in t for w in ["estado dos neuronios","estado do cerebro","quantos neuronios","mapa neural"]):return "neural_status",{}
+ if any(w in t for w in ["procura na memoria","pesquisa na memoria","o que tens na memoria sobre"]):return "neural_recall",{"query":text}
+ if any(w in t for w in ["consolida a memoria","consolida os neuronios","ciclo de sono","dream cycle"]):return "neural_consolidate",{}
+ if any(t.startswith(w) for w in ["lembra-te que","lembra que","guarda que","memoriza que","recorda que"]):return "note_fact",{"text":text}
  if "nao mexas" in t:return "pause_project",p
  if any(w in t for w in ["repositorio","github","paginas internet","paginas internas"]) and any(w in t for w in ["acesso","ligado","ligacao","quais","lista"]):return "repo_access",{}
  if "git" in t:return ("git_diff" if "diff" in t else "git_status"),p
@@ -87,7 +95,7 @@ def classify_local_intent(text,project_id=""):
 class RuntimeStore:
  def __init__(self,db_path:Path):self.db_path=Path(db_path)
  def connect(self):
-  self.db_path.parent.mkdir(parents=True,exist_ok=True);c=sqlite3.connect(self.db_path,timeout=10);c.execute("PRAGMA journal_mode=WAL");c.execute("CREATE TABLE IF NOT EXISTS travis_events(id TEXT PRIMARY KEY,created REAL,correlation_id TEXT,event_type TEXT,data TEXT)");c.execute("CREATE TABLE IF NOT EXISTS travis_entities(id TEXT PRIMARY KEY,created REAL,kind TEXT,data TEXT)");c.execute("CREATE TABLE IF NOT EXISTS travis_relations(id TEXT PRIMARY KEY,created REAL,source_id TEXT,target_id TEXT,kind TEXT,data TEXT)");return c
+  self.db_path.parent.mkdir(parents=True,exist_ok=True);c=sqlite3.connect(self.db_path,timeout=10);c.execute("PRAGMA journal_mode=WAL");c.execute("CREATE TABLE IF NOT EXISTS travis_events(id TEXT PRIMARY KEY,created REAL,correlation_id TEXT,event_type TEXT,data TEXT)");c.execute("CREATE TABLE IF NOT EXISTS travis_entities(id TEXT PRIMARY KEY,created REAL,kind TEXT,data TEXT)");c.execute("CREATE TABLE IF NOT EXISTS travis_relations(id TEXT PRIMARY KEY,created REAL,source_id TEXT,target_id TEXT,kind TEXT,data TEXT)");c.execute("CREATE TABLE IF NOT EXISTS travis_neurons(id TEXT PRIMARY KEY,created REAL,updated REAL,title TEXT,summary TEXT,kind TEXT,tags TEXT,project_id TEXT,priority INTEGER,importance REAL,last_accessed REAL,source_type TEXT,source_event_id TEXT,confidence REAL,active INTEGER DEFAULT 1)");c.execute("CREATE TABLE IF NOT EXISTS travis_synapses(id TEXT PRIMARY KEY,created REAL,updated REAL,source_id TEXT,target_id TEXT,relation_type TEXT,weight REAL,confidence REAL,last_reinforced REAL,active INTEGER DEFAULT 1,UNIQUE(source_id,target_id,relation_type))");return c
  def emit(self,e):
   with self.connect() as c:c.execute("INSERT OR REPLACE INTO travis_events VALUES(?,?,?,?,?)",(e.event_id,e.timestamp,e.correlation_id,e.event_type,_safe(json.dumps(asdict(e),ensure_ascii=False),16000)))
  def entity(self,i,k,d):
@@ -96,10 +104,73 @@ class RuntimeStore:
   i="rel-"+secrets.token_hex(8)
   with self.connect() as c:c.execute("INSERT INTO travis_relations VALUES(?,?,?,?,?,?)",(i,time.time(),s,t,k,_safe(json.dumps(d or {},ensure_ascii=False),8000)))
   return i
+ def remember(self,title,summary,kind="FACT",tags=None,project_id="",priority=3,source_type="explicit_user",source_event_id="",confidence=1.0):
+  kind=str(kind).upper();source_type=str(source_type)
+  if kind not in NEURON_TYPES:raise ValueError("Tipo de neurónio inválido")
+  if source_type not in TRUSTED_MEMORY_SOURCES:raise ValueError("Fonte de memória não autorizada")
+  summary=_safe(summary,2400).strip();title=_safe(title or summary[:90],180).strip()
+  if not summary or not title:raise ValueError("Neurónio vazio")
+  priority=max(1,min(5,int(priority)));confidence=max(0.0,min(1.0,float(confidence)));project_id=_safe(project_id,120).strip()
+  tag_list=sorted({x for x in (_norm(t).strip() for t in (tags or [])) if x})[:20];now=time.time()
+  with self.connect() as c:
+   row=c.execute("SELECT id,importance FROM travis_neurons WHERE active=1 AND lower(title)=lower(?) AND project_id=? AND kind=? LIMIT 1",(title,project_id,kind)).fetchone()
+   if row:
+    nid=row[0];importance=min(1.0,max(float(row[1] or 0.5),0.5)+0.03)
+    c.execute("UPDATE travis_neurons SET updated=?,summary=?,tags=?,priority=?,importance=?,last_accessed=?,source_type=?,source_event_id=?,confidence=? WHERE id=?",(now,summary,json.dumps(tag_list,ensure_ascii=False),priority,importance,now,source_type,_safe(source_event_id,160),confidence,nid));return nid
+   nid="neuron-"+secrets.token_hex(8)
+   c.execute("INSERT INTO travis_neurons VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(nid,now,now,title,summary,kind,json.dumps(tag_list,ensure_ascii=False),project_id,priority,0.5,now,source_type,_safe(source_event_id,160),confidence,1));return nid
+ def link_neurons(self,source_id,target_id,relation_type="EXTENDS",weight=0.5,confidence=1.0):
+  relation_type=str(relation_type).upper()
+  if relation_type not in SYNAPSE_TYPES or source_id==target_id:raise ValueError("Sinapse inválida")
+  weight=max(0.1,min(1.0,float(weight)));confidence=max(0.0,min(1.0,float(confidence)));now=time.time()
+  with self.connect() as c:
+   found=c.execute("SELECT id FROM travis_neurons WHERE id IN (?,?) AND active=1",(source_id,target_id)).fetchall()
+   if len(found)!=2:raise ValueError("Neurónio da sinapse não existe")
+   row=c.execute("SELECT id,weight FROM travis_synapses WHERE source_id=? AND target_id=? AND relation_type=?",(source_id,target_id,relation_type)).fetchone()
+   if row:
+    sid=row[0];weight=min(1.0,max(weight,float(row[1] or 0.1))+0.08);c.execute("UPDATE travis_synapses SET updated=?,weight=?,confidence=?,last_reinforced=?,active=1 WHERE id=?",(now,weight,confidence,now,sid));return sid
+   sid="synapse-"+secrets.token_hex(8);c.execute("INSERT INTO travis_synapses VALUES(?,?,?,?,?,?,?,?,?,?,?)",(sid,now,now,source_id,target_id,relation_type,weight,confidence,now,1));return sid
+ def recall(self,query,project_id="",limit=6):
+  tokens={w for w in re.findall(r"[a-z0-9]+",_norm(query)) if len(w)>=3 and w not in MEMORY_STOPWORDS};project_id=_safe(project_id,120).strip();now=time.time()
+  with self.connect() as c:
+   rows=c.execute("SELECT id,title,summary,kind,tags,project_id,priority,importance,last_accessed,source_type,confidence FROM travis_neurons WHERE active=1 ORDER BY importance DESC,updated DESC LIMIT 500").fetchall()
+   central={row[0]:float(row[1] or 0) for row in c.execute("SELECT n.id,COALESCE(SUM(s.weight),0) FROM travis_neurons n LEFT JOIN travis_synapses s ON s.active=1 AND (s.source_id=n.id OR s.target_id=n.id) WHERE n.active=1 GROUP BY n.id")}
+   scored=[]
+   for row in rows:
+    nid,title,summary,kind,tags_raw,pid,priority,importance,last_accessed,source_type,confidence=row
+    try:tags=json.loads(tags_raw or "[]")
+    except Exception:tags=[]
+    title_tokens=set(re.findall(r"[a-z0-9]+",_norm(title)));body_tokens=set(re.findall(r"[a-z0-9]+",_norm(summary+" "+" ".join(tags))))
+    overlap=2.0*len(tokens & title_tokens)+1.0*len(tokens & body_tokens);project_boost=2.5 if project_id and pid==project_id else 0.0
+    if tokens and overlap==0 and project_boost==0:continue
+    age_days=max(0.0,(now-float(last_accessed or now))/86400);recency=max(0.0,1.0-age_days/30.0)
+    score=overlap+project_boost+float(importance or 0.5)*2.0+min(1.5,central.get(nid,0.0))+recency+float(priority or 3)*0.1
+    scored.append((score,{"id":nid,"title":title,"summary":summary,"kind":kind,"tags":tags,"projectId":pid,"importance":round(float(importance or 0.5),3),"confidence":round(float(confidence or 1.0),3),"sourceType":source_type}))
+   selected=sorted(scored,key=lambda x:(-x[0],-x[1]["importance"]))[:max(1,min(int(limit),12))]
+   for _,item in selected:c.execute("UPDATE travis_neurons SET last_accessed=?,importance=MIN(1.0,importance+0.02),updated=? WHERE id=?",(now,now,item["id"]))
+  return [{**item,"score":round(score,3)} for score,item in selected]
+ def neural_context(self,query,project_id="",limit=5):
+  rows=self.recall(query,project_id,limit)
+  if not rows:return ""
+  return "\n".join(f"- [{r['kind']}] {r['title']}: {r['summary']} (confiança {r['confidence']:.2f})" for r in rows)
+ def consolidate_neurons(self):
+  now=time.time();changed=0
+  with self.connect() as c:
+   synapses=c.execute("SELECT id,weight,last_reinforced FROM travis_synapses WHERE active=1").fetchall()
+   for sid,weight,last in synapses:
+    days=max(0.0,(now-float(last or now))/86400);decay=min(0.25,0.01*(days//7))
+    new_weight=max(0.1,float(weight or 0.5)-decay)
+    if abs(new_weight-float(weight or 0.5))>0.0001:c.execute("UPDATE travis_synapses SET weight=?,updated=? WHERE id=?",(round(new_weight,3),now,sid));changed+=1
+   central={row[0]:float(row[1] or 0) for row in c.execute("SELECT n.id,COALESCE(SUM(s.weight),0) FROM travis_neurons n LEFT JOIN travis_synapses s ON s.active=1 AND (s.source_id=n.id OR s.target_id=n.id) WHERE n.active=1 GROUP BY n.id")}
+   max_c=max([1.0,*central.values()])
+   neurons=c.execute("SELECT id,last_accessed,priority FROM travis_neurons WHERE active=1").fetchall()
+   for nid,last,priority in neurons:
+    age=max(0.0,(now-float(last or now))/86400);recency=max(0.0,0.3-age*0.01);structural=(central.get(nid,0.0)/max_c)*0.6;prio=float(priority or 3)/5*0.1;importance=max(0.1,min(1.0,structural+recency+prio));c.execute("UPDATE travis_neurons SET importance=?,updated=? WHERE id=?",(round(importance,3),now,nid))
+  return {"neurons":len(neurons),"synapses":len(synapses),"decayed":changed}
  def health(self):
   with self.connect() as c:
-   q=c.execute;integrity=q("PRAGMA integrity_check").fetchone()[0];events=q("SELECT COUNT(*) FROM travis_events").fetchone()[0];entities=q("SELECT COUNT(*) FROM travis_entities").fetchone()[0];relations=q("SELECT COUNT(*) FROM travis_relations").fetchone()[0]
-  return {"ok":integrity=="ok","integrity":integrity,"events":events,"entities":entities,"relations":relations}
+   q=c.execute;integrity=q("PRAGMA integrity_check").fetchone()[0];events=q("SELECT COUNT(*) FROM travis_events").fetchone()[0];entities=q("SELECT COUNT(*) FROM travis_entities").fetchone()[0];relations=q("SELECT COUNT(*) FROM travis_relations").fetchone()[0];neurons=q("SELECT COUNT(*) FROM travis_neurons WHERE active=1").fetchone()[0];synapses=q("SELECT COUNT(*) FROM travis_synapses WHERE active=1").fetchone()[0]
+  return {"ok":integrity=="ok","integrity":integrity,"events":events,"entities":entities,"relations":relations,"neurons":neurons,"synapses":synapses}
 
 class UnifiedExecutionFramework:
  def __init__(self,store):self.store=store
