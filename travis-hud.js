@@ -13,7 +13,7 @@
   const clock = one('#travis-clock-time');
   const date = one('#travis-clock-date');
   const spaceCanvas = one('#travis-space-canvas');
-  const coreCanvas = one('#travis-core-canvas');
+  const coreCanvas = null; // V4 core is rendered by travis-scene.js
 
   let timers = [];
   let spaceRaf = 0;
@@ -404,7 +404,7 @@
       shaderRaf = 0;
       return;
     }
-    resizeCore();
+    // Three.js scene resizes through ResizeObserver.
     const { gl,program,buffer,pos,time,level,resolution,started } = webgl;
     gl.useProgram(program);
     gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
@@ -477,7 +477,7 @@
     if (!spaceRaf && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       spaceRaf=requestAnimationFrame(paintSpace);
     }
-    startCore();
+    window.dispatchEvent(new CustomEvent('travis3dreset'));
     if (!parallaxRaf && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       parallaxRaf=requestAnimationFrame(animateParallax);
     }
@@ -492,7 +492,7 @@
     if (parallaxRaf) cancelAnimationFrame(parallaxRaf);
     spaceRaf=0;
     parallaxRaf=0;
-    stopCore();
+    window.dispatchEvent(new CustomEvent('travis3dreset'));
     resetParallax();
     hud.style.setProperty('--trv-rx','0deg');
     hud.style.setProperty('--trv-ry','0deg');
@@ -509,6 +509,7 @@
     if (!hud.classList.contains('is-open')) return;
     const opening=!hud.classList.contains('deck-open');
     hud.classList.toggle('deck-open',opening);
+    window.dispatchEvent(new CustomEvent('travis3dcommands',{detail:{open:opening}}));
     interactionTone(opening);
     haptic(opening ? 18 : 10);
     setState('ready',opening ? 'Escolhe um módulo.' : 'Estou aqui.');
