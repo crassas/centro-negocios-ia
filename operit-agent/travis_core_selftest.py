@@ -6,7 +6,7 @@ import travis_core as t
 class Tests(unittest.TestCase):
  def test_registry(self):
   s=t.registry_snapshot();self.assertTrue(s["localFirst"]);self.assertFalse(s["paidFallback"])
-  required={"presence","open_youtube","stop","system_status","repo_access","site_check","git_status","git_diff","create_task","task_list","laya_status","laya_decide","local_llm","repo_change","server_status","station_status","station_doctor","agents_status","autonomy_selftest","fault_timeout","fault_laya_recovery","git_pull","git_access_matrix","jarvis_query","claude_query","manus_status","manus_query"}
+  required={"presence","open_youtube","stop","system_status","repo_access","site_check","git_status","git_diff","create_task","task_list","neural_status","neural_recall","neural_consolidate","laya_status","laya_decide","local_llm","repo_change","server_status","station_status","station_doctor","agents_status","autonomy_selftest","fault_timeout","fault_laya_recovery","git_pull","git_access_matrix","jarvis_query","claude_query","manus_status","manus_query"}
   self.assertTrue(required.issubset(t.CAPABILITIES))
  def test_contracts(self):
   c=t.RuntimeContext.create(source="test",project_id="centro");e=t.EventEnvelope.create("TEST",c,priority="HIGH");self.assertEqual(e.correlation_id,c.correlation_id)
@@ -17,6 +17,10 @@ class Tests(unittest.TestCase):
   self.assertEqual(t.classify_local_intent("Travis, estás aí?")[0],"presence")
   self.assertEqual(t.classify_local_intent("Travis, abre o YouTube por favor")[0],"open_youtube")
   self.assertEqual(t.classify_local_intent("Jarvis, para")[0],"stop")
+  self.assertEqual(t.classify_local_intent("Travis, lembra-te que a Beatriz entrega em 72 horas")[0],"note_fact")
+  self.assertEqual(t.classify_local_intent("Estado dos neurónios")[0],"neural_status")
+  self.assertEqual(t.classify_local_intent("Procura na memória sobre a Pentehouse")[0],"neural_recall")
+  self.assertEqual(t.classify_local_intent("Faz um ciclo de sono")[0],"neural_consolidate")
   self.assertEqual(t.classify_local_intent("Como está o Git da Pentehouse?","pentehouse")[0],"git_status")
   self.assertEqual(t.classify_local_intent("A Pentehouse está online?","pentehouse")[0],"site_check")
   self.assertEqual(t.classify_local_intent("O Centro está online?","centro")[0],"local_llm")
@@ -34,6 +38,16 @@ class Tests(unittest.TestCase):
    with s.connect() as con:rows="\n".join(r[0] for r in con.execute("SELECT data FROM travis_entities"))
    self.assertNotIn("texto privado",rows);self.assertNotIn("abc123",rows);self.assertIn("parameterKeys",rows)
    bad=u.execute("server_status",{},lambda:{"exitCode":67},t.RuntimeContext.create(source="test"));self.assertEqual(bad["completionStatus"],"PARTIALLY_IMPLEMENTED")
+ def test_neural_memory(self):
+  with tempfile.TemporaryDirectory() as d:
+   s=t.RuntimeStore(Path(d)/"runtime.sqlite")
+   a=s.remember("Entrega Beatriz","A Engomadoria Beatriz entrega em até 72 horas.","FACT",["beatriz","entrega"],"beatriz",5,"explicit_user",confidence=1.0)
+   b=s.remember("Projecto Beatriz","Projecto autorizado da engomadoria.","CONCEPT",["beatriz","projecto"],"beatriz",4,"system_config",confidence=1.0)
+   syn=s.link_neurons(a,b,"EXTENDS",0.7,1.0);self.assertTrue(syn.startswith("synapse-"))
+   rows=s.recall("prazo de entrega da Beatriz","beatriz",5);self.assertTrue(rows);self.assertEqual(rows[0]["id"],a)
+   self.assertIn("72 horas",s.neural_context("entrega Beatriz","beatriz"))
+   state=s.consolidate_neurons();self.assertEqual(state["neurons"],2);self.assertEqual(s.health()["synapses"],1)
+   with self.assertRaises(ValueError):s.remember("Adivinhação","Isto veio apenas do modelo.","FACT",source_type="model_guess")
  def test_exception_event(self):
   with tempfile.TemporaryDirectory() as d:
    s=t.RuntimeStore(Path(d)/"runtime.sqlite");u=t.UnifiedExecutionFramework(s)
