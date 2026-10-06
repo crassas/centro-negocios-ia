@@ -13,6 +13,17 @@ class Tests(unittest.TestCase):
   with patch.object(j,"infer",side_effect=AssertionError("LLM called")):
    for text in ["estás aí", "Travis, estás aí?", "Travis: olá", "Jarvis, estás aí?", "Olá"]:
     self.assertEqual(j.route(text)["tool"],"presence")
+ def test_youtube_is_a_direct_action(self):
+  with patch.object(j,"infer",side_effect=AssertionError("LLM called")):
+   for text in ["consegues abrir o YouTube", "Travis, abre o YouTube", "podes abrir YouTube?"]:
+    reply=j.route(text)
+    self.assertEqual(reply["tool"],"open_youtube")
+    self.assertEqual(reply["result"]["url"],"https://www.youtube.com/")
+  self.assertEqual(j.classify("não abrir o YouTube")[0],"local_llm")
+ def test_chat_timeout_does_not_restart_model(self):
+  with patch.object(j,"http",side_effect=[{"status":"ok"},TimeoutError()]) as http,patch.object(j,"llm_start",side_effect=AssertionError("restart")):
+   with self.assertRaisesRegex(RuntimeError,"prazo"):j.infer("pedido")
+   self.assertEqual(http.call_args.kwargs["timeout"],45)
  def test_shared_context_for_reasoning(self):
   with patch.object(j,"infer",return_value="Resposta") as inference:
    j.route("Analisa o meu negócio",{"projects":[{"name":"Pentehouse"}]})
