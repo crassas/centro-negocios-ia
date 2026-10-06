@@ -1199,6 +1199,23 @@ def action_repo_change(task):
             if not edits:
                 planner_error = "Planeador devolveu zero edições. " + plan_summary
                 repair_notes.append(planner_error)
+                if str(task.get("source") or "") == "office-autopilot":
+                    report_task_progress(
+                        task,
+                        "completed",
+                        "Revisão autónoma concluída sem alteração segura."
+                    )
+                    return {
+                        "exitCode": 0,
+                        "stdout": (
+                            "ESCRITÓRIO AUTÓNOMO · REVISÃO CONCLUÍDA\n"
+                            f"Projecto: {target}\n"
+                            "Resultado: sem alterações. O planeador não encontrou melhoria segura e verificável.\n"
+                            + (plan_summary or "Sem justificação adicional.")
+                        ),
+                        "stderr": "",
+                        "durationMs": int((time.time() - started) * 1000),
+                    }
                 continue
 
             try:
