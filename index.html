@@ -18,8 +18,8 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
   <script src="./agent-room.js?v=jarvis-1" defer></script>
   <script src="./app.js?v=travis-panel-2" defer></script>
-  <link rel="stylesheet" href="./travis-hud.css?v=2">
-  <script src="./travis-hud.js?v=2" defer></script>
+  <link rel="stylesheet" href="./travis-hud.css?v=3">
+  <script src="./travis-hud.js?v=3" defer></script>
 </head>
 <body>
 <div class="shell">
@@ -598,6 +598,13 @@
 
 <section id="travis-hud" class="travis-hud" data-state="idle" aria-hidden="true" aria-label="Travis">
   <canvas id="travis-space-canvas" aria-hidden="true"></canvas>
+  <div class="travis-atmosphere" aria-hidden="true">
+    <span class="travis-depth-grid"></span>
+    <span class="travis-volumetric-beam beam-top"></span>
+    <span class="travis-volumetric-beam beam-bottom"></span>
+    <span class="travis-lens-flare"></span>
+    <span class="travis-horizon"></span>
+  </div>
   <button id="travis-hud-close" class="travis-close" type="button" aria-label="Fechar Travis">×</button>
 
   <div class="travis-frame">
@@ -617,13 +624,44 @@
 
     <div class="travis-stage">
       <main class="travis-hero">
-        <div class="travis-orb-shell">
-          <canvas id="travis-core-canvas" aria-hidden="true"></canvas>
-          <span class="travis-orb-base" aria-hidden="true"></span>
-          <span class="travis-boot-flare" aria-hidden="true"></span>
-          <button id="travis-core-trigger" class="travis-core-trigger" type="button" aria-label="Abrir comandos do Travis">
-            <span class="travis-emblem" aria-hidden="true"></span>
-          </button>
+        <div id="travis-orb-parallax" class="travis-orb-parallax">
+          <div class="travis-orb-shell">
+            <span class="travis-orb-shadow" aria-hidden="true"></span>
+            <span class="travis-holo-disc disc-outer" aria-hidden="true"></span>
+            <span class="travis-holo-disc disc-mid" aria-hidden="true"></span>
+            <span class="travis-holo-disc disc-inner" aria-hidden="true"></span>
+            <canvas id="travis-core-canvas" aria-hidden="true"></canvas>
+            <span class="travis-orb-base" aria-hidden="true"></span>
+            <span class="travis-boot-flare" aria-hidden="true"></span>
+
+            <nav class="travis-orbit-menu" aria-label="Comandos Travis">
+              <button class="travis-orbit-node node-centro" data-travis-panel="visao" type="button">
+                <span class="node-ring"></span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>
+                <b>CENTRO</b>
+              </button>
+              <button class="travis-orbit-node node-projectos" data-travis-panel="crm" type="button">
+                <span class="node-ring"></span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v11H4V6Z"/><path d="M8 12h8M8 15h5"/></svg>
+                <b>PROJECTOS</b>
+              </button>
+              <button class="travis-orbit-node node-seo" data-travis-panel="seo" type="button">
+                <span class="node-ring"></span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+                <b>SEO</b>
+              </button>
+              <button class="travis-orbit-node node-agentes" data-travis-panel="agentes" type="button">
+                <span class="node-ring"></span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8a5 5 0 0 1 10 0v8a5 5 0 0 1-10 0V8Z"/><path d="M4 10v4M20 10v4"/></svg>
+                <b>AGENTES</b>
+              </button>
+            </nav>
+
+            <button id="travis-core-trigger" class="travis-core-trigger" type="button" aria-label="Abrir comandos do Travis">
+              <span class="travis-core-glass" aria-hidden="true"></span>
+              <span class="travis-emblem" aria-hidden="true"></span>
+            </button>
+          </div>
         </div>
 
         <div class="travis-title">
@@ -639,34 +677,12 @@
           <div id="travis-status-state" class="travis-status-state">EM ESPERA</div>
         </div>
 
-        <div class="travis-touch-hint">TOCA NO NÚCLEO PARA ABRIR OS COMANDOS</div>
+        <div class="travis-touch-hint">TOCA NO NÚCLEO</div>
       </main>
     </div>
 
-    <div class="travis-mini-state">TRAVIS VISUAL CORE<br>LOCAL-FIRST · FASE DE INTERFACE</div>
-
-    <nav class="travis-command-deck" aria-label="Comandos Travis">
-      <button class="travis-command primary" data-travis-panel="visao" type="button">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>
-        <span>CENTRO</span>
-      </button>
-      <button class="travis-command" data-travis-panel="crm" type="button">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v11H4V6Z"/><path d="M8 12h8M8 15h5"/></svg>
-        <span>PROJECTOS</span>
-      </button>
-      <button class="travis-command" data-travis-panel="seo" type="button">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
-        <span>SEO</span>
-      </button>
-      <button class="travis-command" data-travis-panel="agentes" type="button">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8a5 5 0 0 1 10 0v8a5 5 0 0 1-10 0V8Z"/><path d="M4 10v4M20 10v4"/></svg>
-        <span>AGENTES</span>
-      </button>
-      <button class="travis-command danger" data-travis-action="close" type="button">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
-        <span>FECHAR</span>
-      </button>
-    </nav>
+    <div class="travis-mini-state">TRAVIS VISUAL CORE · V3<br>LOCAL-FIRST · QUASI NORTE</div>
+    <div class="travis-mini-state right">NÚCLEO INTERACTIVO<br>WEBGL · AUDIO · PARALLAX</div>
   </div>
 </section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
