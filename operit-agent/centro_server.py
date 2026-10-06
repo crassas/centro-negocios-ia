@@ -14,6 +14,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
+import travis_core
 
 HOST = "127.0.0.1"
 PORT = 8765
@@ -41,6 +42,8 @@ OLLAMA_KEY_FILE = HOME / ".centro-agent" / "ollama_api_key"
 WORKTREE_ROOT = STATE_DIR / "worktrees"
 CLOUD_BASE = "https://centro-negocios-ai.travisthejarvis.workers.dev"
 AGENT_TOKEN_FILE = HOME / ".centro-agent" / "token"
+TRAVIS_STORE = travis_core.RuntimeStore(STATE_DIR / "runtime.sqlite")
+TRAVIS_UTEF = travis_core.UnifiedExecutionFramework(TRAVIS_STORE)
 
 REPOS = {
     "centro-negocios-ia": "https://github.com/crassas/centro-negocios-ia.git",
@@ -115,6 +118,8 @@ def append_history(task, result):
             "label": str(task.get("label") or ""),
             "exitCode": int(result.get("exitCode", 1)),
             "durationMs": int(result.get("durationMs", 0)),
+            "correlationId": str(result.get("correlationId") or ""),
+            "completionStatus": str(result.get("completionStatus") or ""),
             "error": (
                 str(result.get("stderr") or "")[-1500:]
                 if int(result.get("exitCode", 1)) != 0
@@ -145,6 +150,7 @@ def capabilities():
     return {
         "mode": "local-first",
         "paidApiFallback": False,
+        "travisCore": travis_core.registry_snapshot(),
         "actions": [
             "server_status",
             "station_status",
@@ -2499,6 +2505,7 @@ class Handler(BaseHTTPRequestHandler):
                         "active": agent_active,
                         "pid": agent_pid,
                     },
+                    "travisCore": TRAVIS_STORE.health(),
                 },
             )
             return
@@ -2521,6 +2528,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(400, {"ok": False, "error": "JSON inválido."})
                 return
             task = task if isinstance(task, dict) else {}
+            try:
+                travis_core.validate_centro_task(task, capabilities()["actions"], REPOS.keys())
+            except ValueError as exc:
+                self.send_json(400, {"ok": False, "error": str(exc)})
+                return
             if not EXECUTION_LOCK.acquire(blocking=False):
                 self.send_json(503, {"ok": False, "error": "Executor ocupado; repetir mais tarde."})
                 return
@@ -2536,7 +2548,23 @@ class Handler(BaseHTTPRequestHandler):
                 # Termina antes da lease de 20 minutos da fila; deixa margem para entregar.
                 EXECUTION_STATE.deadline = time.monotonic()+840
                 try:
-                    result = execute_action(task)
+                    runtime = travis_core.RuntimeContext.create(
+                        source=str(task.get("source") or "centro-server"),
+                        project_id=str(task.get("target") or ""),
+                        request_id=task_id,
+                    )
+                    arg_keys = sorted(str(key) for key in ((task.get("args") or {}).keys()))
+                    outcome = TRAVIS_UTEF.execute(
+                        str(task.get("action") or ""),
+                        {"target": str(task.get("target") or ""), "argKeys": arg_keys},
+                        lambda: execute_action(task),
+                        runtime,
+                    )
+                    result = outcome["result"]
+                    if isinstance(result, dict):
+                        result = dict(result)
+                        result.setdefault("correlationId", outcome["correlationId"])
+                        result.setdefault("completionStatus", outcome["completionStatus"])
                 except Exception as exc:
                     result = {"exitCode": 1, "stdout": "", "stderr": type(exc).__name__+": "+str(exc)[:1500], "durationMs": 0}
                 append_history(task, result)
