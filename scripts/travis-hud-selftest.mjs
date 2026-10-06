@@ -1,64 +1,45 @@
 import fs from 'node:fs';
 
-const html = fs.readFileSync('index.html','utf8');
-const css = fs.readFileSync('travis-hud.css','utf8');
-const js = fs.readFileSync('travis-hud.js','utf8');
-const sw = fs.readFileSync('sw.js','utf8');
+const html=fs.readFileSync('index.html','utf8');
+const css=fs.readFileSync('travis-hud.css','utf8');
+const hud=fs.readFileSync('travis-hud.js','utf8');
+const scene=fs.readFileSync('travis-scene.js','utf8');
+const sw=fs.readFileSync('sw.js','utf8');
+const glb=fs.statSync('assets/travis/travis-core.glb');
 
-for (const token of [
+for(const token of [
   'id="travis-hud"',
-  'id="travis-space-canvas"',
-  'id="travis-core-canvas"',
+  'id="travis-three-stage"',
   'id="travis-core-trigger"',
   'class="travis-orbit-menu"',
-  'class="travis-orbit-node node-centro"',
-  'class="travis-orbit-node node-projectos"',
-  'class="travis-orbit-node node-seo"',
-  'class="travis-orbit-node node-agentes"',
-  './travis-hud.css?v=3',
-  './travis-hud.js?v=3',
-  '<meta name="theme-color" content="#02060b">'
-]) {
-  if (!html.includes(token)) throw new Error('Travis V3 HTML em falta: '+token);
+  './travis-hud.css?v=4',
+  './travis-hud.js?v=4',
+  './travis-scene.js?v=4',
+  'type="importmap"',
+  '"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"'
+]){
+  if(!html.includes(token)) throw new Error('Travis V4 HTML em falta: '+token);
 }
 
-for (const token of [
-  'id="travis-panel"',
-  './travis-panel.css',
-  './travis-panel.js',
-  'class="travis-command-deck"'
-]) {
-  if (html.includes(token)) throw new Error('Elemento Travis antigo ainda ligado: '+token);
+for(const token of ['id="travis-panel"','./travis-panel.css','./travis-panel.js','id="travis-core-canvas"']){
+  if(html.includes(token)) throw new Error('Renderer/Travis antigo ainda ligado: '+token);
 }
 
-for (const token of [
-  '.travis-depth-grid',
-  '.travis-volumetric-beam',
-  '.travis-orbit-node',
-  '.travis-hud.deck-open .node-centro',
-  '.travis-orb-parallax'
-]) {
-  if (!css.includes(token)) throw new Error('Travis V3 CSS em falta: '+token);
+for(const token of [
+  "import * as THREE from 'three'",
+  'GLTFLoader',
+  'EffectComposer',
+  'UnrealBloomPass',
+  "./assets/travis/travis-core.glb?v=1",
+  'ACESFilmicToneMapping',
+  'window.Travis3D'
+]){
+  if(!scene.includes(token)) throw new Error('Motor 3D em falta: '+token);
 }
 
-for (const token of [
-  "getContext('webgl'",
-  'powerPreference',
-  'function animateParallax()',
-  'function bootTone()',
-  'function interactionTone(',
-  'window.TravisVisual',
-  'window.TravisPanel='
-]) {
-  if (!js.includes(token)) throw new Error('Travis V3 motor em falta: '+token);
-}
+if(glb.size < 100000) throw new Error('GLB Travis parece vazio ou inválido: '+glb.size);
+if(!css.includes('#travis-three-stage')) throw new Error('Mount CSS 3D em falta.');
+if(!hud.includes("new CustomEvent('travis3dcommands'")) throw new Error('Ligação HUD→3D em falta.');
+if(!sw.includes('travis-scene.js?v=4') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache V4 em falta.');
 
-if (js.includes('window.TravisBridge.ask')) {
-  throw new Error('HUD visual voltou a ficar ligado ao Travis antigo.');
-}
-
-if (!sw.includes('travis-hud.js?v=3') || !sw.includes('travis-hud.css?v=3')) {
-  throw new Error('Cache PWA V3 em falta.');
-}
-
-console.log('TRAVIS HUD V3 SELFTEST OK');
+console.log('TRAVIS REAL 3D V4 SELFTEST OK',glb.size,'bytes');
