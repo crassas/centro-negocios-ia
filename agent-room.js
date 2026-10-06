@@ -7,6 +7,7 @@ window.CentroRoom=(()=>{
     {id:'executor',name:'Operit',role:'Edição e execução',color:'#6384eb',home:[50,76],phases:['editing'],actions:['repo_change','git_pull','git_status','system_info','site_check']},
     {id:'reviewer',name:'Revisor',role:'Testes e controlo',color:'#8b78c9',home:[69,76],phases:['validating'],actions:[]},
     {id:'publisher',name:'Publicador',role:'Commit e publicação',color:'#4d9b78',home:[88,76],phases:['publishing','completed'],actions:[]},
+    {id:'scout',name:'Prospector',role:'Novos trabalhos',color:'#c88a52',home:[69,54],phases:[],actions:[]},
     {id:'laya',name:'Laya',role:'Análise rápida · auxiliar',color:'#ac79cf',home:[88,54],phases:[],actions:['laya_status','laya_decide']}
   ];
 
@@ -20,7 +21,7 @@ window.CentroRoom=(()=>{
     blocked:'Bloqueado'
   };
 
-  let taskStats=null,connectionFailed=false;
+  let taskStats=null,connectionFailed=false,office=null;
   let rows=[],available=false,selected='coordinator',mounted=false,finance=null,conversationBusy=false,lastDetailHTML='',trackedTask='';
 
   const el=id=>document.getElementById(id);
@@ -105,6 +106,18 @@ window.CentroRoom=(()=>{
       const queued=Number(taskStats?.queued)||0;
       if(role.id==='coordinator'&&queued>0){
         return {state:'waiting',label:queued+' tarefa(s) na fila',speech:queued+' na fila',task:null,phase:'received',zone:'home'};
+      }
+      if(office?.enabled){
+        if(role.id==='coordinator'){
+          return {state:'monitoring',label:'Modo autónomo activo · organiza a próxima ronda',speech:'A organizar',task:null,phase:'',zone:'home'};
+        }
+        if(role.id==='reviewer'){
+          return {state:'monitoring',label:'Auditorias técnicas e sites sob vigilância',speech:'A vigiar sites',task:null,phase:'',zone:'home'};
+        }
+        if(role.id==='scout'){
+          const count=Number(office?.opportunityCount)||0;
+          return {state:'monitoring',label:'Radar de novos trabalhos · '+count+' sinais guardados',speech:'Radar activo',task:null,phase:'',zone:'home'};
+        }
       }
       return {state:'idle',label:'Posto livre',speech:'',task:null,phase:'',zone:'home'};
     }
@@ -200,6 +213,19 @@ window.CentroRoom=(()=>{
       return '<span class="room-centre-icon">▤</span><span class="room-eyebrow">FLUXO DE TRABALHO</span><h2>Um pedido, uma fase de cada vez</h2><p>Coordenador → Planeador → Operit → Revisor → Publicador. A Laya é auxiliar e nunca bloqueia este percurso.</p><p class="room-truth">A fase mostrada vem do executor real.</p>';
     }
 
+    if(selected==='scout'){
+      const opportunities=Array.isArray(office?.opportunities)?office.opportunities:[];
+      const rowsHtml=opportunities.slice(0,6).map(row=>
+        '<span><b>'+escape(row.name||'Negócio local')+'</b><small>'+escape(row.category||'')+' · '+escape(row.area||'Porto')+'</small></span>'
+      ).join('');
+      return '<div class="room-detail-avatar">'+sprite('#c88a52')+'</div>'+
+        '<span class="room-eyebrow">NOVOS TRABALHOS</span><h2>Prospector</h2>'+
+        '<strong class="room-detail-state" data-state="monitoring">Radar autónomo activo</strong>'+
+        '<p>Procura sinais gratuitos em dados públicos. “Sem website registado” não significa “sem website”: cada lead precisa de verificação antes de contacto.</p>'+
+        '<div class="room-prospect-list">'+(rowsHtml||'<span><b>Sem sinais guardados</b><small>A próxima ronda volta a procurar.</small></span>')+'</div>'+
+        '<p class="room-truth">Fonte actual: OpenStreetMap. Sem outreach automático.</p>';
+    }
+
     const r=roles.find(r=>r.id===selected)||roles[0];
     const m=model(r),t=m.task;
     return '<div class="room-detail-avatar">'+sprite(r.color)+'</div>'+
@@ -238,6 +264,14 @@ window.CentroRoom=(()=>{
     }
     if(Number(taskStats?.queued)>0)return {label:'Fila pronta para avançar',running:Number(taskStats?.running)||0,queued:Number(taskStats?.queued)||0};
     if(task?.status==='completed'&&Number(task.exitCode)!==0)return {label:'Última tarefa precisa de atenção',running:0,queued:Number(taskStats?.queued)||0};
+    if(office?.enabled){
+      const mins=office.nextCycleAt?Math.max(0,Math.ceil((Number(office.nextCycleAt)-Date.now())/60000)):null;
+      return {
+        label:'Escritório autónomo · '+(mins==null?'vigilância activa':'próxima ronda em '+mins+' min'),
+        running:Number(taskStats?.running)||0,
+        queued:Number(taskStats?.queued)||0
+      };
+    }
     return {label:'Escritório pronto',running:Number(taskStats?.running)||0,queued:Number(taskStats?.queued)||0};
   }
 
@@ -253,7 +287,9 @@ window.CentroRoom=(()=>{
       )));
     });
     const job=el('room-current-job');
-    if(job)job.textContent=task?(short(task.label||task.action||'Tarefa',48)+(task.target?' · '+task.target:'')):'Sem tarefa activa';
+    if(job)job.textContent=task
+      ? (short(task.label||task.action||'Tarefa',48)+(task.target?' · '+task.target:''))
+      : (office?.enabled?short(office.lastAction||'Vigilância automática activa',68):'Sem tarefa activa');
   }
 
   function paint(){
@@ -273,7 +309,7 @@ window.CentroRoom=(()=>{
       const bubble=b.querySelector('.room-bubble');
       bubble.textContent=m.speech||'';
       bubble.hidden=!m.speech;
-      b.querySelector('.room-status').textContent=m.state==='working'?phaseLabel(m.phase):m.state==='waiting'?'Na fila':m.state==='error'?'Atenção':m.state==='unknown'?'Sem ligação':m.state==='done'?'Concluído':'Livre';
+      b.querySelector('.room-status').textContent=m.state==='working'?phaseLabel(m.phase):m.state==='monitoring'?'Vigilância':m.state==='waiting'?'Na fila':m.state==='error'?'Atenção':m.state==='unknown'?'Sem ligação':m.state==='done'?'Concluído':'Livre';
       b.setAttribute('aria-label',r.name+': '+m.label);
     }
 
@@ -315,6 +351,7 @@ window.CentroRoom=(()=>{
     connectionFailed=false;
     taskStats=payload?.stats&&typeof payload.stats==='object'?payload.stats:null;
     rows=Array.isArray(payload?.executions)?payload.executions:[];
+    office=payload?.office&&typeof payload.office==='object'?payload.office:null;
     available=true;
     if(trackedTask){
       const tracked=rows.find(t=>t.id===trackedTask);
