@@ -1,3 +1,5 @@
+[Reading 58 lines from start (total: 58 lines, 0 remaining)]
+
 name: Deploy GitHub Pages
 
 on:
@@ -30,7 +32,7 @@ jobs:
         run: |
           node --check app.js
           node scripts/travis-panel-selftest.mjs
-          node --check travis-hud.js
+          node --check travis-3d.mjs
           node scripts/travis-hud-selftest.mjs
           node --check agent-room.js
           node scripts/agent-room-selftest.mjs
@@ -56,3 +58,5 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+[executed on device: localhost (8ad4e1a5-6b39-4f45-82a2-0253dd9519fb)]
