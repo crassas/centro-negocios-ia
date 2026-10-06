@@ -61,7 +61,8 @@ def validate_centro_task(task,allowed_actions:Iterable[str],allowed_targets:Iter
  action=str(task.get("action") or "").strip()
  if action not in set(allowed_actions) or action not in CAPABILITIES:raise ValueError("Acção não registada")
  target=str(task.get("target") or "").strip()
- if target and target!="local" and target not in set(allowed_targets):raise ValueError("Target não autorizado")
+ repo_target_actions={"repo_change","git_status","git_pull","claude_query"}
+ if action in repo_target_actions and target and target!="local" and target not in set(allowed_targets):raise ValueError("Target não autorizado")
  args=task.get("args") or {}
  if not isinstance(args,dict):raise ValueError("args deve ser um objecto")
  if len(json.dumps(args,ensure_ascii=False))>56000:raise ValueError("Parâmetros excedem o limite")
