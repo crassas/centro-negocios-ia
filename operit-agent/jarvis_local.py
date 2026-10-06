@@ -234,7 +234,7 @@ def transcribe(audio):
  if len(audio)>12*1024*1024:raise ValueError("Áudio demasiado grande")
  with tempfile.TemporaryDirectory(prefix="jarvis-stt-") as tmp:
   src=Path(tmp)/"input";wav=Path(tmp)/"audio.wav";out=Path(tmp)/"transcript";src.write_bytes(audio)
-  command(["ffmpeg","-v","error","-y","-i",str(src),"-t","45","-ar","16000","-ac","1",str(wav)],timeout=40)
+  command(["ffmpeg","-v","error","-y","-protocol_whitelist","file,pipe","-i",str(src),"-t","45","-ar","16000","-ac","1",str(wav)],timeout=40)
   if (ROOT/"bin/whisper-cli").is_file():
    command([str(ROOT/"bin/whisper-cli"),"-m",str(MODELS/"stt/ggml-base.bin"),"-f",str(wav),"-l","pt","-t","2","-otxt","-of",str(out)],timeout=180)
   else:
