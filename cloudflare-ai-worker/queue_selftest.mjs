@@ -117,3 +117,12 @@ try{
   console.log('OK high-autonomy policy: routine SEO auto-queues; security/credentials require Telegram; duplicate request creates no second task; submit requires authentication');
  }finally{globalThis.fetch=originalFetch;}
 }finally{Date.now=realNow;}
+{
+ const request=()=>new Request('https://test/api/assist',{method:'POST',headers:{origin:'https://crassas.github.io'},body:JSON.stringify({question:'Olá',mode:'conversation',context:{}})});
+ const models=[];
+ const response=await worker.fetch(request(),{AI:{async run(model){models.push(model);if(models.length===1)throw Error('primary unavailable');return {response:'Estou aqui.'}}}},{});
+ assert.equal(response.status,200);assert.equal((await response.json()).answer,'Estou aqui.');assert.equal(models[1],'@cf/meta/llama-3.2-3b-instruct');
+ const unavailable=await worker.fetch(request(),{AI:{async run(){throw Error('daily limit exceeded')}}},{});
+ assert.equal(unavailable.status,503);const error=await unavailable.json();assert.equal(error.ok,false);assert.equal(error.reason,'quota');assert.equal(error.answer,undefined);
+ console.log('OK conversation uses real alternate inference; quota failure never becomes a successful answer');
+}

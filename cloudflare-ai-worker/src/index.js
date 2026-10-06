@@ -670,6 +670,7 @@ export class TaskQueue extends DurableObject {
 
 const FAST_MODEL='@cf/zai-org/glm-4.7-flash';
 const MODEL='@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+const CONVERSATION_FALLBACK='@cf/meta/llama-3.2-3b-instruct';
 const DEEP_MODEL='@cf/openai/gpt-oss-120b';
 const AGENT_MODEL='@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const QWEN_MODEL='@cf/qwen/qwen3-30b-a3b-fp8';
@@ -3181,15 +3182,15 @@ export default {
           return json({ok:true,summary:String(parsed.summary||'').trim()||'Análise concluída.',actions,model:usedModel,usage:result?.usage||null},200,origin);
         }
 
-        let result=null,usedModel=MODEL,answer='';
+        let result=null,usedModel=MODEL,answer='',modelError='';
         try{
           result=await runAssist(env,question,context);
           answer=typeof result?.response==='string'?result.response.trim():'';
-        }catch{}
+        }catch(error){modelError=String(error?.message||error)}
         if(!answer){
-          usedModel=FAST_MODEL;
+          usedModel=body?.mode==='conversation'?CONVERSATION_FALLBACK:FAST_MODEL;
           try{
-            result=await env.AI.run(FAST_MODEL,{
+            result=await env.AI.run(usedModel,{
               messages:[
                 {role:'system',content:baseSystem()},
                 {role:'user',content:'PEDIDO:\n'+question+'\n\nDADOS ACTUAIS:\n'+JSON.stringify(context).slice(0,30000)}
@@ -3198,9 +3199,13 @@ export default {
               temperature:0.2
             });
             answer=typeof result?.response==='string'?result.response.trim():'';
-          }catch{}
+          }catch(error){modelError=String(error?.message||error)}
         }
-        if(!answer)return json({ok:true,answer:'IA temporariamente sem resposta. A estação e o Telegram continuam operacionais.',model:'fallback-local',usage:null},200,origin);
+        if(!answer){
+          const quota=/(quota|neurons|rate.limit|limit.exceeded|daily.limit|too.many.requests)/i.test(modelError);
+          console.warn('Workers AI failed',modelError.slice(0,160));
+          return json({ok:false,error:quota?'O limite de utilização do modelo foi atingido. A conversa não recebeu resposta.':'O modelo de conversa não respondeu. Podes tentar novamente ou usar a voz no telemóvel.',reason:quota?'quota':'model_unavailable'},503,origin);
+        }
         return json({ok:true,answer,model:usedModel,usage:result?.usage||null},200,origin);
       }catch(error){
         return json({ok:false,error:'Falha no Workers AI: '+String(error?.message||error)},500,origin);
