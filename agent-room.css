@@ -157,3 +157,25 @@
   .room-phase-history>span{grid-template-columns:7px 57px minmax(0,1fr);gap:5px}
   .room-phase-history small{font-size:7px}
 }
+
+
+/* Autonomous office states */
+.room-actor[data-state=monitoring] .room-status{
+  background:#e3f0ed;border-color:#91b9ae;color:#3d7668
+}
+.room-actor[data-state=monitoring] .room-monitor i{
+  background-color:#a8d3c7;
+  animation:room-screen 2.2s steps(2,end) infinite
+}
+.room-actor[data-state=monitoring] .room-sprite{
+  filter:drop-shadow(0 3px 2px rgba(52,107,92,.10))
+}
+.room-detail-state[data-state=monitoring]{color:#3f7668}
+.room-prospect-list{display:grid;gap:7px;margin:14px 0}
+.room-prospect-list>span{
+  display:grid;gap:2px;padding:9px 10px;border-radius:8px;
+  background:#f6f3ec;border:1px solid #e5ded0
+}
+.room-prospect-list b{font-size:9px;color:#5c4a35}
+.room-prospect-list small{font-size:8px;color:#8b7c69}
+.room-legend i[data-state=monitoring],i[data-state=monitoring]{background:#5b9b8a}
