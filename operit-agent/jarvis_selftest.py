@@ -7,8 +7,10 @@ spec=importlib.util.spec_from_file_location("jarvis",Path(__file__).with_name("j
 j=importlib.util.module_from_spec(spec);spec.loader.exec_module(j)
 class Tests(unittest.TestCase):
  def setUp(self):
-  self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.old=j.ROOT;j.ROOT=self.root
- def tearDown(self):j.ROOT=self.old;self.tmp.cleanup()
+  self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.old=j.ROOT;self.old_store=j.TRAVIS_STORE;self.old_utef=j.TRAVIS_UTEF;self.old_seed=j.NEURAL_SEEDED;j.ROOT=self.root
+  j.TRAVIS_STORE=j.travis_core.RuntimeStore(self.root/"memory.sqlite");j.TRAVIS_UTEF=j.travis_core.UnifiedExecutionFramework(j.TRAVIS_STORE);j.NEURAL_SEEDED=False
+ def tearDown(self):
+  j.ROOT=self.old;j.TRAVIS_STORE=self.old_store;j.TRAVIS_UTEF=self.old_utef;j.NEURAL_SEEDED=self.old_seed;self.tmp.cleanup()
  def test_presence_without_llm(self):
   with patch.object(j,"infer",side_effect=AssertionError("LLM called")):
    for text in ["estás aí", "Travis, estás aí?", "Travis: olá", "Jarvis, estás aí?", "Olá"]:
@@ -42,6 +44,15 @@ class Tests(unittest.TestCase):
   for text,tool in cases.items():self.assertEqual(j.classify("Travis, "+text)[0],tool)
   with patch.object(j,"infer",side_effect=AssertionError("LLM called")),patch.object(j,"doctor",return_value={"centro":{"ok":True},"ram_available_mb":1024}):
    self.assertEqual(j.route("Estado da estação")["tool"],"system_status")
+ def test_neural_memory_assists_reasoning(self):
+  saved=j.route("Travis, lembra-te que a Beatriz entrega em até 72 horas")
+  self.assertEqual(saved["tool"],"note_fact");self.assertTrue(saved["result"]["neuronId"].startswith("neuron-"))
+  status=j.route("Estado dos neurónios");self.assertGreaterEqual(status["result"]["neurons"],6)
+  with patch.object(j,"infer",return_value="Resposta") as inference:
+   j.route("Qual é o prazo de entrega da Beatriz?")
+   prompt=inference.call_args.args[0]
+   self.assertIn("Memória semântica local confirmada",prompt);self.assertIn("72 horas",prompt)
+  recalled=j.route("Procura na memória sobre a Beatriz");self.assertEqual(recalled["tool"],"neural_recall");self.assertTrue(recalled["result"])
  def test_memory_survives_connection(self):
   task=j.execute("create_task",{"title":"Rever a página amanhã"})
   self.assertEqual(j.execute("task_list",{})[0]["id"],task["id"])
