@@ -20,6 +20,8 @@
   <script src="./app.js?v=travis-panel-2" defer></script>
   <link rel="stylesheet" href="./travis-panel.css?v=1">
   <script src="./travis-panel.js?v=1" defer></script>
+  <link rel="stylesheet" href="./travis-hud.css?v=1">
+  <script src="./travis-hud.js?v=1" defer></script>
 </head>
 <body>
 <div class="shell">
@@ -590,7 +592,7 @@
 </nav>
 
 <button class="return-command" id="return-top" type="button" title="Voltar ao comando">⌃</button>
-<button id="travis-launcher" type="button" aria-haspopup="dialog" aria-controls="travis-panel" aria-expanded="false"><i aria-hidden="true">T</i>Travis</button>
+<button id="travis-launcher" class="travis-launch" type="button" aria-haspopup="dialog" aria-controls="travis-panel" aria-expanded="false"><i aria-hidden="true">T</i>Travis</button>
 <dialog id="travis-panel" aria-labelledby="travis-title"><div class="travis-shell">
 <header><div><small>CENTRO DE NEGÓCIOS</small><strong id="travis-title">Travis.</strong></div><button id="travis-close" type="button" aria-label="Fechar conversa">×</button></header>
 <div class="travis-core" aria-hidden="true" data-travis-avatar><span>T</span></div>
@@ -602,6 +604,114 @@
 <div class="travis-options"><label><input id="travis-read-aloud" type="checkbox" checked>Ouvir respostas</label><label><input id="travis-continuous" type="checkbox">Conversa contínua</label></div>
 <small>Ditado e conversa usam a ligação à Internet. <a href="http://127.0.0.1:8770/" target="_blank" rel="noopener">Voz no telemóvel</a></small></div>
 </div></dialog>
+
+<section id="travis-hud" class="travis-hud" data-state="idle" aria-hidden="true" aria-label="Interface visual do Travis">
+  <canvas id="travis-particles" aria-hidden="true"></canvas>
+  <button id="travis-hud-close" class="travis-close" type="button" aria-label="Fechar interface Travis">×</button>
+
+  <div class="travis-frame">
+    <header class="travis-topbar">
+      <div class="travis-brand">
+        <span class="travis-brand-mark" aria-hidden="true"></span>
+        <div><strong>QUASI NORTE</strong><small>SOLUÇÕES DIGITAIS</small></div>
+      </div>
+      <div class="travis-clock">
+        <strong id="travis-clock-time">--:--</strong>
+        <span id="travis-clock-date">CENTRO DE NEGÓCIOS</span>
+      </div>
+    </header>
+
+    <div class="travis-stage">
+      <aside class="travis-side travis-side-left" aria-label="Princípios Travis">
+        <div class="travis-kicker">CENTRO DE NEGÓCIOS</div>
+        <div class="travis-word-stack">
+          <b>IDEIAS</b>
+          <b>PLANOS</b>
+          <b>AUTOMAÇÃO</b>
+          <b>RESULTADOS</b>
+        </div>
+        <div class="travis-side-rule"></div>
+        <p class="travis-side-copy">Mais que uma interface.<br>Um centro de execução.</p>
+      </aside>
+
+      <main class="travis-centre">
+        <div class="travis-hologram" aria-hidden="true">
+          <span class="travis-beam"></span>
+          <span class="travis-ground-glow"></span>
+          <span class="travis-orbit"></span>
+          <span class="travis-orbit o2"></span>
+          <span class="travis-orbit o3"></span>
+          <span class="travis-ring r1"></span>
+          <span class="travis-ring r2"></span>
+          <span class="travis-ring r3"></span>
+          <span class="travis-ring r4"></span>
+          <span class="travis-hud-core"><span class="travis-emblem"></span></span>
+        </div>
+
+        <div class="travis-title">
+          <h1>TR<span class="a">A</span>VIS</h1>
+          <p>A SUA IA · CENTRO DE COMANDO</p>
+        </div>
+
+        <div class="travis-voice-card" role="status" aria-live="polite">
+          <div class="travis-wave" aria-hidden="true">
+            <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+          </div>
+          <div id="travis-voice-text" class="travis-voice-text">Em repouso.</div>
+          <div id="travis-voice-state" class="travis-voice-state">EM ESPERA</div>
+        </div>
+      </main>
+
+      <aside class="travis-side travis-side-right">
+        <div class="travis-status-panel">
+          <div class="travis-status-title">INICIALIZANDO TRAVIS...</div>
+          <div class="travis-checks">
+            <div class="travis-check"><i>·</i><span>Interface visual</span></div>
+            <div class="travis-check"><i>·</i><span>Centro de Negócios</span></div>
+            <div class="travis-check"><i>·</i><span>Agentes</span></div>
+            <div class="travis-check"><i>·</i><span>Ferramentas</span></div>
+            <div class="travis-check"><i>·</i><span>Memória operacional</span></div>
+          </div>
+          <div id="travis-status-ready" class="travis-status-ready">PRONTO</div>
+        </div>
+        <div class="travis-side-rule"></div>
+        <div class="travis-word-stack">
+          <b>PENSA</b>
+          <b>RESPONDE</b>
+          <b>EXECUTA</b>
+        </div>
+        <p class="travis-side-copy">Interface local-first<br>preparada para voz.</p>
+      </aside>
+    </div>
+
+    <nav class="travis-modules" aria-label="Atalhos Travis">
+      <button class="travis-module is-primary" data-target="conversation" type="button" title="Abrir conversa Travis">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 3V5Z"/><path d="M8 9h8M8 12h5"/></svg><span>CONVERSA</span>
+      </button>
+      <button class="travis-module" data-target="empresa" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v3M18 3v3M4 8h16v12H4V8Z"/><path d="M8 12h3M8 16h5"/></svg><span>PLANEAMENTO</span>
+      </button>
+      <button class="travis-module" data-target="assistente" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="4"/><path d="m5.6 5.6 2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg><span>AUTOMAÇÃO</span>
+      </button>
+      <button class="travis-module" data-target="crm" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v11H4V6Z"/><path d="M8 12h8M8 15h5"/></svg><span>PROJECTOS</span>
+      </button>
+      <button class="travis-module" data-target="seo" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4M8 11h6M11 8v6"/></svg><span>PESQUISA</span>
+      </button>
+      <button class="travis-module" data-target="agentes" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8a5 5 0 0 1 10 0v8a5 5 0 0 1-10 0V8Z"/><path d="M4 10v4M20 10v4M10 8v8M14 8v8"/></svg><span>AGENTES</span>
+      </button>
+      <button class="travis-module" data-target="visao" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6"/><rect x="14" y="4" width="6" height="6"/><rect x="4" y="14" width="6" height="6"/><rect x="14" y="14" width="6" height="6"/></svg><span>CENTRO</span>
+      </button>
+    </nav>
+
+    <div class="travis-system-note">QUASI NORTE · CENTRO DE NEGÓCIOS<br>INTERFACE HOLOGRÁFICA · FASE VISUAL</div>
+    <div class="travis-system-note right">LOCAL-FIRST<br>TRAVIS VISUAL CORE</div>
+  </div>
+</section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>
