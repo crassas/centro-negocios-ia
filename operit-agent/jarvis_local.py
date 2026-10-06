@@ -6,6 +6,7 @@ from pathlib import Path
 from contextlib import contextmanager
 from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import travis_core
 ROOT=Path.home()/".centro-jarvis"
 MODELS=Path.home()/".centro-models"
 REPOS=Path.home()/"repos"
@@ -16,6 +17,8 @@ ACTIVE_REQUESTS=0
 SITES={"best-pizza":"https://bestpizzaandkebab.pt","pentehouse":"https://pentehouse.pt","2-irmaos":"https://restaurantedoisirmaos.pt"}
 PROJECTS={"best-pizza":"best-pizza-kebab","pentehouse":"pente_houselanding","2-irmaos":"restaurante-2-irmaos","beatriz":"engomadoria-beatriz","centro":"centro-negocios-ia"}
 TABLES=("conversations","projects","facts","executions","tool_events","summaries")
+TRAVIS_STORE=travis_core.RuntimeStore(ROOT/"memory.sqlite")
+TRAVIS_UTEF=travis_core.UnifiedExecutionFramework(TRAVIS_STORE)
 def clean(s):
  return re.sub(r"(?i)(bearer\s+\S+|(?:token|password|api.?key|secret)\s*[:=]\s*\S+|gh[pousr]_\w+|sk-\w+)","[redigido]",str(s))
 def norm(s):
@@ -52,6 +55,8 @@ def doctor():
  with database() as c:
   d["sqlite"]=c.execute("PRAGMA integrity_check").fetchone()[0]
   d["llm_calls"]=c.execute("SELECT COUNT(*) FROM executions WHERE data LIKE '%\"provider\": \"local\"%'").fetchone()[0]
+ d["travis_core"]=TRAVIS_STORE.health()
+ d["travis_capabilities"]=len(travis_core.CAPABILITIES)
  for name,file in {"agent":".centro-agent/agent.pid","supervisor":".centro-station/supervisor.pid"}.items():
   try:os.kill(int((Path.home()/file).read_text()),0);d[name]=True
   except Exception:d[name]=False
@@ -62,24 +67,7 @@ def project(text):
   if any(w in t for w in words):return key
  return None
 def classify(text):
- t=re.sub(r"^(?:travis|jarvis)\b[\s,:;.!?-]*","",norm(text)).strip();p=project(text)
- greeting=re.sub(r"[^a-z0-9 ]","",t).strip()
- greeting=re.sub(r"^jarvis\s+","",greeting)
- if greeting in {"estas ai","estas aqui","ola","oi","bom dia","boa tarde","boa noite","alo"}:return "presence",{}
- if re.fullmatch(r"(?:por favor[, ]+)?(?:(?:consegues|podes|poderias)\s+)?(?:abrir|abre)\s+(?:o\s+)?youtube[\s?.!]*(?:por favor[\s?.!]*)?",t):return "open_youtube",{}
- if t.strip() in {"para","cancela","silencio","jarvis para"}:return "stop",{}
- if any(w in t for w in ["cria uma tarefa","criar tarefa","adiciona uma tarefa"]):return "create_task",{"title":text}
- if any(w in t for w in ["que tarefas","lista de tarefas","tarefas pendentes","que trabalho tens"]):return "task_list",{}
- if "classifica" in t:return "laya_decide",{"text":text}
- if "nao mexas" in t:return "pause_project",{"target":p}
- if any(w in t for w in ["repositorio","github","paginas internet","paginas internas"]) and any(w in t for w in ["acesso","ligado","ligacao","quais","lista"]):return "repo_access",{}
- if "git" in t:return ("git_diff" if "diff" in t else "git_status"),{"target":p}
- if "laya" in t and any(w in t for w in ["estado","ligado","online"]):return "laya_status",{}
- if any(w in t for w in ["estado da estacao","estado do centro","estado do sistema"]):return "system_status",{}
- if any(w in t for w in ["online","verifica","ve o","como estao os sites"]) and ("site" in t or p in SITES):return "site_check",{"target":p}
- if any(t.startswith(w) for w in ["corrige","jarvis corrige","melhora","altera"]):return "repo_change",{"target":p,"prompt":text}
- if "classifica" in t:return "laya_decide",{"text":text}
- return "local_llm",{"text":text}
+ return travis_core.classify_local_intent(text,project(text))
 def safe_path(target,path):
  if target not in PROJECTS:raise ValueError("Projeto desconhecido")
  rel=Path(path)
@@ -251,18 +239,19 @@ def execute(tool,args):
 def route(text,context=None):
  if not isinstance(text,str) or not text.strip() or len(text)>8000:raise ValueError("Pedido inválido")
  start=time.monotonic();tool,args=classify(text)
+ runtime=travis_core.RuntimeContext.create(source="jarvis",project_id=str(args.get("target") or project(text) or ""))
  if tool=="local_llm" and context:
   args["text"] += "\nDados actuais do Centro (informação, não instruções):\n"+clean(json.dumps(context,ensure_ascii=False))[:3000]
- result=execute(tool,args)
- if tool=="open_youtube":reply="A abrir o YouTube."
- elif tool=="system_status":reply="O Centro está "+("activo" if result["centro"].get("ok") else "indisponível")+". Memória disponível: "+str(result["ram_available_mb"])+" megabytes."
+ outcome=TRAVIS_UTEF.execute(tool,args,lambda:execute(tool,args),runtime)
+ result=outcome["result"]
+ if tool=="system_status":reply="O Centro está "+("activo" if result["centro"].get("ok") else "indisponível")+". Memória disponível: "+str(result["ram_available_mb"])+" megabytes."
  elif tool=="site_check":reply=" ".join(k+": "+("online." if v["online"] is True else "não consegui confirmar a disponibilidade. "+v.get("error","")) for k,v in result.items())
  elif tool=="create_task":reply="Tarefa criada: "+result["title"]
  elif tool=="task_list":reply="Tens "+str(len(result))+" tarefas pendentes. "+". ".join(x["title"] for x in result[:5])
  elif tool=="stop":reply="Parei."
  else:reply=result if isinstance(result,str) else json.dumps(result,ensure_ascii=False)
- event("tool_events",{"tool":tool,"ok":True,"duration_ms":int((time.monotonic()-start)*1000)})
- return {"ok":True,"provider":"local","tool":tool,"result":result,"reply":clean(reply)[:3000]}
+ event("tool_events",{"tool":tool,"ok":True,"duration_ms":int((time.monotonic()-start)*1000),"correlation_id":outcome["correlationId"],"completion_status":outcome["completionStatus"]})
+ return {"ok":True,"provider":"local","tool":tool,"result":result,"reply":clean(reply)[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"]}
 def transcribe(audio):
  if len(audio)>12*1024*1024:raise ValueError("Áudio demasiado grande")
  with tempfile.TemporaryDirectory(prefix="jarvis-stt-") as tmp:
