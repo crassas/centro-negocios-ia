@@ -18,11 +18,11 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
   <script src="./agent-room.js?v=jarvis-1" defer></script>
   <script src="./app.js?v=travis-panel-2" defer></script>
-  <link rel="stylesheet" href="./travis-hud.css?v=6">
+  <link rel="stylesheet" href="./travis-hud.css?v=7">
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
-  <script type="module" src="./travis-3d.mjs?v=2"></script>
+  <script type="module" src="./travis-3d.mjs?v=3"></script>
 </head>
 <body>
 <div class="shell">
@@ -619,6 +619,28 @@
   <button id="travis-hud-close" class="travis-close" type="button" aria-label="Fechar Travis">×</button>
   <div id="travis-loading" class="travis-loading">A PREPARAR NÚCLEO 3D…</div>
 
+  <div class="travis-reticle" aria-hidden="true">
+    <i class="r-tl"></i><i class="r-tr"></i><i class="r-bl"></i><i class="r-br"></i>
+    <span class="r-axis horizontal"></span><span class="r-axis vertical"></span>
+  </div>
+
+  <aside class="travis-telemetry left" aria-hidden="true">
+    <span>CORE / 07</span>
+    <b>QUASI LINK</b>
+    <small>SYNC 99.7</small>
+    <small>GYRO ACTIVE</small>
+  </aside>
+
+  <aside class="travis-telemetry right" aria-hidden="true">
+    <span>OPTICAL LAYER</span>
+    <b>PBR · HDR</b>
+    <small>BLOOM SELECTIVE</small>
+    <small>DEPTH TRACK</small>
+  </aside>
+
+  <div class="travis-scan-sweep" aria-hidden="true"></div>
+  <div class="travis-ticker" aria-hidden="true"><span>CORE MATRIX 07 · LOCAL FIRST · QUASI NORTE · VECTOR LINK · ACTIVE · </span></div>
+
   <div class="travis-title" aria-hidden="true">
     <h1>TR<span class="a">A</span>VIS</h1>
     <p>INTERFACE DE COMANDO · QUASI NORTE</p>
@@ -634,7 +656,7 @@
     <div id="travis-status-state" class="travis-status-state">EM ESPERA</div>
   </div>
 
-  <div class="travis-version">TRAVIS 3D CORE · PBR · BLOOM · RAYCAST</div>
+  <div class="travis-version">TRAVIS V7 · HDR · SELECTIVE BLOOM · HOLOGRAM SHADER</div>
 </section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>

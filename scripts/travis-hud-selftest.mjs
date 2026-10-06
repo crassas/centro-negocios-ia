@@ -10,8 +10,8 @@ for(const token of [
   'id="travis-hud"',
   'id="travis-three-canvas"',
   'id="travis-loading"',
-  './travis-hud.css?v=6',
-  './travis-3d.mjs?v=2',
+  './travis-hud.css?v=7',
+  './travis-3d.mjs?v=3',
   'type="importmap"',
   '"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"'
 ]){
@@ -64,8 +64,37 @@ for(const forbidden of [
   if(scene.includes(forbidden)) throw new Error('Comando circular antigo ainda activo: '+forbidden);
 }
 
+
+for(const token of [
+  'ShaderPass',
+  'bloomComposer',
+  'finalComposer',
+  'finalFxPass',
+  'hologramShader',
+  'BLOOM_LAYER',
+  'GridHelper',
+  'orbitParticles',
+  'filamentGroup',
+  'setVoiceLevel',
+  'uAberration',
+  'uGrain',
+  'uScan',
+  'uGlitch'
+]){
+  if(!scene.includes(token)) throw new Error('V7 cinematic layer em falta: '+token);
+}
+
+for(const token of [
+  'class="travis-reticle"',
+  'class="travis-telemetry left"',
+  'class="travis-scan-sweep"',
+  'TRAVIS V7'
+]){
+  if(!html.includes(token)) throw new Error('V7 HUD fino em falta: '+token);
+}
+
 if(glb.size < 500000) throw new Error('GLB Travis demasiado pequeno: '+glb.size);
 if(!css.includes('#travis-three-canvas')) throw new Error('Canvas 3D CSS em falta.');
-if(!sw.includes('travis-3d.mjs?v=2') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
+if(!sw.includes('travis-3d.mjs?v=3') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
 
 console.log('TRAVIS REAL 3D SELFTEST OK',glb.size,'bytes');

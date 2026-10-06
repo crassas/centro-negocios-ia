@@ -4,6 +4,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const $ = (s, r=document) => r.querySelector(s);
@@ -33,8 +34,10 @@ if (!hud || !launcher || !canvas) {
   let renderer;
   let scene;
   let camera;
-  let composer;
-  let bloom;
+  let bloomComposer;
+  let finalComposer;
+  let bloomPass;
+  let finalPass;
   let pmrem;
   let model;
   let coreRoot;
@@ -46,6 +49,10 @@ if (!hud || !launcher || !canvas) {
   let floorHalo;
   let beamTop;
   let beamBottom;
+  let gridFloor;
+  let orbitParticles;
+  let filamentGroup;
+  let hologramMaterial;
   let commandRoot;
   let commandNodes = [];
   let commandLines = [];
@@ -67,7 +74,14 @@ if (!hud || !launcher || !canvas) {
   let tiltTarget = new THREE.Vector2();
   let tiltNow = new THREE.Vector2();
   let resizeTimer = 0;
+  let externalVoiceLevel = null;
+  let speechLevel = 0;
+  let flashPower = 0;
+  let glitchPower = 0;
+  let nextGlitchAt = performance.now() + 4500;
+  let stateChangedAt = performance.now();
 
+  const BLOOM_LAYER = 1;
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
 
@@ -84,11 +98,155 @@ if (!hud || !launcher || !canvas) {
   }
 
   function setState(next='ready', message='') {
+    const previous=state;
     state = next;
+    stateChangedAt = performance.now();
+    if (next==='speaking' && previous!=='speaking') flashPower=1;
+    if (next==='listening' && previous!=='listening') flashPower=Math.max(flashPower,.38);
     hud.dataset.state = next;
     const [copy,label] = stateCopy[next] || stateCopy.ready;
     if (statusMessage) statusMessage.textContent = message || copy;
     if (statusState) statusState.textContent = label;
+  }
+
+  function markBloom(object) {
+    if (!object) return object;
+    object.layers.enable(BLOOM_LAYER);
+    return object;
+  }
+
+  function finalFxPass() {
+    return new ShaderPass(new THREE.ShaderMaterial({
+      uniforms:{
+        tDiffuse:{value:null},
+        bloomTexture:{value:null},
+        uTime:{value:0},
+        uResolution:{value:new THREE.Vector2(1,1)},
+        uAberration:{value:.00055},
+        uGrain:{value:.018},
+        uScan:{value:.022},
+        uGlitch:{value:0},
+        uFlash:{value:0}
+      },
+      vertexShader:`
+        varying vec2 vUv;
+        void main(){
+          vUv=uv;
+          gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);
+        }
+      `,
+      fragmentShader:`
+        precision highp float;
+        varying vec2 vUv;
+        uniform sampler2D tDiffuse;
+        uniform sampler2D bloomTexture;
+        uniform float uTime;
+        uniform vec2 uResolution;
+        uniform float uAberration;
+        uniform float uGrain;
+        uniform float uScan;
+        uniform float uGlitch;
+        uniform float uFlash;
+
+        float hash21(vec2 p){
+          p=fract(p*vec2(123.34,456.21));
+          p+=dot(p,p+45.32);
+          return fract(p.x*p.y);
+        }
+
+        void main(){
+          vec2 uv=vUv;
+          float band=floor(uv.y*74.0);
+          float glitchLine=(hash21(vec2(band,floor(uTime*28.0)))-.5)*uGlitch*.014;
+          uv.x+=glitchLine;
+
+          vec2 radial=uv-.5;
+          vec2 off=radial*uAberration*(1.0+uGlitch*4.0);
+          float r=texture2D(tDiffuse,uv+off).r;
+          float g=texture2D(tDiffuse,uv).g;
+          float b=texture2D(tDiffuse,uv-off).b;
+          vec3 base=vec3(r,g,b);
+          vec3 bloom=texture2D(bloomTexture,uv).rgb;
+
+          float scan=.5+.5*sin(uv.y*uResolution.y*1.32);
+          base*=1.0-uScan*scan;
+
+          float grain=(hash21(uv*uResolution.xy+uTime*vec2(31.7,17.3))-.5)*uGrain;
+          base+=grain;
+
+          float d=distance(uv,vec2(.5));
+          float vignette=1.0-smoothstep(.48,.78,d)*.34;
+          vec3 color=(base+bloom*1.12)*vignette;
+          color+=vec3(.72,.94,1.0)*uFlash*.12;
+
+          gl_FragColor=vec4(max(color,vec3(0.0)),1.0);
+        }
+      `,
+      depthWrite:false,
+      depthTest:false
+    }), 'tDiffuse');
+  }
+
+  function hologramShader() {
+    return new THREE.ShaderMaterial({
+      uniforms:{
+        uTime:{value:0},
+        uColor:{value:new THREE.Color(0.10,1.15,2.0)},
+        uOpacity:{value:.46},
+        uGlitch:{value:0},
+        uState:{value:0}
+      },
+      vertexShader:`
+        varying vec3 vNormalV;
+        varying vec3 vViewDir;
+        varying float vLocalY;
+        uniform float uTime;
+        uniform float uGlitch;
+        void main(){
+          vec3 p=position;
+          float slice=step(.82,fract((p.y+2.0)*7.0+uTime*13.0));
+          p.x+=sin(p.y*52.0+uTime*95.0)*uGlitch*slice*.025;
+          vec4 mv=modelViewMatrix*vec4(p,1.0);
+          vNormalV=normalize(normalMatrix*normal);
+          vViewDir=normalize(-mv.xyz);
+          vLocalY=p.y;
+          gl_Position=projectionMatrix*mv;
+        }
+      `,
+      fragmentShader:`
+        precision highp float;
+        varying vec3 vNormalV;
+        varying vec3 vViewDir;
+        varying float vLocalY;
+        uniform float uTime;
+        uniform vec3 uColor;
+        uniform float uOpacity;
+        uniform float uGlitch;
+        uniform float uState;
+
+        float hash11(float p){
+          return fract(sin(p*127.1)*43758.5453123);
+        }
+
+        void main(){
+          float fresnel=pow(1.0-clamp(dot(normalize(vNormalV),normalize(vViewDir)),0.0,1.0),2.15);
+          float fine=.86+.14*sin((vLocalY+uTime*.22)*48.0);
+          float scanPos=fract(uTime*.145);
+          float localN=fract(vLocalY*.18+.5);
+          float sweep=1.0-smoothstep(.0,.10,abs(localN-scanPos));
+          float flick=.94+.06*sin(uTime*19.0)+uGlitch*(hash11(floor(uTime*44.0))-.5)*.35;
+          float energy=.22+fresnel*1.65+sweep*.8+uState*.16;
+          vec3 c=uColor*energy*fine*flick;
+          float a=uOpacity*(.08+fresnel*.72+sweep*.14);
+          gl_FragColor=vec4(c,a);
+        }
+      `,
+      transparent:true,
+      blending:THREE.AdditiveBlending,
+      depthWrite:false,
+      side:THREE.DoubleSide,
+      toneMapped:false
+    });
   }
 
   function updateClock() {
@@ -233,51 +391,108 @@ if (!hud || !launcher || !canvas) {
   }
 
   function createAtmosphere() {
-    const dustCount = innerWidth < 700 ? 240 : 420;
+    const dustCount = innerWidth < 700 ? 280 : 520;
     const pos=new Float32Array(dustCount*3);
     for(let i=0;i<dustCount;i++){
-      pos[i*3]=(Math.random()-.5)*12;
-      pos[i*3+1]=(Math.random()-.5)*9;
-      pos[i*3+2]=(Math.random()-.5)*7-1.5;
+      pos[i*3]=(Math.random()-.5)*13;
+      pos[i*3+1]=(Math.random()-.5)*10;
+      pos[i*3+2]=(Math.random()-.5)*8-1.8;
     }
     const geo=new THREE.BufferGeometry();
     geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
     const mat=new THREE.PointsMaterial({
-      color:0x70ddff,size:innerWidth<700?.018:.022,transparent:true,opacity:.32,
+      color:0x70ddff,size:innerWidth<700?.017:.021,transparent:true,opacity:.24,
       blending:THREE.AdditiveBlending,depthWrite:false
     });
     dust=new THREE.Points(geo,mat);
     scene.add(dust);
 
     const beamMat=new THREE.MeshBasicMaterial({
-      color:0x48cfff,transparent:true,opacity:.025,
-      blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide
+      color:0x48cfff,transparent:true,opacity:.018,
+      blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,toneMapped:false
     });
-    beamTop=new THREE.Mesh(new THREE.ConeGeometry(2.8,8.2,48,1,true),beamMat.clone());
+    beamTop=markBloom(new THREE.Mesh(new THREE.ConeGeometry(2.8,8.2,48,1,true),beamMat.clone()));
     beamTop.position.set(0,4.4,-1.6);
     scene.add(beamTop);
 
-    beamBottom=new THREE.Mesh(new THREE.ConeGeometry(2.4,6.8,48,1,true),beamMat.clone());
+    beamBottom=markBloom(new THREE.Mesh(new THREE.ConeGeometry(2.4,6.8,48,1,true),beamMat.clone()));
     beamBottom.rotation.z=Math.PI;
     beamBottom.position.set(0,-4.3,-1.8);
     scene.add(beamBottom);
 
     const haloMat=new THREE.MeshBasicMaterial({
-      color:0x36cfff,transparent:true,opacity:.07,
-      blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide
+      color:0x36cfff,transparent:true,opacity:.055,
+      blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,toneMapped:false
     });
-    floorHalo=new THREE.Mesh(new THREE.RingGeometry(1.55,3.6,128),haloMat);
+    floorHalo=markBloom(new THREE.Mesh(new THREE.RingGeometry(1.55,3.6,128),haloMat));
     floorHalo.rotation.x=1.18;
     floorHalo.position.set(0,-2.35,-1.15);
     scene.add(floorHalo);
 
-    const glow=new THREE.Sprite(new THREE.SpriteMaterial({
-      map:radialTexture(),transparent:true,opacity:.12,
-      blending:THREE.AdditiveBlending,depthWrite:false
-    }));
+    const glow=markBloom(new THREE.Sprite(new THREE.SpriteMaterial({
+      map:radialTexture(),transparent:true,opacity:.09,
+      blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
+    })));
     glow.scale.set(7.5,7.5,1);
     glow.position.set(0,.2,-1.8);
     scene.add(glow);
+
+    gridFloor=new THREE.GridHelper(18,36,0x1c91b7,0x0a2a38);
+    gridFloor.position.set(0,-2.72,-1.2);
+    gridFloor.material.transparent=true;
+    gridFloor.material.opacity=.085;
+    gridFloor.material.depthWrite=false;
+    gridFloor.material.blending=THREE.AdditiveBlending;
+    scene.add(gridFloor);
+
+    const orbitCount=innerWidth<700?150:260;
+    const orbitPos=new Float32Array(orbitCount*3);
+    for(let i=0;i<orbitCount;i++){
+      const a=Math.random()*Math.PI*2;
+      const r=1.25+Math.random()*2.25;
+      orbitPos[i*3]=Math.cos(a)*r;
+      orbitPos[i*3+1]=Math.sin(a)*r*.82;
+      orbitPos[i*3+2]=(Math.random()-.5)*1.35;
+    }
+    const orbitGeo=new THREE.BufferGeometry();
+    orbitGeo.setAttribute('position',new THREE.BufferAttribute(orbitPos,3));
+    orbitParticles=markBloom(new THREE.Points(
+      orbitGeo,
+      new THREE.PointsMaterial({
+        color:0x7ceeff,size:innerWidth<700?.022:.028,
+        transparent:true,opacity:.5,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
+      })
+    ));
+    scene.add(orbitParticles);
+
+    filamentGroup=new THREE.Group();
+    for(let j=0;j<7;j++){
+      const pts=[];
+      const rx=1.5+j*.23;
+      const ry=1.15+j*.16;
+      const phase=j*.71;
+      for(let i=0;i<120;i++){
+        const a=(i/119)*Math.PI*2;
+        pts.push(new THREE.Vector3(
+          Math.cos(a)*rx,
+          Math.sin(a)*ry,
+          Math.sin(a*2.0+phase)*.16 + (j-3)*.035
+        ));
+      }
+      const line=markBloom(new THREE.LineLoop(
+        new THREE.BufferGeometry().setFromPoints(pts),
+        new THREE.LineBasicMaterial({
+          color:j%3===0?0xff3d67:0x5fe6ff,
+          transparent:true,opacity:j%3===0?.07:.09,
+          blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
+        })
+      ));
+      line.rotation.x=(j-3)*.035;
+      line.rotation.y=(j%2?1:-1)*.06;
+      line.userData.speed=(j%2?1:-1)*(.012+j*.002);
+      filamentGroup.add(line);
+    }
+    scene.add(filamentGroup);
   }
 
   function createLights() {
@@ -306,34 +521,54 @@ if (!hud || !launcher || !canvas) {
       obj.material.metalness=Math.max(.62,obj.material.metalness ?? .72);
       obj.material.roughness=Math.max(.28,obj.material.roughness ?? .3);
     }
+
     if (name.includes('EmissiveCyan') || name.includes('EmissiveIce')) {
-      obj.material.emissiveIntensity=name.includes('Ice')?1.65:1.2;
+      if (obj.material.emissive) {
+        if (name.includes('Ice')) obj.material.emissive.setRGB(.08,1.18,2.15);
+        else obj.material.emissive.setRGB(.025,.82,1.72);
+      }
+      obj.material.emissiveIntensity=name.includes('Ice')?1.05:.92;
       obj.material.toneMapped=false;
+      obj.material.userData.travisBaseEmission=obj.material.emissiveIntensity;
+      markBloom(obj);
     }
+
     if (name.includes('EmissiveRed')) {
-      obj.material.emissiveIntensity=1.35;
+      obj.material.emissive?.setRGB(1.8,.025,.12);
+      obj.material.emissiveIntensity=.96;
       obj.material.toneMapped=false;
+      obj.material.userData.travisBaseEmission=obj.material.emissiveIntensity;
+      markBloom(obj);
     }
+
     if (name.includes('EmissiveWhite')) {
-      obj.material.emissiveIntensity=1.8;
+      obj.material.emissive?.setRGB(1.2,1.75,2.2);
+      obj.material.emissiveIntensity=1.08;
       obj.material.toneMapped=false;
+      obj.material.userData.travisBaseEmission=obj.material.emissiveIntensity;
+      markBloom(obj);
     }
+
     if (name==='CoreEnergy') {
-      obj.material.emissiveIntensity=1.55;
+      obj.material.emissive?.setRGB(.04,1.0,1.9);
+      obj.material.emissiveIntensity=1.12;
       obj.material.toneMapped=false;
+      obj.material.userData.travisBaseEmission=obj.material.emissiveIntensity;
       energyMesh=obj;
+      markBloom(obj);
     }
+
     if (name==='CoreGlass') {
-      const glass=new THREE.MeshPhysicalMaterial({
-        color:0x061722,metalness:.18,roughness:.06,
-        transmission:.38,thickness:.42,ior:1.46,
-        transparent:true,opacity:.52,envMapIntensity:1.1,
-        clearcoat:1,clearcoatRoughness:.08
-      });
-      obj.material=glass;
+      hologramMaterial=hologramShader();
+      obj.material=hologramMaterial;
       glassMesh=obj;
+      markBloom(obj);
     }
-    if (obj.name==='Emblem') emblem=obj;
+
+    if (obj.name==='Emblem') {
+      emblem=obj;
+      markBloom(obj);
+    }
   }
 
   function createCommandNode({label,panel,icon:iconKey,color=0x58ddff}) {
@@ -354,6 +589,7 @@ if (!hud || !launcher || !canvas) {
         color,transparent:true,opacity:.42,blending:THREE.AdditiveBlending
       })
     );
+    markBloom(edges);
     group.add(edges);
 
     const accent=new THREE.Mesh(
@@ -364,6 +600,7 @@ if (!hud || !launcher || !canvas) {
       })
     );
     accent.position.set(-.59,0,.038);
+    markBloom(accent);
     group.add(accent);
 
     const icon=new THREE.Sprite(new THREE.SpriteMaterial({
@@ -411,7 +648,7 @@ if (!hud || !launcher || !canvas) {
         color:node.group.userData.panel==='agentes'?0xff4668:0x5fe2ff,
         transparent:true,opacity:0,blending:THREE.AdditiveBlending
       });
-      const line=new THREE.Line(geo,mat);
+      const line=markBloom(new THREE.Line(geo,mat));
       commandRoot.add(line);
       return line;
     });
@@ -480,13 +717,16 @@ if (!hud || !launcher || !canvas) {
     if (!renderer || !camera) return;
     const w=Math.max(1,innerWidth);
     const h=Math.max(1,innerHeight);
-    const dpr=Math.min(devicePixelRatio||1,innerWidth<700?1.35:1.65);
+    const dpr=Math.min(devicePixelRatio||1,innerWidth<700?1.25:1.55);
     camera.aspect=w/h;
     sizeForViewport();
     renderer.setPixelRatio(dpr);
     renderer.setSize(w,h,false);
-    composer.setPixelRatio(dpr);
-    composer.setSize(w,h);
+    bloomComposer?.setPixelRatio(dpr);
+    bloomComposer?.setSize(w,h);
+    finalComposer?.setPixelRatio(dpr);
+    finalComposer?.setSize(w,h);
+    finalPass?.uniforms?.uResolution?.value.set(w*dpr,h*dpr);
   }
 
   function setLoading(text,done=false) {
@@ -521,11 +761,18 @@ if (!hud || !launcher || !canvas) {
     createLights();
     createAtmosphere();
 
-    composer=new EffectComposer(renderer);
-    composer.addPass(new RenderPass(scene,camera));
-    bloom=new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),.55,.42,.62);
-    composer.addPass(bloom);
-    composer.addPass(new OutputPass());
+    bloomComposer=new EffectComposer(renderer);
+    bloomComposer.renderToScreen=false;
+    bloomComposer.addPass(new RenderPass(scene,camera));
+    bloomPass=new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),1.02,.56,.08);
+    bloomComposer.addPass(bloomPass);
+
+    finalComposer=new EffectComposer(renderer);
+    finalComposer.addPass(new RenderPass(scene,camera));
+    finalPass=finalFxPass();
+    finalPass.uniforms.bloomTexture.value=bloomComposer.renderTarget2.texture;
+    finalComposer.addPass(finalPass);
+    finalComposer.addPass(new OutputPass());
 
     setLoading('A carregar geometria…');
     const loader=new GLTFLoader();
@@ -537,6 +784,18 @@ if (!hud || !launcher || !canvas) {
       materialTune(obj);
       if (/^Rotor_\d+$/.test(obj.name) || obj.name==='Rotor_Ticks') rotors.push(obj);
       if (obj.name==='Emblem') emblem=obj;
+    });
+    rotors.forEach((rotor)=>{
+      rotor.userData.baseRotX=rotor.rotation.x;
+      rotor.userData.baseRotY=rotor.rotation.y;
+      rotor.userData.emissiveMaterials=[];
+      rotor.traverse((child)=>{
+        if (!child.isMesh || !child.material) return;
+        const mats=Array.isArray(child.material)?child.material:[child.material];
+        mats.forEach((mat)=>{
+          if (mat?.userData?.travisBaseEmission!=null) rotor.userData.emissiveMaterials.push(mat);
+        });
+      });
     });
     coreRoot.add(model);
     scene.add(coreRoot);
@@ -550,16 +809,34 @@ if (!hud || !launcher || !canvas) {
   }
 
   function stateBloom() {
-    if (state==='booting') return .72;
-    if (state==='listening') return .68;
-    if (state==='thinking') return .82;
-    if (state==='speaking') return .92;
-    return .55;
+    if (state==='booting') return 1.18;
+    if (state==='listening') return 1.24;
+    if (state==='thinking') return 1.38;
+    if (state==='speaking') return 1.48;
+    return 1.02;
+  }
+
+  function renderComposed(t) {
+    const background=scene.background;
+    camera.layers.set(BLOOM_LAYER);
+    scene.background=new THREE.Color(0x000000);
+    bloomComposer.render();
+
+    camera.layers.set(0);
+    scene.background=background;
+    finalPass.uniforms.bloomTexture.value=bloomComposer.renderTarget2.texture;
+    finalPass.uniforms.uTime.value=t;
+    finalPass.uniforms.uGlitch.value=glitchPower;
+    finalPass.uniforms.uFlash.value=flashPower;
+    finalPass.uniforms.uAberration.value=.00048+glitchPower*.0017+(state==='speaking'?.00013:0);
+    finalPass.uniforms.uGrain.value=innerWidth<700?.016:.019;
+    finalPass.uniforms.uScan.value=innerWidth<700?.018:.022;
+    finalComposer.render();
   }
 
   function animate(now) {
     requestAnimationFrame(animate);
-    if (!renderer || !composer) return;
+    if (!renderer || !bloomComposer || !finalComposer) return;
     if (!opened) { lastFrame=now; return; }
     const dt=Math.min(.05,(now-lastFrame)/1000);
     lastFrame=now;
@@ -572,30 +849,74 @@ if (!hud || !launcher || !canvas) {
     cameraNow.lerp(cameraTarget,.055);
     tiltNow.lerp(tiltTarget,.05);
 
+    if (now>nextGlitchAt) {
+      glitchPower=state==='thinking'?.86:.48;
+      nextGlitchAt=now+4200+Math.random()*7600;
+    }
+    glitchPower*=Math.exp(-dt*18);
+    flashPower*=Math.exp(-dt*6.5);
+
+    const simulatedVoice=state==='speaking'
+      ? clamp(.18+Math.abs(Math.sin(t*6.2))*.5+Math.abs(Math.sin(t*11.7))*.24,0,1)
+      : 0;
+    const targetVoice=externalVoiceLevel==null?simulatedVoice:externalVoiceLevel;
+    speechLevel+=(targetVoice-speechLevel)*Math.min(1,dt*13);
+
     if (coreRoot) {
       const baseScale=(innerWidth/innerHeight<.72?.47:.70)*(.35+.65*introEase);
-      coreRoot.scale.setScalar(baseScale);
-      coreRoot.rotation.x=lerp(-.24,-.08,introEase)+tiltNow.y*.035;
-      coreRoot.rotation.y=tiltNow.x*.055;
+      const speechExpand=state==='speaking'?speechLevel*.045:0;
+      coreRoot.scale.setScalar(baseScale*(1+speechExpand));
+      coreRoot.rotation.x=lerp(-.24,-.08,introEase)+tiltNow.y*.045;
+      coreRoot.rotation.y=tiltNow.x*.07;
       coreRoot.rotation.z=Math.sin(t*.12)*.01;
 
       const baseY=innerWidth/innerHeight<.72?.62:.35;
       coreRoot.position.y=baseY + (1-introEase)*-.55;
-      coreRoot.position.x=cameraNow.x*.08;
+      coreRoot.position.x=cameraNow.x*.09;
 
+      const speedBoost=state==='listening'?2.45:state==='thinking'?1.95:state==='speaking'?1.48:1;
       rotors.forEach((r,i)=>{
         const direction=i%2?1:-1;
-        const speed=(.055+i*.017)*(state==='thinking'?1.85:state==='speaking'?1.45:1);
+        const speed=(.055+i*.017)*speedBoost;
         r.rotation.z += direction*speed*dt;
+        r.rotation.x=(r.userData.baseRotX||0)+Math.sin(t*.36+i*.72)*.014;
+        r.rotation.y=(r.userData.baseRotY||0)+Math.cos(t*.31+i*.51)*.011;
+
+        let targetScale=1;
+        if (state==='listening') targetScale=.948+i*.004;
+        if (state==='thinking') targetScale=1+Math.sin(t*3.8-i*.82)*.026;
+        if (state==='speaking') targetScale=1+speechLevel*.017;
+        const rs=lerp(r.scale.x,targetScale,Math.min(1,dt*8));
+        r.scale.setScalar(rs);
+
+        const energyWave=.5+.5*Math.sin(t*4.0-i*.88);
+        (r.userData.emissiveMaterials||[]).forEach((mat)=>{
+          const base=mat.userData.travisBaseEmission||1;
+          const boost=state==='thinking'?energyWave*.82:
+                      state==='listening'?.22:
+                      state==='speaking'?speechLevel*.54:0;
+          mat.emissiveIntensity=base*(1+boost)+flashPower*.12;
+        });
       });
 
       if (energyMesh) {
-        const pulse=1+Math.sin(t*2.5)*(state==='speaking'?.065:.025);
+        const pulse=state==='speaking'
+          ? 1+speechLevel*.105+flashPower*.055
+          : 1+Math.sin(t*2.5)*.025;
         energyMesh.scale.setScalar(pulse);
+        if (energyMesh.material?.userData?.travisBaseEmission!=null) {
+          const base=energyMesh.material.userData.travisBaseEmission;
+          energyMesh.material.emissiveIntensity=base*(1+(state==='thinking'?.45:0)+(state==='speaking'?speechLevel*.7:0))+flashPower*.4;
+        }
       }
-      if (emblem) {
-        emblem.position.z=Math.sin(t*1.7)*.015;
-      }
+      if (emblem) emblem.position.z=Math.sin(t*1.7)*.015+flashPower*.025;
+    }
+
+    if (hologramMaterial) {
+      hologramMaterial.uniforms.uTime.value=t;
+      hologramMaterial.uniforms.uGlitch.value=glitchPower;
+      hologramMaterial.uniforms.uState.value=state==='thinking'?1:state==='listening'?.72:state==='speaking'?.86:.18;
+      hologramMaterial.uniforms.uOpacity.value=.40+(state==='listening'?.06:state==='thinking'?.09:state==='speaking'?.08:0);
     }
 
     commandTarget=commandsOpen?1:0;
@@ -614,14 +935,29 @@ if (!hud || !launcher || !canvas) {
       dust.rotation.z=t*.006;
       dust.position.y=Math.sin(t*.18)*.08;
     }
+    if (orbitParticles) {
+      orbitParticles.rotation.z=t*.025*(state==='thinking'?1.7:1);
+      orbitParticles.rotation.x=Math.sin(t*.18)*.045;
+      orbitParticles.material.opacity=.36+(state==='listening'?.09:state==='thinking'?.14:0);
+    }
+    if (filamentGroup) {
+      filamentGroup.children.forEach((line,i)=>{
+        line.rotation.z+=line.userData.speed*dt*(state==='thinking'?2.0:1);
+        line.material.opacity=(i%3===0?.055:.075)+(state==='thinking'?.055:state==='listening'?.022:0);
+      });
+    }
+    if (gridFloor) {
+      gridFloor.position.z=-1.2+Math.sin(t*.16)*.08;
+      gridFloor.material.opacity=.06+(state==='thinking'?.035:0);
+    }
     if (floorHalo) {
-      floorHalo.material.opacity=.09+.04*Math.sin(t*1.1);
+      floorHalo.material.opacity=.055+.025*Math.sin(t*1.1)+(state==='listening'?.025:0);
       floorHalo.rotation.z=t*.035;
     }
-    if (beamTop) beamTop.material.opacity=.018+.012*(.5+.5*Math.sin(t*.7));
-    if (beamBottom) beamBottom.material.opacity=.012+.008*(.5+.5*Math.sin(t*.6+1));
+    if (beamTop) beamTop.material.opacity=.012+.009*(.5+.5*Math.sin(t*.7))+(state==='thinking'?.009:0);
+    if (beamBottom) beamBottom.material.opacity=.009+.006*(.5+.5*Math.sin(t*.6+1));
 
-    if (bloom) bloom.strength += (stateBloom()-bloom.strength)*.055;
+    if (bloomPass) bloomPass.strength += (stateBloom()-bloomPass.strength)*.055;
 
     const portrait=innerWidth/innerHeight<.72;
     const cameraBaseZ=portrait?10.4:8.3;
@@ -630,7 +966,7 @@ if (!hud || !launcher || !canvas) {
     camera.position.z += (cameraBaseZ-camera.position.z)*.08;
     camera.lookAt(0,portrait?.48:.26,0);
 
-    composer.render();
+    renderComposed(t);
   }
 
   function rayFromEvent(event) {
@@ -769,6 +1105,12 @@ if (!hud || !launcher || !canvas) {
     speak(message='A responder.') {
       if (!opened) openHud();
       setState('speaking',message);
+    },
+    setVoiceLevel(level=0) {
+      externalVoiceLevel=clamp(Number(level)||0,0,1);
+    },
+    clearVoiceLevel() {
+      externalVoiceLevel=null;
     }
   });
 

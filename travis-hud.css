@@ -251,3 +251,77 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
 @media(prefers-reduced-motion:reduce){
   #travis-launcher::before,.travis-hud *{animation-duration:.001ms!important;animation-iteration-count:1!important}
 }
+
+/* V7 optical HUD: thin technical traces, never solid dashboard chrome. */
+.travis-reticle{
+  position:absolute;z-index:6;inset:12% 7% 17%;pointer-events:none;opacity:.34
+}
+.travis-reticle i{
+  position:absolute;width:42px;height:42px;border-color:rgba(105,231,255,.34)
+}
+.travis-reticle .r-tl{left:0;top:0;border-left:1px solid;border-top:1px solid}
+.travis-reticle .r-tr{right:0;top:0;border-right:1px solid;border-top:1px solid}
+.travis-reticle .r-bl{left:0;bottom:0;border-left:1px solid;border-bottom:1px solid}
+.travis-reticle .r-br{right:0;bottom:0;border-right:1px solid;border-bottom:1px solid}
+.travis-reticle .r-axis{position:absolute;background:rgba(105,231,255,.09)}
+.travis-reticle .horizontal{left:8%;right:8%;top:50%;height:1px}
+.travis-reticle .vertical{top:10%;bottom:10%;left:50%;width:1px}
+
+.travis-telemetry{
+  position:absolute;z-index:8;top:27%;
+  display:grid;gap:5px;pointer-events:none;
+  color:rgba(126,191,216,.5);font-size:6px;letter-spacing:.2em;text-transform:uppercase
+}
+.travis-telemetry.left{left:clamp(18px,4vw,58px)}
+.travis-telemetry.right{right:clamp(18px,4vw,58px);text-align:right}
+.travis-telemetry b{color:rgba(173,229,245,.68);font-size:7px;font-weight:600}
+.travis-telemetry span{color:rgba(103,229,255,.58)}
+.travis-telemetry small{font-size:5.5px}
+
+.travis-scan-sweep{
+  position:absolute;z-index:5;left:13%;right:13%;height:1px;top:18%;
+  pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(105,233,255,.32),rgba(220,252,255,.46),rgba(105,233,255,.32),transparent);
+  box-shadow:0 0 16px rgba(69,213,255,.16);
+  opacity:0
+}
+.travis-hud.is-open .travis-scan-sweep{animation:trv-scan-sweep 4.8s 1.4s ease-in-out infinite}
+
+.travis-ticker{
+  position:absolute;z-index:7;left:12%;right:12%;top:18%;
+  height:18px;overflow:hidden;pointer-events:none;
+  border-top:1px solid rgba(91,209,255,.07);
+  color:rgba(94,171,197,.36);font-size:5.5px;letter-spacing:.24em;text-transform:uppercase;
+  white-space:nowrap
+}
+.travis-ticker span{display:inline-block;padding-top:5px;animation:trv-ticker 18s linear infinite}
+
+.travis-hud[data-state="listening"] .travis-reticle{opacity:.46}
+.travis-hud[data-state="thinking"] .travis-reticle{opacity:.58}
+.travis-hud[data-state="thinking"] .travis-telemetry{color:rgba(126,213,238,.67)}
+.travis-hud[data-state="speaking"] .travis-reticle{opacity:.52}
+
+@keyframes trv-scan-sweep{
+  0%,12%{top:18%;opacity:0}
+  20%{opacity:.5}
+  58%{opacity:.28}
+  86%{top:78%;opacity:.12}
+  100%{top:82%;opacity:0}
+}
+@keyframes trv-ticker{to{transform:translateX(-40%)}}
+
+@media(max-width:820px){
+  .travis-reticle{inset:14% 5% 18%}
+  .travis-reticle i{width:28px;height:28px}
+  .travis-telemetry{top:24%;font-size:5px;gap:4px}
+  .travis-telemetry b{font-size:5.8px}
+  .travis-telemetry small{font-size:4.7px}
+  .travis-telemetry.left{left:12px}
+  .travis-telemetry.right{right:12px}
+  .travis-ticker{left:8%;right:8%;top:20%;font-size:4.6px}
+  .travis-scan-sweep{left:8%;right:8%}
+}
+@media(max-width:440px){
+  .travis-telemetry small{display:none}
+  .travis-telemetry{opacity:.68}
+}
