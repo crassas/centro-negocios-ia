@@ -197,7 +197,9 @@ body.travis-hud-open{overflow:hidden}
   opacity:0;transform:scale(.68);filter:drop-shadow(0 0 34px rgba(31,173,255,.18));overflow:visible;
 }
 .travis-hud.is-open .travis-orb-shell{animation:trv-orb-in 1s .14s cubic-bezier(.16,.85,.18,1) forwards}
-#travis-core-canvas{position:absolute;inset:-7%;width:114%;height:114%;pointer-events:none;filter:drop-shadow(0 0 8px rgba(60,211,255,.18))}
+#travis-three-stage{position:absolute;inset:-12%;width:124%;height:124%;pointer-events:none;z-index:1}
+#travis-three-stage canvas{display:block;width:100%;height:100%;background:transparent}
+#travis-three-stage.three-failed{opacity:.2}
 .travis-orb-shadow{
   position:absolute;width:88%;height:24%;bottom:4%;border-radius:50%;
   background:radial-gradient(ellipse,rgba(61,210,255,.22),rgba(20,111,171,.055) 45%,transparent 72%);
@@ -400,3 +402,13 @@ body.travis-hud-open{overflow:hidden}
   #travis-launcher .trv-launch-ring,.travis-hud *,.travis-hud *::before,.travis-hud *::after{animation-duration:.001ms!important;animation-iteration-count:1!important}
   .travis-orb-parallax{transition:none}
 }
+
+/* V4: real 3D scene owns the visual core; CSS is only interaction chrome. */
+.travis-holo-disc{opacity:.14}
+.travis-core-trigger{z-index:7;background:radial-gradient(circle,rgba(5,23,36,.12),rgba(2,10,17,.22) 58%,transparent 62%);border-color:rgba(119,229,255,.2);box-shadow:0 0 28px rgba(42,194,255,.12),inset 0 0 24px rgba(82,223,255,.08)}
+.travis-core-trigger::before{border-color:rgba(91,213,255,.09)}
+.travis-core-trigger::after{border-color:rgba(139,239,255,.16)}
+.travis-core-glass{opacity:.45}
+.travis-emblem{opacity:.76}
+.travis-orb-shadow{opacity:.38}
+.travis-hud.deck-open .travis-holo-disc{opacity:.08}
