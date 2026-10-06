@@ -140,6 +140,26 @@ export class TaskQueue extends DurableObject {
     if(!task||task.status!=='pending')return {ok:false};
     task.status=approved?'queued':'rejected';
     task.resolvedAt=Date.now();
+    task.progress=approved
+      ? {phase:'received',detail:'Pedido aceite e pronto para entrar na fila.',at:Date.now()}
+      : {phase:'blocked',detail:'Pedido recusado.',at:Date.now()};
+    await this.setJson('task:'+id,task);
+    return {ok:true,task};
+  }
+  async setTaskProgress(id,phase,detail=''){
+    const task=await this.getJson('task:'+id,null);
+    if(!task)return {ok:false};
+    const allowed=new Set(['received','planning','editing','validating','publishing','completed','blocked']);
+    const safePhase=allowed.has(String(phase||''))?String(phase):'received';
+    const row={
+      phase:safePhase,
+      detail:String(detail||'').slice(0,500),
+      at:Date.now()
+    };
+    task.progress=row;
+    const history=Array.isArray(task.progressHistory)?task.progressHistory:[];
+    history.push(row);
+    task.progressHistory=history.slice(-12);
     await this.setJson('task:'+id,task);
     return {ok:true,task};
   }
@@ -181,6 +201,10 @@ export class TaskQueue extends DurableObject {
         task.status='running';
         task.startedAt=now;
         task.attempts=(Number(task.attempts)||0)+1;
+        task.progress={phase:'received',detail:'O executor recebeu a tarefa.',at:now};
+        const history=Array.isArray(task.progressHistory)?task.progressHistory:[];
+        history.push(task.progress);
+        task.progressHistory=history.slice(-12);
         await this.setJson('task:'+id,task);
         return task;
       }
@@ -211,6 +235,14 @@ export class TaskQueue extends DurableObject {
     task.status='completed';
     task.completedAt=Date.now();
     task.result=result;
+    task.progress={
+      phase:Number(result?.exitCode)===0?'completed':'blocked',
+      detail:Number(result?.exitCode)===0?'Tarefa concluída.':'A tarefa terminou com erro.',
+      at:Date.now()
+    };
+    const progressHistory=Array.isArray(task.progressHistory)?task.progressHistory:[];
+    progressHistory.push(task.progress);
+    task.progressHistory=progressHistory.slice(-12);
     await this.setJson('task:'+id,task);
     return {ok:true,task,retrying:false};
   }
@@ -458,7 +490,15 @@ export class TaskQueue extends DurableObject {
         completedAt:Number(task.completedAt)||0,
         exitCode:Number.isFinite(Number(result.exitCode))?Number(result.exitCode):null,
         durationMs:Number(result.durationMs)||0,
-        output:String(result.stdout||result.stderr||'').slice(0,1200)
+        output:String(result.stdout||result.stderr||'').slice(0,1200),
+        progressPhase:String(task.progress?.phase||''),
+        progressDetail:String(task.progress?.detail||'').slice(0,500),
+        progressAt:Number(task.progress?.at)||0,
+        progressHistory:(Array.isArray(task.progressHistory)?task.progressHistory:[]).slice(-8).map(row=>({
+          phase:String(row?.phase||''),
+          detail:String(row?.detail||'').slice(0,300),
+          at:Number(row?.at)||0
+        }))
       });
     }
     return rows;
@@ -2565,6 +2605,21 @@ export default {
         await telegramSend(env,'MESA INTERROMPIDA\n\n'+String(error?.message||error).slice(0,1200));
         return json({ok:false,error:String(error?.message||error)},500,origin);
       }
+    }
+
+    if(url.pathname==='/api/operit/progress'&&request.method==='POST'){
+      try{
+        const token=bearer(request);
+        const q=taskQueue(env);
+        if(!await q.authenticate(await sha256Hex(token)))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
+        const id=String(body?.id||'').trim();
+        const phase=String(body?.phase||'').trim();
+        const detail=String(body?.detail||'').trim();
+        if(!id||!phase)return json({ok:false,error:'Progresso inválido.'},400,origin);
+        const saved=await q.setTaskProgress(id,phase,detail);
+        if(!saved.ok)return json({ok:false,error:'Tarefa não encontrada.'},404,origin);
+        return json({ok:true,phase:saved.task.progress?.phase||phase},200,origin);
+      }catch(error){return json({ok:false,error:String(error?.message||error)},500,origin);}
     }
 
     if(url.pathname==='/api/operit/result'&&request.method==='POST'){
