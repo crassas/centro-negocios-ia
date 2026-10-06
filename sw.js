@@ -1,5 +1,5 @@
-const CACHE='centro-negocios-v29-travis-3d-v4';
-const SHELL=['./','./index.html','./styles.css','./app.js?v=travis-panel-2','./agent-room.js?v=jarvis-1','./agent-room.css?v=world-10','./product.css?v=world-8','./travis-hud.js?v=4','./travis-hud.css?v=4','./travis-scene.js?v=4','./assets/travis/travis-core.glb?v=1','./manifest.webmanifest','./icon.svg','./data/sites.json'];
+const CACHE='centro-negocios-v30-travis-3d-v5';
+const SHELL=['./','./index.html','./styles.css','./app.js?v=travis-panel-2','./agent-room.js?v=jarvis-1','./agent-room.css?v=world-10','./product.css?v=world-8','./travis-hud.js?v=5','./travis-hud.css?v=5','./travis-scene.js?v=5','./assets/travis/travis-core.glb?v=1','./manifest.webmanifest','./icon.svg','./data/sites.json'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));
