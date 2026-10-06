@@ -5,10 +5,10 @@ const AI_ENDPOINT_KEY='centro_negocios_ai_endpoint_v1';
 const AI_DEFAULT_ENDPOINT='https://centro-negocios-ai.travisthejarvis.workers.dev';
 const GSC_DEVICE_TOKEN_KEY='centro_negocios_gsc_device_token_v1';
 const GSC_SITE_KEY='centro_negocios_gsc_site_v1';
-const APP_VERSION=3;
+const APP_VERSION=4;
 const VAULT_LOCK_MS=5*60*1000;
 const EXTRA_PROJECTS=[
-  {id:'engomadoria',name:'Engomadoria Beatriz',area:'Praça das Flores',url:''}
+  {id:'engomadoria',name:'Engomadoria Beatriz',area:'Praça das Flores',url:'',repo:'https://github.com/crassas/engomadoria-beatriz'}
 ];
 
 let sites=[];
@@ -21,7 +21,28 @@ let installPrompt=null;
 let toastTimer=null;
 let gscPairPollTimer=null;
 
-function defaultState(){return {clients:{},leads:[],gsc:null,transactions:[],pendingPayments:[],agent:{opportunities:[],decisions:[],reports:[],telegramOffset:0}};}
+function defaultCompanyState(){
+  return {
+    profile:{name:'Quasi Norte — Soluções Digitais',monthlyTarget:0,safetyReserve:0},
+    tasks:[],
+    recurringCosts:[]
+  };
+}
+function normalizeCompany(value){
+  const d=defaultCompanyState();
+  if(!value||typeof value!=='object')return d;
+  const profile=value.profile&&typeof value.profile==='object'?value.profile:{};
+  return {
+    profile:{
+      name:String(profile.name||d.profile.name),
+      monthlyTarget:Math.max(0,Number(profile.monthlyTarget)||0),
+      safetyReserve:Math.max(0,Number(profile.safetyReserve)||0)
+    },
+    tasks:Array.isArray(value.tasks)?value.tasks.filter(Boolean):[],
+    recurringCosts:Array.isArray(value.recurringCosts)?value.recurringCosts.filter(Boolean):[]
+  };
+}
+function defaultState(){return {clients:{},leads:[],gsc:null,transactions:[],pendingPayments:[],company:defaultCompanyState(),agent:{opportunities:[],decisions:[],reports:[],telegramOffset:0}};}
 function loadState(){
   try{
     const current=localStorage.getItem(STORE_KEY);
@@ -40,6 +61,7 @@ function normalizeState(value){
     gsc:value.gsc&&typeof value.gsc==='object'?value.gsc:null,
     transactions:Array.isArray(value.transactions)?value.transactions:[],
     pendingPayments:Array.isArray(value.pendingPayments)?value.pendingPayments:[],
+    company:normalizeCompany(value.company),
     agent:{
       opportunities:Array.isArray(value.agent?.opportunities)?value.agent.opportunities:[],
       decisions:Array.isArray(value.agent?.decisions)?value.agent.decisions:[],
@@ -49,6 +71,13 @@ function normalizeState(value){
   };
 }
 function saveState(){localStorage.setItem(STORE_KEY,JSON.stringify(state));renderLocalSummary();if($('decision-list'))renderAgentState();}
+function seedCompanyDefaults(){
+  const normalized=normalizeCompany(state.company);
+  const changed=JSON.stringify(normalized)!==JSON.stringify(state.company||null);
+  state.company=normalized;
+  if(changed)localStorage.setItem(STORE_KEY,JSON.stringify(state));
+}
+
 function seedCRMDefaults(){
   const defaults={
     pentehouse:{stage:'Activo',note:'Acompanhar ranking Marquês / Constituição e rever posições locais.'},
@@ -148,7 +177,7 @@ function ageLabel(value){
 
 const DEFAULT_PANEL='agentes';
 const PANEL_NAMES={
-  agentes:'SALA DOS AGENTES',visao:'PAINEL',assistente:'AUTOMAÇÃO & IA',radar:'OPORTUNIDADES',sites:'SITES',crm:'CLIENTES',
+  agentes:'SALA DOS AGENTES',visao:'PAINEL',empresa:'EMPRESA',assistente:'AUTOMAÇÃO & IA',radar:'OPORTUNIDADES',sites:'SITES',crm:'CLIENTES',
   leads:'LEADS',caixa:'FINANCEIRO',seo:'OPORTUNIDADES SEO',cofre:'COFRE',ferramentas:'DEFINIÇÕES'
 };
 function openPanel(id,options={}){
@@ -162,6 +191,7 @@ function openPanel(id,options={}){
     else history.pushState({panel:id},'','#'+id);
   }
   window.scrollTo({top:0,behavior:options.instant?'auto':'smooth'});
+  if(id==='empresa')renderCompany();
   if(options.focusDecisions&&id==='assistente')setTimeout(()=>document.querySelector('#decisions')?.scrollIntoView({behavior:'smooth',block:'start'}),120);
 }
 function setupPanelNavigation(){
@@ -217,7 +247,7 @@ async function loadLive(){
 
 function renderAll(){
   fillProjectSelects();
-  renderMonitorStatus();renderKpis();renderSites();renderAlerts();renderConnections();renderCRM();renderLeads();renderGsc();renderPayments();renderFinance();renderSystem();renderAIStatus();setupVaultState();
+  renderMonitorStatus();renderKpis();renderSites();renderAlerts();renderConnections();renderCRM();renderLeads();renderGsc();renderPayments();renderFinance();renderCompany();renderSystem();renderAIStatus();setupVaultState();
 }
 function renderMonitorStatus(){
   const pill=$('monitor-pill'),label=$('monitor-label'),meta=$('audit-meta');
@@ -644,13 +674,167 @@ function renderFinance(){
 function fillProjectSelects(){
   const projects=allProjects();
   const options='<option value="">Sem projecto</option>'+projects.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join('');
-  ['finance-project','payment-project','vault-project'].forEach(id=>{const el=$(id);if(el&&el.dataset.ready!==String(projects.length)){const current=el.value;el.innerHTML=options;el.value=current;el.dataset.ready=String(projects.length);}});
+  ['finance-project','payment-project','vault-project','company-task-project'].forEach(id=>{const el=$(id);if(el&&el.dataset.ready!==String(projects.length)){const current=el.value;el.innerHTML=options;el.value=current;el.dataset.ready=String(projects.length);}});
+}
+
+
+const COMPANY_TASK_LABELS={todo:'A fazer',doing:'Em curso',waiting:'À espera',done:'Concluído'};
+const COMPANY_TASK_ORDER=['doing','todo','waiting','done'];
+function companyMonthKey(date=new Date()){
+  return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0');
+}
+function companyMonthTotals(){
+  const month=companyMonthKey();
+  return state.transactions.reduce((a,row)=>{
+    if(!String(row.date||'').startsWith(month))return a;
+    const amount=Math.abs(Number(row.amount)||0);
+    if(row.type==='income')a.income+=amount;else a.expense+=amount;
+    a.margin=a.income-a.expense;
+    return a;
+  },{income:0,expense:0,margin:0});
+}
+function companyTaskStats(){
+  const today=new Date();today.setHours(0,0,0,0);
+  const tasks=state.company?.tasks||[];
+  const open=tasks.filter(t=>t.status!=='done');
+  const overdue=open.filter(t=>{
+    if(!t.dueDate)return false;
+    const d=new Date(t.dueDate+'T00:00:00');
+    return Number.isFinite(d.getTime())&&d<today;
+  });
+  return {open:open.length,overdue:overdue.length,done:tasks.filter(t=>t.status==='done').length};
+}
+function companyPriorityRank(value){return value==='urgent'?3:value==='high'?2:1;}
+function companyFixedTotal(){
+  return (state.company?.recurringCosts||[]).filter(c=>c.active!==false).reduce((sum,c)=>sum+Math.abs(Number(c.amount)||0),0);
+}
+function companyProjectMoney(projectId){
+  const totals=state.transactions.reduce((a,row)=>{
+    if(row.projectId!==projectId)return a;
+    const amount=Math.abs(Number(row.amount)||0);
+    if(row.type==='income')a.income+=amount;else a.expense+=amount;
+    a.margin=a.income-a.expense;return a;
+  },{income:0,expense:0,margin:0});
+  const pending=(state.pendingPayments||[]).filter(p=>p.projectId===projectId&&p.status==='pending').reduce((sum,p)=>sum+Math.abs(Number(p.amount)||0),0);
+  return {...totals,pending};
+}
+function companyFocusItems(){
+  const now=new Date();now.setHours(0,0,0,0);
+  const tasks=(state.company?.tasks||[]).filter(t=>t.status!=='done').map(t=>{
+    let overdue=false;
+    if(t.dueDate){
+      const d=new Date(t.dueDate+'T00:00:00');
+      overdue=Number.isFinite(d.getTime())&&d<now;
+    }
+    return {kind:'task',title:t.title,meta:(t.area||'Tarefa')+(t.dueDate?' · '+(overdue?'atrasada · ':'')+fmtDateOnly(t.dueDate):''),priority:overdue?5:companyPriorityRank(t.priority),id:t.id};
+  });
+  const payments=(state.pendingPayments||[]).filter(p=>p.status==='pending').map(p=>({
+    kind:'payment',
+    title:'Receber '+fmtMoney(p.amount)+' · '+(p.client||'Cliente'),
+    meta:(p.dueDate?'Previsto '+fmtDateOnly(p.dueDate):'Sem data prevista')+(p.description?' · '+p.description:''),
+    priority:p.dueDate&&p.dueDate<new Date().toISOString().slice(0,10)?4:2,
+    id:p.id
+  }));
+  return [...tasks,...payments].sort((a,b)=>b.priority-a.priority||a.title.localeCompare(b.title,'pt')).slice(0,7);
+}
+function renderCompanyFocus(){
+  const list=$('company-focus-list');if(!list)return;
+  const items=companyFocusItems();
+  if($('company-focus-count'))$('company-focus-count').textContent=items.length+' '+(items.length===1?'item':'itens');
+  list.innerHTML=items.length?items.map(item=>
+    '<button type="button" class="company-focus-row '+(item.priority>=4?'hot':'')+'" data-company-focus="'+esc(item.kind)+'">'+
+    '<span>'+(item.kind==='payment'?'€':'✓')+'</span><div><b>'+esc(item.title)+'</b><small>'+esc(item.meta)+'</small></div><i>→</i></button>'
+  ).join(''):'<div class="empty">Sem urgências registadas. Adiciona a próxima tarefa concreta e o Centro passa a orientar o dia.</div>';
+  list.querySelectorAll('[data-company-focus]').forEach(btn=>btn.addEventListener('click',()=>openPanel(btn.dataset.companyFocus==='payment'?'caixa':'empresa')));
+}
+function renderCompanyTasks(){
+  const board=$('company-task-board');if(!board)return;
+  const tasks=state.company?.tasks||[];
+  board.innerHTML=COMPANY_TASK_ORDER.map(status=>{
+    let rows=tasks.filter(t=>(t.status||'todo')===status).sort((a,b)=>companyPriorityRank(b.priority)-companyPriorityRank(a.priority)||String(a.dueDate||'9999').localeCompare(String(b.dueDate||'9999')));
+    if(status==='done')rows=rows.slice(0,8);
+    const cards=rows.map(t=>{
+      const project=projectById(t.projectId),due=t.dueDate?fmtDateOnly(t.dueDate):'Sem prazo';
+      const priority=t.priority==='urgent'?'Urgente':t.priority==='high'?'Alta':'Normal';
+      return '<article class="company-task-card" data-priority="'+esc(t.priority||'normal')+'">'+
+        '<div class="company-task-card-top"><span>'+esc(t.area||'Tarefa')+'</span><b>'+esc(priority)+'</b></div>'+
+        '<h3>'+esc(t.title||'Tarefa')+'</h3><p>'+esc(project?project.name:'Sem projeto')+' · '+esc(due)+'</p>'+
+        '<div class="company-task-actions"><select data-company-task-status="'+esc(t.id)+'">'+Object.entries(COMPANY_TASK_LABELS).map(([value,label])=>'<option value="'+value+'" '+(status===value?'selected':'')+'>'+label+'</option>').join('')+'</select>'+
+        '<button type="button" class="danger-btn" data-company-task-delete="'+esc(t.id)+'" title="Eliminar">×</button></div></article>';
+    }).join('');
+    return '<section class="company-task-lane" data-status="'+status+'"><header><b>'+COMPANY_TASK_LABELS[status]+'</b><span>'+rows.length+'</span></header><div>'+(cards||'<div class="company-lane-empty">Sem tarefas</div>')+'</div></section>';
+  }).join('');
+  board.querySelectorAll('[data-company-task-status]').forEach(sel=>sel.addEventListener('change',()=>{
+    const task=state.company.tasks.find(t=>t.id===sel.dataset.companyTaskStatus);if(!task)return;
+    task.status=sel.value;task.updatedAt=new Date().toISOString();task.completedAt=sel.value==='done'?new Date().toISOString():null;
+    saveState();renderCompany();toast('Estado da tarefa atualizado.');
+  }));
+  board.querySelectorAll('[data-company-task-delete]').forEach(btn=>btn.addEventListener('click',()=>{
+    const idx=state.company.tasks.findIndex(t=>t.id===btn.dataset.companyTaskDelete);
+    if(idx<0||!confirm('Eliminar esta tarefa?'))return;
+    state.company.tasks.splice(idx,1);saveState();renderCompany();
+  }));
+}
+function renderCompanyProjects(){
+  const grid=$('company-project-grid');if(!grid)return;
+  const projects=allProjects();
+  grid.innerHTML=projects.map(project=>{
+    const crm=state.clients[project.id]||{stage:'Activo',note:''},money=companyProjectMoney(project.id);
+    const openTasks=(state.company?.tasks||[]).filter(t=>t.projectId===project.id&&t.status!=='done').length;
+    const repo=safeUrl(project.repo||'');
+    const site=safeUrl(project.url||'');
+    return '<article class="company-project-card">'+
+      '<div class="company-project-head"><div><span>'+esc(crm.stage||'Activo')+'</span><h3>'+esc(project.name)+'</h3><small>'+esc(project.area||'')+'</small></div><b>'+openTasks+' '+(openTasks===1?'tarefa':'tarefas')+'</b></div>'+
+      '<p>'+esc(crm.note||'Sem próxima ação registada no CRM.')+'</p>'+
+      '<div class="company-project-money"><span>Entradas <b>'+fmtMoney(money.income)+'</b></span><span>Custos <b>'+fmtMoney(money.expense)+'</b></span><span>Por receber <b>'+fmtMoney(money.pending)+'</b></span></div>'+
+      '<div class="company-project-links">'+(site?'<a href="'+esc(site)+'" target="_blank" rel="noopener">Site ↗</a>':'')+(repo?'<a href="'+esc(repo)+'" target="_blank" rel="noopener">GitHub ↗</a>':'')+'<button type="button" data-panel-target="crm">CRM →</button></div>'+
+    '</article>';
+  }).join('');
+  grid.querySelectorAll('[data-panel-target]').forEach(btn=>btn.addEventListener('click',()=>openPanel(btn.dataset.panelTarget)));
+}
+function renderCompanyCosts(){
+  const list=$('company-cost-list');if(!list)return;
+  const costs=state.company?.recurringCosts||[];
+  if($('company-fixed-total'))$('company-fixed-total').textContent=fmtMoney(companyFixedTotal());
+  list.innerHTML=costs.length?costs.map(cost=>
+    '<div class="company-cost-row '+(cost.active===false?'is-off':'')+'"><label><input type="checkbox" data-company-cost-active="'+esc(cost.id)+'" '+(cost.active===false?'':'checked')+'><span><b>'+esc(cost.name)+'</b><small>'+(cost.day?'dia '+esc(cost.day):'sem dia definido')+'</small></span></label><strong>'+fmtMoney(cost.amount)+'</strong><button type="button" class="danger-btn" data-company-cost-delete="'+esc(cost.id)+'">×</button></div>'
+  ).join(''):'<div class="empty">Sem custos fixos registados.</div>';
+  list.querySelectorAll('[data-company-cost-active]').forEach(input=>input.addEventListener('change',()=>{
+    const cost=state.company.recurringCosts.find(c=>c.id===input.dataset.companyCostActive);if(!cost)return;
+    cost.active=input.checked;saveState();renderCompany();
+  }));
+  list.querySelectorAll('[data-company-cost-delete]').forEach(btn=>btn.addEventListener('click',()=>{
+    const idx=state.company.recurringCosts.findIndex(c=>c.id===btn.dataset.companyCostDelete);
+    if(idx<0||!confirm('Eliminar este custo fixo?'))return;
+    state.company.recurringCosts.splice(idx,1);saveState();renderCompany();
+  }));
+}
+function renderCompany(){
+  if(!$('empresa'))return;
+  state.company=normalizeCompany(state.company);
+  const monthly=companyMonthTotals(),pending=pendingPaymentTotals(),tasks=companyTaskStats(),profile=state.company.profile,totals=financeTotals();
+  if($('company-heading'))$('company-heading').textContent=profile.name||'A empresa, num só lugar';
+  if($('company-name'))$('company-name').value=profile.name||'';
+  if($('company-monthly-target'))$('company-monthly-target').value=profile.monthlyTarget||'';
+  if($('company-safety-reserve'))$('company-safety-reserve').value=profile.safetyReserve||'';
+  $('company-month-income').textContent=fmtMoney(monthly.income);
+  $('company-month-expense').textContent=fmtMoney(monthly.expense);
+  $('company-month-margin').textContent=fmtMoney(monthly.margin);
+  $('company-pending').textContent=fmtMoney(pending.total);
+  $('company-pending-note').textContent=pending.count+' '+(pending.count===1?'pagamento':'pagamentos');
+  $('company-open-tasks').textContent=tasks.open;
+  $('company-overdue-tasks').textContent=tasks.overdue;
+  const target=Math.max(0,Number(profile.monthlyTarget)||0),pct=target?Math.min(100,Math.max(0,monthly.income/target*100)):0;
+  $('company-goal-bar').style.width=pct+'%';
+  $('company-goal-label').textContent=target?fmtMoney(monthly.income)+' / '+fmtMoney(target):'Define uma meta';
+  $('company-goal-note').textContent=target?fmtNum(pct,0)+'% do objetivo mensal recebido. Saldo total registado: '+fmtMoney(totals.balance)+'.':'O progresso usa apenas entradas efetivamente registadas.';
+  renderCompanyFocus();renderCompanyTasks();renderCompanyProjects();renderCompanyCosts();
 }
 
 function download(name,content,type='text/plain;charset=utf-8'){
   const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),500);
 }
-function reportObject(){return {exportedAt:new Date().toISOString(),monitor:live,crm:state.clients,leads:state.leads,agent:state.agent,finance:{transactions:state.transactions,pendingPayments:state.pendingPayments,pendingTotals:pendingPaymentTotals(),totals:financeTotals()},gsc:state.gsc?{source:state.gsc.source||'csv',fileName:state.gsc.fileName,siteUrl:state.gsc.siteUrl||'',importedAt:state.gsc.importedAt,projectId:state.gsc.projectId||'',periodDays:state.gsc.periodDays||null,summary:gscSummary(),opportunities:gscOpportunityRows().slice(0,30),rows:state.gsc.rows,previousRows:state.gsc.previousRows||[]}:null};}
+function reportObject(){return {exportedAt:new Date().toISOString(),monitor:live,crm:state.clients,leads:state.leads,company:state.company,agent:state.agent,finance:{transactions:state.transactions,pendingPayments:state.pendingPayments,pendingTotals:pendingPaymentTotals(),totals:financeTotals()},gsc:state.gsc?{source:state.gsc.source||'csv',fileName:state.gsc.fileName,siteUrl:state.gsc.siteUrl||'',importedAt:state.gsc.importedAt,projectId:state.gsc.projectId||'',periodDays:state.gsc.periodDays||null,summary:gscSummary(),opportunities:gscOpportunityRows().slice(0,30),rows:state.gsc.rows,previousRows:state.gsc.previousRows||[]}:null};}
 function sitesCsv(){
   const rows=[['site','url','online','http','response_ms','changed','title','h1_count','sitemap_urls','issues']];
   sites.forEach(s=>{const r=siteResult(s.id)||{};rows.push([s.name,s.url,r.online,r.status,r.responseTimeMs,r.changed,r.title,r.h1Count,r.sitemapUrls,(r.issues||[]).map(x=>x.message).join(' | ')]);});
@@ -1005,6 +1189,37 @@ function setupEvents(){
   $('prospect-voice-btn').addEventListener('click',()=>startDictation('prospect-capture'));
   $('prospect-analyse').addEventListener('click',captureOpportunity);
   $('prospect-capture').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();captureOpportunity();}});
+  $('company-new-task')?.addEventListener('click',()=>{$('company-task-title')?.focus();$('company-task-form')?.scrollIntoView({behavior:'smooth',block:'center'});});
+  $('company-profile-form')?.addEventListener('submit',e=>{
+    e.preventDefault();
+    state.company=normalizeCompany(state.company);
+    state.company.profile={
+      name:$('company-name').value.trim()||'Quasi Norte — Soluções Digitais',
+      monthlyTarget:Math.max(0,Number($('company-monthly-target').value)||0),
+      safetyReserve:Math.max(0,Number($('company-safety-reserve').value)||0)
+    };
+    saveState();renderCompany();toast('Controlo da empresa guardado.');
+  });
+  $('company-task-form')?.addEventListener('submit',e=>{
+    e.preventDefault();state.company=normalizeCompany(state.company);
+    const title=$('company-task-title').value.trim();if(!title)return;
+    state.company.tasks.push({
+      id:uid('task'),title,projectId:$('company-task-project').value,area:$('company-task-area').value,
+      priority:$('company-task-priority').value,dueDate:$('company-task-due').value,status:'todo',
+      createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()
+    });
+    saveState();e.target.reset();fillProjectSelects();renderCompany();toast('Tarefa adicionada à empresa.');
+  });
+  $('company-cost-form')?.addEventListener('submit',e=>{
+    e.preventDefault();state.company=normalizeCompany(state.company);
+    const amount=Math.abs(Number($('company-cost-amount').value)||0);if(!amount){toast('Indica um custo válido.');return;}
+    state.company.recurringCosts.push({
+      id:uid('cost'),name:$('company-cost-name').value.trim(),amount,
+      day:Math.min(31,Math.max(0,Number($('company-cost-day').value)||0))||null,active:true,createdAt:new Date().toISOString()
+    });
+    saveState();e.target.reset();renderCompany();toast('Custo fixo adicionado.');
+  });
+
   $('payment-form')?.addEventListener('submit',e=>{
     e.preventDefault();
     const amount=Math.abs(Number($('payment-amount').value)||0);
@@ -1062,6 +1277,7 @@ function setupDashboardChrome(){
       const q=search.value.trim().toLowerCase();
       if(!q)return;
       const routes=[
+        {terms:['empresa','tarefas','tarefa','objetivo','objectivo','meta','custos fixos','organizar trabalho'],panel:'empresa'},
         {terms:['cliente','clientes','projeto','projecto','pentehouse','pizza','kebab','irmãos','irmaos','beatriz'],panel:'crm'},
         {terms:['site','sites','online','auditoria'],panel:'sites'},
         {terms:['seo','google','search','posição','posicao','ranking'],panel:'seo'},
@@ -1086,9 +1302,9 @@ function setupPWA(){
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
-  seedCRMDefaults();seedLeadDefaults();seedPaymentDefaults();setupEvents();setupDashboardChrome();setupPWA();
+  seedCompanyDefaults();seedCRMDefaults();seedLeadDefaults();seedPaymentDefaults();setupEvents();setupDashboardChrome();setupPWA();
   $('finance-date').value=new Date().toISOString().slice(0,10);
-  renderLeads();renderPayments();renderFinance();renderGsc();renderAgentState();setupVaultState();renderSystem();renderAIStatus();refreshGscConnection();
+  renderLeads();renderPayments();renderFinance();renderCompany();renderGsc();renderAgentState();setupVaultState();renderSystem();renderAIStatus();refreshGscConnection();
   checkTelegramStatus(false);pollTelegramApprovals(false);loadExecutions();
   setInterval(()=>pollTelegramApprovals(false),30000);
   setInterval(()=>loadExecutions(),3000);

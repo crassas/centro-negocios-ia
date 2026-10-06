@@ -52,3 +52,20 @@ O Worker transforma a chave da conta de serviço num token OAuth 2.0 de curta du
 <!-- CENTRO_OPERACAO_SEM_OPENCLAW -->
 O OpenClaw está temporariamente desactivado. O Centro mantém o Worker, a fila persistente, o Agent, o Server, o supervisor e o Laya. A publicação automática usa validação local antes de enviar alterações para o Git. O fallback pago automático permanece desactivado.
 
+
+
+## Empresa / Business OS
+
+A área **Empresa** transforma o Centro numa camada de gestão operacional, sem métricas fictícias.
+
+Inclui:
+- visão mensal de entradas, saídas e margem registadas;
+- pagamentos por receber;
+- objetivo mensal configurável;
+- fila única de tarefas para sites, apps, SEO, CRM, financeiro, comercial e administração;
+- prioridade, prazo e estado de cada tarefa;
+- visão por projeto com entradas, custos, pendentes e próxima ação do CRM;
+- custos fixos mensais planeados, sem os contabilizar automaticamente como despesa;
+- inclusão dos dados de Empresa no relatório e no backup existente.
+
+Os dados continuam local-first nesta versão. Credenciais permanecem separadas no Cofre cifrado.

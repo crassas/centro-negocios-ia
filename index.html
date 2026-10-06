@@ -13,11 +13,11 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
-  <link rel="stylesheet" href="./agent-room.css?v=world-7">
-  <link rel="stylesheet" href="./product.css?v=world-7">
+  <link rel="stylesheet" href="./agent-room.css?v=world-8">
+  <link rel="stylesheet" href="./product.css?v=world-8">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
-  <script src="./agent-room.js?v=world-7" defer></script>
-  <script src="./app.js?v=world-7" defer></script>
+  <script src="./agent-room.js?v=world-8" defer></script>
+  <script src="./app.js?v=world-8" defer></script>
 </head>
 <body>
 <div class="shell">
@@ -29,6 +29,7 @@
     </div>
     <nav class="command-nav nav" aria-label="Módulos">
       <a class="active" href="#visao" data-panel-target="visao"><span class="nav-icon">⌂</span><span>Painel</span></a>
+      <a href="#empresa" data-panel-target="empresa"><span class="nav-icon">▦</span><span>Empresa</span></a>
       <a href="#agentes" data-panel-target="agentes"><span class="nav-icon">♟</span><span>Sala dos Agentes</span></a>
       <a href="#crm" data-panel-target="crm"><span class="nav-icon">♙</span><span>Clientes</span></a>
       <a href="#sites" data-panel-target="sites"><span class="nav-icon">▣</span><span>Sites</span></a>
@@ -62,7 +63,7 @@
         <div><small>Área ativa</small><b id="active-panel-name">PAINEL</b></div>
       </div>
       <div class="command-bar-actions">
-        <button class="top-primary" data-panel-target="crm" type="button"><span>＋</span>Novo projeto</button>
+        <button class="top-primary" data-panel-target="empresa" type="button"><span>＋</span>Organizar trabalho</button>
         <div class="rail-health" id="monitor-pill"><i></i><span id="monitor-label">A sincronizar</span></div>
         <button class="icon-btn" id="nav-home" type="button" title="Voltar ao painel">⌂</button>
         <button class="icon-btn" id="refresh-btn" type="button" title="Atualizar dados">↻</button>
@@ -242,6 +243,108 @@
       <section class="panel-view" id="sites" data-panel="sites">
         <div class="panel-title"><div><span class="sys-label">NETWORK OBSERVATORY</span><h1>SITES EM PRODUÇÃO</h1></div><div class="section-meta" id="audit-meta">Sem leitura</div></div>
         <div id="site-grid" class="site-grid"><div class="empty">A obter a última auditoria.</div></div>
+      </section>
+
+
+      <section class="panel-view company-panel" id="empresa" data-panel="empresa">
+        <div class="company-command">
+          <div>
+            <span class="sys-label">QUASI NORTE · BUSINESS OS</span>
+            <h1 id="company-heading">A empresa, num só lugar</h1>
+            <p>Clientes, dinheiro, trabalho e próximos passos. Só mostra dados que estejam realmente registados.</p>
+          </div>
+          <button class="btn primary" id="company-new-task" type="button">＋ Nova tarefa</button>
+        </div>
+
+        <div class="company-scoreboard" aria-label="Estado da empresa">
+          <article><span>Entradas este mês</span><b id="company-month-income">0,00 €</b><small>recebido e registado</small></article>
+          <article><span>Saídas este mês</span><b id="company-month-expense">0,00 €</b><small>despesas registadas</small></article>
+          <article><span>Margem registada</span><b id="company-month-margin">0,00 €</b><small>entradas − saídas</small></article>
+          <article><span>Por receber</span><b id="company-pending">0,00 €</b><small id="company-pending-note">0 pagamentos</small></article>
+          <article><span>Trabalho aberto</span><b id="company-open-tasks">0</b><small>tarefas por concluir</small></article>
+          <article><span>Atrasadas</span><b id="company-overdue-tasks">0</b><small>precisam de atenção</small></article>
+        </div>
+
+        <div class="company-top-grid">
+          <article class="module company-focus-module">
+            <div class="module-head">
+              <div><span class="sys-label">FOCO</span><h2>O que move a empresa agora</h2></div>
+              <span class="status-tag" id="company-focus-count">0 itens</span>
+            </div>
+            <div id="company-focus-list" class="company-focus-list">
+              <div class="empty">Ainda não há prioridades registadas.</div>
+            </div>
+          </article>
+
+          <article class="module company-control-module">
+            <div class="module-head">
+              <div><span class="sys-label">CONTROLO</span><h2>Meta e segurança</h2></div>
+            </div>
+            <form id="company-profile-form" class="company-profile-form">
+              <label><span>Nome da operação</span><input id="company-name" autocomplete="organization" placeholder="Nome da empresa"></label>
+              <label><span>Objetivo mensal de entradas</span><input id="company-monthly-target" type="number" min="0" step="1" placeholder="0 €"></label>
+              <label><span>Reserva desejada</span><input id="company-safety-reserve" type="number" min="0" step="1" placeholder="0 €"></label>
+              <button class="btn" type="submit">Guardar controlo</button>
+            </form>
+            <div class="company-progress-block">
+              <div><span>Objetivo mensal</span><b id="company-goal-label">Define uma meta</b></div>
+              <div class="company-progress"><i id="company-goal-bar"></i></div>
+              <small id="company-goal-note">O progresso usa apenas entradas efetivamente registadas.</small>
+            </div>
+          </article>
+        </div>
+
+        <article class="module company-work-module">
+          <div class="module-head">
+            <div><span class="sys-label">EXECUÇÃO</span><h2>Fila única de trabalho</h2></div>
+            <span class="section-meta">Sites · Apps · SEO · CRM · Financeiro · Administração</span>
+          </div>
+          <form id="company-task-form" class="company-task-form">
+            <input id="company-task-title" required placeholder="O que tem de ficar feito?">
+            <select id="company-task-project"><option value="">Sem projeto</option></select>
+            <select id="company-task-area" aria-label="Área">
+              <option>Site / App</option>
+              <option>SEO</option>
+              <option>CRM</option>
+              <option>Financeiro</option>
+              <option>Comercial</option>
+              <option>Administração</option>
+            </select>
+            <select id="company-task-priority" aria-label="Prioridade">
+              <option value="normal">Normal</option>
+              <option value="high">Alta</option>
+              <option value="urgent">Urgente</option>
+            </select>
+            <input id="company-task-due" type="date" aria-label="Prazo">
+            <button class="btn primary" type="submit">Adicionar tarefa</button>
+          </form>
+          <div id="company-task-board" class="company-task-board"></div>
+        </article>
+
+        <div class="company-bottom-grid">
+          <article class="module company-projects-module">
+            <div class="module-head">
+              <div><span class="sys-label">CARTEIRA</span><h2>Negócios e projetos</h2></div>
+              <button class="text-link" data-panel-target="crm" type="button">Abrir CRM →</button>
+            </div>
+            <div id="company-project-grid" class="company-project-grid"></div>
+          </article>
+
+          <article class="module company-costs-module">
+            <div class="module-head">
+              <div><span class="sys-label">ESTRUTURA</span><h2>Custos fixos mensais</h2></div>
+              <b id="company-fixed-total">0,00 €</b>
+            </div>
+            <form id="company-cost-form" class="company-cost-form">
+              <input id="company-cost-name" required placeholder="Ex.: domínio, software, telefone">
+              <input id="company-cost-amount" type="number" min="0.01" step="0.01" required placeholder="Valor €">
+              <input id="company-cost-day" type="number" min="1" max="31" placeholder="Dia">
+              <button class="btn" type="submit">Adicionar custo</button>
+            </form>
+            <div id="company-cost-list" class="company-cost-list"><div class="empty">Sem custos fixos registados.</div></div>
+            <p class="company-truth-note">Os custos fixos são planeamento. Só entram nas saídas quando registares o pagamento no Financeiro.</p>
+          </article>
+        </div>
       </section>
 
       <section class="panel-view" id="crm" data-panel="crm">
