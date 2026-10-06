@@ -478,9 +478,6 @@
       spaceRaf=requestAnimationFrame(paintSpace);
     }
     window.dispatchEvent(new CustomEvent('travis3dreset'));
-    if (!parallaxRaf && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      parallaxRaf=requestAnimationFrame(animateParallax);
-    }
     bootTone();
     haptic([12,36,10]);
     bootSequence();
@@ -530,9 +527,7 @@
     button.addEventListener('click',() => openCentrePanel(button.dataset.travisPanel));
   });
 
-  hud.addEventListener('pointermove',setParallaxFromEvent,{passive:true});
-  hud.addEventListener('pointerleave',resetParallax,{passive:true});
-  hud.addEventListener('pointercancel',resetParallax,{passive:true});
+  // Pointer parallax is owned by the real Three.js scene in V4.
 
   document.addEventListener('keydown',(event) => {
     if (event.key==='Escape' && hud.classList.contains('is-open')) closeHud();
