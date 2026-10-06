@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="./product.css?v=world-8">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
   <script src="./agent-room.js?v=jarvis-1" defer></script>
-  <script src="./app.js?v=travis-1" defer></script>
+  <script src="./app.js?v=travis-voice-2" defer></script>
 </head>
 <body>
 <div class="shell">
@@ -173,7 +173,7 @@
             <div class="office-plant plant-one">♣</div><div class="office-plant plant-two">♣</div><div id="room-stations"></div><div class="office-door"><span>ENTRADA</span></div>
           </div><div class="room-legend"><span><i data-state="working"></i>A trabalhar</span><span><i data-state="monitoring"></i>Vigilância</span><span><i data-state="waiting"></i>Na fila</span><span><i data-state="error"></i>Precisa de atenção</span><span><i data-state="unknown"></i>Sem ligação</span></div>
         </article><button type="button" id="room-detail-scrim" class="room-detail-scrim" aria-label="Fechar detalhe"></button><aside class="room-detail" id="room-detail"></aside></div>
-        <div class="room-bottom"><article class="room-conversation"><span class="room-eyebrow">FALA COM O TRAVIS</span><h2>O que fazemos a seguir?</h2><p id="room-reply" role="status" aria-live="polite">Diz o projecto e o objectivo. Respondo de forma curta.</p><form id="room-talk-form"><label class="sr-only" for="room-talk-input">Pedido ao Travis</label><input id="room-talk-input" required maxlength="2000" placeholder="Ex.: analisa a Pentehouse e propõe 3 melhorias"><button type="submit" id="room-talk-send" aria-label="Enviar pedido">↑</button></form><button class="text-link" data-panel-target="assistente" type="button">Ver resposta completa e propostas →</button> <a class="text-link" href="http://127.0.0.1:8770/" target="_blank" rel="noopener">Falar com o Travis ↗</a></article>
+        <div class="room-bottom"><article class="room-conversation"><span class="room-eyebrow">FALA COM O TRAVIS</span><h2>O que fazemos a seguir?</h2><p id="room-reply" role="status" aria-live="polite">Diz o projecto e o objectivo. Respondo de forma curta.</p><form id="room-talk-form"><label class="sr-only" for="room-talk-input">Pedido ao Travis</label><input id="room-talk-input" required maxlength="2000" placeholder="Ex.: analisa a Pentehouse e propõe 3 melhorias"><button type="submit" id="room-talk-send" aria-label="Enviar pedido">↑</button></form><button class="text-link" data-panel-target="assistente" type="button">Ver resposta completa e propostas →</button> <div class="travis-voice-tools"><a class="travis-voice-open" href="http://127.0.0.1:8770/" target="_blank" rel="noopener">🎙 Falar com o Travis</a><button type="button" data-travis-listen disabled>Ouvir resposta</button><button type="button" data-travis-stop>Parar voz</button></div><small class="travis-voice-note">Falar abre a voz no teu telemóvel. Ouvir resposta usa a voz do navegador.</small></article>
         <article class="room-activity"><div><span class="room-eyebrow">ACTIVIDADE REAL</span><h2>Os últimos passos</h2></div><ul id="room-feed"></ul><button class="text-link" data-panel-target="ferramentas" type="button">Ver execuções →</button></article></div>
         <p class="room-footnote">A sala mostra fases registadas pelo executor real. A Laya é auxiliar e nunca bloqueia o fluxo principal.</p>
       </section>
@@ -185,9 +185,9 @@
         </div>
 
         <div class="ai-command">
-          <div class="ai-command-head"><span>FALA COM O CENTRO</span><label>Assistente <select id="ai-engine"><option value="local">Travis</option><option value="cloud">Workers AI</option></select></label><a href="http://127.0.0.1:8770/" target="_blank" rel="noopener">Falar com o Travis ↗</a></div>
+          <div class="ai-command-head"><span>FALA COM O TRAVIS</span><label>Assistente <select id="ai-engine"><option value="local">Travis</option><option value="cloud">Workers AI</option></select></label><a class="travis-voice-open" href="http://127.0.0.1:8770/" target="_blank" rel="noopener">🎙 Falar com o Travis</a></div>
           <div class="ai-input-row">
-            <button class="voice-key" id="ai-voice-btn" type="button" title="Ditar">◉</button>
+            <button class="voice-key" id="ai-voice-btn" type="button" title="Ditar o pedido" aria-label="Ditar o pedido">Ditar</button>
             <textarea id="ai-question" class="ai-question" rows="2" placeholder="Diz o que queres. Ex.: vê tudo e diz-me só o que precisa da minha atenção."></textarea>
             <button class="execute-key" id="ai-ask-btn" type="button">EXECUTAR</button>
           </div>
@@ -205,7 +205,7 @@
         <div class="ai-layout">
           <article class="module ai-output-module">
             <div class="module-head"><div><span class="sys-label">RESPOSTA</span><h2>Travis</h2></div><span class="signal">LIVE</span></div>
-            <div id="ai-answer" class="ai-answer" aria-live="polite"><div class="empty">Pronto para analisar a operação.</div></div>
+            <div class="travis-voice-tools"><button type="button" data-travis-listen disabled>Ouvir resposta</button><button type="button" data-travis-stop>Parar voz</button><small>Voz do navegador</small></div><div id="ai-answer" class="ai-answer" aria-live="polite"><div class="empty">Pronto para analisar a operação.</div></div>
           </article>
 
           <article class="module decision-module" id="decisions">

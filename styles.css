@@ -1089,3 +1089,14 @@ td{border-color:#edf0f4!important}
   .company-task-form{grid-template-columns:1fr 1fr;padding:0 10px 12px}.company-task-form #company-task-title{grid-column:1/-1}.company-task-form button{grid-column:1/-1;width:100%}
   .company-task-board{grid-template-columns:1fr;padding:0 10px}.company-project-grid{grid-template-columns:1fr;padding:0 10px 10px}.company-cost-form{grid-template-columns:1fr 1fr;padding:0 10px 10px}.company-cost-form #company-cost-name{grid-column:1/-1}.company-cost-form button{grid-column:1/-1}
 }
+
+/* Shared Travis controls across the conversation and assistant panels. */
+.travis-voice-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0}
+.travis-voice-open,.travis-voice-tools button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 14px;border:1px solid #bfd1c7;border-radius:10px;background:#edf4ef;color:#244d37;font:600 14px system-ui;text-decoration:none;cursor:pointer;box-sizing:border-box}
+.travis-voice-open{background:#244d37;color:#fff;border-color:#244d37}
+.travis-voice-tools button:disabled{opacity:.45;cursor:default}
+.travis-voice-note,.travis-voice-tools small{display:block;color:#536675;font:13px/1.5 system-ui}
+.ai-command-head{align-items:center;gap:12px;flex-wrap:wrap}
+#ai-voice-btn{min-width:54px;min-height:44px;font-size:12px}
+.travis-voice-tools button:focus-visible,.travis-voice-open:focus-visible{outline:3px solid #2869df;outline-offset:3px}
+@media(max-width:600px){.room-conversation input,.ai-question{font-size:16px!important}.ai-command-head{font-size:11px}.travis-voice-tools{gap:8px}.travis-voice-tools button{flex:1}.ai-command-head .travis-voice-open{width:100%}}

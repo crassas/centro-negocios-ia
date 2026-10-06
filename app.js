@@ -20,7 +20,24 @@ let vaultTimer=null;
 let installPrompt=null;
 let toastTimer=null;
 let gscPairPollTimer=null;
-let jarvisConversationTask='';
+let jarvisConversationTask=sessionStorage.getItem('travis-pending-task')||'';
+let travisReply='';
+
+function setTravisReply(text){
+  travisReply=String(text||'').trim();
+  document.querySelectorAll('[data-travis-listen]').forEach(button=>button.disabled=!travisReply);
+}
+function listenToTravis(){
+  if(!travisReply)return;
+  if(!window.speechSynthesis){toast('Abre Falar com o Travis para ouvir a resposta no telemóvel.');return;}
+  speechSynthesis.cancel();
+  const voice=new SpeechSynthesisUtterance(travisReply);
+  voice.lang='pt-PT';voice.rate=1;
+  const voices=speechSynthesis.getVoices();
+  voice.voice=voices.find(v=>v.lang.toLowerCase()==='pt-pt')||voices.find(v=>v.lang.toLowerCase().startsWith('pt'))||null;
+  voice.onerror=()=>toast('Não foi possível reproduzir. Abre Falar com o Travis.');
+  speechSynthesis.speak(voice);
+}
 
 function defaultCompanyState(){
   return {
@@ -1074,6 +1091,7 @@ async function askAI(questionOverride){
   if(!question){toast('Diz à IA o que queres analisar.');return;}
   $('ai-question').value=question;
   const btn=$('ai-ask-btn'),answer=$('ai-answer');
+  window.speechSynthesis?.cancel();setTravisReply('');
   btn.disabled=true;btn.textContent='A PROCESSAR';
   answer.classList.add('loading');answer.textContent='A cruzar sinais da operação…';
   try{
@@ -1081,7 +1099,7 @@ async function askAI(questionOverride){
     const added=queueAgentActions(data.actions,question);
     answer.textContent=(data.summary||'Análise concluída.')+(added?'\\n\\n'+added+' proposta'+(added===1?'':'s')+' aguarda'+(added===1?'':'m')+' confirmação.':'');
     $('ai-status').textContent='ONLINE';
-    if(data.taskId){jarvisConversationTask=data.taskId;window.CentroRoom?.trackTask(data.taskId);loadExecutions(true);}
+    if(data.taskId){jarvisConversationTask=data.taskId;sessionStorage.setItem('travis-pending-task',data.taskId);$('ai-status').textContent='NA FILA';window.CentroRoom?.trackTask(data.taskId);loadExecutions(true);}else{setTravisReply(answer.textContent);}
   }catch(err){
     answer.textContent='Falha: '+err.message;$('ai-status').textContent='ERRO';
   }finally{answer.classList.remove('loading');btn.disabled=false;btn.textContent='EXECUTAR';}
@@ -1152,7 +1170,8 @@ function loadExecutions(force=false){
             : 'Pedido na fila do Centro. A resposta depende do Agent e do servidor no telemóvel.';
         $('ai-answer').textContent=message;
         if($('room-reply'))$('room-reply').textContent=message;
-        if(conversation.status==='completed')jarvisConversationTask='';
+        $('ai-status').textContent=conversation.status==='completed'?'RESPOSTA PRONTA':conversation.status==='running'?'A RESPONDER':'NA FILA';
+        if(conversation.status==='completed'){setTravisReply(message);jarvisConversationTask='';sessionStorage.removeItem('travis-pending-task');}
       }
     }catch(err){
       executionPollFailures=Math.min(5,executionPollFailures+1);
@@ -1198,6 +1217,8 @@ function setupEvents(){
   $('ai-clear-btn').addEventListener('click',()=>{$('ai-question').value='';$('ai-answer').innerHTML='<div class="empty">Pronto para analisar a operação.</div>';});
   $('ai-question').addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter')askAI();});
   $('ai-voice-btn').addEventListener('click',()=>startDictation('ai-question'));
+  document.querySelectorAll('[data-travis-listen]').forEach(button=>button.addEventListener('click',listenToTravis));
+  document.querySelectorAll('[data-travis-stop]').forEach(button=>button.addEventListener('click',()=>window.speechSynthesis?.cancel()));
   $('prospect-voice-btn').addEventListener('click',()=>startDictation('prospect-capture'));
   $('prospect-analyse').addEventListener('click',captureOpportunity);
   $('prospect-capture').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();captureOpportunity();}});
