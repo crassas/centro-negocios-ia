@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import fcntl
 import random
 import os
 import platform
@@ -364,7 +365,26 @@ def work_once(token):
     return True
 
 
+def acquire_agent_lock():
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    handle = (STATE_DIR / "agent.lock").open("a+")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        return None
+    (STATE_DIR / "agent.pid").write_text(str(os.getpid()), encoding="utf-8")
+    return handle
+
+
 def main():
+    # Status reads do not consume tasks; every queue consumer shares one lock.
+    lock = None
+    if "--status" not in sys.argv:
+        lock = acquire_agent_lock()
+        if lock is None:
+            print("Centro Agent já está activo; este processo termina.", flush=True)
+            return
     token = load_token()
     if not token:
         token = pair()

@@ -70,6 +70,7 @@ def classify(text):
  if any(w in t for w in ["que tarefas","lista de tarefas","tarefas pendentes","que trabalho tens"]):return "task_list",{}
  if "classifica" in t:return "laya_decide",{"text":text}
  if "nao mexas" in t:return "pause_project",{"target":p}
+ if any(w in t for w in ["repositorio","github","paginas internet","paginas internas"]) and any(w in t for w in ["acesso","ligado","ligacao","quais","lista"]):return "repo_access",{}
  if "git" in t:return ("git_diff" if "diff" in t else "git_status"),{"target":p}
  if "laya" in t and any(w in t for w in ["estado","ligado","online"]):return "laya_status",{}
  if any(w in t for w in ["estado da estacao","estado do centro","estado do sistema"]):return "system_status",{}
@@ -151,6 +152,19 @@ def plan_change(target,prompt,context):
  raise RuntimeError("Planeador local devolveu JSON inválido")
 def execute(tool,args):
  if tool=="presence":return "Sou o Travis. Estou aqui. Podes pedir o estado do Centro, verificar os sites ou indicar o projecto e o que queres fazer."
+ if tool=="repo_access":
+  available=[];missing=[]
+  for target,name in PROJECTS.items():
+   try:
+    root=REPOS/name
+    if command(["git","rev-parse","--is-inside-work-tree"],root,5).strip()!="true":raise ValueError("Sem checkout")
+    command(["git","ls-files"],root,5)
+    available.append(target)
+   except (OSError,RuntimeError,ValueError,subprocess.TimeoutExpired):missing.append(target)
+  reply=("Confirmei acesso aos ficheiros dos repositórios no telemóvel: "+", ".join(available)+"." if available else "Não consegui confirmar nenhum repositório no telemóvel.")
+  if missing:reply+=" Não consegui confirmar: "+", ".join(missing)+"."
+  if available:reply+=" Posso consultar o código e encaminhar alterações pelo Centro. Publicar no GitHub exige verificar a autorização no momento da publicação."
+  return reply
  if tool=="system_status":return doctor()
  if tool=="stop":return {"stopped":True}
  if tool=="site_check":

@@ -17,6 +17,14 @@ class Tests(unittest.TestCase):
   with patch.object(j,"infer",return_value="Resposta") as inference:
    j.route("Analisa o meu negócio",{"projects":[{"name":"Pentehouse"}]})
    self.assertIn("Pentehouse",inference.call_args.args[0])
+ def test_repository_access_is_verified_without_inference(self):
+  with patch.object(j,"infer",side_effect=AssertionError("LLM called")),patch.object(j,"command",return_value="true"):
+   reply=j.route("Já tens acesso aos repositórios das páginas internas?")
+   self.assertEqual(reply["tool"],"repo_access")
+   self.assertIn("pentehouse",reply["reply"])
+   self.assertIn("exige verificar",reply["reply"])
+  with patch.object(j,"command",side_effect=OSError("missing")):
+   self.assertIn("Não consegui confirmar nenhum",j.execute("repo_access",{}))
  def test_rules_avoid_inference(self):
   cases={"Jarvis, diz-me o estado da estação.":"system_status","O Best Pizza está online?":"site_check","Como está o Git da Pentehouse?":"git_status","Que tarefas tenho?":"task_list","Cria uma tarefa para amanhã":"create_task"}
   for text,tool in cases.items():self.assertEqual(j.classify(text)[0],tool)
