@@ -15,22 +15,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
           node-version: "22"
+
       - name: Verificar JavaScript
         run: |
           node --check app.js
-          node --check travis-panel.js
           node scripts/travis-panel-selftest.mjs
           node --check travis-hud.js
           node scripts/travis-hud-selftest.mjs
@@ -39,12 +37,22 @@ jobs:
           node scripts/execution-poll-selftest.mjs
           node --check scripts/monitor.mjs
           node -e "JSON.parse(require('fs').readFileSync('data/sites.json','utf8')); JSON.parse(require('fs').readFileSync('manifest.webmanifest','utf8'));"
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:
           path: "."
+
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
