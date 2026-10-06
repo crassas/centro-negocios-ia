@@ -6,7 +6,7 @@ import travis_core as t
 class Tests(unittest.TestCase):
  def test_registry(self):
   s=t.registry_snapshot();self.assertTrue(s["localFirst"]);self.assertFalse(s["paidFallback"])
-  required={"presence","stop","system_status","repo_access","site_check","git_status","git_diff","create_task","task_list","laya_status","laya_decide","local_llm","repo_change","server_status","station_status","station_doctor","agents_status","autonomy_selftest","fault_timeout","fault_laya_recovery","git_pull","git_access_matrix","jarvis_query","claude_query","manus_status","manus_query"}
+  required={"presence","open_youtube","stop","system_status","repo_access","site_check","git_status","git_diff","create_task","task_list","laya_status","laya_decide","local_llm","repo_change","server_status","station_status","station_doctor","agents_status","autonomy_selftest","fault_timeout","fault_laya_recovery","git_pull","git_access_matrix","jarvis_query","claude_query","manus_status","manus_query"}
   self.assertTrue(required.issubset(t.CAPABILITIES))
  def test_contracts(self):
   c=t.RuntimeContext.create(source="test",project_id="centro");e=t.EventEnvelope.create("TEST",c,priority="HIGH");self.assertEqual(e.correlation_id,c.correlation_id)
@@ -15,6 +15,7 @@ class Tests(unittest.TestCase):
   with self.assertRaises(ValueError):t.ActionRequest.create(c,"SHELL")
  def test_router(self):
   self.assertEqual(t.classify_local_intent("Travis, estás aí?")[0],"presence")
+  self.assertEqual(t.classify_local_intent("Travis, abre o YouTube por favor")[0],"open_youtube")
   self.assertEqual(t.classify_local_intent("Jarvis, para")[0],"stop")
   self.assertEqual(t.classify_local_intent("Como está o Git da Pentehouse?","pentehouse")[0],"git_status")
   self.assertEqual(t.classify_local_intent("A Pentehouse está online?","pentehouse")[0],"site_check")
