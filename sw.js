@@ -1,5 +1,3 @@
-[Reading 57 lines from start (total: 57 lines, 0 remaining)]
-
 const CACHE='centro-negocios-v31-travis-real3d';
 const SHELL=['./','./index.html','./styles.css','./app.js?v=travis-panel-2','./agent-room.js?v=jarvis-1','./agent-room.css?v=world-10','./product.css?v=world-8','./travis-hud.css?v=6','./travis-3d.mjs?v=2','./assets/travis/travis-core.glb?v=1','./manifest.webmanifest','./icon.svg','./data/sites.json'];
 
@@ -57,5 +55,3 @@ self.addEventListener('fetch',event=>{
     })
   );
 });
-
-[executed on device: localhost (8ad4e1a5-6b39-4f45-82a2-0253dd9519fb)]
