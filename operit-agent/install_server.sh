@@ -4,6 +4,7 @@ set -eu
 RAW="https://raw.githubusercontent.com/crassas/centro-negocios-ia/main/operit-agent"
 HOME_DIR="${HOME:-/root}"
 SERVER="$HOME_DIR/centro_server.py"
+TRAVIS_CORE="$HOME_DIR/travis_core.py"
 
 fetch_to() {
   URL="$1"
@@ -20,6 +21,9 @@ fetch_to() {
 
 fetch_to "$RAW/centro_server.py" "$SERVER"
 chmod 700 "$SERVER"
+
+fetch_to "$RAW/travis_core.py" "$TRAVIS_CORE"
+chmod 600 "$TRAVIS_CORE"
 
 if [ -w "/usr/local/bin" ]; then
   SERVER_CTL="/usr/local/bin/centroserver"
