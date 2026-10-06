@@ -17,6 +17,25 @@ Implementação em main. A validação física do microfone e da reprodução no
 - Best Pizza respondeu HTTP 200 sem inferência na verificação inicial.
 - O teste de inferência/código bloqueou HTTP externo no cliente do teste. Não equivale a cortar toda a rede Android.
 Evidências locais em ~/.centro-jarvis/*-proof.json; não guardar gravações.
+## Núcleo reaproveitado do Travis original
+A migração do Travis antigo é selectiva: o Centro actual continua a ser o executor e recebe apenas as peças que tinham valor arquitectural real.
+
+- **Truthful Completion**: resultados propagam `completionStatus`; uma execução com `exitCode=0` fica `IMPLEMENTED_NOT_VERIFIED` até existir prova específica. Falhas nunca são promovidas a verificadas.
+- **UTEF real**: `travis_core.py` envolve o executor existente; não existe um segundo executor escondido.
+- **Event Envelope + Action Request**: cada execução tem contrato, `correlationId`, limites de segurança e eventos persistidos.
+- **Capability Registry**: todas as acções activas do Travis/Centro são registadas explicitamente; acções arbitrárias não entram no executor. Rotas OpenClaw continuam fora do registry e desactivadas.
+- **Intent Router determinístico**: presença, YouTube, Git, sites, tarefas, Laya e alterações de repositório são encaminhados por regras antes de qualquer LLM.
+- **Runtime Context**: origem, projecto, request e correlação acompanham a execução.
+- **Knowledge/Event Graph local**: SQLite guarda pedidos, acções, resultados e relações estruturais. Valores dos prompts/parâmetros não são persistidos neste grafo.
+- **Fallback policy explícita**: local-first e `paidFallback=false`; os fallbacks declarados ficam associados às capabilities, sem reactivar OpenClaw.
+
+Não foram importados o override global de `fetch`, LangGraph/TAIE simulados, a rota directa para Gemini, o knowledge graph em JSON/localStorage nem componentes que no Travis antigo existiam apenas como documentação.
+
+### Estado de validação
+- Repositório: **REGRESSION_TESTED** pelo workflow `Validate Centro Core`, incluindo sintaxe Python, `travis_core_selftest.py`, `jarvis_selftest.py`, policy, resiliência, shell, Worker JavaScript e fila/aprovações.
+- Dispositivo: **IMPLEMENTED_NOT_VERIFIED** enquanto não houver prova de que o Station descarregou `travis_core.py`, reiniciou os serviços e executou os diagnósticos no Android.
+- O auto-update e os instaladores foram actualizados para distribuir `travis_core.py` juntamente com Server/Jarvis.
+
 ## Arquitectura
 MediaRecorder no browser local → FFmpeg → whisper.cpp (pywhispercpp ARM64) → router determinístico → tools/Laya/llama.cpp → memória SQLite → Piper → browser.
 Sem API cloud obrigatória no fluxo Travis. O Telegram e operações Git/Web continuam naturalmente online.
