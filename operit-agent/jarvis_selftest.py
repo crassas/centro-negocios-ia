@@ -75,6 +75,18 @@ class Tests(unittest.TestCase):
   j.execute("pause_project",{"target":"centro"})
   (j.ROOT/"planner_enabled").touch()
   with self.assertRaises(ValueError):j.execute("repo_change",{"target":"centro","prompt":"Corrige"})
+ def test_voice_worker_reuse_and_cleanup(self):
+  binary=self.root/"bin"/"piper";binary.parent.mkdir()
+  binary.write_text("#!/usr/bin/env python3\nimport json,sys,wave\nfor line in sys.stdin:\n d=json.loads(line)\n with wave.open(d['output_file'],'wb') as w:w.setnchannels(1);w.setsampwidth(2);w.setframerate(22050);w.writeframes(b'\\0'*440)\n print(d['output_file'],flush=True)\n")
+  binary.chmod(0o755);worker=j.VoiceWorker("tts")
+  try:
+   with patch.object(j,"TTS_WORKER",worker):
+    first=j.speak("Primeira resposta");pid=worker.process.pid
+    second=j.speak("Segunda resposta")
+    self.assertEqual(pid,worker.process.pid)
+    self.assertTrue(first.startswith(b"RIFF"));self.assertTrue(second.startswith(b"RIFF"))
+   process=worker.process;worker.stop();self.assertIsNotNone(process.poll())
+  finally:worker.stop()
  def test_unknown_tool(self):
   with self.assertRaises(ValueError):j.execute("shell",{"command":"rm -rf /"})
  def test_cloud_off(self):

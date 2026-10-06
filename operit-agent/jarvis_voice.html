@@ -1,10 +1,12 @@
 <!doctype html><html lang="pt-PT"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Travis</title>
 <style>body{margin:0;background:#f4f1ea;color:#233026;font:18px system-ui}main{max-width:640px;margin:auto;padding:32px 22px}h1{font-size:42px;margin:12px 0}p{line-height:1.5}button,input{font:inherit;border-radius:12px;padding:16px;border:1px solid #ccc}button{background:#244d37;color:white;cursor:pointer}button:disabled{opacity:.5}input{box-sizing:border-box;width:100%;background:white;margin:15px 0}#answer{padding:20px;background:white;border-radius:18px;white-space:pre-wrap;min-height:120px}.row{display:flex;gap:12px;flex-wrap:wrap}small{color:#61685d}</style>
-<main><a href="https://crassas.github.io/centro-negocios-ia/#agentes" style="color:#244d37">← Centro de Negócios</a><p><small>CENTRO DE NEGÓCIOS</small></p><h1>Fala com o Travis.</h1><p id="status" role="status">Carrega em Falar. Carrega outra vez para terminar.</p><div class="row"><button id="mic">Falar</button><button id="replay" disabled>Ouvir resposta</button><button id="stop">Parar voz</button></div>
+<main><a href="https://crassas.github.io/centro-negocios-ia/#agentes" style="color:#244d37">← Centro de Negócios</a><p><small>CENTRO DE NEGÓCIOS</small></p><h1>Fala com o Travis.</h1><p id="status" role="status">Carrega em Falar. Quando fizeres uma pausa, o Travis responde.</p><div class="row"><button id="mic">Falar</button><button id="replay" disabled>Ouvir resposta</button><button id="stop">Parar voz</button></div>
 <input id="text" placeholder="Ou escreve o teu pedido…" aria-label="Pedido"><button id="send">Enviar</button><p id="answer" aria-live="polite">Experimenta: “Travis, diz-me o estado da estação.”</p><small>Voz e raciocínio no teu telemóvel. As gravações temporárias são apagadas após a transcrição.</small><details><summary>Actividade do Centro</summary><button id="activity" type="button">Actualizar actividade</button><p id="activity-result" aria-live="polite">Execuções do mesmo servidor usado pelo Centro e pelo Telegram.</p></details></main>
 <script>
 const key="__KEY__",status=document.querySelector("#status"),answer=document.querySelector("#answer"),mic=document.querySelector("#mic"),send=document.querySelector("#send");
 const replay=document.querySelector("#replay");
+let vadTimer,recordTimer,audioContext;
+function releaseMicrophone(){clearInterval(vadTimer);clearTimeout(recordTimer);audioContext?.close().catch(()=>{});audioContext=null;stream?.getTracks().forEach(t=>t.stop());mic.textContent="Falar"}
 let recorder,stream,chunks=[],audio,objectUrl,busy=false,generation=0,controller;
 async function api(path,body,type="application/json",signal){const r=await fetch(path,{method:"POST",headers:{"X-Jarvis-Key":key,"Content-Type":type},body:type==="application/json"?JSON.stringify(body):body,signal});if(!r.ok){const e=await r.json();throw Error(r.status===403?"A sessão mudou. Actualiza esta página.":e.error||"Pedido falhou")}return r}
 function stop(){replay.disabled=true;generation++;controller?.abort();busy=false;mic.disabled=send.disabled=false;if(audio){audio.pause();audio.src=""}if(objectUrl){URL.revokeObjectURL(objectUrl);objectUrl=null}status.textContent="Voz parada."}
@@ -22,8 +24,31 @@ async function request(path,body,type="application/json"){
  try{await result(await api(path,body,type,signal),id,signal)}catch(e){if(id===generation)status.textContent=e.name==="AbortError"?"Pedido cancelado.":e.message}
  finally{clearTimeout(deadline);clearInterval(progress);if(id===generation){busy=false;mic.disabled=send.disabled=false;controller=null}}
 }
-mic.onclick=async()=>{if(recorder?.state==="recording"){recorder.stop();return}try{stop();stream=await navigator.mediaDevices.getUserMedia({audio:true});chunks=[];recorder=new MediaRecorder(stream);recorder.ondataavailable=e=>chunks.push(e.data);recorder.onstop=()=>{stream.getTracks().forEach(t=>t.stop());mic.textContent="Falar";request("/listen",new Blob(chunks,{type:recorder.mimeType}),recorder.mimeType)};recorder.start();mic.textContent="Terminar gravação";status.textContent="Microfone activo. Fala agora.";const take=recorder;setTimeout(()=>{if(take.state==="recording")take.stop()},30000)}catch(e){status.textContent="Microfone: "+e.message}};
-document.querySelector("#stop").onclick=()=>{stop();if(recorder?.state==="recording"){recorder.onstop=()=>stream.getTracks().forEach(t=>t.stop());recorder.stop();mic.textContent="Falar"}};
+mic.onclick=async()=>{
+ if(recorder?.state==="recording"){recorder.stop();return}
+ try{
+  stop();const capture=generation;
+  stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+  if(capture!==generation){releaseMicrophone();return}
+  chunks=[];recorder=new MediaRecorder(stream);const take=recorder;
+  recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+  recorder.onstop=()=>{releaseMicrophone();if(capture!==generation)return;request("/listen",new Blob(chunks,{type:take.mimeType}),take.mimeType)};
+  recorder.start();mic.textContent="Terminar";status.textContent="Estou a ouvir. Fala naturalmente.";
+  const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+  if(AudioContextClass){
+   audioContext=new AudioContextClass();await audioContext.resume();if(take.state!=="recording")return;const source=audioContext.createMediaStreamSource(stream),analyser=audioContext.createAnalyser();analyser.fftSize=1024;source.connect(analyser);
+   const samples=new Float32Array(analyser.fftSize);const began=Date.now();let lastSpeech=began,speechFrames=0;
+   vadTimer=setInterval(()=>{
+    if(take.state!=="recording")return;analyser.getFloatTimeDomainData(samples);let energy=0;for(const sample of samples)energy+=sample*sample;
+    if(Math.sqrt(energy/samples.length)>.018){lastSpeech=Date.now();speechFrames++}
+    if(speechFrames>=3&&Date.now()-lastSpeech>1400){take.stop();return}
+    if(speechFrames===0&&Date.now()-began>10000){take.onstop=()=>{releaseMicrophone();status.textContent="Não ouvi voz. Carrega em Falar para tentar novamente."};take.stop()}
+   },50);
+  }
+  recordTimer=setTimeout(()=>{if(take.state==="recording")take.stop()},30000);
+ }catch(e){releaseMicrophone();status.textContent="Microfone: "+e.message}
+};
+document.querySelector("#stop").onclick=()=>{stop();if(recorder?.state==="recording"){recorder.onstop=releaseMicrophone;recorder.stop()}else releaseMicrophone()};
 replay.onclick=async()=>{if(!audio)return;try{audio.currentTime=0;await audio.play();status.textContent="O Travis está a falar."}catch(e){status.textContent="Não foi possível reproduzir a voz: "+e.message}};
 send.onclick=()=>request("/jarvis",{text:document.querySelector("#text").value});
 document.querySelector("#text").onkeydown=e=>{if(e.key==="Enter")send.click()};

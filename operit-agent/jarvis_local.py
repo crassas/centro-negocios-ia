@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Local-first voice and deterministic tools. No mandatory cloud provider."""
-import argparse, datetime, fcntl, json, os, re, secrets, shutil, signal
+import argparse, datetime, fcntl, json, os, re, secrets, select, shutil, signal
 import sqlite3, subprocess, tempfile, threading, time, unicodedata, urllib.request
 from pathlib import Path
 from contextlib import contextmanager
@@ -115,13 +115,13 @@ def inference_lock(timeout):
  if not LOCK.acquire(timeout=timeout):raise RuntimeError("O modelo está ocupado. Tenta novamente dentro de alguns segundos.")
  try:yield
  finally:LOCK.release()
-def infer(text,system="És o Travis, assistente do Centro de Negócios. Responde brevemente em português de Portugal. /no_think",json_mode=False,schema=None):
+def infer(text,system="És o Travis, assistente do Centro de Negócios. Responde em português de Portugal, sem gerúndio, em uma ou duas frases curtas. Responde logo ao pedido, sem introduções. /no_think",json_mode=False,schema=None):
  with inference_lock(240 if json_mode else 2):
   try:http("http://127.0.0.1:8771/health",timeout=2)
   except Exception:
    try:llm_start("small")
    except Exception:llm_start("fallback")
-  data={"messages":[{"role":"system","content":clean(system)},{"role":"user","content":clean(text)[:6000]}],"temperature":0.1,"max_tokens":320,"stream":False}
+  data={"messages":[{"role":"system","content":clean(system)},{"role":"user","content":clean(text)[:6000]}],"temperature":0.1,"max_tokens":320 if json_mode else 80,"stream":False}
   if json_mode:data["response_format"]={"type":"json_object"}
   if schema:data["response_format"]={"type":"json_object","schema":schema}
   start=time.monotonic()
@@ -282,23 +282,79 @@ def route(text,context=None):
  else:reply=result if isinstance(result,str) else json.dumps(result,ensure_ascii=False)
  event("tool_events",{"tool":tool,"ok":True,"duration_ms":int((time.monotonic()-start)*1000),"correlation_id":outcome["correlationId"],"completion_status":outcome["completionStatus"]})
  return {"ok":True,"provider":"local","tool":tool,"result":result,"reply":clean(reply)[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"]}
+class VoiceWorker:
+ def __init__(self,kind):self.kind=kind;self.process=None;self.buffer=b"";self.lock=threading.RLock()
+ def start(self):
+  if self.process is not None and self.process.poll() is None:return
+  if self.kind=="stt":args=[str(ROOT/"venv/bin/python"),str(Path(__file__).with_name("jarvis_whisper.py")),str(MODELS/"stt/ggml-base.bin"),"--worker"]
+  else:args=[str(ROOT/"bin/piper"),"-m",str(MODELS/"tts/pt_PT-tugao-medium.onnx"),"--json-input","-q"]
+  ROOT.mkdir(parents=True,exist_ok=True)
+  with (ROOT/(self.kind+"-worker.log")).open("ab") as log:self.process=subprocess.Popen(args,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=log,bufsize=0)
+  self.buffer=b""
+  if self.kind=="stt":
+   if not json.loads(self.line(20).removeprefix("TRAVIS_STT:")).get("ready"):raise RuntimeError("Transcrição não ficou pronta")
+ def line(self,timeout):
+  deadline=time.monotonic()+timeout
+  while b"\n" not in self.buffer:
+   remaining=deadline-time.monotonic()
+   if remaining<=0 or not select.select([self.process.stdout],[],[],remaining)[0]:raise TimeoutError("Voz excedeu o prazo")
+   block=os.read(self.process.stdout.fileno(),65536)
+   if not block:raise RuntimeError("Processo de voz terminou")
+   self.buffer+=block
+  line,self.buffer=self.buffer.split(b"\n",1)
+  value=line.decode("utf-8",errors="replace")
+  if self.kind=="stt" and not value.startswith("TRAVIS_STT:"):return self.line(max(.1,deadline-time.monotonic()))
+  return value
+ def request(self,payload):
+  if not self.lock.acquire(timeout=2):raise RuntimeError("Voz ocupada; tenta novamente dentro de alguns segundos")
+  try:
+   self.start();self.process.stdin.write((json.dumps(payload,ensure_ascii=False)+"\n").encode());self.process.stdin.flush()
+   return self.line(45)
+  except Exception:self.stop();raise
+  finally:self.lock.release()
+ def stop(self):
+  if self.process is not None:
+   try:
+    self.process.terminate();self.process.wait(timeout=2)
+   except subprocess.TimeoutExpired:self.process.kill();self.process.wait(timeout=2)
+   except ProcessLookupError:pass
+   for pipe in [self.process.stdin,self.process.stdout]:
+    if pipe is not None:pipe.close()
+   self.process=None
+  self.buffer=b""
+STT_WORKER=VoiceWorker("stt")
+TTS_WORKER=VoiceWorker("tts")
+def warm_voice():
+ for worker in [STT_WORKER,TTS_WORKER]:
+  try:
+   with worker.lock:worker.start()
+  except Exception as exc:event("executions",{"voice_warmup_error":worker.kind+": "+clean(str(exc))[:180]})
 def transcribe(audio):
  if len(audio)>12*1024*1024:raise ValueError("Áudio demasiado grande")
+ start=time.monotonic()
  with tempfile.TemporaryDirectory(prefix="jarvis-stt-") as tmp:
-  src=Path(tmp)/"input";wav=Path(tmp)/"audio.wav";out=Path(tmp)/"transcript";src.write_bytes(audio)
-  command(["ffmpeg","-v","error","-y","-protocol_whitelist","file,pipe","-i",str(src),"-t","45","-ar","16000","-ac","1",str(wav)],timeout=40)
-  if (ROOT/"bin/whisper-cli").is_file():
-   command([str(ROOT/"bin/whisper-cli"),"-m",str(MODELS/"stt/ggml-base.bin"),"-f",str(wav),"-l","pt","-t","2","-otxt","-of",str(out)],timeout=180)
+  src=Path(tmp)/"input";wav=Path(tmp)/"audio.wav";src.write_bytes(audio)
+  command(["ffmpeg","-v","error","-y","-protocol_whitelist","file,pipe","-i",str(src),"-t","30","-ar","16000","-ac","1",str(wav)],timeout=15)
+  if (ROOT/"venv/bin/python").is_file():
+   data=json.loads(STT_WORKER.request({"path":str(wav)}).removeprefix("TRAVIS_STT:"))
+   if data.get("error"):raise RuntimeError(data["error"])
+   text=data["text"]
   else:
-   command([str(ROOT/"venv/bin/python"),str(Path(__file__).with_name("jarvis_whisper.py")),str(MODELS/"stt/ggml-base.bin"),str(wav),str(out.with_suffix(".txt"))],timeout=180)
-  return out.with_suffix(".txt").read_text().strip()
+   out=Path(tmp)/"transcript"
+   command([str(ROOT/"bin/whisper-cli"),"-m",str(MODELS/"stt/ggml-base.bin"),"-f",str(wav),"-l","pt","-t","4","-otxt","-of",str(out)],timeout=45)
+   text=out.with_suffix(".txt").read_text().strip()
+ event("executions",{"stage":"stt","latency_ms":int((time.monotonic()-start)*1000)})
+ return text
 def speak(text):
- if len(text)>3000:raise ValueError("Resposta demasiado longa")
+ if not str(text).strip() or len(text)>3000:raise ValueError("Resposta vazia ou demasiado longa")
+ start=time.monotonic()
  with tempfile.TemporaryDirectory(prefix="jarvis-tts-") as tmp:
   out=Path(tmp)/"speech.wav"
-  p=subprocess.run([str(ROOT/"bin/piper"),"-m",str(MODELS/"tts/pt_PT-tugao-medium.onnx"),"-f",str(out)],input=clean(text),text=True,capture_output=True,timeout=60)
-  if p.returncode:raise RuntimeError("Piper falhou: "+clean(p.stderr[-300:]))
-  return out.read_bytes()
+  reported=TTS_WORKER.request({"text":clean(text),"output_file":str(out)})
+  if reported!=str(out):raise RuntimeError("Piper devolveu um ficheiro inesperado")
+  audio=out.read_bytes()
+ event("executions",{"stage":"tts","latency_ms":int((time.monotonic()-start)*1000)})
+ return audio
 def centro_activity():
  token=(Path.home()/".centro-server/token").read_text().strip()
  request=urllib.request.Request("http://127.0.0.1:8765/history",headers={"Authorization":"Bearer "+token})
@@ -339,7 +395,13 @@ def main():
  ap=argparse.ArgumentParser();ap.add_argument("action",choices=["serve","doctor","ask","llm-start","llm-stop"]);ap.add_argument("text",nargs="?",default="");a=ap.parse_args();ROOT.mkdir(parents=True,exist_ok=True)
  if a.action=="serve":
   with (ROOT/"router.lock").open("w") as lock:
-   fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB);ThreadingHTTPServer(("127.0.0.1",8770),Handler).serve_forever()
+   fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+   def shutdown(*args):raise SystemExit(0)
+   signal.signal(signal.SIGTERM,shutdown)
+   threading.Thread(target=warm_voice,daemon=True).start()
+   try:ThreadingHTTPServer(("127.0.0.1",8770),Handler).serve_forever()
+   finally:
+    STT_WORKER.stop();TTS_WORKER.stop()
  elif a.action=="doctor":print(json.dumps(doctor(),indent=2,ensure_ascii=False))
  elif a.action=="ask":print(json.dumps(route(a.text),ensure_ascii=False))
  elif a.action=="llm-start":llm_start(a.text or "small")
