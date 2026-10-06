@@ -1,57 +1,75 @@
+[Reading 71 lines from start (total: 71 lines, 0 remaining)]
+
 import fs from 'node:fs';
 
 const html=fs.readFileSync('index.html','utf8');
 const css=fs.readFileSync('travis-hud.css','utf8');
-const hud=fs.readFileSync('travis-hud.js','utf8');
-const scene=fs.readFileSync('travis-scene.js','utf8');
+const scene=fs.readFileSync('travis-3d.mjs','utf8');
 const sw=fs.readFileSync('sw.js','utf8');
 const glb=fs.statSync('assets/travis/travis-core.glb');
 
 for(const token of [
   'id="travis-hud"',
-  'id="travis-three-stage"',
-  'id="travis-core-trigger"',
-  'class="travis-orbit-menu"',
-  './travis-hud.css?v=5',
-  './travis-hud.js?v=5',
-  './travis-scene.js?v=5',
+  'id="travis-three-canvas"',
+  'id="travis-loading"',
+  './travis-hud.css?v=6',
+  './travis-3d.mjs?v=2',
   'type="importmap"',
   '"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"'
 ]){
-  if(!html.includes(token)) throw new Error('Travis V5 HTML em falta: '+token);
+  if(!html.includes(token)) throw new Error('Travis real 3D HTML em falta: '+token);
 }
 
 for(const token of [
   'id="travis-panel"',
   './travis-panel.css',
   './travis-panel.js',
-  'id="travis-core-canvas"',
-  'class="node-ring"'
+  './travis-scene.js',
+  './travis-hud.js',
+  'class="travis-orbit-menu"',
+  'id="travis-core-trigger"'
 ]){
-  if(html.includes(token)) throw new Error('UI/renderer antigo ainda ligado: '+token);
+  if(html.includes(token)) throw new Error('Camada antiga/genérica ainda ligada: '+token);
 }
 
 for(const token of [
   "import * as THREE from 'three'",
   'GLTFLoader',
-  "./assets/travis/travis-core.glb?v=1",
+  'EffectComposer',
+  'UnrealBloomPass',
+  'RoomEnvironment',
+  "new THREE.MeshPhysicalMaterial",
+  'raycaster.intersectObjects',
+  'createCommandNode',
+  './assets/travis/travis-core.glb?v=1',
   'ACESFilmicToneMapping',
-  "setClearColor(0x000000,0)",
-  'premultipliedAlpha:false',
-  'renderer.render(scene,camera)',
-  'window.Travis3D'
+  'window.TravisVisual'
 ]){
-  if(!scene.includes(token)) throw new Error('Motor 3D V5 em falta: '+token);
+  if(!scene.includes(token)) throw new Error('Motor Three.js em falta: '+token);
 }
 
-for(const forbidden of ['EffectComposer','UnrealBloomPass','OutputPass','composer.render()']){
-  if(scene.includes(forbidden)) throw new Error('Pós-processamento que pode quebrar alpha ainda activo: '+forbidden);
+
+for(const token of [
+  'canvas,alpha:false',
+  'scene.background=new THREE.Color(0x02070b)',
+  'new THREE.BoxGeometry(1.35,.52,.065)',
+  'new THREE.EdgesGeometry',
+  'raycaster.intersectObjects'
+]){
+  if(!scene.includes(token)) throw new Error('Pipeline 3D robusto em falta: '+token);
 }
 
-if(glb.size<100000) throw new Error('GLB Travis parece vazio ou inválido: '+glb.size);
-if(!css.includes('#travis-three-stage')) throw new Error('Mount CSS 3D em falta.');
-if(css.includes('.node-ring')) throw new Error('UI circular antiga ainda existe no CSS.');
-if(!hud.includes("new CustomEvent('travis3dcommands'")) throw new Error('Ligação HUD→3D em falta.');
-if(!sw.includes('travis-scene.js?v=5')||!sw.includes('travis-hud.css?v=5')) throw new Error('Cache V5 em falta.');
+for(const forbidden of [
+  'new THREE.CylinderGeometry(.38,.38,.075',
+  'new THREE.CircleGeometry(.68,32)'
+]){
+  if(scene.includes(forbidden)) throw new Error('Comando circular antigo ainda activo: '+forbidden);
+}
 
-console.log('TRAVIS TRANSPARENT 3D V5 SELFTEST OK',glb.size,'bytes');
+if(glb.size < 500000) throw new Error('GLB Travis demasiado pequeno: '+glb.size);
+if(!css.includes('#travis-three-canvas')) throw new Error('Canvas 3D CSS em falta.');
+if(!sw.includes('travis-3d.mjs?v=2') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
+
+console.log('TRAVIS REAL 3D SELFTEST OK',glb.size,'bytes');
+
+[executed on device: localhost (8ad4e1a5-6b39-4f45-82a2-0253dd9519fb)]
