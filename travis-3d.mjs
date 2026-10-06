@@ -1,5 +1,3 @@
-[Reading 790 lines from start (total: 790 lines, 0 remaining)]
-
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -790,5 +788,3 @@ if (!hud || !launcher || !canvas) {
 
   requestAnimationFrame(animate);
 }
-
-[executed on device: localhost (8ad4e1a5-6b39-4f45-82a2-0253dd9519fb)]
