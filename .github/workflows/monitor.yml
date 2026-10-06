@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: "site-audit"
+  group: "site-audit-v2"
   cancel-in-progress: false
 
 jobs:
