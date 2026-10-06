@@ -81,17 +81,29 @@ try{
   const first=await send();assert.equal(first.status,200,await first.clone().text());
   const data=await first.json();
   const created=await q.getJson('task:'+data.taskId);
-  assert.equal(created.action,'repo_change');assert.equal(created.target,'restaurante-2-irmaos');assert.equal(created.status,'pending');
+  assert.equal(created.action,'repo_change');assert.equal(created.target,'restaurante-2-irmaos');assert.equal(created.status,'queued');
+  assert.equal(data.approvalRequired,false);
   assert.equal((await (await send()).json()).taskId,data.taskId);assert.equal(notifications,1);
+  assert.equal((await q.getJson('task:ids')).filter(id=>id===data.taskId).length,1);
+
+  const riskyBody={question:'Altera o Centro para trocar o token da API',requestId:'security-request-test-01'};
+  const risky=await worker.fetch(new Request('https://test/api/agent',{method:'POST',body:JSON.stringify(riskyBody)}),env,{});
+  assert.equal(risky.status,200,await risky.clone().text());
+  const riskyData=await risky.json();
+  const riskyTask=await q.getJson('task:'+riskyData.taskId);
+  assert.equal(riskyTask.action,'repo_change');assert.equal(riskyTask.target,'centro-negocios-ia');assert.equal(riskyTask.status,'pending');
+  assert.equal(riskyData.approvalRequired,true);
+  assert.match(String(riskyData.approvalReason||''),/credenciais|segurança/i);
+
   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(env.TELEGRAM_BOT_TOKEN));
   const secret=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
-  const approve=()=>worker.fetch(new Request('https://test/telegram/webhook',{method:'POST',headers:{'x-telegram-bot-api-secret-token':secret},body:JSON.stringify({update_id:999999,callback_query:{id:'cb',data:'taskapprove:'+data.taskId,message:{chat:{id:42}}}})}),env,{});
+  const approve=()=>worker.fetch(new Request('https://test/telegram/webhook',{method:'POST',headers:{'x-telegram-bot-api-secret-token':secret},body:JSON.stringify({update_id:999999,callback_query:{id:'cb',data:'taskapprove:'+riskyData.taskId,message:{chat:{id:42}}}})}),env,{});
   assert.equal((await approve()).status,200);await approve();
-  assert.equal((await q.getJson('task:'+data.taskId)).status,'queued');
-  assert.equal((await q.getJson('task:ids')).filter(id=>id===data.taskId).length,1);
+  assert.equal((await q.getJson('task:'+riskyData.taskId)).status,'queued');
+
   q.authenticate=async()=>false;
   const unauthorised=await worker.fetch(new Request('https://test/api/operit/submit',{method:'POST',body:JSON.stringify(body)}),env,{});
   assert.equal(unauthorised.status,401);
-  console.log('OK SEO conversation -> pending task -> Telegram approval -> queue; duplicate request/callback creates no second task; submit requires authentication');
+  console.log('OK high-autonomy policy: routine SEO auto-queues; security/credentials require Telegram; duplicate request creates no second task; submit requires authentication');
  }finally{globalThis.fetch=originalFetch;}
 }finally{Date.now=realNow;}
