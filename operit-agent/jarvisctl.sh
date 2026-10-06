@@ -7,21 +7,55 @@ SOURCE="${JARVIS_SOURCE:-$SCRIPT_ROOT}"
 mkdir -p "$STATE"
 stop_router() {
   /usr/bin/python3 - "$STATE/router.pid" <<'PY'
-import os,signal,sys
+import os,signal,sys,time
 from pathlib import Path
 p=Path(sys.argv[1])
 try:
  pid=int(p.read_text())
- if b"jarvis_local.py" in Path(f"/proc/{pid}/cmdline").read_bytes():os.kill(pid,signal.SIGTERM)
+ if b"jarvis_local.py" in Path(f"/proc/{pid}/cmdline").read_bytes():
+  os.kill(pid,signal.SIGTERM)
+  deadline=time.monotonic()+8
+  while time.monotonic()<deadline:
+   try:
+    if b"jarvis_local.py" not in Path(f"/proc/{pid}/cmdline").read_bytes():break
+   except OSError:break
+   time.sleep(.1)
+  else:raise RuntimeError("O Travis ainda não terminou; novo arranque cancelado.")
 except (OSError,ValueError):pass
 p.unlink(missing_ok=True)
 PY
 }
 case "${1:-doctor}" in
  start)
-  if [ -f "$STATE/router.pid" ] && kill -0 "$(cat "$STATE/router.pid")" 2>/dev/null; then echo "Travis activo"; exit; fi
+  if /usr/bin/python3 - <<'PYHEALTH'
+import json,sys,urllib.request
+try:
+ with urllib.request.urlopen('http://127.0.0.1:8770/health',timeout=1) as response:d=json.load(response)
+ sys.exit(0 if d.get('ok') and d.get('service')=='jarvis' else 1)
+except (OSError,ValueError):sys.exit(1)
+PYHEALTH
+  then echo "Travis activo e confirmado"; exit; fi
   nohup /usr/bin/python3 "$SOURCE/jarvis_local.py" serve >>"$STATE/router.log" 2>&1 </dev/null &
-  echo $! > "$STATE/router.pid"
+  ROUTER_PID=$!
+  echo "$ROUTER_PID" > "$STATE/router.pid"
+  if ! /usr/bin/python3 - "$ROUTER_PID" <<'PY'
+import os,sys,time,urllib.request,json
+from pathlib import Path
+pid=int(sys.argv[1]);deadline=time.monotonic()+8
+while time.monotonic()<deadline:
+ try:
+  os.kill(pid,0)
+  with urllib.request.urlopen('http://127.0.0.1:8770/health',timeout=1) as response:
+   if json.load(response).get('ok'):sys.exit(0)
+ except (OSError,ValueError):pass
+ time.sleep(.2)
+sys.exit(1)
+PY
+  then
+   echo "Travis não ficou disponível. Último erro:"
+   tail -n 12 "$STATE/router.log"
+   exit 1
+  fi
   echo "Travis: http://127.0.0.1:8770"
   ;;
  stop)
