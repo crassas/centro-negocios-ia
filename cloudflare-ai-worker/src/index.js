@@ -133,7 +133,7 @@ export class TaskQueue extends DurableObject {
     const previous=await this.getJson(key,null);
     if(previous){
       const task=await this.getJson('task:'+previous.id,null);
-      if(task&&task.target===spec.target&&task.args.prompt===spec.args.prompt)return {task,reused:true};
+      if(task&&task.action===spec.action&&task.target===spec.target&&task.args.prompt===spec.args.prompt)return {task,reused:true};
       throw new Error('Identificador já usado por outro pedido.');
     }
     const task=await this.createTask(spec,'app');
@@ -2120,6 +2120,8 @@ const OPERIT_PROJECTS={
 };
 function parseOperitInstruction(text){
   const raw=String(text||'').trim();
+  const jarvis=raw.match(/^\/jarvis\s+([\s\S]{1,4000})$/i);
+  if(jarvis)return {action:'jarvis_query',target:'local',args:{prompt:jarvis[1].trim()},label:'Jarvis local · conversa'};
   let m=raw.match(/^\/station$/i);
   if(m)return {action:'station_status',target:'local',label:'Estado da Estação Centro'};
   m=raw.match(/^\/doctor$/i);
@@ -2461,7 +2463,7 @@ async function handleTelegramUpdate(env,update,ctx){
           await q.resolveTask(task.id,true);
           await telegramSend(env,'⚙️ AUTOMAÇÃO\n\n'+task.label+'\n\nAceite automaticamente. O executor valida e publica apenas se tudo passar.');
         }
-      }else if(isClaude||isLaya||isManus||instruction.action==='git_pull'){
+      }else if(isClaude||isLaya||isManus||instruction.action==='git_pull'||instruction.action==='jarvis_query'){
         await q.resolveTask(task.id,true);
         const heading=isClaude?'🧠 CLAUDE':(isLaya?'🟦 LAYA':(isManus?'🛰️ MANUS':'⚡ CENTRO'));
         await telegramSend(env,heading+'\n\n'+task.label+'\n\nAceite automaticamente.');
@@ -3132,6 +3134,14 @@ export default {
               ? 'Pedido '+task.id+' registado. Esta operação é de risco elevado ('+approvalReason+') e aguarda confirmação no Telegram.'
               : 'Pedido '+task.id+' aceite automaticamente. Não precisas de confirmar no Telegram; acompanha apenas o resultado.';
             return json({ok:true,taskId:task.id,status:approvalReason?'pending':'queued',actions:[],summary,approvalRequired:Boolean(approvalReason),approvalReason},200,origin);
+          }
+          if(body?.mode==='local'){
+            const requestId=String(body?.requestId||'');
+            if(!/^[a-zA-Z0-9_-]{8,80}$/.test(requestId))return json({ok:false,error:'Identificador do pedido em falta.'},400,origin);
+            const spec={action:'jarvis_query',target:'local',args:{prompt:question,context},label:'Jarvis local · '+question.slice(0,80)};
+            const q=taskQueue(env),result=await q.createRepoRequest(requestId,spec);
+            if(!result.reused)await q.resolveTask(result.task.id,true);
+            return json({ok:true,taskId:result.task.id,status:'queued',actions:[],model:'jarvis-local',summary:'Pedido recebido na fila do Centro. O Jarvis responde no teu telemóvel; acompanha o resultado aqui.'},200,origin);
           }
           let result=null,usedModel=AGENT_MODEL,parsed=null;
           try{

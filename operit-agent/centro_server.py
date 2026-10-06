@@ -159,6 +159,7 @@ def capabilities():
             "fault_timeout",
             "fault_laya_recovery",
             "repo_change",
+            "jarvis_query",
             "claude_query",
             "laya_status",
             "laya_decide",
@@ -1627,6 +1628,21 @@ def action_fault_laya_recovery(task):
 def execute_action(task):
     action = str(task.get("action") or "")
     target = str(task.get("target") or "")
+    if action == "jarvis_query":
+        started = time.time()
+        try:
+            import jarvis_local
+            args = task.get("args") or {}
+            prompt = str(args.get("prompt") or "").strip()
+            # Alterações percorrem a acção repo_change, com a política existente.
+            if jarvis_local.classify(prompt)[0] == "repo_change":
+                raise ValueError("Indica o projecto no Centro para iniciar uma alteração protegida.")
+            answer = jarvis_local.route(prompt, args.get("context"))
+            return {"exitCode": 0, "stdout": answer["reply"], "stderr": "",
+                    "durationMs": int((time.time()-started)*1000)}
+        except Exception as exc:
+            return {"exitCode": 1, "stdout": "", "stderr": str(exc)[:500],
+                    "durationMs": int((time.time()-started)*1000)}
     if not OPENCLAW_ENABLED and (action.startswith("openclaw_") or action == "fault_openclaw_recovery"):
         return {"exitCode": 78, "stdout": "OpenClaw DESACTIVADO pelo operador.", "stderr": "", "durationMs": 0}
 

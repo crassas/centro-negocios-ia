@@ -3,7 +3,7 @@
 window.CentroRoom=(()=>{
   const roles=[
     {id:'coordinator',name:'Coordenador',role:'Recepção e fila',color:'#63aa92',home:[12,76],phases:['received'],actions:[]},
-    {id:'planner',name:'Planeador',role:'Plano e decisão',color:'#dd9870',home:[31,76],phases:['planning'],actions:['claude_query']},
+    {id:'planner',name:'Planeador',role:'Plano e decisão',color:'#dd9870',home:[31,76],phases:['planning'],actions:['claude_query','jarvis_query']},
     {id:'executor',name:'Operit',role:'Edição e execução',color:'#6384eb',home:[50,76],phases:['editing'],actions:['repo_change','git_pull','git_status','system_info','site_check']},
     {id:'reviewer',name:'Revisor',role:'Testes e controlo',color:'#8b78c9',home:[69,76],phases:['validating'],actions:[]},
     {id:'publisher',name:'Publicador',role:'Commit e publicação',color:'#4d9b78',home:[88,76],phases:['publishing','completed'],actions:[]},
@@ -37,7 +37,7 @@ window.CentroRoom=(()=>{
     if(t?.status==='running'){
       const a=String(t?.action||'');
       if(a.startsWith('laya_'))return 'laya';
-      if(a==='repo_change'||a==='claude_query')return 'planning';
+      if(a==='repo_change'||a==='claude_query'||a==='jarvis_query')return 'planning';
       return 'editing';
     }
     if(t?.status==='completed')return Number(t?.exitCode)===0?'completed':'blocked';

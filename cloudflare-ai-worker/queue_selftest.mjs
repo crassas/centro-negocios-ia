@@ -76,6 +76,15 @@ try{
   let notifications=0;
   globalThis.fetch=async()=>{notifications++;return new Response(JSON.stringify({ok:true,result:{message_id:1}}),{headers:{'content-type':'application/json'}});};
   const env={TASKS:{getByName:()=>q},TELEGRAM_BOT_TOKEN:'test-only',TELEGRAM_CHAT_ID:'42'};
+  assert.equal(parseOperitInstruction('/jarvis estás aí').action,'jarvis_query');
+  const localBody={question:'estás aí',mode:'local',context:{projects:[]},requestId:'local-request-test-01'};
+  const localSend=()=>worker.fetch(new Request('https://test/api/agent',{method:'POST',body:JSON.stringify(localBody)}),{...env,AI:{run:()=>{throw Error('Cloud inference must not run');}}},{});
+  const localResult=await (await localSend()).json();
+  const localTask=await q.getJson('task:'+localResult.taskId);
+  assert.equal(localTask.action,'jarvis_query');assert.equal(localTask.status,'queued');
+  assert.equal(localTask.args.prompt,'estás aí');
+  assert.equal((await (await localSend()).json()).taskId,localResult.taskId);
+  console.log('OK Jarvis uses the shared persistent queue, without cloud inference or duplicate tasks');
   const body={question:'Faz o SEO da página dos dois irmãos',requestId:'seo-request-test-01'};
   const send=()=>worker.fetch(new Request('https://test/api/agent',{method:'POST',body:JSON.stringify(body)}),env,{});
   const first=await send();assert.equal(first.status,200,await first.clone().text());

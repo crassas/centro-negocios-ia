@@ -1,5 +1,5 @@
-const CACHE='centro-negocios-v20-autonomous-office';
-const SHELL=['./','./index.html','./styles.css','./app.js?v=world-8','./agent-room.js?v=world-10','./agent-room.css?v=world-10','./product.css?v=world-8','./manifest.webmanifest','./icon.svg','./data/sites.json'];
+const CACHE='centro-negocios-v21-jarvis';
+const SHELL=['./','./index.html','./styles.css','./app.js?v=jarvis-1','./agent-room.js?v=jarvis-1','./agent-room.css?v=world-10','./product.css?v=world-8','./manifest.webmanifest','./icon.svg','./data/sites.json'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));
@@ -55,5 +55,3 @@ self.addEventListener('fetch',event=>{
     })
   );
 });
-
-

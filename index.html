@@ -16,8 +16,8 @@
   <link rel="stylesheet" href="./agent-room.css?v=world-10">
   <link rel="stylesheet" href="./product.css?v=world-8">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
-  <script src="./agent-room.js?v=world-10" defer></script>
-  <script src="./app.js?v=world-8" defer></script>
+  <script src="./agent-room.js?v=jarvis-1" defer></script>
+  <script src="./app.js?v=jarvis-1" defer></script>
 </head>
 <body>
 <div class="shell">
@@ -185,7 +185,7 @@
         </div>
 
         <div class="ai-command">
-          <div class="ai-command-head"><span>COMMAND INPUT</span><small>Ctrl + Enter para executar</small></div>
+          <div class="ai-command-head"><span>FALA COM O CENTRO</span><label>Motor <select id="ai-engine"><option value="local">Jarvis local</option><option value="cloud">Workers AI</option></select></label><a href="http://127.0.0.1:8770/" target="_blank" rel="noopener">Voz no telemóvel ↗</a></div>
           <div class="ai-input-row">
             <button class="voice-key" id="ai-voice-btn" type="button" title="Ditar">◉</button>
             <textarea id="ai-question" class="ai-question" rows="2" placeholder="Diz o que queres. Ex.: vê tudo e diz-me só o que precisa da minha atenção."></textarea>

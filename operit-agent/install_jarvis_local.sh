@@ -45,6 +45,7 @@ VOICE_BASE='https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_PT/tu
 fetch "$VOICE_BASE.onnx" "$MODEL_ROOT/tts/pt_PT-tugao-medium.onnx"
 fetch "$VOICE_BASE.onnx.json" "$MODEL_ROOT/tts/pt_PT-tugao-medium.onnx.json"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+for file in jarvis_local.py jarvis_whisper.py jarvis_voice.html; do cp "$SCRIPT_DIR/$file" "$HOME/$file"; done
 chmod +x "$SCRIPT_DIR/jarvisctl.sh"
 ln -sf "$SCRIPT_DIR/jarvisctl.sh" /usr/local/bin/jarvisctl
 printf 'Componentes instalados. Execute jarvisctl doctor e os testes antes de activar o planeador.\n'

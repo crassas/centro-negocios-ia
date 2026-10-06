@@ -61,6 +61,8 @@ RUNTIME_FILES = {
     "centro_soak.py": HOME / "centro_soak.py",
     "jarvis_local.py": HOME / "jarvis_local.py",
     "jarvis_whisper.py": HOME / "jarvis_whisper.py",
+    "jarvis_voice.html": HOME / "jarvis_voice.html",
+    "jarvisctl.sh": locate_ctl("jarvisctl"),
     "centroctl.sh": AGENT_CTL,
     "serverctl.sh": SERVER_CTL,
     "stationctl.sh": locate_ctl("centrostation"),
@@ -569,6 +571,7 @@ def main():
     last_busy_seen = 0
     pending_server_restart = False
     pending_agent_restart = False
+    pending_jarvis_restart = False
 
     while True:
         now = int(time.time())
@@ -588,6 +591,8 @@ def main():
                 candidate_sha = ""
             changed, update_errors = sync_runtime()
             if changed:
+                if any(name in changed for name in ("jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh")):
+                    pending_jarvis_restart = True
                 if "centro_server.py" in changed:
                     pending_server_restart = True
                     actions.append({"service": "autoupdate/server", "ok": True, "output": "actualização validada e preparada"})
@@ -677,14 +682,21 @@ def main():
                 actions.append({"service": "laya", "ok": False, "output": str(exc)})
 
         jarvis_ok = False
+        jarvis_busy = True
         jarvis_ctl = locate_ctl("jarvisctl")
         jarvis_enabled = (HOME / ".centro-jarvis/enabled").exists()
         if jarvis_enabled:
             try:
                 with urllib.request.urlopen("http://127.0.0.1:8770/health", timeout=2) as response:
-                    jarvis_ok = json.loads(response.read()).get("ok") is True
+                    jarvis_state = json.loads(response.read())
+                    jarvis_ok = jarvis_state.get("ok") is True
+                    jarvis_busy = bool(jarvis_state.get("busy", False))
             except Exception:
                 pass
+            if pending_jarvis_restart and jarvis_ok and not jarvis_busy and not busy:
+                ok, output = run_ctl(jarvis_ctl, "reload")
+                actions.append({"service":"autoupdate/jarvis", "ok":ok, "output":output})
+                if ok:pending_jarvis_restart = False
             if not jarvis_ok and jarvis_ctl.exists() and now-last_jarvis_attempt >= 45:
                 last_jarvis_attempt = now
                 ok, output = run_ctl(jarvis_ctl, "start")

@@ -20,6 +20,7 @@ let vaultTimer=null;
 let installPrompt=null;
 let toastTimer=null;
 let gscPairPollTimer=null;
+let jarvisConversationTask='';
 
 function defaultCompanyState(){
   return {
@@ -941,7 +942,7 @@ function aiContext(){
 async function aiFetch(path,options={}){
   const endpoint=getAIEndpoint();
   if(!endpoint)throw new Error('Worker da IA indisponível.');
-  const response=await fetch(endpoint+path,{...options,headers:{'content-type':'application/json',...(options.headers||{})}});
+  const response=await fetch(endpoint+path,{...options,signal:options.signal||AbortSignal.timeout(30000),headers:{'content-type':'application/json',...(options.headers||{})}});
   let data=null;try{data=await response.json();}catch{}
   if(!response.ok)throw new Error((data&&data.error)||('Erro HTTP '+response.status));
   return data||{};
@@ -1076,11 +1077,11 @@ async function askAI(questionOverride){
   btn.disabled=true;btn.textContent='A PROCESSAR';
   answer.classList.add('loading');answer.textContent='A cruzar sinais da operação…';
   try{
-    const data=await aiFetch('/api/agent',{method:'POST',body:JSON.stringify({question,context:aiContext(),requestId:crypto.randomUUID()})});
+    const data=await aiFetch('/api/agent',{method:'POST',body:JSON.stringify({question,context:aiContext(),mode:$('ai-engine')?.value||'local',requestId:crypto.randomUUID()})});
     const added=queueAgentActions(data.actions,question);
     answer.textContent=(data.summary||'Análise concluída.')+(added?'\\n\\n'+added+' proposta'+(added===1?'':'s')+' aguarda'+(added===1?'':'m')+' confirmação.':'');
     $('ai-status').textContent='ONLINE';
-    if(data.taskId){window.CentroRoom?.trackTask(data.taskId);loadExecutions(true);}
+    if(data.taskId){jarvisConversationTask=data.taskId;window.CentroRoom?.trackTask(data.taskId);loadExecutions(true);}
   }catch(err){
     answer.textContent='Falha: '+err.message;$('ai-status').textContent='ERRO';
   }finally{answer.classList.remove('loading');btn.disabled=false;btn.textContent='EXECUTAR';}
@@ -1142,6 +1143,17 @@ function loadExecutions(force=false){
       const data=await aiFetch('/api/executions?limit=20',{method:'GET',headers:{},signal:controller.signal});
       executionPollFailures=0;executionNextPollAt=0;
       renderExecutions(data);window.CentroRoom?.update(data);
+      const conversation=(data.executions||[]).find(row=>row.id===jarvisConversationTask);
+      if(conversation){
+        const message=conversation.status==='completed'
+          ? (String(conversation.output||'').trim()||'Execução sem resposta.')
+          : conversation.status==='running'
+            ? ('Jarvis local · '+(conversation.progressDetail||'A tratar do pedido no telemóvel.'))
+            : 'Pedido na fila do Centro. A resposta depende do Agent e do servidor no telemóvel.';
+        $('ai-answer').textContent=message;
+        if($('room-reply'))$('room-reply').textContent=message;
+        if(conversation.status==='completed')jarvisConversationTask='';
+      }
     }catch(err){
       executionPollFailures=Math.min(5,executionPollFailures+1);
       executionNextPollAt=Date.now()+Math.min(30000,3000*2**executionPollFailures);
@@ -1168,7 +1180,7 @@ function setupEvents(){
     const question=input.value.trim();if(!question||button.disabled)return;
     button.disabled=true;reply.textContent='Vou analisar o pedido.';window.CentroRoom?.setConversationBusy(true);
     try{
-      await askAI(question+'\nResponde em português de Portugal, em até 3 frases curtas. Não afirmes que executaste alterações sem provas.');
+      await askAI(question);
       const full=$('ai-answer').textContent.trim();reply.textContent=full.length>360?full.slice(0,357)+'…':full;
     }catch{reply.textContent='Não consegui receber a resposta. Tenta novamente.';}
     finally{button.disabled=false;window.CentroRoom?.setConversationBusy(false);}
@@ -1310,4 +1322,3 @@ document.addEventListener('DOMContentLoaded',()=>{
   setInterval(()=>loadExecutions(),3000);
   loadLive();
 });
-

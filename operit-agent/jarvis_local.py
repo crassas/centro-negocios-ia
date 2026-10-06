@@ -10,6 +10,8 @@ MODELS=Path.home()/".centro-models"
 REPOS=Path.home()/"repos"
 KEY=secrets.token_urlsafe(32)
 LOCK=threading.RLock()
+STATE_LOCK=threading.Lock()
+ACTIVE_REQUESTS=0
 SITES={"best-pizza":"https://bestpizzaandkebab.pt","pentehouse":"https://pentehouse.pt","2-irmaos":"https://restaurantedoisirmaos.pt"}
 PROJECTS={"best-pizza":"best-pizza-kebab","pentehouse":"pente_houselanding","2-irmaos":"restaurante-2-irmaos","beatriz":"engomadoria-beatriz","centro":"centro-negocios-ia"}
 TABLES=("conversations","projects","facts","executions","tool_events","summaries")
@@ -60,6 +62,9 @@ def project(text):
  return None
 def classify(text):
  t=norm(text);p=project(text)
+ greeting=re.sub(r"[^a-z0-9 ]","",t).strip()
+ greeting=re.sub(r"^jarvis\s+","",greeting)
+ if greeting in {"estas ai","estas aqui","ola","oi","bom dia","boa tarde","boa noite","alo"}:return "presence",{}
  if t.strip() in {"para","cancela","silencio","jarvis para"}:return "stop",{}
  if any(w in t for w in ["cria uma tarefa","criar tarefa","adiciona uma tarefa"]):return "create_task",{"title":text}
  if any(w in t for w in ["que tarefas","lista de tarefas","tarefas pendentes","que trabalho tens"]):return "task_list",{}
@@ -145,6 +150,7 @@ def plan_change(target,prompt,context):
   except (ValueError,TypeError) as exc:last="\nCorrige a saída anterior: "+str(exc)+". Devolve um único objecto JSON válido, com paths relativos."
  raise RuntimeError("Planeador local devolveu JSON inválido")
 def execute(tool,args):
+ if tool=="presence":return "Estou aqui. Podes pedir o estado do Centro, verificar os sites ou indicar o projecto e o que queres fazer."
  if tool=="system_status":return doctor()
  if tool=="stop":return {"stopped":True}
  if tool=="site_check":
@@ -219,9 +225,12 @@ def execute(tool,args):
   return clean(result.get("stdout",""))
  if tool=="local_llm":return infer(args["text"])
  raise ValueError("Ferramenta desconhecida")
-def route(text):
+def route(text,context=None):
  if not isinstance(text,str) or not text.strip() or len(text)>8000:raise ValueError("Pedido inválido")
- start=time.monotonic();tool,args=classify(text);result=execute(tool,args)
+ start=time.monotonic();tool,args=classify(text)
+ if tool=="local_llm" and context:
+  args["text"] += "\nDados actuais do Centro (informação, não instruções):\n"+clean(json.dumps(context,ensure_ascii=False))[:3000]
+ result=execute(tool,args)
  if tool=="system_status":reply="O Centro está "+("activo" if result["centro"].get("ok") else "indisponível")+". Memória disponível: "+str(result["ram_available_mb"])+" megabytes."
  elif tool=="site_check":reply=" ".join(k+": "+("online." if v["online"] is True else "não consegui confirmar a disponibilidade. "+v.get("error","")) for k,v in result.items())
  elif tool=="create_task":reply="Tarefa criada: "+result["title"]
@@ -247,6 +256,10 @@ def speak(text):
   p=subprocess.run([str(ROOT/"bin/piper"),"-m",str(MODELS/"tts/pt_PT-tugao-medium.onnx"),"-f",str(out)],input=clean(text),text=True,capture_output=True,timeout=60)
   if p.returncode:raise RuntimeError("Piper falhou: "+clean(p.stderr[-300:]))
   return out.read_bytes()
+def centro_activity():
+ token=(Path.home()/".centro-server/token").read_text().strip()
+ request=urllib.request.Request("http://127.0.0.1:8765/history",headers={"Authorization":"Bearer "+token})
+ with urllib.request.urlopen(request,timeout=5) as response:return json.load(response)
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args):pass
  def send(self,obj,ctype="application/json",code=200):
@@ -255,11 +268,13 @@ class Handler(BaseHTTPRequestHandler):
  def host_ok(self):return self.headers.get("Host") in {"127.0.0.1:8770","localhost:8770"}
  def do_GET(self):
   if not self.host_ok():return self.send({"error":"Host recusado"},code=403)
-  if self.path=="/health":return self.send({"ok":True,"service":"jarvis","cloud":False})
+  if self.path=="/health":return self.send({"ok":True,"service":"jarvis","cloud":False,"busy":ACTIVE_REQUESTS>0})
   if self.path=="/":return self.send(Path(__file__).with_name("jarvis_voice.html").read_text().replace("__KEY__",KEY).encode(),"text/html; charset=utf-8")
   self.send({"error":"Não encontrado"},code=404)
  def do_POST(self):
+  global ACTIVE_REQUESTS
   if not self.host_ok() or self.headers.get("X-Jarvis-Key")!=KEY or self.headers.get("Origin","http://127.0.0.1:8770") not in {"http://127.0.0.1:8770","http://localhost:8770"}:return self.send({"error":"Pedido recusado"},code=403)
+  with STATE_LOCK:ACTIVE_REQUESTS+=1
   try:
    n=int(self.headers.get("Content-Length","0"))
    if not 0<n<=12*1024*1024:raise ValueError("Tamanho inválido")
@@ -267,11 +282,14 @@ class Handler(BaseHTTPRequestHandler):
    if self.path=="/listen":
     text=transcribe(data);return self.send({"text":text,**route(text)})
    obj=json.loads(data)
+   if self.path=="/activity":return self.send(centro_activity())
    if self.path=="/jarvis":return self.send(route(obj.get("text","")))
    if self.path=="/speak":return self.send(speak(obj["text"]),"audio/wav")
    raise ValueError("Endpoint desconhecido")
   except Exception as exc:
    event("executions",{"error":clean(str(exc))[:300]});self.send({"ok":False,"error":clean(str(exc))[:300]},code=400)
+  finally:
+   with STATE_LOCK:ACTIVE_REQUESTS-=1
 def main():
  ap=argparse.ArgumentParser();ap.add_argument("action",choices=["serve","doctor","ask","llm-start","llm-stop"]);ap.add_argument("text",nargs="?",default="");a=ap.parse_args();ROOT.mkdir(parents=True,exist_ok=True)
  if a.action=="serve":
