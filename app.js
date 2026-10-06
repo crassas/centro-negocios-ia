@@ -1086,7 +1086,7 @@ async function checkTelegramStatus(showToast=true){
     if(showToast)toast(data.configured?'Telegram ligado.':'Telegram ainda precisa do bot.');
   }catch{$('telegram-status').textContent='ERRO';if(showToast)toast('Não consegui verificar o Telegram.');}
 }
-async function askAI(questionOverride){
+async function askAI(questionOverride,modeOverride){
   const question=String(questionOverride||$('ai-question').value||'').trim();
   if(!question){toast('Diz à IA o que queres analisar.');return;}
   $('ai-question').value=question;
@@ -1095,13 +1095,14 @@ async function askAI(questionOverride){
   btn.disabled=true;btn.textContent='A PROCESSAR';
   answer.classList.add('loading');answer.textContent='A cruzar sinais da operação…';
   try{
-    const data=await aiFetch('/api/agent',{method:'POST',body:JSON.stringify({question,context:aiContext(),mode:$('ai-engine')?.value||'local',requestId:crypto.randomUUID()})});
+    const data=await aiFetch('/api/agent',{method:'POST',body:JSON.stringify({question,context:aiContext(),mode:modeOverride||$('ai-engine')?.value||'local',requestId:crypto.randomUUID()})});
     const added=queueAgentActions(data.actions,question);
     answer.textContent=(data.summary||'Análise concluída.')+(added?'\\n\\n'+added+' proposta'+(added===1?'':'s')+' aguarda'+(added===1?'':'m')+' confirmação.':'');
     $('ai-status').textContent='RESPOSTA PRONTA';
     if(data.taskId){jarvisConversationTask=data.taskId;sessionStorage.setItem('travis-pending-task',data.taskId);$('ai-status').textContent='NA FILA';window.CentroRoom?.trackTask(data.taskId);loadExecutions(true);}else{setTravisReply(answer.textContent);}
+    return {...data,reply:answer.textContent};
   }catch(err){
-    answer.textContent='Falha: '+err.message;$('ai-status').textContent='ERRO';
+    answer.textContent='Falha: '+err.message;$('ai-status').textContent='ERRO';return {error:err.message};
   }finally{answer.classList.remove('loading');btn.disabled=false;btn.textContent='EXECUTAR';}
 }
 async function captureOpportunity(){
@@ -1171,7 +1172,7 @@ function loadExecutions(force=false){
         $('ai-answer').textContent=message;
         if($('room-reply'))$('room-reply').textContent=message;
         $('ai-status').textContent=conversation.status==='completed'?'RESPOSTA PRONTA':conversation.status==='running'?'A RESPONDER':'NA FILA';
-        if(conversation.status==='completed'){setTravisReply(message);jarvisConversationTask='';sessionStorage.removeItem('travis-pending-task');}
+        if(conversation.status==='completed'){window.TravisPanel?.completeTask(conversation.id,message);setTravisReply(message);jarvisConversationTask='';sessionStorage.removeItem('travis-pending-task');}
       }
     }catch(err){
       executionPollFailures=Math.min(5,executionPollFailures+1);
@@ -1349,3 +1350,21 @@ window.addEventListener('message',event=>{
   if(!['http://127.0.0.1:8770','http://localhost:8770'].includes(event.origin)||event.source!==window.opener||event.data?.type!=='travis-gsc-connect')return;
   event.source.postMessage({type:'travis-gsc-authorization',token:gscDeviceToken()},event.origin);
 });
+
+window.TravisBridge={async ask(question,signal){
+  const q=question.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/^travis[, :]+/,'').trim();
+  if(/^(estas ai|estas aqui|ola|bom dia|boa tarde|boa noite)[?.!]*$/.test(q))return {reply:'Estou aqui. Diz-me o que queres fazer.'};
+  if(/^(?:(?:podes|consegues) )?(?:abre|abrir) (?:o )?youtube[?.!]*$/.test(q)){window.location.assign('https://www.youtube.com/');return {reply:'A abrir o YouTube.'}}
+  if(/\b(posicao|posicoes|ranking|rankings)\b/.test(q)){
+    const project=allProjects().find(p=>q.includes(p.id)||q.includes(p.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()));
+    const g=state.gsc;
+    if(!g||!Array.isArray(g.rows)||!g.rows.length)return {reply:'Ainda não há dados de posições no Centro. Abre SEO para ligar o Search Console ou importar o relatório. Não tenho posições confirmadas para te indicar.'};
+    if(project&&g.projectId!==project.id)return {reply:'Os dados de pesquisa guardados pertencem a outro projecto. Escolhe '+project.name+' no painel SEO e sincroniza os dados.'};
+    const rows=g.rows.slice().filter(r=>Number.isFinite(r.position)).sort((a,b)=>(b.impressions||0)-(a.impressions||0)).slice(0,5);
+    if(!rows.length)return {reply:'O relatório não contém posições válidas.'};
+    return {reply:'Search Console, dados de '+fmtDate(g.importedAt)+'. Posições médias por pesquisa; não são posições em tempo real. '+rows.map(r=>r.query+': '+r.position.toFixed(1).replace('.',',')).join('; ')};
+  }
+  if(/\b(corrige|melhora|altera|publica|implementa|cria|adiciona|remove|apaga)\b/.test(q))return askAI(question,'cloud');
+  const data=await aiFetch('/api/assist',{method:'POST',signal:AbortSignal.any([signal,AbortSignal.timeout(25000)]),body:JSON.stringify({question:'Responde em português de Portugal, sem gerúndio, em uma ou duas frases curtas. Pedido: '+question,context:aiContext()})});
+  const reply=String(data.answer||'').trim();if(!reply)throw Error('O Centro não devolveu uma resposta.');setTravisReply(reply);return {reply};
+}};

@@ -1,0 +1,26 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+const elements=new Map();
+function element(){return {textContent:'',value:'',checked:false,disabled:false,dataset:{},children:[],open:false,append(...nodes){this.children.push(...nodes)},remove(){},focus(){},setAttribute(){},addEventListener(){},showModal(){this.open=true},close(){this.open=false},get firstElementChild(){return {remove:()=>this.children.shift()}}}}
+const document={getElementById(id){if(!elements.has(id))elements.set(id,element());return elements.get(id)},createElement:element,createTextNode:text=>({text}),querySelectorAll:()=>[],activeElement:element()};
+let resolveReply;let calls=0;
+const context=vm.createContext({document,AbortController,setTimeout,clearTimeout,window:{TravisBridge:{ask:async()=>{calls++;return {reply:'Estou aqui.'}}}},console});
+vm.runInContext(fs.readFileSync(new URL('../travis-panel.js',import.meta.url),'utf8'),context);
+context.window.TravisPanel.open();assert.equal(elements.get('travis-panel').open,true);
+elements.get('travis-input').value='olá';await elements.get('travis-form').onsubmit({preventDefault(){}});await new Promise(r=>setImmediate(r));
+assert.equal(calls,1);assert.equal(elements.get('travis-send').disabled,false);assert.equal(elements.get('travis-replay').disabled,false);
+context.window.TravisBridge.ask=()=>new Promise(resolve=>resolveReply=resolve);
+elements.get('travis-input').value='pedido demorado';elements.get('travis-form').onsubmit({preventDefault(){}});assert.equal(elements.get('travis-send').disabled,true);
+elements.get('travis-stop').onclick();resolveReply({reply:'resposta antiga'});await new Promise(r=>setImmediate(r));
+assert.equal(elements.get('travis-send').disabled,false);assert.equal(elements.get('travis-state').textContent,'Conversa parada. Podes voltar a falar.');
+elements.get('travis-close').onclick();assert.equal(elements.get('travis-panel').open,false);
+const source=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
+const bridge='window.TravisBridge={'+source.split('window.TravisBridge={')[1];
+const state={gsc:null};const bridgeContext=vm.createContext({window:{},state,allProjects:()=>[{id:'pentehouse',name:'Pentehouse'}],fmtDate:()=> '6/10/2026',AbortSignal});
+vm.runInContext(bridge,bridgeContext);
+assert.match((await bridgeContext.window.TravisBridge.ask('Verifica as posições da Pentehouse')).reply,/Não tenho posições confirmadas/);
+state.gsc={projectId:'pentehouse',importedAt:'2026-10-06',rows:[{query:'barbearia marquês',position:3.2,impressions:20}]};
+assert.match((await bridgeContext.window.TravisBridge.ask('Posições da Pentehouse')).reply,/barbearia marquês: 3,2/);
+state.gsc.projectId='best-pizza';assert.match((await bridgeContext.window.TravisBridge.ask('Posições da Pentehouse')).reply,/outro projecto/);
+console.log('PASS: Travis modal, successful reply, cancellation, stale result rejection and ranking evidence');

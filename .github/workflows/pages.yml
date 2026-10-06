@@ -30,6 +30,8 @@ jobs:
       - name: Verificar JavaScript
         run: |
           node --check app.js
+          node --check travis-panel.js
+          node scripts/travis-panel-selftest.mjs
           node --check agent-room.js
           node scripts/agent-room-selftest.mjs
           node scripts/execution-poll-selftest.mjs

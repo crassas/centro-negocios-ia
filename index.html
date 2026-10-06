@@ -17,7 +17,9 @@
   <link rel="stylesheet" href="./product.css?v=world-8">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
   <script src="./agent-room.js?v=jarvis-1" defer></script>
-  <script src="./app.js?v=travis-voice-2" defer></script>
+  <script src="./app.js?v=travis-panel-1" defer></script>
+  <link rel="stylesheet" href="./travis-panel.css?v=1">
+  <script src="./travis-panel.js?v=1" defer></script>
 </head>
 <body>
 <div class="shell">
@@ -588,6 +590,18 @@
 </nav>
 
 <button class="return-command" id="return-top" type="button" title="Voltar ao comando">⌃</button>
+<button id="travis-launcher" type="button" aria-haspopup="dialog" aria-controls="travis-panel" aria-expanded="false"><i aria-hidden="true">T</i>Travis</button>
+<dialog id="travis-panel" aria-labelledby="travis-title"><div class="travis-shell">
+<header><div><small>CENTRO DE NEGÓCIOS</small><strong id="travis-title">Travis.</strong></div><button id="travis-close" type="button" aria-label="Fechar conversa">×</button></header>
+<div class="travis-core" aria-hidden="true" data-travis-avatar><span>T</span></div>
+<p id="travis-state" role="status">Estou aqui.</p>
+<div class="travis-chips"><button data-travis-prompt="Travis, estás aí?">Estás aí?</button><button data-travis-prompt="Verifica as posições da Pentehouse">Posições Pentehouse</button><button data-travis-prompt="Abre o YouTube">YouTube</button></div>
+<div id="travis-dialogue" role="log" aria-live="polite"><p class="travis-message assistant"><small>TRAVIS</small>Estou aqui. Diz-me o que queres fazer.</p></div>
+<div class="travis-controls"><form id="travis-form"><input id="travis-input" type="text" maxlength="2000" aria-label="Pedido ao Travis" placeholder="Fala comigo ou escreve…" autocomplete="off"><button id="travis-send" type="submit" aria-label="Enviar pedido">↑</button></form>
+<div class="travis-buttons"><button id="travis-mic" type="button">Falar</button><button id="travis-replay" type="button" disabled>Ouvir</button><button id="travis-stop" type="button">Parar</button></div>
+<div class="travis-options"><label><input id="travis-read-aloud" type="checkbox" checked>Ouvir respostas</label><label><input id="travis-continuous" type="checkbox">Conversa contínua</label></div>
+<small>Ditado e conversa usam a ligação à Internet. <a href="http://127.0.0.1:8770/" target="_blank" rel="noopener">Voz no telemóvel</a></small></div>
+</div></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>
