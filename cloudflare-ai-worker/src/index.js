@@ -1843,6 +1843,38 @@ async function telegramSendDecision(env,decision){
   });
 }
 
+function repoChangeApprovalReason(text){
+  const raw=String(text||'').toLowerCase();
+  if(!raw)return '';
+
+  // Confirmação apenas para operações cujo erro pode sair do âmbito de um
+  // simples rollback de código/site.
+  const rules=[
+    {
+      reason:'credenciais ou segurança',
+      re:/\b(password|palavra[- ]?passe|senha|token|api key|chave privada|private key|secret|segredo|oauth|autentica(?:ção|cao)|permiss(?:ão|ao)|admin|2fa|mfa)\b/i
+    },
+    {
+      reason:'domínio, DNS ou infraestrutura externa',
+      re:/\b(dns|nameserver|name server|dom[ií]nio|cloudflare dns|registo (?:a|aaaa|cname|mx|txt)|zona dns|transferir dom[ií]nio)\b/i
+    },
+    {
+      reason:'movimento financeiro ou pagamentos reais',
+      re:/\b(reembolso|refund|cobrar|debitar|transferir dinheiro|pagamento real|stripe|ifthenpay|mb ?way api|payment intent|checkout session|subscri(?:ção|cao)|fatura(?:ção|cao))\b/i
+    },
+    {
+      reason:'eliminação de dados ou operação destrutiva',
+      re:/\b(apaga|apagar|elimina|eliminar|remove|remover|limpa|limpar)\b[\s\S]{0,80}\b(base de dados|database|clientes|utilizadores|contas|registos|hist[oó]rico|backups?|reposit[oó]rio|todos os ficheiros|tudo)\b/i
+    },
+    {
+      reason:'operação Git destrutiva',
+      re:/\b(force push|push --force|reset --hard|rebase --onto|delete branch|apagar branch)\b/i
+    }
+  ];
+  const hit=rules.find(rule=>rule.re.test(raw));
+  return hit?hit.reason:'';
+}
+
 function automaticRepoChange(text){
   const raw=String(text||'').trim();
   if(!raw||raw.startsWith('/'))return null;
@@ -2012,34 +2044,52 @@ async function handleTelegramUpdate(env,update,ctx){
         'site_check','git_status'
       ].includes(instruction.action);
 
-      // Leituras/diagnóstico executam logo: não faz sentido pedir confirmação
-      // para consultar estado. Alterações explícitas mantêm o executor seguro.
+      // Política de autonomia alta: só operações de risco elevado pedem
+      // confirmação. Diagnóstico, análise e trabalho normal em repositórios
+      // avançam automaticamente e continuam sujeitos às validações locais.
       if(isReadOnly){
         await q.resolveTask(task.id,true);
         await telegramSend(env,'⚡ CENTRO\n\n'+task.label+'\n\nA verificar agora.');
       }else if(isRepoChange){
+        const approvalReason=repoChangeApprovalReason(String(instruction?.args?.prompt||text));
+        if(approvalReason){
+          await telegramSend(env,'⚠️ CONFIRMAÇÃO IMPORTANTE\n\n'+task.label+'\n\nMotivo: '+approvalReason+'\n\nExecutar?',{
+            reply_markup:{inline_keyboard:[[
+              {text:'✅ Executar',callback_data:'taskapprove:'+task.id},
+              {text:'❌ Recusar',callback_data:'taskreject:'+task.id}
+            ]]}
+          });
+        }else{
+          await q.resolveTask(task.id,true);
+          await telegramSend(env,'⚙️ AUTOMAÇÃO\n\n'+task.label+'\n\nAceite automaticamente. O executor valida e publica apenas se tudo passar.');
+        }
+      }else if(isClaude||isLaya||isManus||instruction.action==='git_pull'){
         await q.resolveTask(task.id,true);
-        await telegramSend(env,'⚙️ AUTOMAÇÃO\n\n'+task.label+'\n\nTarefa aceite automaticamente. O executor vai trabalhar numa cópia isolada, validar e publicar apenas se tudo passar.');
-      }else if(isLaya||isManus){
-        await q.resolveTask(task.id,true);
-        const heading=isLaya?'🟦 LAYA':'🛰️ MANUS';
-        const dest=isLaya?'motor local':'API v2';
-        await telegramSend(env,heading+'\n\n'+task.label+'\n\nEnviado directamente para '+dest+'.');
+        const heading=isClaude?'🧠 CLAUDE':(isLaya?'🟦 LAYA':(isManus?'🛰️ MANUS':'⚡ CENTRO'));
+        await telegramSend(env,heading+'\n\n'+task.label+'\n\nAceite automaticamente.');
       }else{
-        const heading=isClaude?'CLAUDE CODE':'ACÇÃO OPERIT';
-        const question=isClaude?'Enviar ao Claude Code?':'Executar?';
-        await telegramSend(env,heading+'\n\n'+task.label+'\n\n'+question,{
+        await telegramSend(env,'⚠️ CONFIRMAÇÃO IMPORTANTE\n\n'+task.label+'\n\nEsta acção não pertence à lista de operações automáticas. Executar?',{
           reply_markup:{inline_keyboard:[[
-            {text:isClaude?'✅ Enviar':'✅ Executar',callback_data:'taskapprove:'+task.id},
-            {text:isClaude?'❌ Cancelar':'❌ Recusar',callback_data:'taskreject:'+task.id}
+            {text:'✅ Executar',callback_data:'taskapprove:'+task.id},
+            {text:'❌ Recusar',callback_data:'taskreject:'+task.id}
           ]]}
         });
       }
     }else if(automaticRepoChange(text)){
       const autoChange=automaticRepoChange(text);
       const task=await q.createTask(autoChange,'telegram');
-      await q.resolveTask(task.id,true);
-      await telegramSend(env,'⚙️ AUTOMAÇÃO ACTIVADA\n\n'+autoChange.label+'\n\nNão precisas confirmar outra vez. O Centro vai editar numa cópia isolada, validar, fazer commit e publicar se tudo passar.');
+      const approvalReason=repoChangeApprovalReason(text);
+      if(approvalReason){
+        await telegramSend(env,'⚠️ CONFIRMAÇÃO IMPORTANTE\n\n'+autoChange.label+'\n\nMotivo: '+approvalReason+'\n\nExecutar?',{
+          reply_markup:{inline_keyboard:[[
+            {text:'✅ Executar',callback_data:'taskapprove:'+task.id},
+            {text:'❌ Recusar',callback_data:'taskreject:'+task.id}
+          ]]}
+        });
+      }else{
+        await q.resolveTask(task.id,true);
+        await telegramSend(env,'⚙️ AUTOMAÇÃO ACTIVADA\n\n'+autoChange.label+'\n\nAceite automaticamente. Só volto a pedir confirmação para operações de risco elevado.');
+      }
     }else if(text==='/limpar'){
       await q.clearRoom();
       await telegramSend(env,'Conversa do grupo limpa.');
@@ -2615,18 +2665,32 @@ export default {
           if(spec){
             const requestId=String(body?.requestId||'');
             if(!/^[a-zA-Z0-9_-]{8,80}$/.test(requestId))return json({ok:false,error:'Identificador do pedido em falta.'},400,origin);
-            if(!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_CHAT_ID)return json({ok:false,error:'Telegram não configurado. A alteração não foi executada.'},409,origin);
             const q=taskQueue(env),result=await q.createRepoRequest(requestId,spec),task=result.task;
+            const approvalReason=repoChangeApprovalReason(question);
             if(!result.reused){
-              const sent=await telegramSend(env,'ALTERAÇÃO DO SITE\n\n'+task.target+'\n'+question.slice(0,1500)+'\n\nID: '+task.id+'\nConfirmar execução, testes e publicação?',{
-                reply_markup:{inline_keyboard:[[
-                  {text:'✅ Executar',callback_data:'taskapprove:'+task.id},
-                  {text:'❌ Recusar',callback_data:'taskreject:'+task.id}
-                ]]}
-              });
-              if(!sent.ok){await q.resolveTask(task.id,false);return json({ok:false,error:'Falha ao enviar a autorização. Nada foi executado.'},502,origin);}
+              if(approvalReason){
+                if(!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_CHAT_ID){
+                  await q.resolveTask(task.id,false);
+                  return json({ok:false,error:'Esta alteração é de risco elevado ('+approvalReason+') e precisa de confirmação no Telegram.'},409,origin);
+                }
+                const sent=await telegramSend(env,'⚠️ CONFIRMAÇÃO IMPORTANTE\n\n'+task.target+'\n'+question.slice(0,1500)+'\n\nMotivo: '+approvalReason+'\nID: '+task.id+'\n\nExecutar?',{
+                  reply_markup:{inline_keyboard:[[
+                    {text:'✅ Executar',callback_data:'taskapprove:'+task.id},
+                    {text:'❌ Recusar',callback_data:'taskreject:'+task.id}
+                  ]]}
+                });
+                if(!sent.ok){await q.resolveTask(task.id,false);return json({ok:false,error:'Falha ao enviar a confirmação importante. Nada foi executado.'},502,origin);}
+              }else{
+                await q.resolveTask(task.id,true);
+                if(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID){
+                  await telegramSend(env,'⚙️ AUTOMAÇÃO\n\n'+task.label+'\n\nAceite automaticamente. Vou validar e publicar apenas se tudo passar.');
+                }
+              }
             }
-            return json({ok:true,taskId:task.id,status:task.status,actions:[],summary:'Pedido '+task.id+' registado para '+task.target+'. Confirma no Telegram; depois acompanha a execução e o resultado aqui.'},200,origin);
+            const summary=approvalReason
+              ? 'Pedido '+task.id+' registado. Esta operação é de risco elevado ('+approvalReason+') e aguarda confirmação no Telegram.'
+              : 'Pedido '+task.id+' aceite automaticamente. Não precisas de confirmar no Telegram; acompanha apenas o resultado.';
+            return json({ok:true,taskId:task.id,status:approvalReason?'pending':'queued',actions:[],summary,approvalRequired:Boolean(approvalReason),approvalReason},200,origin);
           }
           let result=null,usedModel=AGENT_MODEL,parsed=null;
           try{
