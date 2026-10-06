@@ -925,7 +925,7 @@ function getAIEndpoint(){return normalizeAIEndpoint(localStorage.getItem(AI_ENDP
 function renderAIStatus(){
   if(!$('ai-status'))return;
   const endpoint=getAIEndpoint();
-  $('ai-status').textContent=endpoint?'ONLINE':'OFFLINE';
+  $('ai-status').textContent=endpoint?'CONFIGURADO':'POR LIGAR';
   if(endpoint&&!$('ai-endpoint').value)$('ai-endpoint').value=endpoint;
 }
 function aiContext(){
@@ -971,7 +971,7 @@ async function testAIEndpoint(){
   $('ai-status').textContent='TESTE';
   try{
     const data=await aiFetch('/health',{method:'GET',headers:{}});
-    $('ai-status').textContent=data.ok?'ONLINE':'ERRO';
+    $('ai-status').textContent=data.ok?'CENTRO DISPONÍVEL':'ERRO';
     toast(data.ok?'Núcleo IA ligado.':'Worker sem confirmação.');
   }catch(err){$('ai-status').textContent='ERRO';toast('Falha na IA: '+err.message);}
 }
@@ -1098,7 +1098,7 @@ async function askAI(questionOverride){
     const data=await aiFetch('/api/agent',{method:'POST',body:JSON.stringify({question,context:aiContext(),mode:$('ai-engine')?.value||'local',requestId:crypto.randomUUID()})});
     const added=queueAgentActions(data.actions,question);
     answer.textContent=(data.summary||'Análise concluída.')+(added?'\\n\\n'+added+' proposta'+(added===1?'':'s')+' aguarda'+(added===1?'':'m')+' confirmação.':'');
-    $('ai-status').textContent='ONLINE';
+    $('ai-status').textContent='RESPOSTA PRONTA';
     if(data.taskId){jarvisConversationTask=data.taskId;sessionStorage.setItem('travis-pending-task',data.taskId);$('ai-status').textContent='NA FILA';window.CentroRoom?.trackTask(data.taskId);loadExecutions(true);}else{setTravisReply(answer.textContent);}
   }catch(err){
     answer.textContent='Falha: '+err.message;$('ai-status').textContent='ERRO';
@@ -1214,7 +1214,7 @@ function setupEvents(){
   });
   $('ai-test-endpoint').addEventListener('click',testAIEndpoint);
   $('ai-ask-btn').addEventListener('click',()=>askAI());
-  $('ai-clear-btn').addEventListener('click',()=>{$('ai-question').value='';$('ai-answer').innerHTML='<div class="empty">Pronto para analisar a operação.</div>';});
+  $('ai-clear-btn').addEventListener('click',()=>{window.speechSynthesis?.cancel();setTravisReply('');$('ai-question').value='';$('ai-answer').innerHTML='<div class="empty">Pronto para analisar a operação.</div>';});
   $('ai-question').addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter')askAI();});
   $('ai-voice-btn').addEventListener('click',()=>startDictation('ai-question'));
   document.querySelectorAll('[data-travis-listen]').forEach(button=>button.addEventListener('click',listenToTravis));
