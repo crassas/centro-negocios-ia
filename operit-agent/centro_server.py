@@ -1230,7 +1230,7 @@ def action_repo_change(task):
                     "Operit aplicou o plano no worktree isolado: " + ", ".join(applied[:6])
                 )
                 executor_output = (
-                    "WORKERS AI · PLANO APLICADO"
+                    ("LLM LOCAL · PLANO APLICADO" if (HOME / ".centro-jarvis/planner_enabled").exists() else "WORKERS AI · PLANO APLICADO")
                     + f" · tentativa {plan_round + 1}/3\n"
                     + (plan_summary + "\n" if plan_summary else "")
                     + "\n".join(applied)
