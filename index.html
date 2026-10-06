@@ -1,3 +1,5 @@
+[Reading 643 lines from start (total: 643 lines, 0 remaining)]
+
 <!doctype html>
 <html lang="pt-PT">
 <head>
@@ -18,12 +20,11 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
   <script src="./agent-room.js?v=jarvis-1" defer></script>
   <script src="./app.js?v=travis-panel-2" defer></script>
-  <link rel="stylesheet" href="./travis-hud.css?v=5">
+  <link rel="stylesheet" href="./travis-hud.css?v=6">
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
-  <script type="module" src="./travis-scene.js?v=5"></script>
-  <script src="./travis-hud.js?v=5" defer></script>
+  <script type="module" src="./travis-3d.mjs?v=2"></script>
 </head>
 <body>
 <div class="shell">
@@ -601,92 +602,46 @@
 </button>
 
 <section id="travis-hud" class="travis-hud" data-state="idle" aria-hidden="true" aria-label="Travis">
-  <canvas id="travis-space-canvas" aria-hidden="true"></canvas>
-  <div class="travis-atmosphere" aria-hidden="true">
-    <span class="travis-depth-grid"></span>
-    <span class="travis-volumetric-beam beam-top"></span>
-    <span class="travis-volumetric-beam beam-bottom"></span>
-    <span class="travis-lens-flare"></span>
-    <span class="travis-horizon"></span>
-  </div>
-  <button id="travis-hud-close" class="travis-close" type="button" aria-label="Fechar Travis">×</button>
+  <canvas id="travis-three-canvas" aria-label="Núcleo 3D interactivo do Travis"></canvas>
 
-  <div class="travis-frame">
-    <header class="travis-topbar">
-      <div class="travis-brand">
-        <span class="travis-brand-mark" aria-hidden="true"></span>
-        <div>
-          <strong>QUASI NORTE</strong>
-          <small>SOLUÇÕES DIGITAIS</small>
-        </div>
+  <header class="travis-topbar">
+    <div class="travis-brand">
+      <span class="travis-brand-mark" aria-hidden="true"></span>
+      <div>
+        <strong>QUASI NORTE</strong>
+        <small>SOLUÇÕES DIGITAIS</small>
       </div>
-      <div class="travis-clock">
-        <strong id="travis-clock-time">--:--</strong>
-        <span id="travis-clock-date">TRAVIS</span>
-      </div>
-    </header>
-
-    <div class="travis-stage">
-      <main class="travis-hero">
-        <div id="travis-orb-parallax" class="travis-orb-parallax">
-          <div class="travis-orb-shell">
-            <span class="travis-orb-shadow" aria-hidden="true"></span>
-            <span class="travis-holo-disc disc-outer" aria-hidden="true"></span>
-            <span class="travis-holo-disc disc-mid" aria-hidden="true"></span>
-            <span class="travis-holo-disc disc-inner" aria-hidden="true"></span>
-            <div id="travis-three-stage" aria-hidden="true"></div>
-            <span class="travis-orb-base" aria-hidden="true"></span>
-            <span class="travis-boot-flare" aria-hidden="true"></span>
-
-            <nav class="travis-orbit-menu" aria-label="Comandos Travis">
-              <button class="travis-orbit-node node-centro" data-travis-panel="visao" type="button">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>
-                <b>CENTRO</b>
-              </button>
-              <button class="travis-orbit-node node-projectos" data-travis-panel="crm" type="button">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6l2 2h8v11H4V6Z"/><path d="M8 12h8M8 15h5"/></svg>
-                <b>PROJECTOS</b>
-              </button>
-              <button class="travis-orbit-node node-seo" data-travis-panel="seo" type="button">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
-                <b>SEO</b>
-              </button>
-              <button class="travis-orbit-node node-agentes" data-travis-panel="agentes" type="button">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8a5 5 0 0 1 10 0v8a5 5 0 0 1-10 0V8Z"/><path d="M4 10v4M20 10v4"/></svg>
-                <b>AGENTES</b>
-              </button>
-            </nav>
-
-            <button id="travis-core-trigger" class="travis-core-trigger" type="button" aria-label="Abrir comandos do Travis">
-              <span class="travis-core-glass" aria-hidden="true"></span>
-              <span class="travis-emblem" aria-hidden="true"></span>
-            </button>
-          </div>
-        </div>
-
-        <div class="travis-title">
-          <h1>TR<span class="a">A</span>VIS</h1>
-          <p>INTERFACE DE COMANDO · QUASI NORTE</p>
-        </div>
-
-        <div class="travis-status-line" role="status" aria-live="polite">
-          <div class="travis-wave" aria-hidden="true">
-            <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-          </div>
-          <div id="travis-status-message" class="travis-status-message">Em repouso.</div>
-          <div id="travis-status-state" class="travis-status-state">EM ESPERA</div>
-        </div>
-
-        <div class="travis-touch-hint">TOCA NO NÚCLEO</div>
-      </main>
     </div>
+    <div class="travis-clock">
+      <strong id="travis-clock-time">--:--</strong>
+      <span id="travis-clock-date">TRAVIS</span>
+    </div>
+  </header>
 
-    <div class="travis-mini-state">TRAVIS VISUAL CORE · V4<br>LOCAL-FIRST · QUASI NORTE</div>
-    <div class="travis-mini-state right">NÚCLEO INTERACTIVO<br>WEBGL · AUDIO · PARALLAX</div>
+  <button id="travis-hud-close" class="travis-close" type="button" aria-label="Fechar Travis">×</button>
+  <div id="travis-loading" class="travis-loading">A PREPARAR NÚCLEO 3D…</div>
+
+  <div class="travis-title" aria-hidden="true">
+    <h1>TR<span class="a">A</span>VIS</h1>
+    <p>INTERFACE DE COMANDO · QUASI NORTE</p>
   </div>
+
+  <div class="travis-hint">TOCA NO NÚCLEO</div>
+
+  <div class="travis-status" role="status" aria-live="polite">
+    <div class="travis-wave" aria-hidden="true">
+      <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+    </div>
+    <div id="travis-status-message" class="travis-status-message">Em repouso.</div>
+    <div id="travis-status-state" class="travis-status-state">EM ESPERA</div>
+  </div>
+
+  <div class="travis-version">TRAVIS 3D CORE · PBR · BLOOM · RAYCAST</div>
 </section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>
 
 
+
+[executed on device: localhost (8ad4e1a5-6b39-4f45-82a2-0253dd9519fb)]
