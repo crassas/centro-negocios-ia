@@ -129,7 +129,7 @@ class RuntimeStore:
    row=c.execute("SELECT id,weight FROM travis_synapses WHERE source_id=? AND target_id=? AND relation_type=?",(source_id,target_id,relation_type)).fetchone()
    if row:
     sid=row[0];weight=min(1.0,max(weight,float(row[1] or 0.1))+0.08);c.execute("UPDATE travis_synapses SET updated=?,weight=?,confidence=?,last_reinforced=?,active=1 WHERE id=?",(now,weight,confidence,now,sid));return sid
-   sid="synapse-"+secrets.token_hex(8);c.execute("INSERT INTO travis_synapses VALUES(?,?,?,?,?,?,?,?,?,?,?)",(sid,now,now,source_id,target_id,relation_type,weight,confidence,now,1));return sid
+   sid="synapse-"+secrets.token_hex(8);c.execute("INSERT INTO travis_synapses VALUES(?,?,?,?,?,?,?,?,?,?)",(sid,now,now,source_id,target_id,relation_type,weight,confidence,now,1));return sid
  def recall(self,query,project_id="",limit=6):
   tokens={w for w in re.findall(r"[a-z0-9]+",_norm(query)) if len(w)>=3 and w not in MEMORY_STOPWORDS};project_id=_safe(project_id,120).strip();now=time.time()
   with self.connect() as c:
