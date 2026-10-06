@@ -121,6 +121,11 @@ export class TaskQueue extends DurableObject {
     const ids=await this.getJson('task:ids',[]);
     ids.push(id);
     await this.setJson('task:ids',ids.slice(-200));
+    if(!['office-autopilot','benchmark','stability','selftest','publication-selftest'].includes(String(source||''))){
+      const office=await this.officeState();
+      office.lastUserTaskAt=Date.now();
+      await this.setJson('office:state',office);
+    }
     return task;
   }
   async createRepoRequest(requestId,spec){
@@ -163,6 +168,78 @@ export class TaskQueue extends DurableObject {
     await this.setJson('task:'+id,task);
     return {ok:true,task};
   }
+  async officeState(){
+    return await this.getJson('office:state',{
+      enabled:true,
+      mode:'autonomous',
+      intervalMinutes:5,
+      cycle:0,
+      lastCycleAt:0,
+      nextCycleAt:0,
+      lastAction:'A iniciar vigilância automática.',
+      lastUserTaskAt:0,
+      lastProspectAt:0,
+      lastWriteAt:0,
+      lastMaintenanceByRepo:{}
+    });
+  }
+  async saveOfficeState(patch={}){
+    const current=await this.officeState();
+    const next={...current,...(patch&&typeof patch==='object'?patch:{})};
+    if(!next.lastMaintenanceByRepo||typeof next.lastMaintenanceByRepo!=='object')next.lastMaintenanceByRepo={};
+    await this.setJson('office:state',next);
+    return next;
+  }
+  async appendOfficeEvent(event={}){
+    const rows=await this.getJson('office:events',[]);
+    rows.push({
+      id:crypto.randomUUID().replaceAll('-','').slice(0,10),
+      type:String(event.type||'info').slice(0,40),
+      label:String(event.label||'').slice(0,240),
+      detail:String(event.detail||'').slice(0,600),
+      taskId:String(event.taskId||'').slice(0,40),
+      createdAt:Date.now()
+    });
+    await this.setJson('office:events',rows.slice(-80));
+    return {ok:true};
+  }
+  async addOfficeOpportunities(items=[]){
+    const current=await this.getJson('office:opportunities',[]);
+    const map=new Map(current.map(row=>[String(row.key||''),row]));
+    for(const item of (Array.isArray(items)?items:[])){
+      const key=String(item?.key||'').slice(0,120);
+      if(!key)continue;
+      const previous=map.get(key)||{};
+      map.set(key,{
+        ...previous,
+        key,
+        name:String(item?.name||'Negócio local').slice(0,180),
+        category:String(item?.category||'').slice(0,120),
+        area:String(item?.area||'Porto').slice(0,120),
+        lat:Number(item?.lat)||null,
+        lon:Number(item?.lon)||null,
+        source:'OpenStreetMap',
+        signal:'website-not-listed',
+        note:'Website não registado no OpenStreetMap. É apenas um sinal comercial e precisa de verificação antes de contacto.',
+        firstSeenAt:Number(previous.firstSeenAt)||Date.now(),
+        lastSeenAt:Date.now()
+      });
+    }
+    const rows=[...map.values()].sort((a,b)=>Number(b.lastSeenAt)-Number(a.lastSeenAt)).slice(0,100);
+    await this.setJson('office:opportunities',rows);
+    return rows;
+  }
+  async officeStatus(){
+    const state=await this.officeState();
+    const opportunities=await this.getJson('office:opportunities',[]);
+    const events=await this.getJson('office:events',[]);
+    return {
+      ...state,
+      opportunityCount:opportunities.length,
+      opportunities:opportunities.slice(0,8),
+      events:events.slice(-10).reverse()
+    };
+  }
   async pullTask(){
     const ids=await this.getJson('task:ids',[]);
     const now=Date.now();
@@ -195,19 +272,27 @@ export class TaskQueue extends DurableObject {
       await this.setJson('task:'+id,task);
     }
 
+    const ready=[];
     for(const id of ids){
       const task=await this.getJson('task:'+id,null);
-      if(task&&task.status==='queued'&&Number(task.retryAfter||0)<=now){
-        task.status='running';
-        task.startedAt=now;
-        task.attempts=(Number(task.attempts)||0)+1;
-        task.progress={phase:'received',detail:'O executor recebeu a tarefa.',at:now};
-        const history=Array.isArray(task.progressHistory)?task.progressHistory:[];
-        history.push(task.progress);
-        task.progressHistory=history.slice(-12);
-        await this.setJson('task:'+id,task);
-        return task;
-      }
+      if(task&&task.status==='queued'&&Number(task.retryAfter||0)<=now)ready.push(task);
+    }
+    ready.sort((a,b)=>{
+      const ao=String(a.source||'')==='office-autopilot'?1:0;
+      const bo=String(b.source||'')==='office-autopilot'?1:0;
+      return ao-bo || Number(a.createdAt||0)-Number(b.createdAt||0);
+    });
+    const task=ready[0]||null;
+    if(task){
+      task.status='running';
+      task.startedAt=now;
+      task.attempts=(Number(task.attempts)||0)+1;
+      task.progress={phase:'received',detail:'O executor recebeu a tarefa.',at:now};
+      const history=Array.isArray(task.progressHistory)?task.progressHistory:[];
+      history.push(task.progress);
+      task.progressHistory=history.slice(-12);
+      await this.setJson('task:'+task.id,task);
+      return task;
     }
     return null;
   }
@@ -1741,6 +1826,223 @@ async function runCouncil(env,topic){
   }
 }
 
+const OFFICE_INTERVAL_MS=5*60*1000;
+const OFFICE_PROSPECT_INTERVAL_MS=6*60*60*1000;
+const OFFICE_LONG_WORK_IDLE_MS=60*60*1000;
+const OFFICE_GLOBAL_WRITE_COOLDOWN_MS=3*60*60*1000;
+const OFFICE_PROJECT_WRITE_COOLDOWN_MS=24*60*60*1000;
+const OFFICE_AUDIT_URL='https://raw.githubusercontent.com/crassas/centro-negocios-ia/main/data/live.json';
+
+const OFFICE_PROJECTS=[
+  {id:'pentehouse',siteId:'pentehouse',repo:'pente_houselanding',label:'Pentehouse'},
+  {id:'pizza',siteId:'best-pizza',repo:'best-pizza-kebab',label:'Best Pizza & Kebab'},
+  {id:'doisirmaos',siteId:'dois-irmaos',repo:'restaurante-2-irmaos',label:'Restaurante 2 Irmãos'},
+  {id:'beatriz',siteId:'',repo:'engomadoria-beatriz',label:'Engomadoria Beatriz'}
+];
+
+async function fetchOfficeAudit(){
+  try{
+    const res=await fetch(OFFICE_AUDIT_URL+'?t='+Date.now(),{
+      headers:{'user-agent':'Centro-Office-Autopilot/1.0','cache-control':'no-cache'},
+      cache:'no-store'
+    });
+    if(!res.ok)return {sites:[],error:'Audit HTTP '+res.status};
+    const data=await res.json();
+    return data&&typeof data==='object'?data:{sites:[]};
+  }catch(error){
+    return {sites:[],error:String(error?.message||error).slice(0,300)};
+  }
+}
+
+function officeCodeIssue(message){
+  const text=String(message||'').toLowerCase();
+  if(!text)return false;
+  if(text.includes('versão http não consolidou'))return false;
+  return [
+    'title em falta',
+    'meta description em falta',
+    'nenhum h1',
+    'h1 detectados',
+    'canonical em falta',
+    'canonical aponta',
+    'canonical não aponta',
+    'robots.txt não respondeu',
+    'sitemap.xml não respondeu',
+    'json-ld não detectado',
+    'resposta do servidor acima'
+  ].some(marker=>text.includes(marker));
+}
+
+function officeMaintenancePrompt(project,auditSite=null){
+  const evidence=auditSite
+    ? '\n\nAUDITORIA TÉCNICA MAIS RECENTE:\n'+JSON.stringify({
+        checkedAt:auditSite.checkedAt,
+        status:auditSite.status,
+        responseTimeMs:auditSite.responseTimeMs,
+        checks:auditSite.checks,
+        issues:auditSite.issues
+      }).slice(0,3500)
+    : '';
+  return [
+    'MODO ESCRITÓRIO AUTÓNOMO · manutenção conservadora.',
+    'Inspecciona o repositório real e melhora APENAS se encontrares um problema concreto e verificável.',
+    'Prioridades permitidas: acessibilidade, mobile, performance, semântica HTML, links partidos, SEO técnico, schema, sitemap/robots, erros de UI ou inconsistências factuais internas.',
+    'Não reescrevas títulos, H1, meta descriptions, copy local ou palavras-chave só para variar.',
+    'Não alteres preços, moradas, contactos, horários ou factos comerciais sem evidência existente no próprio repositório.',
+    'Não faças alterações cosméticas sem benefício verificável.',
+    'Se estiver tudo correcto ou não houver evidência suficiente, devolve zero edições. Isso conta como revisão concluída.',
+    'Mantém o escopo mínimo e preserva o design actual.'
+  ].join(' ')+evidence;
+}
+
+async function scanOfficeOpportunities(){
+  const query='[out:json][timeout:20];('+
+    'nwr["name"]["shop"~"hairdresser|beauty|bakery|butcher|clothes|convenience|florist|laundry|mobile_phone|car_repair|furniture|pet|shoes"](41.13,-8.68,41.19,-8.55);'+
+    'nwr["name"]["amenity"~"restaurant|cafe|bar|fast_food"](41.13,-8.68,41.19,-8.55);'+
+    'nwr["name"]["office"="estate_agent"](41.13,-8.68,41.19,-8.55);'+
+    ');out center tags 180;';
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),22000);
+  try{
+    const res=await fetch('https://overpass-api.de/api/interpreter',{
+      method:'POST',
+      headers:{'content-type':'application/x-www-form-urlencoded','user-agent':'Centro-Office-Autopilot/1.0'},
+      body:'data='+encodeURIComponent(query),
+      signal:controller.signal
+    });
+    if(!res.ok)throw new Error('Overpass HTTP '+res.status);
+    const data=await res.json();
+    const out=[];
+    for(const row of (Array.isArray(data?.elements)?data.elements:[])){
+      const tags=row?.tags||{};
+      const name=String(tags.name||'').trim();
+      if(!name)continue;
+      const website=tags.website||tags['contact:website']||tags.url;
+      if(website)continue;
+      const lat=Number(row.lat??row.center?.lat);
+      const lon=Number(row.lon??row.center?.lon);
+      const category=String(tags.shop||tags.amenity||tags.office||'negócio local');
+      out.push({
+        key:'osm:'+String(row.type||'x')+':'+String(row.id||name),
+        name,category,area:'Porto',lat,lon
+      });
+      if(out.length>=30)break;
+    }
+    return out;
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+async function runOfficeCycle(env){
+  const q=taskQueue(env);
+  const now=Date.now();
+  const state=await q.officeState();
+  const cycle=(Number(state.cycle)||0)+1;
+  const audit=await fetchOfficeAudit();
+  const stats=await q.taskStats();
+  const busy=(Number(stats.pending)||0)+(Number(stats.queued)||0)+(Number(stats.running)||0)>0;
+  let lastAction=busy?'A acompanhar a fila actual.':'A preparar trabalho de fundo.';
+  let createdTask=null;
+  let prospectCount=0;
+  const maintenanceByRepo={...(state.lastMaintenanceByRepo||{})};
+
+  // Prospeção corre na cloud e nunca ocupa o executor do telemóvel.
+  if(!state.lastProspectAt||now-Number(state.lastProspectAt)>=OFFICE_PROSPECT_INTERVAL_MS){
+    try{
+      const found=await scanOfficeOpportunities();
+      const saved=await q.addOfficeOpportunities(found);
+      prospectCount=found.length;
+      state.lastProspectAt=now;
+      await q.appendOfficeEvent({
+        type:'prospecting',
+        label:'Radar local actualizado',
+        detail:found.length+' sinais no Porto com website não registado no OpenStreetMap. Total guardado: '+saved.length+'.'
+      });
+    }catch(error){
+      await q.appendOfficeEvent({type:'prospecting',label:'Radar local sem leitura',detail:String(error?.message||error).slice(0,300)});
+    }
+  }
+
+  if(!busy){
+    const auditSites=Array.isArray(audit?.sites)?audit.sites:[];
+    const actionable=[];
+    for(const site of auditSites){
+      const project=OFFICE_PROJECTS.find(p=>p.siteId===site.id);
+      if(!project)continue;
+      const issues=(Array.isArray(site.issues)?site.issues:[]).filter(i=>officeCodeIssue(i?.message));
+      if(issues.length)actionable.push({project,site,issues});
+    }
+
+    const userQuiet=!state.lastUserTaskAt||now-Number(state.lastUserTaskAt)>=OFFICE_LONG_WORK_IDLE_MS;
+    const globalWriteReady=!state.lastWriteAt||now-Number(state.lastWriteAt)>=OFFICE_GLOBAL_WRITE_COOLDOWN_MS;
+    let writeCandidate=null;
+
+    if(userQuiet&&globalWriteReady&&actionable.length){
+      writeCandidate=actionable.find(row=>!maintenanceByRepo[row.project.repo]||now-Number(maintenanceByRepo[row.project.repo])>=OFFICE_PROJECT_WRITE_COOLDOWN_MS)||null;
+    }
+
+    // Se não há falha detectada, cada projecto recebe no máximo uma revisão
+    // conservadora por 24h e apenas após uma hora sem pedidos do utilizador.
+    if(!writeCandidate&&userQuiet&&globalWriteReady){
+      const project=OFFICE_PROJECTS.find(p=>!maintenanceByRepo[p.repo]||now-Number(maintenanceByRepo[p.repo])>=OFFICE_PROJECT_WRITE_COOLDOWN_MS);
+      if(project){
+        const site=auditSites.find(x=>x.id===project.siteId)||null;
+        writeCandidate={project,site,issues:[]};
+      }
+    }
+
+    if(writeCandidate){
+      const prompt=officeMaintenancePrompt(writeCandidate.project,writeCandidate.site);
+      const task=await q.createTask({
+        action:'repo_change',
+        target:writeCandidate.project.repo,
+        args:{prompt},
+        label:'Escritório · revisão conservadora · '+writeCandidate.project.label
+      },'office-autopilot');
+      await q.resolveTask(task.id,true);
+      createdTask=task;
+      maintenanceByRepo[writeCandidate.project.repo]=now;
+      state.lastWriteAt=now;
+      lastAction='Revisão conservadora iniciada · '+writeCandidate.project.label;
+      await q.appendOfficeEvent({type:'maintenance',label:lastAction,detail:writeCandidate.issues.map(i=>i.message).join(' | ')||'Revisão diária baseada no repositório real.',taskId:task.id});
+    }else{
+      const housekeeping=[
+        {action:'site_check',target:'all',label:'Escritório · verificar sites publicados'},
+        {action:'git_status',target:'pente_houselanding',label:'Escritório · verificar Git · Pentehouse'},
+        {action:'git_status',target:'best-pizza-kebab',label:'Escritório · verificar Git · Best Pizza'},
+        {action:'git_status',target:'restaurante-2-irmaos',label:'Escritório · verificar Git · 2 Irmãos'},
+        {action:'git_status',target:'engomadoria-beatriz',label:'Escritório · verificar Git · Beatriz'},
+        {action:'system_info',target:'local',label:'Escritório · verificar estação local'}
+      ];
+      const spec=housekeeping[(cycle-1)%housekeeping.length];
+      const task=await q.createTask(spec,'office-autopilot');
+      await q.resolveTask(task.id,true);
+      createdTask=task;
+      lastAction=spec.label;
+      await q.appendOfficeEvent({type:'watch',label:lastAction,detail:'Rotina leve de vigilância. Os teus pedidos têm prioridade.',taskId:task.id});
+    }
+  }
+
+  const next={
+    ...state,
+    enabled:true,
+    mode:'autonomous',
+    intervalMinutes:5,
+    cycle,
+    lastCycleAt:now,
+    nextCycleAt:now+OFFICE_INTERVAL_MS,
+    lastAction,
+    lastMaintenanceByRepo:maintenanceByRepo,
+    lastProspectCount:prospectCount,
+    auditGeneratedAt:String(audit?.generatedAt||''),
+    auditError:String(audit?.error||''),
+    lastTaskId:String(createdTask?.id||'')
+  };
+  await q.saveOfficeState(next);
+  return next;
+}
+
 function taskQueue(env){return env.TASKS.getByName('primary');}
 async function sha256Hex(value){
   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(String(value||'')));
@@ -2249,6 +2551,9 @@ async function telegramPoll(env,since){
 
 
 export default {
+  async scheduled(controller,env,ctx){
+    ctx.waitUntil(runOfficeCycle(env));
+  },
   async fetch(request,env,ctx){
     const url=new URL(request.url);
     const origin=request.headers.get('origin')||'';
@@ -2291,6 +2596,15 @@ export default {
       },200,origin);
     }
 
+    if(url.pathname==='/api/office/status'&&request.method==='GET'){
+      try{
+        const office=await taskQueue(env).officeStatus();
+        return json({ok:true,office},200,origin);
+      }catch(error){
+        return json({ok:false,error:String(error?.message||error).slice(0,500)},500,origin);
+      }
+    }
+
     if(url.pathname==='/api/telegram/status'&&request.method==='GET'){
       return json({ok:true,configured:Boolean(env.TELEGRAM_BOT_TOKEN&&env.TELEGRAM_CHAT_ID)},200,origin);
     }
@@ -2300,7 +2614,8 @@ export default {
         const q=taskQueue(env);
         const rows=await q.recentTasks(Number(url.searchParams.get('limit'))||20);
         const stats=await q.taskStats();
-        return json({ok:true,stats,executions:rows},200,origin);
+        const office=await q.officeStatus();
+        return json({ok:true,stats,executions:rows,office},200,origin);
       }catch(error){
         return json({ok:false,error:'Falha ao ler execuções: '+String((error&&error.message)||error).slice(0,800)},500,origin);
       }
@@ -2406,7 +2721,7 @@ export default {
         const q=taskQueue(env);
         if(!await q.authenticate(hash))return json({ok:false,error:'Dispositivo não autorizado.'},401,origin);
         const task=await q.pullTask();
-        if(task&&task.source!=='benchmark'&&task.source!=='stability'){
+        if(task&&!['benchmark','stability','office-autopilot'].includes(String(task.source||''))){
           await telegramSend(env,'A EXECUTAR AGORA\n\n'+task.label+'\n\nO telemóvel já recebeu a tarefa.');
         }
         return json({ok:true,task},200,origin);
@@ -2648,7 +2963,7 @@ export default {
         if(!done.ok)return json({ok:false,error:'Tarefa não encontrada.'},404,origin);
         if(done.duplicate)return json({ok:true,duplicate:true,retrying:Boolean(done.retrying)},200,origin);
         if(done.retrying){
-          if(done.task.source!=='benchmark'&&done.task.source!=='stability'){
+          if(!['benchmark','stability','office-autopilot'].includes(String(done.task.source||''))){
             await telegramSend(env,'↻ RETRY AUTOMÁTICO\n\n'+done.task.label+
               '\n\nA tentativa '+String(done.task.attempts||1)+' falhou de forma recuperável. O Centro vai repetir automaticamente em ~20 segundos.');
           }
@@ -2669,6 +2984,21 @@ export default {
           return json({ok:true,benchmark},200,origin);
         }
         if(done.task.source==='stability')return json({ok:true},200,origin);
+        if(done.task.source==='office-autopilot'){
+          const ok=Number(result.exitCode)===0;
+          await q.appendOfficeEvent({
+            type:ok?'completed':'attention',
+            label:done.task.label,
+            detail:(result.stdout||result.stderr||('exit '+result.exitCode)).slice(0,600),
+            taskId:done.task.id
+          });
+          await q.saveOfficeState({
+            lastAction:(ok?'Concluído · ':'Atenção · ')+done.task.label,
+            lastOfficeResultAt:Date.now(),
+            lastOfficeExitCode:Number(result.exitCode)
+          });
+          return json({ok:true,office:true},200,origin);
+        }
         const output=(result.stdout||result.stderr||'(sem saída)').slice(0,2800);
         if(done.task.action==='council_run'){
           await telegramSend(env,result.exitCode===0?'✅ SALA DE CONSELHO CONCLUÍDA':'⚠️ SALA DE CONSELHO TERMINOU COM ERRO');
