@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 import time
+from unittest.mock import patch
 from pathlib import Path
 
 def load(name):
@@ -15,6 +16,16 @@ def load(name):
 
 def main():
     server, agent, station = (load(n) for n in ("centro_server","centro_agent","centro_station"))
+    with tempfile.TemporaryDirectory() as tmp:
+        dest=Path(tmp)/"runtime.py";dest.write_text("version = 'old'\n")
+        sha='a'*40
+        with patch.object(station,"RUNTIME_FILES",{"runtime.py":dest}),patch.object(station,"download_runtime",return_value="version = 'new'\n") as download:
+            changed,errors=station.sync_runtime(sha)
+            assert changed==['runtime.py'] and not errors
+            download.assert_called_once_with('runtime.py',sha)
+            changed,errors=station.sync_runtime('invalid')
+            assert not changed and errors and download.call_count==1
+    print('OK runtime updates use one confirmed commit and preserve files when the version is invalid')
     assert not server.OPENCLAW_ENABLED and not station.OPENCLAW_AUTOSTART
     def forbidden_probe(*args, **kwargs):
         raise AssertionError("disabled OpenClaw must never contact the gateway")

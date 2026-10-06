@@ -25,7 +25,7 @@ Paths do plano ficam limitados ao contexto autorizado por schema, e o executor p
 ## Ecossistema do Centro
 A conversa na Sala dos Agentes e em Automação & IA usa o motor seleccionado (Jarvis local por defeito). Os pedidos locais entram na fila persistente existente: Worker → Centro Agent → Centro Server → Jarvis. O resultado aparece na conversa e na actividade do Centro. O contexto actual de sites, CRM, financeiro e SEO acompanha a análise local. Alterações nos repositórios continuam no executor protegido e na política de confirmação existente.
 A voz abre no telemóvel a partir do Centro e permite consultar o histórico do mesmo Centro Server. O token permanente nunca sai do servidor. No Telegram, /jarvis seguido do pedido usa a mesma fila; alterações usam o percurso /fazer.
-Esta integração exige actualizar o runtime do telemóvel; a ligação Remote estava offline no momento desta publicação. A publicação de código não confirma por si só a versão activa no dispositivo.
+Esta integração exige o runtime actualizado no telemóvel. O auto-update confirma o commit de main e obtém todos os componentes desse commit, para evitar misturar versões em cache. A publicação de código não confirma por si só a versão activa no dispositivo.
 A presença ("estás aí?", "Olá") responde por regra, sem carregar o LLM. A interface tem prazo de espera e cancela a espera ao premir Parar voz. Cancelar a espera não reverte uma operação que o executor já tenha iniciado.
 ## Instalar
 bash operit-agent/install_jarvis_local.sh

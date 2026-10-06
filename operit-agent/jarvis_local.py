@@ -286,6 +286,8 @@ class Handler(BaseHTTPRequestHandler):
    if self.path=="/jarvis":return self.send(route(obj.get("text","")))
    if self.path=="/speak":return self.send(speak(obj["text"]),"audio/wav")
    raise ValueError("Endpoint desconhecido")
+  except (BrokenPipeError,ConnectionResetError):
+   pass
   except Exception as exc:
    event("executions",{"error":clean(str(exc))[:300]});self.send({"ok":False,"error":clean(str(exc))[:300]},code=400)
   finally:

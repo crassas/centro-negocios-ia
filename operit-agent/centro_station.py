@@ -369,7 +369,7 @@ def run_ctl(path, command):
 
 def fetch_main_sha():
     req = urllib.request.Request(
-        MAIN_COMMIT_API,
+        MAIN_COMMIT_API + "?t=" + str(int(time.time())),
         headers={
             "User-Agent": "Centro-Station-Autoupdate/1.0",
             "Accept": "application/vnd.github+json",
@@ -381,9 +381,10 @@ def fetch_main_sha():
         return str(data.get("sha") or "")[:40]
 
 
-def download_runtime(name):
+def download_runtime(name, ref="main"):
+    base = RAW_BASE.replace("/main/", "/" + ref + "/")
     req = urllib.request.Request(
-        RAW_BASE + "/" + name + "?t=" + str(int(time.time())),
+        base + "/" + name + "?t=" + str(int(time.time())),
         headers={
             "User-Agent": "Centro-Station-Autoupdate/1.0",
             "Cache-Control": "no-cache",
@@ -441,16 +442,19 @@ def sync_operit_workflow(local_path):
     return copied
 
 
-def sync_runtime():
+def sync_runtime(ref=None):
     """
     Mantém Server/Agent/Supervisor alinhados com main.
     Só instala Python que compila; falhas de rede nunca derrubam a estação.
     """
     changed = []
     errors = []
+    ref = ref or fetch_main_sha()
+    if len(ref) != 40 or any(c not in "0123456789abcdef" for c in ref):
+        return [], ["Não foi possível confirmar a versão de main; runtime preservado."]
     for name, dest in RUNTIME_FILES.items():
         try:
-            remote = download_runtime(name)
+            remote = download_runtime(name, ref)
             validate_runtime_text(name, remote, dest)
             current = dest.read_text(encoding="utf-8") if dest.exists() else ""
             if current == remote:
@@ -589,7 +593,7 @@ def main():
                 candidate_sha = fetch_main_sha()
             except Exception:
                 candidate_sha = ""
-            changed, update_errors = sync_runtime()
+            changed, update_errors = sync_runtime(candidate_sha)
             if changed:
                 if any(name in changed for name in ("jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh")):
                     pending_jarvis_restart = True
