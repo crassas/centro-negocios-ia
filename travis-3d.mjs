@@ -191,8 +191,8 @@ if (!hud || !launcher || !canvas) {
     return new THREE.ShaderMaterial({
       uniforms:{
         uTime:{value:0},
-        uColor:{value:new THREE.Color(0.10,1.15,2.0)},
-        uOpacity:{value:.46},
+        uColor:{value:new THREE.Color(0.055,.62,1.18)},
+        uOpacity:{value:.34},
         uGlitch:{value:0},
         uState:{value:0}
       },
@@ -408,14 +408,14 @@ if (!hud || !launcher || !canvas) {
     scene.add(dust);
 
     const beamMat=new THREE.MeshBasicMaterial({
-      color:0x48cfff,transparent:true,opacity:.018,
+      color:0x48cfff,transparent:true,opacity:.0045,
       blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,toneMapped:false
     });
-    beamTop=markBloom(new THREE.Mesh(new THREE.ConeGeometry(2.8,8.2,48,1,true),beamMat.clone()));
+    beamTop=new THREE.Mesh(new THREE.ConeGeometry(1.7,8.2,48,1,true),beamMat.clone());
     beamTop.position.set(0,4.4,-1.6);
     scene.add(beamTop);
 
-    beamBottom=markBloom(new THREE.Mesh(new THREE.ConeGeometry(2.4,6.8,48,1,true),beamMat.clone()));
+    beamBottom=new THREE.Mesh(new THREE.ConeGeometry(1.45,6.8,48,1,true),beamMat.clone());
     beamBottom.rotation.z=Math.PI;
     beamBottom.position.set(0,-4.3,-1.8);
     scene.add(beamBottom);
@@ -524,34 +524,34 @@ if (!hud || !launcher || !canvas) {
 
     if (name.includes('EmissiveCyan') || name.includes('EmissiveIce')) {
       if (obj.material.emissive) {
-        if (name.includes('Ice')) obj.material.emissive.setRGB(.08,1.18,2.15);
-        else obj.material.emissive.setRGB(.025,.82,1.72);
+        if (name.includes('Ice')) obj.material.emissive.setRGB(.035,.72,1.25);
+        else obj.material.emissive.setRGB(.018,.52,1.0);
       }
-      obj.material.emissiveIntensity=name.includes('Ice')?1.05:.92;
+      obj.material.emissiveIntensity=name.includes('Ice')?.72:.62;
       obj.material.toneMapped=false;
       obj.material.userData.travisBaseEmission=obj.material.emissiveIntensity;
       markBloom(obj);
     }
 
     if (name.includes('EmissiveRed')) {
-      obj.material.emissive?.setRGB(1.8,.025,.12);
-      obj.material.emissiveIntensity=.96;
+      obj.material.emissive?.setRGB(1.12,.018,.07);
+      obj.material.emissiveIntensity=.68;
       obj.material.toneMapped=false;
       obj.material.userData.travisBaseEmission=obj.material.emissiveIntensity;
       markBloom(obj);
     }
 
     if (name.includes('EmissiveWhite')) {
-      obj.material.emissive?.setRGB(1.2,1.75,2.2);
-      obj.material.emissiveIntensity=1.08;
+      obj.material.emissive?.setRGB(.7,1.05,1.32);
+      obj.material.emissiveIntensity=.7;
       obj.material.toneMapped=false;
       obj.material.userData.travisBaseEmission=obj.material.emissiveIntensity;
       markBloom(obj);
     }
 
     if (name==='CoreEnergy') {
-      obj.material.emissive?.setRGB(.04,1.0,1.9);
-      obj.material.emissiveIntensity=1.12;
+      obj.material.emissive?.setRGB(.025,.58,1.12);
+      obj.material.emissiveIntensity=.62;
       obj.material.toneMapped=false;
       obj.material.userData.travisBaseEmission=obj.material.emissiveIntensity;
       energyMesh=obj;
@@ -658,18 +658,26 @@ if (!hud || !launcher || !canvas) {
   function layoutCommands() {
     if (!commandNodes.length) return;
     const portrait=innerWidth/innerHeight < .72;
+    const compact=innerWidth<700;
     const positions=portrait
-      ? [
-          [-1.72,.95,.5],
-          [1.72,.95,.5],
-          [-1.68,-1.18,.38],
-          [1.68,-1.18,.38]
-        ]
+      ? (compact
+          ? [
+              [-1.18,.88,.48],
+              [1.18,.88,.48],
+              [-1.18,-.98,.34],
+              [1.18,-.98,.34]
+            ]
+          : [
+              [-1.45,.95,.5],
+              [1.45,.95,.5],
+              [-1.42,-1.08,.38],
+              [1.42,-1.08,.38]
+            ])
       : [
-          [-3.0,1.2,.45],
-          [3.0,1.2,.45],
-          [-2.5,-1.65,.35],
-          [2.5,-1.65,.35]
+          [-2.55,1.1,.45],
+          [2.55,1.1,.45],
+          [-2.2,-1.5,.35],
+          [2.2,-1.5,.35]
         ];
     commandNodes.forEach((n,i)=>n.target.set(...positions[i]));
   }
@@ -764,7 +772,7 @@ if (!hud || !launcher || !canvas) {
     bloomComposer=new EffectComposer(renderer);
     bloomComposer.renderToScreen=false;
     bloomComposer.addPass(new RenderPass(scene,camera));
-    bloomPass=new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),1.02,.56,.08);
+    bloomPass=new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),.62,.38,.18);
     bloomComposer.addPass(bloomPass);
 
     finalComposer=new EffectComposer(renderer);
@@ -809,11 +817,11 @@ if (!hud || !launcher || !canvas) {
   }
 
   function stateBloom() {
-    if (state==='booting') return 1.18;
-    if (state==='listening') return 1.24;
-    if (state==='thinking') return 1.38;
-    if (state==='speaking') return 1.48;
-    return 1.02;
+    if (state==='booting') return .72;
+    if (state==='listening') return .76;
+    if (state==='thinking') return .88;
+    if (state==='speaking') return .94;
+    return .62;
   }
 
   function renderComposed(t) {
@@ -916,7 +924,7 @@ if (!hud || !launcher || !canvas) {
       hologramMaterial.uniforms.uTime.value=t;
       hologramMaterial.uniforms.uGlitch.value=glitchPower;
       hologramMaterial.uniforms.uState.value=state==='thinking'?1:state==='listening'?.72:state==='speaking'?.86:.18;
-      hologramMaterial.uniforms.uOpacity.value=.40+(state==='listening'?.06:state==='thinking'?.09:state==='speaking'?.08:0);
+      hologramMaterial.uniforms.uOpacity.value=.28+(state==='listening'?.04:state==='thinking'?.06:state==='speaking'?.055:0);
     }
 
     commandTarget=commandsOpen?1:0;
@@ -954,8 +962,8 @@ if (!hud || !launcher || !canvas) {
       floorHalo.material.opacity=.055+.025*Math.sin(t*1.1)+(state==='listening'?.025:0);
       floorHalo.rotation.z=t*.035;
     }
-    if (beamTop) beamTop.material.opacity=.012+.009*(.5+.5*Math.sin(t*.7))+(state==='thinking'?.009:0);
-    if (beamBottom) beamBottom.material.opacity=.009+.006*(.5+.5*Math.sin(t*.6+1));
+    if (beamTop) beamTop.material.opacity=.0025+.0025*(.5+.5*Math.sin(t*.7))+(state==='thinking'?.0015:0);
+    if (beamBottom) beamBottom.material.opacity=.0018+.0018*(.5+.5*Math.sin(t*.6+1));
 
     if (bloomPass) bloomPass.strength += (stateBloom()-bloomPass.strength)*.055;
 

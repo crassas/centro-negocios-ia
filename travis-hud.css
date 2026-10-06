@@ -146,10 +146,10 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
   transition:opacity .35s ease;
 }
 .travis-hud.is-open .travis-title{animation:trv-title-in .75s 1.05s ease forwards}
-.travis-hud.commands-open .travis-title{opacity:.34!important}
+.travis-hud.commands-open .travis-title{opacity:.62!important}
 .travis-title h1{
   margin:0;
-  font-size:clamp(55px,7vw,94px);
+  font-size:clamp(48px,6.2vw,82px);
   line-height:.9;letter-spacing:.1em;font-weight:760;
   color:#eefcff;
   text-shadow:0 0 8px rgba(190,248,255,.3),0 0 32px rgba(43,172,255,.16)
@@ -227,8 +227,8 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
   .travis-brand-mark::before{left:8px;top:7px;width:13px;height:13px}
   .travis-close{right:11px;top:calc(11px + env(safe-area-inset-top));width:40px;height:40px}
   .travis-loading{top:calc(64px + env(safe-area-inset-top));font-size:6px}
-  .travis-title{top:68%;width:94vw}
-  .travis-title h1{font-size:clamp(52px,15vw,76px)}
+  .travis-title{top:70%;width:92vw}
+  .travis-title h1{font-size:clamp(44px,12.5vw,60px)}
   .travis-title p{font-size:6.5px;letter-spacing:.3em}
   .travis-hint{top:59%;font-size:6px}
   .travis-status{
@@ -242,8 +242,8 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
   #travis-launcher{right:15px;width:59px;height:59px}
 }
 @media(max-height:700px) and (max-width:820px){
-  .travis-title{top:65%}
-  .travis-title h1{font-size:48px}
+  .travis-title{top:68%}
+  .travis-title h1{font-size:42px}
   .travis-title p{display:none}
   .travis-hint{display:none}
   .travis-status{bottom:calc(12px + env(safe-area-inset-bottom))}
@@ -324,4 +324,12 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
 @media(max-width:440px){
   .travis-telemetry small{display:none}
   .travis-telemetry{opacity:.68}
+}
+
+/* V7.1 framing correction from real mobile capture */
+@media(max-width:820px){
+  .travis-telemetry{opacity:.5}
+  .travis-reticle{opacity:.26}
+  .travis-hud[data-state="thinking"] .travis-reticle{opacity:.4}
+  .travis-title h1{text-shadow:0 0 7px rgba(190,248,255,.24),0 0 22px rgba(43,172,255,.11)}
 }
