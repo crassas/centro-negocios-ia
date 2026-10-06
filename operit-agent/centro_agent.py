@@ -307,10 +307,24 @@ def execute(task):
 
 def save_outbox(payload):
     STATE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    body = json.dumps(payload, ensure_ascii=False)
     tmp = OUTBOX_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    tmp.write_text(body, encoding="utf-8")
     os.chmod(tmp, 0o600)
-    tmp.replace(OUTBOX_FILE)
+    try:
+        tmp.replace(OUTBOX_FILE)
+    except OSError as exc:
+        # Android/PRoot can return ENOSYS for rename/replace even when normal
+        # file writes work. Fall back to a direct write so result delivery
+        # remains persistent instead of entering an error loop.
+        if getattr(exc, "errno", None) != 38:
+            raise
+        OUTBOX_FILE.write_text(body, encoding="utf-8")
+        os.chmod(OUTBOX_FILE, 0o600)
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def flush_outbox(token):
