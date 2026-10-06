@@ -227,69 +227,70 @@ body.travis-hud-open{overflow:hidden}
 
 /* interactive core */
 .travis-core-trigger{
-  position:relative;z-index:5;width:29%;aspect-ratio:1;border:1px solid rgba(119,229,255,.6);border-radius:50%;
-  background:
-    radial-gradient(circle at 50% 42%,rgba(232,254,255,.97) 0 3%,rgba(88,228,255,.65) 5% 11%,rgba(14,100,157,.72) 20%,rgba(3,17,28,.98) 56%),
-    #04101a;
-  box-shadow:0 0 12px rgba(155,242,255,.8),0 0 48px rgba(42,194,255,.6),0 0 120px rgba(18,139,226,.24),inset 0 0 34px rgba(82,223,255,.24);
-  cursor:pointer;display:grid;place-items:center;transition:transform .2s ease,box-shadow .2s ease;-webkit-tap-highlight-color:transparent;
+  position:relative;z-index:7;width:27%;aspect-ratio:1;border:1px solid rgba(119,229,255,.08);border-radius:50%;
+  background:transparent;box-shadow:none;cursor:pointer;display:grid;place-items:center;
+  transition:transform .2s ease,border-color .2s ease;-webkit-tap-highlight-color:transparent;
 }
 .travis-core-trigger:hover,.travis-core-trigger:focus-visible{
-  transform:scale(1.035);box-shadow:0 0 14px #a6f3ff,0 0 60px rgba(42,194,255,.72),0 0 145px rgba(18,139,226,.3),inset 0 0 42px rgba(82,223,255,.32);outline:none
+  transform:scale(1.025);border-color:rgba(119,229,255,.22);outline:none
 }
 .travis-core-trigger::before{
-  content:"";position:absolute;inset:-21%;border:1px solid rgba(91,213,255,.18);border-radius:50%;box-shadow:0 0 34px rgba(30,174,255,.09)
+  content:"";position:absolute;inset:-13%;border:1px solid rgba(91,213,255,.06);border-radius:50%;box-shadow:none
 }
 .travis-core-trigger::after{
-  content:"";position:absolute;inset:10%;border-radius:50%;border:1px dashed rgba(139,239,255,.34);animation:trv-launch-spin 8s linear infinite
+  content:"";position:absolute;inset:13%;border-radius:50%;border:1px dashed rgba(139,239,255,.08);animation:trv-launch-spin 10s linear infinite
 }
-.travis-core-glass{
-  position:absolute;inset:4%;border-radius:50%;background:linear-gradient(135deg,rgba(255,255,255,.09),transparent 34%);
-  mix-blend-mode:screen;pointer-events:none
-}
-.travis-emblem{width:45%;aspect-ratio:1;position:relative;filter:drop-shadow(0 0 10px rgba(87,229,255,.85))}
-.travis-emblem::before{
-  content:"";position:absolute;inset:3% 10% 12%;clip-path:polygon(50% 100%,0 7%,100% 7%);
-  background:linear-gradient(180deg,#f3feff,#6be7ff 52%,#168dff)
-}
-.travis-emblem::after{
-  content:"";position:absolute;inset:17% 27% 27%;clip-path:polygon(50% 100%,0 0,100% 0);background:#04111c
-}
+.travis-core-glass{position:absolute;inset:7%;border-radius:50%;background:transparent;pointer-events:none}
+.travis-emblem{display:none}
 
 /* orbital command materialisation */
 .travis-orbit-menu{position:absolute;inset:0;z-index:6;pointer-events:none}
 .travis-orbit-node{
-  position:absolute;left:50%;top:50%;width:86px;height:86px;margin:-43px 0 0 -43px;
-  border:0;background:transparent;color:#82a5b7;display:grid;place-items:center;cursor:pointer;
-  opacity:0;transform:translate3d(0,0,0) scale(.25);transition:
-    transform .48s cubic-bezier(.16,.8,.2,1),
-    opacity .24s ease,
-    color .2s ease;
-  pointer-events:none;-webkit-tap-highlight-color:transparent;
+  position:absolute;
+  left:50%;top:50%;
+  width:116px;height:46px;
+  margin:-23px 0 0 -58px;
+  border:1px solid rgba(101,220,255,.14);
+  background:linear-gradient(90deg,rgba(5,21,33,.5),rgba(8,31,48,.28),rgba(5,21,33,.5));
+  color:#78a0b2;
+  display:flex;align-items:center;justify-content:flex-start;gap:10px;
+  padding:0 13px;
+  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+  cursor:pointer;
+  opacity:0;
+  transform:translate3d(0,0,0) scale(.5);
+  transition:transform .42s cubic-bezier(.16,.8,.2,1),opacity .2s ease,color .2s ease,border-color .2s ease,background .2s ease;
+  pointer-events:none;
+  -webkit-tap-highlight-color:transparent;
+  backdrop-filter:blur(10px);
+  box-shadow:inset 0 0 20px rgba(47,181,235,.02);
 }
-.travis-orbit-node .node-ring{
-  position:absolute;inset:8px;border-radius:50%;
-  border:1px solid rgba(90,210,255,.18);
-  background:radial-gradient(circle,rgba(15,73,107,.18),rgba(3,15,24,.58) 58%,transparent 60%);
-  box-shadow:inset 0 0 22px rgba(49,187,247,.035),0 0 18px rgba(33,171,236,.05);
+.travis-orbit-node::before{
+  content:"";
+  position:absolute;
+  left:8px;right:8px;top:0;
+  height:1px;
+  background:linear-gradient(90deg,rgba(108,233,255,.65),transparent 72%);
+  box-shadow:0 0 8px rgba(69,214,255,.28);
 }
-.travis-orbit-node .node-ring::before{
-  content:"";position:absolute;inset:-5px;border-radius:50%;
-  border-top:1px solid rgba(109,233,255,.48);border-right:1px solid transparent;border-bottom:1px solid rgba(255,66,102,.18);border-left:1px solid transparent;
-  animation:trv-launch-spin 6s linear infinite;
+.travis-orbit-node svg{
+  position:relative;flex:0 0 auto;width:18px;height:18px;
+  fill:none;stroke:currentColor;stroke-width:1.5;
+  filter:drop-shadow(0 0 6px rgba(80,217,255,.2));
 }
-.travis-orbit-node svg{position:relative;width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.55;filter:drop-shadow(0 0 7px rgba(80,217,255,.28))}
 .travis-orbit-node b{
-  position:absolute;top:78px;left:50%;transform:translateX(-50%);font-size:7px;letter-spacing:.15em;font-weight:750;white-space:nowrap
+  position:relative;
+  font-size:7px;letter-spacing:.16em;font-weight:760;white-space:nowrap;
 }
 .travis-hud.deck-open .travis-orbit-node{opacity:1;pointer-events:auto}
-.travis-hud.deck-open .node-centro{transform:translate3d(-220px,28px,50px) scale(1)}
-.travis-hud.deck-open .node-projectos{transform:translate3d(-150px,-166px,74px) scale(1)}
-.travis-hud.deck-open .node-seo{transform:translate3d(150px,-166px,74px) scale(1)}
-.travis-hud.deck-open .node-agentes{transform:translate3d(220px,28px,50px) scale(1)}
-.travis-orbit-node:hover,.travis-orbit-node:focus-visible{color:#eaffff;outline:none}
-.travis-orbit-node:hover .node-ring,.travis-orbit-node:focus-visible .node-ring{
-  border-color:rgba(109,233,255,.5);box-shadow:0 0 28px rgba(50,197,255,.16),inset 0 0 24px rgba(50,197,255,.06)
+.travis-hud.deck-open .node-centro{transform:translate3d(-232px,52px,55px) scale(1)}
+.travis-hud.deck-open .node-projectos{transform:translate3d(-192px,-138px,70px) scale(1)}
+.travis-hud.deck-open .node-seo{transform:translate3d(192px,-138px,70px) scale(1)}
+.travis-hud.deck-open .node-agentes{transform:translate3d(232px,52px,55px) scale(1)}
+.travis-orbit-node:hover,.travis-orbit-node:focus-visible{
+  color:#eaffff;border-color:rgba(109,233,255,.42);
+  background:linear-gradient(90deg,rgba(7,30,45,.72),rgba(11,43,64,.38),rgba(7,30,45,.72));
+  outline:none;
 }
 
 /* typography/status */
@@ -328,12 +329,10 @@ body.travis-hud-open{overflow:hidden}
 
 /* state dynamics */
 .travis-hud[data-state="booting"] .travis-core-trigger{animation:trv-core-breathe 1.25s ease-in-out infinite}
-.travis-hud[data-state="listening"] .travis-core-trigger{
-  box-shadow:0 0 16px #a0f2ff,0 0 78px rgba(46,200,255,.8),0 0 160px rgba(15,132,228,.3),inset 0 0 44px rgba(90,226,255,.33)
-}
-.travis-hud[data-state="thinking"] #travis-core-canvas{filter:saturate(1.18) brightness(1.17) drop-shadow(0 0 12px rgba(75,215,255,.2))}
+.travis-hud[data-state="listening"] .travis-core-trigger{border-color:rgba(119,229,255,.18)}
+.travis-hud[data-state="thinking"] #travis-three-stage{filter:saturate(1.08) brightness(1.04)}
 .travis-hud[data-state="speaking"] .travis-wave i{animation-duration:.5s}
-.travis-hud[data-state="speaking"] .travis-core-trigger{animation:trv-core-breathe .72s ease-in-out infinite}
+.travis-hud[data-state="speaking"] .travis-core-trigger{animation:trv-core-breathe .9s ease-in-out infinite}
 .travis-hud.deck-open .travis-touch-hint{opacity:0!important}
 
 /* animation */
@@ -360,11 +359,13 @@ body.travis-hud-open{overflow:hidden}
   .travis-mini-state{display:none}
   .travis-lens-flare{top:45%}
   .travis-depth-grid{bottom:-39%;opacity:.34}
-  .travis-hud.deck-open .node-centro{transform:translate3d(-132px,18px,36px) scale(.86)}
-  .travis-hud.deck-open .node-projectos{transform:translate3d(-92px,-112px,48px) scale(.86)}
-  .travis-hud.deck-open .node-seo{transform:translate3d(92px,-112px,48px) scale(.86)}
-  .travis-hud.deck-open .node-agentes{transform:translate3d(132px,18px,36px) scale(.86)}
-  .travis-orbit-node b{top:75px;font-size:6px}
+  .travis-orbit-node{width:102px;height:42px;margin:-21px 0 0 -51px;padding:0 10px;gap:8px}
+  .travis-orbit-node svg{width:16px;height:16px}
+  .travis-orbit-node b{font-size:6px;letter-spacing:.12em}
+  .travis-hud.deck-open .node-centro{transform:translate3d(-138px,38px,36px) scale(.92)}
+  .travis-hud.deck-open .node-projectos{transform:translate3d(-108px,-104px,46px) scale(.92)}
+  .travis-hud.deck-open .node-seo{transform:translate3d(108px,-104px,46px) scale(.92)}
+  .travis-hud.deck-open .node-agentes{transform:translate3d(138px,38px,36px) scale(.92)}
   #travis-launcher{right:16px;bottom:calc(25px + env(safe-area-inset-bottom));width:62px;height:62px}
 }
 @media(max-width:520px){
@@ -379,36 +380,31 @@ body.travis-hud-open{overflow:hidden}
   .travis-status-line{min-height:43px;margin-top:14px;padding:7px 9px;grid-template-columns:40px 1fr auto}
   .travis-status-message{font-size:12px}.travis-status-state{font-size:6.5px}
   .travis-touch-hint{font-size:6px;margin-top:8px}
-  .travis-orbit-node{width:72px;height:72px;margin:-36px 0 0 -36px}
-  .travis-orbit-node .node-ring{inset:6px}
-  .travis-orbit-node svg{width:19px;height:19px}
-  .travis-orbit-node b{top:66px}
-  .travis-hud.deck-open .node-centro{transform:translate3d(-118px,20px,30px) scale(.82)}
-  .travis-hud.deck-open .node-projectos{transform:translate3d(-82px,-100px,40px) scale(.82)}
-  .travis-hud.deck-open .node-seo{transform:translate3d(82px,-100px,40px) scale(.82)}
-  .travis-hud.deck-open .node-agentes{transform:translate3d(118px,20px,30px) scale(.82)}
+  .travis-orbit-node{width:94px;height:39px;margin:-19.5px 0 0 -47px;padding:0 9px}
+  .travis-orbit-node svg{width:15px;height:15px}
+  .travis-orbit-node b{font-size:5.8px}
+  .travis-hud.deck-open .node-centro{transform:translate3d(-126px,34px,30px) scale(.88)}
+  .travis-hud.deck-open .node-projectos{transform:translate3d(-94px,-94px,38px) scale(.88)}
+  .travis-hud.deck-open .node-seo{transform:translate3d(94px,-94px,38px) scale(.88)}
+  .travis-hud.deck-open .node-agentes{transform:translate3d(126px,34px,30px) scale(.88)}
 }
 @media(max-height:690px) and (max-width:820px){
   .travis-orb-parallax{width:min(88vw,43vh,340px)}
   .travis-title h1{font-size:45px}
   .travis-status-line{margin-top:10px}
   .travis-touch-hint{display:none}
-  .travis-hud.deck-open .node-projectos{transform:translate3d(-78px,-86px,30px) scale(.74)}
-  .travis-hud.deck-open .node-seo{transform:translate3d(78px,-86px,30px) scale(.74)}
-  .travis-hud.deck-open .node-centro{transform:translate3d(-105px,16px,24px) scale(.74)}
-  .travis-hud.deck-open .node-agentes{transform:translate3d(105px,16px,24px) scale(.74)}
+  .travis-hud.deck-open .node-projectos{transform:translate3d(-78px,-78px,28px) scale(.74)}
+  .travis-hud.deck-open .node-seo{transform:translate3d(78px,-78px,28px) scale(.74)}
+  .travis-hud.deck-open .node-centro{transform:translate3d(-104px,20px,22px) scale(.74)}
+  .travis-hud.deck-open .node-agentes{transform:translate3d(104px,20px,22px) scale(.74)}
 }
 @media(prefers-reduced-motion:reduce){
   #travis-launcher .trv-launch-ring,.travis-hud *,.travis-hud *::before,.travis-hud *::after{animation-duration:.001ms!important;animation-iteration-count:1!important}
   .travis-orb-parallax{transition:none}
 }
 
-/* V4: real 3D scene owns the visual core; CSS is only interaction chrome. */
-.travis-holo-disc{opacity:.14}
-.travis-core-trigger{z-index:7;background:radial-gradient(circle,rgba(5,23,36,.12),rgba(2,10,17,.22) 58%,transparent 62%);border-color:rgba(119,229,255,.2);box-shadow:0 0 28px rgba(42,194,255,.12),inset 0 0 24px rgba(82,223,255,.08)}
-.travis-core-trigger::before{border-color:rgba(91,213,255,.09)}
-.travis-core-trigger::after{border-color:rgba(139,239,255,.16)}
-.travis-core-glass{opacity:.45}
-.travis-emblem{opacity:.76}
-.travis-orb-shadow{opacity:.38}
-.travis-hud.deck-open .travis-holo-disc{opacity:.08}
+/* V4: the real 3D scene owns the visual core; CSS only supplies invisible hit-area and light UI chrome. */
+.travis-holo-disc{opacity:.045}
+.travis-orb-shadow{opacity:.18}
+.travis-hud.deck-open .travis-holo-disc{opacity:.025}
+#travis-three-stage{filter:drop-shadow(0 0 10px rgba(54,187,239,.08))}
