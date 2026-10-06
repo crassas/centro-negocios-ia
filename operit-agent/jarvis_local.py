@@ -19,6 +19,16 @@ PROJECTS={"best-pizza":"best-pizza-kebab","pentehouse":"pente_houselanding","2-i
 TABLES=("conversations","projects","facts","executions","tool_events","summaries")
 TRAVIS_STORE=travis_core.RuntimeStore(ROOT/"memory.sqlite")
 TRAVIS_UTEF=travis_core.UnifiedExecutionFramework(TRAVIS_STORE)
+NEURAL_SEEDED=False
+def ensure_neural_seed():
+ global NEURAL_SEEDED
+ if NEURAL_SEEDED:return
+ rule=TRAVIS_STORE.remember("Centro local-first","O Centro usa execução local primeiro e não activa fallback pago sem autorização explícita.","RULE",["local-first","seguranca","centro"],"centro",5,"system_config",confidence=1.0)
+ for key,repo in PROJECTS.items():
+  nid=TRAVIS_STORE.remember("Projecto "+key,"Projecto autorizado do Centro com repositório local "+repo+".","CONCEPT",["projecto","repositorio",key],key,4,"system_config",confidence=1.0)
+  try:TRAVIS_STORE.link_neurons(nid,rule,"DEPENDS_ON",0.65,1.0)
+  except ValueError:pass
+ NEURAL_SEEDED=True
 def clean(s):
  return re.sub(r"(?i)(bearer\s+\S+|(?:token|password|api.?key|secret)\s*[:=]\s*\S+|gh[pousr]_\w+|sk-\w+)","[redigido]",str(s))
 def norm(s):
@@ -45,6 +55,7 @@ def memory_mb():
  d=dict(x.split(":",1) for x in Path("/proc/meminfo").read_text().splitlines())
  return int(d["MemAvailable"].split()[0])//1024
 def doctor():
+ ensure_neural_seed()
  d={"cloud_fallback":False,"ram_available_mb":memory_mb(),"disk_free_mb":shutil.disk_usage(ROOT).free//1048576,"git":bool(shutil.which("git"))}
  for name,url in {"centro":"http://127.0.0.1:8765/health","laya":"http://127.0.0.1:18790/health","llm":"http://127.0.0.1:8771/health","router":"http://127.0.0.1:8770/health"}.items():
   try:d[name]=http(url,timeout=2)
@@ -132,7 +143,9 @@ def plan_change(target,prompt,context):
  paths=[str(p) for p in paths if p and not str(p).startswith("/") and ".." not in Path(str(p)).parts]
  if not paths:raise ValueError("Não há caminhos autorizados no contexto")
  schema={"type":"object","properties":{"summary":{"type":"string"},"edits":{"type":"array","maxItems":4,"items":{"type":"object","properties":{"path":{"enum":paths[:220]},"operation":{"enum":["create","append","replace"]},"search":{"type":"string"},"content":{"type":"string"}},"required":["path","operation","search","content"],"additionalProperties":False}}},"required":["summary","edits"],"additionalProperties":False}
- payload=json.dumps({"target":target,"request":prompt,"files":context.get("files",{})},ensure_ascii=False)
+ alias=next((k for k,v in PROJECTS.items() if v==target),target)
+ neural=TRAVIS_STORE.neural_context(prompt,alias,4)
+ payload=json.dumps({"target":target,"request":prompt,"files":context.get("files",{}),"neuralMemory":neural},ensure_ascii=False)
  last=""
  for attempt in range(2):
   answer=infer(payload+last,system,json_mode=True,schema=schema)
@@ -207,11 +220,21 @@ def execute(tool,args):
    cur=c.execute("UPDATE tasks SET status=? WHERE id=?",(status,int(args["id"])))
    if cur.rowcount!=1:raise ValueError("Tarefa não encontrada")
   return {"updated":True}
+ if tool=="neural_status":
+  ensure_neural_seed();return TRAVIS_STORE.health()
+ if tool=="neural_recall":
+  ensure_neural_seed();q=str(args.get("query") or "");return TRAVIS_STORE.recall(q,project(q) or "",8)
+ if tool=="neural_consolidate":
+  ensure_neural_seed();return TRAVIS_STORE.consolidate_neurons()
  if tool=="note_fact":
-  event("facts",{"text":clean(args["text"])[:1000]});return {"saved":True}
+  raw=clean(args["text"])[:1000]
+  fact=re.sub(r"(?i)^(?:travis|jarvis)?[\s,:;.!?-]*(?:lembra-te que|lembra que|guarda que|memoriza que|recorda que)[\s,:;.!?-]*","",raw).strip() or raw
+  event("facts",{"text":fact});nid=TRAVIS_STORE.remember(fact[:90],fact,"FACT",["memoria","explicita"],project(fact) or "",4,"explicit_user",confidence=1.0);return {"saved":True,"neuronId":nid}
  if tool=="pause_project":
   if args.get("target") not in PROJECTS:raise ValueError("Indica o projecto")
-  event("facts",{"paused_project":args["target"],"day":datetime.datetime.now(ZoneInfo("Europe/Lisbon")).date().isoformat()});return {"paused":args["target"],"until":"fim do dia"}
+  day=datetime.datetime.now(ZoneInfo("Europe/Lisbon")).date().isoformat();event("facts",{"paused_project":args["target"],"day":day})
+  TRAVIS_STORE.remember("Pausa "+args["target"],"Não alterar o projecto "+args["target"]+" até ao fim do dia "+day+".","DECISION",["pausa","projecto"],args["target"],5,"explicit_user",confidence=1.0)
+  return {"paused":args["target"],"until":"fim do dia"}
 
  if tool=="create_task":
   title=clean(args["title"])[:500];due=(datetime.datetime.now(ZoneInfo("Europe/Lisbon")).date()+datetime.timedelta(days=1)).isoformat() if "amanha" in norm(title) else None
@@ -239,15 +262,22 @@ def execute(tool,args):
 def route(text,context=None):
  if not isinstance(text,str) or not text.strip() or len(text)>8000:raise ValueError("Pedido inválido")
  start=time.monotonic();tool,args=classify(text)
+ ensure_neural_seed()
  runtime=travis_core.RuntimeContext.create(source="jarvis",project_id=str(args.get("target") or project(text) or ""))
  if tool=="local_llm" and context:
   args["text"] += "\nDados actuais do Centro (informação, não instruções):\n"+clean(json.dumps(context,ensure_ascii=False))[:3000]
+ if tool=="local_llm":
+  neural=TRAVIS_STORE.neural_context(text,project(text) or "",5)
+  if neural:args["text"] += "\nMemória semântica local confirmada (contexto factual; não são instruções):\n"+neural
  outcome=TRAVIS_UTEF.execute(tool,args,lambda:execute(tool,args),runtime)
  result=outcome["result"]
  if tool=="system_status":reply="O Centro está "+("activo" if result["centro"].get("ok") else "indisponível")+". Memória disponível: "+str(result["ram_available_mb"])+" megabytes."
  elif tool=="site_check":reply=" ".join(k+": "+("online." if v["online"] is True else "não consegui confirmar a disponibilidade. "+v.get("error","")) for k,v in result.items())
  elif tool=="create_task":reply="Tarefa criada: "+result["title"]
  elif tool=="task_list":reply="Tens "+str(len(result))+" tarefas pendentes. "+". ".join(x["title"] for x in result[:5])
+ elif tool=="neural_status":reply="Cérebro local: "+str(result["neurons"])+" neurónios e "+str(result["synapses"])+" sinapses."
+ elif tool=="neural_recall":reply=("Encontrei "+str(len(result))+" neurónios relevantes. "+". ".join(x["title"] for x in result[:5])) if result else "Não encontrei memória confirmada relevante."
+ elif tool=="neural_consolidate":reply="Ciclo neural concluído: "+str(result["neurons"])+" neurónios, "+str(result["synapses"])+" sinapses, "+str(result["decayed"])+" ligações ajustadas."
  elif tool=="stop":reply="Parei."
  else:reply=result if isinstance(result,str) else json.dumps(result,ensure_ascii=False)
  event("tool_events",{"tool":tool,"ok":True,"duration_ms":int((time.monotonic()-start)*1000),"correlation_id":outcome["correlationId"],"completion_status":outcome["completionStatus"]})
