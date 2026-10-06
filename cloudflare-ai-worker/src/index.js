@@ -1940,8 +1940,8 @@ async function runOfficeCycle(env){
   const state=await q.officeState();
   const cycle=(Number(state.cycle)||0)+1;
   const audit=await fetchOfficeAudit();
-  const stats=await q.taskStats();
-  const busy=(Number(stats.pending)||0)+(Number(stats.queued)||0)+(Number(stats.running)||0)>0;
+  let stats=await q.taskStats();
+  let busy=(Number(stats.pending)||0)+(Number(stats.queued)||0)+(Number(stats.running)||0)>0;
   const recent=await q.recentTasks(24);
   const quotaFailure=recent.find(row=>
     Number(row.exitCode)===67 &&
@@ -1957,6 +1957,40 @@ async function runOfficeCycle(env){
     );
     state.plannerBlockedUntil=Math.max(Number(state.plannerBlockedUntil)||0,nextUtcMidnight);
     state.plannerBlockReason='Workers AI atingiu a quota gratuita diária; manutenção continua em modo leitura/prospecção.';
+
+    // Não deixa revisões automáticas antigas prenderem a fila quando o
+    // planeador está comprovadamente sem quota. Pedidos do utilizador nunca
+    // são cancelados por esta rotina.
+    const ids=await q.getJson('task:ids',[]);
+    let cancelled=0;
+    for(const id of ids.slice(-40)){
+      const task=await q.getJson('task:'+id,null);
+      if(
+        task &&
+        task.source==='office-autopilot' &&
+        task.action==='repo_change' &&
+        task.status==='queued'
+      ){
+        task.status='rejected';
+        task.resolvedAt=Date.now();
+        task.progress={
+          phase:'blocked',
+          detail:'Revisão automática adiada: planeador gratuito sem quota. O escritório continua em vigilância.',
+          at:Date.now()
+        };
+        await q.setJson('task:'+id,task);
+        cancelled++;
+      }
+    }
+    if(cancelled){
+      await q.appendOfficeEvent({
+        type:'deferred',
+        label:'Manutenção de código adiada',
+        detail:cancelled+' revisão(ões) automática(s) retirada(s) da fila por falta de quota do planeador.'
+      });
+      stats=await q.taskStats();
+      busy=(Number(stats.pending)||0)+(Number(stats.queued)||0)+(Number(stats.running)||0)>0;
+    }
   }else if(Number(state.plannerBlockedUntil||0)<=now){
     state.plannerBlockedUntil=0;
     state.plannerBlockReason='';
