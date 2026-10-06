@@ -1365,6 +1365,17 @@ window.TravisBridge={async ask(question,signal){
     return {reply:'Search Console, dados de '+fmtDate(g.importedAt)+'. Posições médias por pesquisa; não são posições em tempo real. '+rows.map(r=>r.query+': '+r.position.toFixed(1).replace('.',',')).join('; ')};
   }
   if(/\b(corrige|melhora|altera|publica|implementa|cria|adiciona|remove|apaga)\b/.test(q))return askAI(question,'cloud');
-  const data=await aiFetch('/api/assist',{method:'POST',signal:AbortSignal.any([signal,AbortSignal.timeout(25000)]),body:JSON.stringify({question:'Responde em português de Portugal, sem gerúndio, em uma ou duas frases curtas. Pedido: '+question,context:aiContext(),mode:'conversation'})});
-  if(data.model==='fallback-local')throw Error('O modelo não respondeu. Podes usar a voz no telemóvel ou tentar novamente.');const reply=String(data.answer||'').trim();if(!reply)throw Error('O Centro não devolveu uma resposta.');setTravisReply(reply);return {reply};
+  try{
+    const data=await aiFetch('/api/assist',{method:'POST',signal:AbortSignal.any([signal,AbortSignal.timeout(25000)]),body:JSON.stringify({question:'Responde em português de Portugal, sem gerúndio, em uma ou duas frases curtas. Pedido: '+question,context:aiContext(),mode:'conversation'})});
+    if(data.model==='fallback-local')throw Error('O modelo não respondeu.');
+    const reply=String(data.answer||'').trim();if(!reply)throw Error('O Centro não devolveu uma resposta.');setTravisReply(reply);return {reply};
+  }catch(error){
+    if(signal.aborted)throw error;
+    if(/limite de utilização do modelo|modelo de conversa não respondeu|modelo não respondeu/i.test(error.message)){
+      const result=await askAI(question,'local');
+      if(result?.taskId)result.reply='Vou responder através do Travis no teu telemóvel. O pedido ficou na fila do Centro.';
+      return result;
+    }
+    throw error;
+  }
 }};

@@ -24,3 +24,9 @@ state.gsc={projectId:'pentehouse',importedAt:'2026-10-06',rows:[{query:'barbeari
 assert.match((await bridgeContext.window.TravisBridge.ask('Posições da Pentehouse')).reply,/barbearia marquês: 3,2/);
 state.gsc.projectId='best-pizza';assert.match((await bridgeContext.window.TravisBridge.ask('Posições da Pentehouse')).reply,/outro projecto/);
 console.log('PASS: Travis modal, successful reply, cancellation, stale result rejection and ranking evidence');
+
+bridgeContext.aiContext=()=>({});bridgeContext.aiFetch=async()=>{throw Error('O limite de utilização do modelo foi atingido.')};
+let fallbackMode='';bridgeContext.askAI=async(q,mode)=>{fallbackMode=mode;return {taskId:'local-task'}};
+const fallback=await bridgeContext.window.TravisBridge.ask('Conta-me uma coisa sobre o Porto.',new AbortController().signal);
+assert.equal(fallbackMode,'local');assert.equal(fallback.taskId,'local-task');assert.match(fallback.reply,/fila do Centro/);
+console.log('PASS: exhausted cloud allowance routes conversation to the persistent local queue');
