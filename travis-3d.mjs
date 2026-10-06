@@ -81,6 +81,21 @@ if (!hud || !launcher || !canvas) {
   let nextGlitchAt = performance.now() + 4500;
   let stateChangedAt = performance.now();
 
+  const LOCAL_TRAVIS_BASE='http://127.0.0.1:8770';
+  let voiceSession=0;
+  let voiceBusy=false;
+  let voiceStream=null;
+  let voiceRecorder=null;
+  let voiceChunks=[];
+  let voiceVadTimer=0;
+  let voiceRecordTimer=0;
+  let voiceRestartTimer=0;
+  let voiceRequestController=null;
+  let voiceSource=null;
+  let voicePlaybackRaf=0;
+  let micSourceNode=null;
+  let micAnalyser=null;
+
   const BLOOM_LAYER = 1;
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
@@ -318,6 +333,323 @@ if (!hud || !launcher || !canvas) {
       o.connect(g).connect(ac.destination);
       o.start(t+d); o.stop(t+d+.18);
     });
+  }
+
+  function localFetch(path,{body=null,type='application/json',method='POST',signal=null}={}) {
+    const headers={};
+    if (body!=null && type) headers['Content-Type']=type;
+    const init={
+      method,
+      mode:'cors',
+      cache:'no-store',
+      credentials:'omit',
+      headers,
+      signal,
+      targetAddressSpace:'local'
+    };
+    if (body!=null) init.body=type==='application/json'?JSON.stringify(body):body;
+    return fetch(LOCAL_TRAVIS_BASE+path,init);
+  }
+
+  async function localJson(path,options={}) {
+    const response=await localFetch(path,options);
+    if (!response.ok) {
+      let message='Pedido local falhou.';
+      try {
+        const data=await response.json();
+        message=data.error||message;
+      } catch {}
+      throw new Error(message);
+    }
+    return response.json();
+  }
+
+  async function localHealth(signal) {
+    const response=await localFetch('/health',{method:'GET',signal});
+    if (!response.ok) throw new Error('Travis local indisponível.');
+    return response.json();
+  }
+
+  function clearVoiceTimers() {
+    clearInterval(voiceVadTimer);
+    clearTimeout(voiceRecordTimer);
+    clearTimeout(voiceRestartTimer);
+    voiceVadTimer=0;
+    voiceRecordTimer=0;
+    voiceRestartTimer=0;
+  }
+
+  function releaseVoiceMic({stopRecorder=false}={}) {
+    clearInterval(voiceVadTimer);
+    clearTimeout(voiceRecordTimer);
+    voiceVadTimer=0;
+    voiceRecordTimer=0;
+    if (stopRecorder && voiceRecorder?.state==='recording') {
+      try {
+        voiceRecorder.onstop=null;
+        voiceRecorder.stop();
+      } catch {}
+    }
+    voiceRecorder=null;
+    micSourceNode?.disconnect?.();
+    micSourceNode=null;
+    micAnalyser=null;
+    voiceStream?.getTracks?.().forEach(track=>track.stop());
+    voiceStream=null;
+    externalVoiceLevel=0;
+  }
+
+  function stopVoiceConversation() {
+    voiceSession++;
+    voiceBusy=false;
+    clearVoiceTimers();
+    voiceRequestController?.abort();
+    voiceRequestController=null;
+    releaseVoiceMic({stopRecorder:true});
+    if (voiceSource) {
+      try { voiceSource.onended=null; voiceSource.stop(); } catch {}
+      try { voiceSource.disconnect(); } catch {}
+      voiceSource=null;
+    }
+    if (voicePlaybackRaf) cancelAnimationFrame(voicePlaybackRaf);
+    voicePlaybackRaf=0;
+    externalVoiceLevel=null;
+  }
+
+  function scheduleListening(session,delay=260) {
+    clearTimeout(voiceRestartTimer);
+    if (!opened || session!==voiceSession) return;
+    voiceRestartTimer=setTimeout(()=>{
+      if (opened && session===voiceSession && !voiceBusy) startListening(session);
+    },delay);
+  }
+
+  async function playVoiceArrayBuffer(arrayBuffer,session,reply) {
+    if (!opened || session!==voiceSession) return;
+    const ac=audio();
+    if (!ac) throw new Error('Áudio indisponível.');
+    if (ac.state==='suspended') await ac.resume();
+
+    const decoded=await ac.decodeAudioData(arrayBuffer.slice(0));
+    if (!opened || session!==voiceSession) return;
+
+    const analyser=ac.createAnalyser();
+    analyser.fftSize=1024;
+    const samples=new Float32Array(analyser.fftSize);
+    const source=ac.createBufferSource();
+    source.buffer=decoded;
+    source.connect(analyser);
+    analyser.connect(ac.destination);
+    voiceSource=source;
+
+    setState('speaking',String(reply||'A responder.').slice(0,96));
+    flashPower=1;
+
+    const meter=()=>{
+      if (!voiceSource || session!==voiceSession || !opened) return;
+      analyser.getFloatTimeDomainData(samples);
+      let energy=0;
+      for (const sample of samples) energy+=sample*sample;
+      const rms=Math.sqrt(energy/samples.length);
+      externalVoiceLevel=clamp((rms-.004)/.10,0,1);
+      voicePlaybackRaf=requestAnimationFrame(meter);
+    };
+
+    source.onended=()=>{
+      if (voicePlaybackRaf) cancelAnimationFrame(voicePlaybackRaf);
+      voicePlaybackRaf=0;
+      try { analyser.disconnect(); } catch {}
+      try { source.disconnect(); } catch {}
+      if (voiceSource===source) voiceSource=null;
+      externalVoiceLevel=0;
+      if (opened && session===voiceSession) {
+        voiceBusy=false;
+        setState('ready','Estou aqui.');
+        scheduleListening(session,320);
+      }
+    };
+
+    meter();
+    source.start();
+  }
+
+  async function handleVoiceBlob(blob,mime,session) {
+    if (!opened || session!==voiceSession) return;
+    voiceBusy=true;
+    voiceRequestController?.abort();
+    const controller=new AbortController();
+    voiceRequestController=controller;
+
+    try {
+      setState('thinking','A transcrever a tua voz…');
+      const transcript=await localJson('/transcribe',{
+        body:blob,
+        type:mime||'application/octet-stream',
+        signal:controller.signal
+      });
+      if (!opened || session!==voiceSession) return;
+
+      const text=String(transcript.text||'').trim();
+      if (!text) throw new Error('Não consegui perceber a voz.');
+      setState('thinking','Ouvi: '+text.slice(0,82));
+
+      const answer=await localJson('/jarvis',{
+        body:{text},
+        type:'application/json',
+        signal:controller.signal
+      });
+      if (!opened || session!==voiceSession) return;
+
+      const reply=String(answer.reply||'').trim();
+      if (!reply) throw new Error('O Travis devolveu uma resposta vazia.');
+      setState('speaking',reply.slice(0,96));
+
+      const speech=await localFetch('/speak',{
+        body:{text:reply},
+        type:'application/json',
+        signal:controller.signal
+      });
+      if (!speech.ok) throw new Error('A voz local não respondeu.');
+      const wav=await speech.arrayBuffer();
+      if (!opened || session!==voiceSession) return;
+
+      await playVoiceArrayBuffer(wav,session,reply);
+
+      if (answer.result?.action==='open_url' && answer.result?.url) {
+        const url=String(answer.result.url);
+        if (/^https?:\/\//i.test(url)) {
+          setTimeout(()=>{ if (opened && session===voiceSession) location.assign(url); },900);
+        }
+      }
+    } catch (error) {
+      if (controller.signal.aborted || session!==voiceSession) return;
+      console.warn('Travis voice:',error);
+      voiceBusy=false;
+      setState('ready',error?.message||'Falha na conversa local.');
+      scheduleListening(session,900);
+    } finally {
+      if (voiceRequestController===controller) voiceRequestController=null;
+    }
+  }
+
+  async function startListening(session=voiceSession) {
+    if (!opened || session!==voiceSession || voiceBusy || voiceRecorder?.state==='recording') return;
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      setState('ready','Este navegador não disponibiliza o microfone.');
+      return;
+    }
+
+    try {
+      setState('listening','Estou a ouvir.');
+      const stream=await navigator.mediaDevices.getUserMedia({
+        audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}
+      });
+      if (!opened || session!==voiceSession) {
+        stream.getTracks().forEach(track=>track.stop());
+        return;
+      }
+      voiceStream=stream;
+      voiceChunks=[];
+
+      const preferred='audio/webm;codecs=opus';
+      const options=MediaRecorder.isTypeSupported?.(preferred)?{mimeType:preferred}:undefined;
+      const recorder=new MediaRecorder(stream,options);
+      voiceRecorder=recorder;
+      const mime=recorder.mimeType||stream.getAudioTracks()[0]?.getSettings?.().mimeType||'audio/webm';
+      let heardSpeech=false;
+      let speechFrames=0;
+
+      recorder.ondataavailable=event=>{
+        if (event.data?.size) voiceChunks.push(event.data);
+      };
+
+      recorder.onstop=()=>{
+        const blob=new Blob(voiceChunks,{type:mime});
+        const valid=opened && session===voiceSession && heardSpeech && blob.size>400;
+        releaseVoiceMic();
+        if (valid) handleVoiceBlob(blob,mime,session);
+        else if (opened && session===voiceSession) {
+          setState('ready','Não ouvi voz.');
+          scheduleListening(session,500);
+        }
+      };
+
+      recorder.start(180);
+
+      const ac=audio();
+      if (ac) {
+        if (ac.state==='suspended') await ac.resume();
+        micSourceNode=ac.createMediaStreamSource(stream);
+        micAnalyser=ac.createAnalyser();
+        micAnalyser.fftSize=1024;
+        micSourceNode.connect(micAnalyser);
+        const samples=new Float32Array(micAnalyser.fftSize);
+        const began=performance.now();
+        let lastSpeech=began;
+
+        voiceVadTimer=setInterval(()=>{
+          if (!voiceRecorder || voiceRecorder!==recorder || recorder.state!=='recording') return;
+          micAnalyser.getFloatTimeDomainData(samples);
+          let energy=0;
+          for (const sample of samples) energy+=sample*sample;
+          const rms=Math.sqrt(energy/samples.length);
+          externalVoiceLevel=clamp((rms-.006)/.065,0,1);
+
+          if (rms>.018) {
+            heardSpeech=true;
+            speechFrames++;
+            lastSpeech=performance.now();
+          }
+          const now=performance.now();
+          if (heardSpeech && speechFrames>=3 && now-lastSpeech>1150) {
+            recorder.stop();
+            return;
+          }
+          if (!heardSpeech && now-began>12000) recorder.stop();
+        },50);
+      }
+
+      voiceRecordTimer=setTimeout(()=>{
+        if (recorder.state==='recording') recorder.stop();
+      },30000);
+    } catch (error) {
+      releaseVoiceMic({stopRecorder:true});
+      if (!opened || session!==voiceSession) return;
+      voiceBusy=false;
+      setState('ready',
+        error?.name==='NotAllowedError'
+          ? 'Permite o microfone para falares comigo.'
+          : 'Microfone: '+(error?.message||'indisponível.')
+      );
+    }
+  }
+
+  async function startVoiceConversation() {
+    stopVoiceConversation();
+    const session=voiceSession;
+    voiceBusy=true;
+    const controller=new AbortController();
+    voiceRequestController=controller;
+    try {
+      setState('booting','A ligar ao Travis local…');
+      const health=await localHealth(controller.signal);
+      if (!opened || session!==voiceSession) return;
+      if (!health?.ok) throw new Error('Travis local indisponível.');
+      if (loadingLabel) {
+        loadingLabel.textContent='TRAVIS LOCAL · VOZ LIGADA';
+        loadingLabel.classList.add('is-done');
+      }
+      voiceBusy=false;
+      setState('ready','Estou aqui.');
+      await startListening(session);
+    } catch (error) {
+      if (controller.signal.aborted || session!==voiceSession) return;
+      voiceBusy=false;
+      console.warn('Travis local:',error);
+      setState('ready','Não consegui ligar ao Travis local.');
+    } finally {
+      if (voiceRequestController===controller) voiceRequestController=null;
+    }
   }
 
   function radialTexture(inner='#bff8ff', outer='rgba(72,216,255,0)') {
@@ -1052,11 +1384,13 @@ if (!hud || !launcher || !canvas) {
     startTime=performance.now();
 
     setTimeout(()=>{
-      if (opened) setState('ready');
+      if (opened && state==='booting') setState('ready');
     },ready?1550:2100);
+    startVoiceConversation();
   }
 
   function closeHud() {
+    stopVoiceConversation();
     opened=false;
     commandsOpen=false;
     commandTarget=0;
