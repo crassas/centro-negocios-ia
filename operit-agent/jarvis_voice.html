@@ -30,7 +30,7 @@ async function result(d,id,stage){
 async function request(path,body,type="application/json"){
  if(path==="/jarvis"&&wantsYouTube(body.text)){openYouTube();return}
  if(busy)return;stop();const id=generation;const ownController=new AbortController();controller=ownController;busy=true;mic.disabled=send.disabled=true;
- let phase="A verificar a ligação",started=Date.now(),expires=0;
+ let phase="A enviar o pedido",started=Date.now(),expires=0;
  const showProgress=()=>{if(id===generation)status.textContent=phase+" · "+Math.floor((Date.now()-started)/1000)+" s."};
  const stage=async(label,limit,work)=>{
   phase=label;started=Date.now();expires=started+limit;showProgress();let timer;
@@ -42,7 +42,6 @@ async function request(path,body,type="application/json"){
  document.addEventListener("visibilitychange",resumed);
  answer.textContent="À espera da resposta do Travis.";
  try{
-  await stage("A verificar a ligação",4000,async signal=>{const r=await fetch("/health",{signal,cache:"no-store"});if(!r.ok||!(await r.json()).ok)throw Error("O servidor do Travis não está disponível.")});
   let heard="";
   if(path==="/listen"){
    const d=await stage("A transcrever a tua voz",25000,async signal=>(await api("/transcribe",body,type,signal)).json());
