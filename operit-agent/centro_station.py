@@ -59,6 +59,7 @@ RUNTIME_FILES = {
     "centro_agent.py": HOME / "centro_agent.py",
     "centro_station.py": SUPERVISOR_PATH,
     "centro_soak.py": HOME / "centro_soak.py",
+    "travis_core.py": HOME / "travis_core.py",
     "jarvis_local.py": HOME / "jarvis_local.py",
     "jarvis_whisper.py": HOME / "jarvis_whisper.py",
     "jarvis_voice.html": HOME / "jarvis_voice.html",
