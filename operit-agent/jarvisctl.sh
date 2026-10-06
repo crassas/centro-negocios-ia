@@ -19,10 +19,10 @@ PY
 }
 case "${1:-doctor}" in
  start)
-  if [ -f "$STATE/router.pid" ] && kill -0 "$(cat "$STATE/router.pid")" 2>/dev/null; then echo "Jarvis activo"; exit; fi
+  if [ -f "$STATE/router.pid" ] && kill -0 "$(cat "$STATE/router.pid")" 2>/dev/null; then echo "Travis activo"; exit; fi
   nohup /usr/bin/python3 "$SOURCE/jarvis_local.py" serve >>"$STATE/router.log" 2>&1 </dev/null &
   echo $! > "$STATE/router.pid"
-  echo "Jarvis: http://127.0.0.1:8770"
+  echo "Travis: http://127.0.0.1:8770"
   ;;
  stop)
   stop_router

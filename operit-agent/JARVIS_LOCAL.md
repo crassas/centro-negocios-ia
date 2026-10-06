@@ -1,9 +1,9 @@
-# JARVIS LOCAL
+# TRAVIS
 Implementação em main. A validação física do microfone e da reprodução no Android está pendente.
 ## Usar
 - http://127.0.0.1:8770 — Falar, terminar gravação, ouvir resposta; botão Parar voz.
 - jarvisctl start / stop / restart / doctor
-- jarvisctl ask "Jarvis, diz-me o estado da estação."
+- jarvisctl ask "Travis, diz-me o estado da estação."
 - jarvisctl llm-start small — modelo operacional Qwen2.5 1.5B Q4_K_M.
 - jarvisctl llm-start fallback — Qwen2.5 0.5B Q4_K_M.
 - jarvisctl llm-start main — candidato Qwen3 4B Q4_K_M; requer 3800 MB livres e continua por validar.
@@ -19,11 +19,11 @@ Implementação em main. A validação física do microfone e da reprodução no
 Evidências locais em ~/.centro-jarvis/*-proof.json; não guardar gravações.
 ## Arquitectura
 MediaRecorder no browser local → FFmpeg → whisper.cpp (pywhispercpp ARM64) → router determinístico → tools/Laya/llama.cpp → memória SQLite → Piper → browser.
-Sem API cloud obrigatória no fluxo Jarvis. O Telegram e operações Git/Web continuam naturalmente online.
+Sem API cloud obrigatória no fluxo Travis. O Telegram e operações Git/Web continuam naturalmente online.
 O planeador local substitui o planeador cloud quando planner_enabled existe; falha segura bloqueia fallback cloud de alterações.
 Paths do plano ficam limitados ao contexto autorizado por schema, e o executor preserva a validação existente.
 ## Ecossistema do Centro
-A conversa na Sala dos Agentes e em Automação & IA usa o motor seleccionado (Jarvis local por defeito). Os pedidos locais entram na fila persistente existente: Worker → Centro Agent → Centro Server → Jarvis. O resultado aparece na conversa e na actividade do Centro. O contexto actual de sites, CRM, financeiro e SEO acompanha a análise local. Alterações nos repositórios continuam no executor protegido e na política de confirmação existente.
+A conversa na Sala dos Agentes e em Automação & IA usa o motor seleccionado (Travis local por defeito). Os pedidos locais entram na fila persistente existente: Worker → Centro Agent → Centro Server → Travis. O resultado aparece na conversa e na actividade do Centro. O contexto actual de sites, CRM, financeiro e SEO acompanha a análise local. Alterações nos repositórios continuam no executor protegido e na política de confirmação existente.
 A voz abre no telemóvel a partir do Centro e permite consultar o histórico do mesmo Centro Server. O token permanente nunca sai do servidor. No Telegram, /jarvis seguido do pedido usa a mesma fila; alterações usam o percurso /fazer.
 Esta integração exige o runtime actualizado no telemóvel. O auto-update confirma o commit de main e obtém todos os componentes desse commit, para evitar misturar versões em cache. A publicação de código não confirma por si só a versão activa no dispositivo.
 A presença ("estás aí?", "Olá") responde por regra, sem carregar o LLM. A interface tem prazo de espera e cancela a espera ao premir Parar voz. Cancelar a espera não reverte uma operação que o executor já tenha iniciado.
@@ -39,7 +39,7 @@ SQLite separa tarefas, projectos, factos, execuções, eventos e resumos. Conver
 Erros HTTP não são automaticamente tratados como prova de indisponibilidade.
 ## Supervisor
 O marcador ~/.centro-jarvis/enabled activa recuperação do router.
-OpenClaw deixou de arrancar por centrostation start. O auto-update e a recuperação Remote foram repostos. Actualizações do Jarvis recarregam o router quando não há pedidos activos, sem parar o modelo local.
+OpenClaw deixou de arrancar por centrostation start. O auto-update e a recuperação Remote foram repostos. Actualizações do Travis recarregam o router quando não há pedidos activos, sem parar o modelo local.
 O filtro do log Remote ignora conteúdo MCP com palavras de erro e preserva a detecção de eventos reais.
 ## Ainda falta verificar
 - Microfone/reprodução físicos, interrupção física de áudio.

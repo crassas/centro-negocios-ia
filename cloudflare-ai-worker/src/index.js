@@ -2120,8 +2120,8 @@ const OPERIT_PROJECTS={
 };
 function parseOperitInstruction(text){
   const raw=String(text||'').trim();
-  const jarvis=raw.match(/^\/jarvis\s+([\s\S]{1,4000})$/i);
-  if(jarvis)return {action:'jarvis_query',target:'local',args:{prompt:jarvis[1].trim()},label:'Jarvis local · conversa'};
+  const jarvis=raw.match(/^\/(?:travis|jarvis)\s+([\s\S]{1,4000})$/i);
+  if(jarvis)return {action:'jarvis_query',target:'local',args:{prompt:jarvis[1].trim()},label:'Travis · conversa'};
   let m=raw.match(/^\/station$/i);
   if(m)return {action:'station_status',target:'local',label:'Estado da Estação Centro'};
   m=raw.match(/^\/doctor$/i);
@@ -3138,10 +3138,10 @@ export default {
           if(body?.mode==='local'){
             const requestId=String(body?.requestId||'');
             if(!/^[a-zA-Z0-9_-]{8,80}$/.test(requestId))return json({ok:false,error:'Identificador do pedido em falta.'},400,origin);
-            const spec={action:'jarvis_query',target:'local',args:{prompt:question,context},label:'Jarvis local · '+question.slice(0,80)};
+            const spec={action:'jarvis_query',target:'local',args:{prompt:question,context},label:'Travis · '+question.slice(0,80)};
             const q=taskQueue(env),result=await q.createRepoRequest(requestId,spec);
             if(!result.reused)await q.resolveTask(result.task.id,true);
-            return json({ok:true,taskId:result.task.id,status:'queued',actions:[],model:'jarvis-local',summary:'Pedido recebido na fila do Centro. O Jarvis responde no teu telemóvel; acompanha o resultado aqui.'},200,origin);
+            return json({ok:true,taskId:result.task.id,status:'queued',actions:[],model:'jarvis-local',summary:'Pedido recebido na fila do Centro. O Travis responde no teu telemóvel; acompanha o resultado aqui.'},200,origin);
           }
           let result=null,usedModel=AGENT_MODEL,parsed=null;
           try{

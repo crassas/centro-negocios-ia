@@ -11,7 +11,7 @@ class Tests(unittest.TestCase):
  def tearDown(self):j.ROOT=self.old;self.tmp.cleanup()
  def test_presence_without_llm(self):
   with patch.object(j,"infer",side_effect=AssertionError("LLM called")):
-   for text in ["estás aí", "Jarvis, estás aí?", "Olá"]:
+   for text in ["estás aí", "Travis, estás aí?", "Travis: olá", "Jarvis, estás aí?", "Olá"]:
     self.assertEqual(j.route(text)["tool"],"presence")
  def test_shared_context_for_reasoning(self):
   with patch.object(j,"infer",return_value="Resposta") as inference:
@@ -20,6 +20,7 @@ class Tests(unittest.TestCase):
  def test_rules_avoid_inference(self):
   cases={"Jarvis, diz-me o estado da estação.":"system_status","O Best Pizza está online?":"site_check","Como está o Git da Pentehouse?":"git_status","Que tarefas tenho?":"task_list","Cria uma tarefa para amanhã":"create_task"}
   for text,tool in cases.items():self.assertEqual(j.classify(text)[0],tool)
+  for text,tool in cases.items():self.assertEqual(j.classify("Travis, "+text)[0],tool)
   with patch.object(j,"infer",side_effect=AssertionError("LLM called")),patch.object(j,"doctor",return_value={"centro":{"ok":True},"ram_available_mb":1024}):
    self.assertEqual(j.route("Estado da estação")["tool"],"system_status")
  def test_memory_survives_connection(self):

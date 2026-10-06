@@ -1148,7 +1148,7 @@ function loadExecutions(force=false){
         const message=conversation.status==='completed'
           ? (String(conversation.output||'').trim()||'Execução sem resposta.')
           : conversation.status==='running'
-            ? ('Jarvis local · '+(conversation.progressDetail||'A tratar do pedido no telemóvel.'))
+            ? ('Travis · '+(conversation.progressDetail||'A tratar do pedido no telemóvel.'))
             : 'Pedido na fila do Centro. A resposta depende do Agent e do servidor no telemóvel.';
         $('ai-answer').textContent=message;
         if($('room-reply'))$('room-reply').textContent=message;

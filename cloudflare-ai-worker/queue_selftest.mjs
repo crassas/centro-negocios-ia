@@ -76,6 +76,7 @@ try{
   let notifications=0;
   globalThis.fetch=async()=>{notifications++;return new Response(JSON.stringify({ok:true,result:{message_id:1}}),{headers:{'content-type':'application/json'}});};
   const env={TASKS:{getByName:()=>q},TELEGRAM_BOT_TOKEN:'test-only',TELEGRAM_CHAT_ID:'42'};
+  assert.equal(parseOperitInstruction('/travis estás aí').action,'jarvis_query');
   assert.equal(parseOperitInstruction('/jarvis estás aí').action,'jarvis_query');
   const localBody={question:'estás aí',mode:'local',context:{projects:[]},requestId:'local-request-test-01'};
   const localSend=()=>worker.fetch(new Request('https://test/api/agent',{method:'POST',body:JSON.stringify(localBody)}),{...env,AI:{run:()=>{throw Error('Cloud inference must not run');}}},{});

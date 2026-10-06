@@ -61,7 +61,7 @@ def project(text):
   if any(w in t for w in words):return key
  return None
 def classify(text):
- t=norm(text);p=project(text)
+ t=re.sub(r"^(?:travis|jarvis)\b[\s,:;.!?-]*","",norm(text)).strip();p=project(text)
  greeting=re.sub(r"[^a-z0-9 ]","",t).strip()
  greeting=re.sub(r"^jarvis\s+","",greeting)
  if greeting in {"estas ai","estas aqui","ola","oi","bom dia","boa tarde","boa noite","alo"}:return "presence",{}
@@ -108,7 +108,7 @@ def llm_start(model="small"):
   except Exception:pass
   time.sleep(1)
  raise RuntimeError("LLM não ficou pronto no prazo")
-def infer(text,system="Responde brevemente em português de Portugal. /no_think",json_mode=False,schema=None):
+def infer(text,system="És o Travis, assistente do Centro de Negócios. Responde brevemente em português de Portugal. /no_think",json_mode=False,schema=None):
  with LOCK:
   try:http("http://127.0.0.1:8771/health",timeout=2)
   except Exception:
@@ -150,7 +150,7 @@ def plan_change(target,prompt,context):
   except (ValueError,TypeError) as exc:last="\nCorrige a saída anterior: "+str(exc)+". Devolve um único objecto JSON válido, com paths relativos."
  raise RuntimeError("Planeador local devolveu JSON inválido")
 def execute(tool,args):
- if tool=="presence":return "Estou aqui. Podes pedir o estado do Centro, verificar os sites ou indicar o projecto e o que queres fazer."
+ if tool=="presence":return "Sou o Travis. Estou aqui. Podes pedir o estado do Centro, verificar os sites ou indicar o projecto e o que queres fazer."
  if tool=="system_status":return doctor()
  if tool=="stop":return {"stopped":True}
  if tool=="site_check":
