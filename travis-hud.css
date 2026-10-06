@@ -1,5 +1,3 @@
-[Reading 253 lines from start (total: 253 lines, 0 remaining)]
-
 :root{
   --trv-cyan:#6feaff;
   --trv-red:#ff4568;
@@ -253,5 +251,3 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
 @media(prefers-reduced-motion:reduce){
   #travis-launcher::before,.travis-hud *{animation-duration:.001ms!important;animation-iteration-count:1!important}
 }
-
-[executed on device: localhost (8ad4e1a5-6b39-4f45-82a2-0253dd9519fb)]
