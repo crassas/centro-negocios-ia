@@ -1942,7 +1942,27 @@ async function runOfficeCycle(env){
   const audit=await fetchOfficeAudit();
   const stats=await q.taskStats();
   const busy=(Number(stats.pending)||0)+(Number(stats.queued)||0)+(Number(stats.running)||0)>0;
-  let lastAction=busy?'A acompanhar a fila actual.':'A preparar trabalho de fundo.';
+  const recent=await q.recentTasks(24);
+  const quotaFailure=recent.find(row=>
+    Number(row.exitCode)===67 &&
+    /daily free allocation|used up your daily free allocation/i.test(String(row.output||'')) &&
+    now-Number(row.completedAt||0)<24*60*60*1000
+  );
+  if(quotaFailure){
+    const nextUtcMidnight=Date.UTC(
+      new Date(now).getUTCFullYear(),
+      new Date(now).getUTCMonth(),
+      new Date(now).getUTCDate()+1,
+      0,10,0,0
+    );
+    state.plannerBlockedUntil=Math.max(Number(state.plannerBlockedUntil)||0,nextUtcMidnight);
+    state.plannerBlockReason='Workers AI atingiu a quota gratuita diária; manutenção continua em modo leitura/prospecção.';
+  }else if(Number(state.plannerBlockedUntil||0)<=now){
+    state.plannerBlockedUntil=0;
+    state.plannerBlockReason='';
+  }
+  const plannerAvailable=!state.plannerBlockedUntil||Number(state.plannerBlockedUntil)<=now;
+  let lastAction=busy?'A acompanhar a fila actual.':(plannerAvailable?'A preparar trabalho de fundo.':'Vigilância activa · planeador em cooldown.');
   let createdTask=null;
   let prospectCount=0;
   const maintenanceByRepo={...(state.lastMaintenanceByRepo||{})};
@@ -1978,13 +1998,13 @@ async function runOfficeCycle(env){
     const globalWriteReady=!state.lastWriteAt||now-Number(state.lastWriteAt)>=OFFICE_GLOBAL_WRITE_COOLDOWN_MS;
     let writeCandidate=null;
 
-    if(userQuiet&&globalWriteReady&&actionable.length){
+    if(plannerAvailable&&userQuiet&&globalWriteReady&&actionable.length){
       writeCandidate=actionable.find(row=>!maintenanceByRepo[row.project.repo]||now-Number(maintenanceByRepo[row.project.repo])>=OFFICE_PROJECT_WRITE_COOLDOWN_MS)||null;
     }
 
     // Se não há falha detectada, cada projecto recebe no máximo uma revisão
     // conservadora por 24h e apenas após uma hora sem pedidos do utilizador.
-    if(!writeCandidate&&userQuiet&&globalWriteReady){
+    if(!writeCandidate&&plannerAvailable&&userQuiet&&globalWriteReady){
       const project=OFFICE_PROJECTS.find(p=>!maintenanceByRepo[p.repo]||now-Number(maintenanceByRepo[p.repo])>=OFFICE_PROJECT_WRITE_COOLDOWN_MS);
       if(project){
         const site=auditSites.find(x=>x.id===project.siteId)||null;
@@ -2033,6 +2053,8 @@ async function runOfficeCycle(env){
     lastCycleAt:now,
     nextCycleAt:now+OFFICE_INTERVAL_MS,
     lastAction,
+    plannerBlockedUntil:Number(state.plannerBlockedUntil)||0,
+    plannerBlockReason:String(state.plannerBlockReason||''),
     lastMaintenanceByRepo:maintenanceByRepo,
     lastProspectCount:prospectCount,
     auditGeneratedAt:String(audit?.generatedAt||''),
