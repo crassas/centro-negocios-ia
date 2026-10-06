@@ -23,6 +23,8 @@ class Tests(unittest.TestCase):
   self.assertEqual(t.classify_local_intent("Corrige o hero","pentehouse")[0],"repo_change")
  def test_validation(self):
   t.validate_centro_task({"action":"server_status","target":"local","args":{}},["server_status","repo_change"],["centro-negocios-ia"])
+  t.validate_centro_task({"action":"site_check","target":"all","args":{}},["site_check"],["centro-negocios-ia"])
+  t.validate_centro_task({"action":"git_access_matrix","target":"all","args":{}},["git_access_matrix"],["centro-negocios-ia"])
   with self.assertRaises(ValueError):t.validate_centro_task({"action":"shell","args":{}},["server_status"],[])
   with self.assertRaises(ValueError):t.validate_centro_task({"action":"repo_change","target":"other","args":{}},["repo_change"],["centro-negocios-ia"])
  def test_graph_privacy_and_truth(self):
