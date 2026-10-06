@@ -27,6 +27,14 @@ jobs:
             python3 -m py_compile "$file"
           done < <(find operit-agent -maxdepth 1 -type f -name '*.py' -print0)
 
+      - name: Travis core self-test
+        shell: bash
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/travis-core-home"
+          mkdir -p "$HOME"
+          PYTHONPATH=operit-agent python3 operit-agent/travis_core_selftest.py
+
       - name: Executor policy self-test
         shell: bash
         run: |
