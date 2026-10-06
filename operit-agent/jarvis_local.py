@@ -159,6 +159,40 @@ def plan_change(target,prompt,context):
    return plan
   except (ValueError,TypeError) as exc:last="\nCorrige a saída anterior: "+str(exc)+". Devolve um único objecto JSON válido, com paths relativos."
  raise RuntimeError("Planeador local devolveu JSON inválido")
+GSC_BASE="https://centro-negocios-ai.travisthejarvis.workers.dev"
+CENTRO_ORIGIN="https://crassas.github.io"
+def gsc_request(path,payload=None,token=None):
+ if token is None:token=(ROOT/"gsc.token").read_text().strip()
+ req=urllib.request.Request(GSC_BASE+path,data=json.dumps(payload).encode() if payload is not None else None,headers={"Content-Type":"application/json","Authorization":"Bearer "+token,"Origin":CENTRO_ORIGIN,"User-Agent":"Centro-Travis/1.0"})
+ with urllib.request.urlopen(req,timeout=10) as response:return json.load(response)
+def connect_gsc(token):
+ if not isinstance(token,str) or not 20<=len(token)<=512 or re.search(r"\s",token):raise ValueError("Autorização inválida")
+ status=gsc_request("/api/gsc/status",token=token)
+ if not status.get("configured"):raise ValueError("A conta de serviço do Search Console ainda não está configurada no Centro de Negócios.")
+ if not status.get("authorized"):raise ValueError("Autoriza primeiro o Search Console no Centro de Negócios.")
+ ROOT.mkdir(parents=True,exist_ok=True);path=ROOT/"gsc.token";tmp=ROOT/("gsc-"+secrets.token_hex(8)+".tmp")
+ try:
+  with tmp.open("x") as f:os.chmod(tmp,0o600);f.write(token)
+  tmp.replace(path)
+ finally:tmp.unlink(missing_ok=True)
+ return {"ok":True,"reply":"Dados de pesquisa do Centro ligados ao Travis."}
+def search_positions(target):
+ if target not in SITES:return {"available":False,"exitCode":78,"reply":"Indica o projecto: Pentehouse, Best Pizza ou Dois Irmãos."}
+ if not (ROOT/"gsc.token").is_file():return {"available":False,"exitCode":78,"requiresConnection":True,"reply":"Ainda não tenho acesso às posições do Search Console nesta página. Carrega em Ligar dados do Centro. A disponibilidade do site não confirma a posição no Google."}
+ try:
+  sites=gsc_request("/api/gsc/sites").get("sites",[])
+  domain=SITES[target].split("//",1)[1].strip("/")
+  allowed={"sc-domain:"+domain,"https://"+domain+"/","http://"+domain+"/"}
+  site=next((r["siteUrl"] for r in sites if r.get("siteUrl") in allowed),None)
+  if not site:return {"available":False,"exitCode":78,"reply":"A propriedade "+domain+" não está disponível na ligação do Search Console do Centro."}
+  end=datetime.datetime.now(ZoneInfo("Europe/Lisbon")).date()-datetime.timedelta(days=2);start=end-datetime.timedelta(days=27)
+  data=gsc_request("/api/gsc/query",{"siteUrl":site,"startDate":str(start),"endDate":str(end),"rowLimit":500})
+  rows=[r for r in data.get("rows",[]) if isinstance(r,dict) and r.get("query") and isinstance(r.get("position"),(int,float))]
+  rows.sort(key=lambda r:r.get("impressions",0),reverse=True)
+  reply="Search Console, de "+str(start)+" a "+str(end)+". Posições médias por pesquisa; não são posições em tempo real. "
+  reply+=("; ".join(str(r["query"])+": "+str(round(r["position"],1)).replace(".",",") for r in rows[:5])) if rows else "Não há consultas com posição registada neste período."
+  return {"available":True,"source":"Google Search Console","siteUrl":site,"startDate":str(start),"endDate":str(end),"rows":rows[:20],"reply":reply}
+ except Exception:return {"available":False,"exitCode":78,"requiresConnection":True,"reply":"Não consegui consultar o Search Console do Centro. Verifica a autorização em Ligar dados do Centro. Não tenho posições confirmadas para te indicar."}
 def execute(tool,args):
  if tool=="presence":return "Sou o Travis. Estou aqui. Podes pedir o estado do Centro, verificar os sites ou indicar o projecto e o que queres fazer."
  if tool=="open_youtube":return {"action":"open_url","url":"https://www.youtube.com/"}
@@ -177,6 +211,7 @@ def execute(tool,args):
   return reply
  if tool=="system_status":return doctor()
  if tool=="stop":return {"stopped":True}
+ if tool=="search_positions":return search_positions(args.get("target"))
  if tool=="site_check":
   keys=[args["target"]] if args.get("target") in SITES else list(SITES);out={}
   for key in keys:
@@ -272,6 +307,7 @@ def route(text,context=None):
  outcome=TRAVIS_UTEF.execute(tool,args,lambda:execute(tool,args),runtime)
  result=outcome["result"]
  if tool=="system_status":reply="O Centro está "+("activo" if result["centro"].get("ok") else "indisponível")+". Memória disponível: "+str(result["ram_available_mb"])+" megabytes."
+ elif tool=="search_positions":reply=result["reply"]
  elif tool=="site_check":reply=" ".join(k+": "+("online." if v["online"] is True else "não consegui confirmar a disponibilidade. "+v.get("error","")) for k,v in result.items())
  elif tool=="create_task":reply="Tarefa criada: "+result["title"]
  elif tool=="task_list":reply="Tens "+str(len(result))+" tarefas pendentes. "+". ".join(x["title"] for x in result[:5])
@@ -383,6 +419,7 @@ class Handler(BaseHTTPRequestHandler):
     if self.path=="/transcribe":return self.send({"ok":True,"text":text})
     return self.send({"text":text,**route(text)})
    obj=json.loads(data)
+   if self.path=="/connect-gsc":return self.send(connect_gsc(obj.get("token")))
    if self.path=="/activity":return self.send(centro_activity())
    if self.path=="/jarvis":return self.send(route(obj.get("text","")))
    if self.path=="/speak":return self.send(speak(obj["text"]),"audio/wav")

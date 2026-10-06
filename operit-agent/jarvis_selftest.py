@@ -97,6 +97,30 @@ class Tests(unittest.TestCase):
     response=connection.getresponse();self.assertEqual(response.status,200)
     self.assertEqual(json.loads(response.read()),{"ok":True,"text":"estás aí?"});transcription.assert_called_once_with(b"audio")
   finally:connection.close();server.shutdown();server.server_close();thread.join()
+ def test_rank_requests_are_not_availability_checks(self):
+  for text in ["verifica as posições da Pentehouse","vê o ranking da Pentehouse","posição no Google da Pentehouse"]:
+   self.assertEqual(j.classify(text)[0],"search_positions")
+  self.assertEqual(j.classify("verifica os preços da Pentehouse")[0],"local_llm")
+  with patch.object(j,"infer",side_effect=AssertionError("guessed rank")):
+   result=j.route("verifica as posições da Pentehouse")
+   self.assertEqual(result["tool"],"search_positions");self.assertFalse(result["result"]["available"])
+   self.assertIn("Search Console",result["reply"]);self.assertNotIn("pentehouse: online",result["reply"])
+ def test_positions_use_authorized_property_and_observed_rows(self):
+  (self.root/"gsc.token").write_text("private-test-token")
+  with patch.object(j,"gsc_request",side_effect=[{"sites":[{"siteUrl":"sc-domain:pentehouse.pt"}]},{"rows":[{"query":"barbearia marquês","position":3.2,"impressions":45}]}]) as request:
+   result=j.search_positions("pentehouse")
+   self.assertTrue(result["available"]);self.assertIn("barbearia marquês: 3,2",result["reply"])
+   self.assertIn("não são posições em tempo real",result["reply"])
+   self.assertEqual(request.call_args.args[1]["siteUrl"],"sc-domain:pentehouse.pt")
+  with patch.object(j,"gsc_request",return_value={"sites":[{"siteUrl":"sc-domain:pentehouse.pt.attacker.test"}]}) as request:
+   self.assertFalse(j.search_positions("pentehouse")["available"]);self.assertEqual(request.call_count,1)
+ def test_gsc_connection_checks_authorization_and_private_storage(self):
+  token="test-private-authorization-123456"
+  with patch.object(j,"gsc_request",return_value={"configured":True,"authorized":False}):
+   with self.assertRaises(ValueError):j.connect_gsc(token)
+   self.assertFalse((self.root/"gsc.token").exists())
+  with patch.object(j,"gsc_request",return_value={"configured":True,"authorized":True}):j.connect_gsc(token)
+  self.assertEqual((self.root/"gsc.token").stat().st_mode & 0o777,0o600)
  def test_unknown_tool(self):
   with self.assertRaises(ValueError):j.execute("shell",{"command":"rm -rf /"})
  def test_cloud_off(self):

@@ -1343,3 +1343,9 @@ document.addEventListener('DOMContentLoaded',()=>{
   setInterval(()=>loadExecutions(),3000);
   loadLive();
 });
+
+// Explicit local Travis connection: credentials stay out of URLs and page logs.
+window.addEventListener('message',event=>{
+  if(!['http://127.0.0.1:8770','http://localhost:8770'].includes(event.origin)||event.source!==window.opener||event.data?.type!=='travis-gsc-connect')return;
+  event.source.postMessage({type:'travis-gsc-authorization',token:gscDeviceToken()},event.origin);
+});

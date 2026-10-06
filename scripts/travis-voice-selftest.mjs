@@ -26,3 +26,12 @@ const badVoice=harness(async path=>{if(path==='/health')return response({ok:true
 await badVoice.run('request("/jarvis",{text:"olá"})');
 assert.equal(badVoice.elements.get('#answer').textContent,'Resposta preservada.');assert.match(badVoice.elements.get('#status').textContent,/Voz indisponível/);assert.equal(badVoice.run('busy'),false);
 console.log('Travis voice: staged requests, timeout recovery and pending playback passed');
+
+let receiver;const sent=[];const opener={postMessage:(data,origin)=>sent.push({data,origin})};
+const bridge=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8').split('// Explicit local Travis connection:')[1].split('\n').slice(1).join('\n');
+vm.runInNewContext(bridge,{window:{opener,addEventListener:(name,fn)=>receiver=fn},gscDeviceToken:()=> 'private-test-token'});
+receiver({origin:'https://attacker.test',source:opener,data:{type:'travis-gsc-connect'}});
+receiver({origin:'http://127.0.0.1:8770',source:{},data:{type:'travis-gsc-connect'}});assert.equal(sent.length,0);
+receiver({origin:'http://127.0.0.1:8770',source:opener,data:{type:'travis-gsc-connect'}});
+assert.equal(sent.length,1);assert.equal(sent[0].origin,'http://127.0.0.1:8770');assert.equal(sent[0].data.token,'private-test-token');
+console.log('Centro connection: untrusted origins and non-opener windows rejected');
