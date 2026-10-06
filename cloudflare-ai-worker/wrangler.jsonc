@@ -20,6 +20,9 @@
       "new_sqlite_classes": ["TaskQueue"]
     }
   ],
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
   "observability": {
     "enabled": true
   }
