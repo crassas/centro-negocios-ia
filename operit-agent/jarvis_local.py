@@ -3,13 +3,14 @@
 import argparse, datetime, fcntl, json, os, re, secrets, shutil, signal
 import sqlite3, subprocess, tempfile, threading, time, unicodedata, urllib.request
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 ROOT=Path.home()/".centro-jarvis"
 MODELS=Path.home()/".centro-models"
 REPOS=Path.home()/"repos"
 KEY=secrets.token_urlsafe(32)
 LOCK=threading.RLock()
-SITES={"best-pizza":"https://bestpizzaandkebab.pt","pentehouse":"https://pentehouse.pt"}
+SITES={"best-pizza":"https://bestpizzaandkebab.pt","pentehouse":"https://pentehouse.pt","2-irmaos":"https://restaurantedoisirmaos.pt"}
 PROJECTS={"best-pizza":"best-pizza-kebab","pentehouse":"pente_houselanding","2-irmaos":"restaurante-2-irmaos","beatriz":"engomadoria-beatriz","centro":"centro-negocios-ia"}
 TABLES=("conversations","projects","facts","executions","tool_events","summaries")
 def clean(s):
@@ -62,6 +63,8 @@ def classify(text):
  if t.strip() in {"para","cancela","silencio","jarvis para"}:return "stop",{}
  if any(w in t for w in ["cria uma tarefa","criar tarefa","adiciona uma tarefa"]):return "create_task",{"title":text}
  if any(w in t for w in ["que tarefas","lista de tarefas","tarefas pendentes","que trabalho tens"]):return "task_list",{}
+ if "classifica" in t:return "laya_decide",{"text":text}
+ if "nao mexas" in t:return "pause_project",{"target":p}
  if "git" in t:return ("git_diff" if "diff" in t else "git_status"),{"target":p}
  if "laya" in t and any(w in t for w in ["estado","ligado","online"]):return "laya_status",{}
  if any(w in t for w in ["estado da estacao","estado do centro","estado do sistema"]):return "system_status",{}
@@ -161,8 +164,40 @@ def execute(tool,args):
    return command(["git","pull","--ff-only"],root,120)
   return command(["git","status","--short","--branch"] if tool=="git_status" else ["git","diff","--stat"],root)[:5000]
  if tool=="read_file":return clean(safe_path(args["target"],args["path"]).read_text()[:8000])
+ if tool=="search_repo":
+  root=REPOS/PROJECTS[args["target"]];out=[]
+  for rel in command(["git","ls-files"],root).splitlines():
+   try:
+    path=safe_path(args["target"],rel)
+    if path.stat().st_size>100000:continue
+    for line,text in enumerate(path.read_text().splitlines(),1):
+     if str(args["query"]).lower() in text.lower():out.append({"path":rel,"line":line,"text":clean(text[:240])})
+    if len(out)>=30:break
+   except (ValueError,OSError,UnicodeError):continue
+  return out[:30]
+ if tool=="sqlite_query":
+  with sqlite3.connect("file:"+str(ROOT/"memory.sqlite")+"?mode=ro",uri=True) as c:
+   allowed={sqlite3.SQLITE_SELECT,sqlite3.SQLITE_READ}
+   def authorize(action,one,two,*rest):
+    if action==sqlite3.SQLITE_FUNCTION:return sqlite3.SQLITE_OK if str(two).lower() in {"count","sum","avg","min","max","length","coalesce","date","datetime"} else sqlite3.SQLITE_DENY
+    return sqlite3.SQLITE_OK if action in allowed else sqlite3.SQLITE_DENY
+   c.set_authorizer(authorize)
+   cur=c.execute(str(args["query"])[:3000]);return [dict(zip([d[0] for d in cur.description],row)) for row in cur.fetchmany(50)]
+ if tool=="update_task":
+  status=str(args["status"])
+  if status not in {"pendente","concluida","cancelada"}:raise ValueError("Estado inválido")
+  with database() as c:
+   cur=c.execute("UPDATE tasks SET status=? WHERE id=?",(status,int(args["id"])))
+   if cur.rowcount!=1:raise ValueError("Tarefa não encontrada")
+  return {"updated":True}
+ if tool=="note_fact":
+  event("facts",{"text":clean(args["text"])[:1000]});return {"saved":True}
+ if tool=="pause_project":
+  if args.get("target") not in PROJECTS:raise ValueError("Indica o projecto")
+  event("facts",{"paused_project":args["target"],"day":datetime.datetime.now(ZoneInfo("Europe/Lisbon")).date().isoformat()});return {"paused":args["target"],"until":"fim do dia"}
+
  if tool=="create_task":
-  title=clean(args["title"])[:500];due=(datetime.date.today()+datetime.timedelta(days=1)).isoformat() if "amanha" in norm(title) else None
+  title=clean(args["title"])[:500];due=(datetime.datetime.now(ZoneInfo("Europe/Lisbon")).date()+datetime.timedelta(days=1)).isoformat() if "amanha" in norm(title) else None
   with database() as c:
    cur=c.execute("INSERT INTO tasks(title,due) VALUES(?,?)",(title,due));return {"id":cur.lastrowid,"title":title,"due":due}
  if tool=="task_list":
@@ -172,6 +207,9 @@ def execute(tool,args):
  if tool=="repo_change":
   if args.get("target") not in PROJECTS:raise ValueError("Indica o projecto a corrigir")
   if not (ROOT/"planner_enabled").exists():raise RuntimeError("Planeador local ainda em validação; alteração não executada")
+  with database() as c:
+   pauses=[json.loads(r[0]) for r in c.execute("SELECT data FROM facts ORDER BY id DESC LIMIT 50")]
+  if any(p.get("paused_project")==args["target"] and p.get("day")==datetime.datetime.now(ZoneInfo("Europe/Lisbon")).date().isoformat() for p in pauses):raise ValueError("Projecto pausado até ao fim do dia")
   token=(Path.home()/".centro-server/token").read_text().strip()
   task={"id":"jarvis-"+secrets.token_hex(8),"action":"repo_change","target":PROJECTS[args["target"]],"args":{"prompt":clean(args["prompt"]),"localOnly":True}}
   req=urllib.request.Request("http://127.0.0.1:8765/execute",data=json.dumps(task).encode(),headers={"Content-Type":"application/json","Authorization":"Bearer "+token})

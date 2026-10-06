@@ -26,6 +26,16 @@ class Tests(unittest.TestCase):
    with self.assertRaises(ValueError):j.safe_path("centro","escape/passwd")
  def test_redaction(self):
   for secret in ["Bearer abc123","token=abc123","sk-secretvalue","ghp_abc123"]:self.assertNotIn(secret,j.clean(secret))
+ def test_sql_readonly(self):
+  j.execute("create_task",{"title":"Teste"})
+  self.assertEqual(j.execute("sqlite_query",{"query":"SELECT COUNT(*) AS n FROM tasks"})[0]["n"],1)
+  for query in ["DELETE FROM tasks","DROP TABLE tasks","ATTACH DATABASE '/tmp/outside' AS other","SELECT load_extension('/tmp/x')"]:
+   with self.assertRaises(Exception):j.execute("sqlite_query",{"query":query})
+  self.assertEqual(len(j.execute("task_list",{})),1)
+ def test_project_pause(self):
+  j.execute("pause_project",{"target":"centro"})
+  (j.ROOT/"planner_enabled").touch()
+  with self.assertRaises(ValueError):j.execute("repo_change",{"target":"centro","prompt":"Corrige"})
  def test_unknown_tool(self):
   with self.assertRaises(ValueError):j.execute("shell",{"command":"rm -rf /"})
  def test_cloud_off(self):
