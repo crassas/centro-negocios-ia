@@ -209,7 +209,7 @@
         float scan = .92 + .08*sin((v_uv.y + t*.035) * 900.0);
         col *= scan;
 
-        float vignette = smoothstep(.66,.25,r);
+        float vignette = 1.0 - smoothstep(.25,.66,r);
         alpha *= vignette * min(1.0,u_level);
         col *= 1.0 + (u_level-.8)*.32;
 
