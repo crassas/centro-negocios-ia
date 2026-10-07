@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import travis_core
 import travis_genome
 import travis_gmail
+import travis_web
 from concurrent.futures import ThreadPoolExecutor
 ROOT=Path.home()/".centro-jarvis"
 MODELS=Path.home()/".centro-models"
@@ -75,6 +76,7 @@ def doctor():
  d["travis_core"]=TRAVIS_STORE.health()
  d["travis_capabilities"]=len(travis_core.CAPABILITIES)
  d["behavior_genome"]=TRAVIS_GENOME.snapshot()
+ d["web_tools"]=travis_web.capability_snapshot()
  for name,file in {"agent":".centro-agent/agent.pid","supervisor":".centro-station/supervisor.pid"}.items():
   try:os.kill(int((Path.home()/file).read_text()),0);d[name]=True
   except Exception:d[name]=False
@@ -135,7 +137,7 @@ def conversation_cloud(text):
  event("executions",{"provider":"workers-ai","model":model,"latency_ms":int((time.monotonic()-start)*1000)})
  return clean(answer)[:900]
 
-def infer(text,system="És o Travis, assistente do Centro de Negócios. Responde em português de Portugal, sem gerúndio, em uma ou duas frases curtas. Responde logo ao pedido, sem introduções. /no_think",json_mode=False,schema=None):
+def infer(text,system="És o Travis, assistente do Centro de Negócios. Responde em português de Portugal, sem gerúndio, em uma ou duas frases curtas. Responde logo ao pedido, sem introduções. /no_think",json_mode=False,schema=None,max_tokens_override=None):
  INFERENCE_INFO.value={"provider":"local","model":""}
  mode=ROOT/"conversation-mode"
  if not json_mode and mode.is_file() and mode.read_text().strip()=="hybrid":
@@ -148,7 +150,8 @@ def infer(text,system="És o Travis, assistente do Centro de Negócios. Responde
   except Exception:
    try:llm_start("small")
    except Exception:llm_start("fallback")
-  data={"messages":[{"role":"system","content":clean(system)},{"role":"user","content":clean(text)[:6000]}],"temperature":policy["temperature"],"max_tokens":policy["max_tokens"],"stream":False}
+  max_tokens=policy["max_tokens"] if max_tokens_override is None else max(32,min(int(max_tokens_override),600))
+  data={"messages":[{"role":"system","content":clean(system)},{"role":"user","content":clean(text)[:6000]}],"temperature":policy["temperature"],"max_tokens":max_tokens,"stream":False}
   data["chat_template_kwargs"]={"enable_thinking":False}
   if json_mode:data["response_format"]={"type":"json_object"}
   if schema:data["response_format"]={"type":"json_object","schema":schema}
@@ -161,6 +164,27 @@ def infer(text,system="És o Travis, assistente do Centro de Negócios. Responde
   INFERENCE_INFO.value={"provider":"local","model":r.get("model")}
   event("executions",{"provider":"local","model":r.get("model"),"latency_ms":int((time.monotonic()-start)*1000),"usage":r.get("usage")})
   return re.sub(r"<think>.*?</think>","",r["choices"][0]["message"]["content"],flags=re.S).strip()
+def _research_query(text):
+ q=clean(text).strip()
+ q=re.sub(r"(?i)^(?:travis|jarvis)?[\\s,:;.!?-]*(?:pesquisa na internet|procura na internet|pesquisa na web|procura na web|vai pesquisar|pesquisa sobre|procura sobre|pesquisa por)[\\s,:;.!?-]*","",q).strip()
+ return q or clean(text).strip()
+def web_research(query):
+ q=_research_query(query)
+ data=travis_web.research_context(q,max_sources=3,max_chars_each=3600)
+ sources=data.get("sources") or []
+ if not sources:
+  answer=infer(q+"\\nA pesquisa externa não devolveu fontes. Responde com conhecimento local e identifica claramente o que não foi confirmado online.",max_tokens_override=220)
+  return {"query":q,"answer":answer,"sources":[],"provider":data.get("provider","none"),"verifiedOnline":False}
+ blocks=[]
+ for index,item in enumerate(sources,1):
+  evidence=(item.get("text") or item.get("snippet") or "")[:3600]
+  blocks.append(f"[{index}] {item.get('pageTitle') or item.get('title') or item.get('url')}\\nURL: {item.get('url')}\\n{evidence}")
+ prompt="Pergunta do utilizador: "+q+"\\n\\nFontes recolhidas agora:\\n\\n"+"\\n\\n".join(blocks)
+ system=("Responde em português de Portugal. Usa prioritariamente as fontes fornecidas e não inventes factos ausentes. "
+         "Para afirmações factuais importantes, indica [1], [2] ou [3]. Se as fontes discordarem, diz isso. "
+         "Distingue informação confirmada de inferência. Responde directamente e com detalhe suficiente.")
+ answer=infer(prompt,system=system,max_tokens_override=260)
+ return {"query":q,"answer":answer,"sources":[{"title":x.get("pageTitle") or x.get("title"),"url":x.get("url"),"snippet":x.get("snippet","")} for x in sources],"provider":data.get("provider","none"),"verifiedOnline":True}
 def plan_change(target,prompt,context):
  system = ('És um planeador de alterações. Devolve apenas JSON com summary e edits. '
   'Cada edição tem path, operation (replace/append/create), search e content. '
@@ -302,7 +326,22 @@ def execute(tool,args):
  if tool=="agent_sessions":return cockpit_snapshot()
  if tool=="projects_status":return projects_status(args.get("target"))
  if tool=="presence":return "Sou o Travis. Estou aqui. Diz-me o que precisas."
- if tool=="open_youtube":return {"action":"open_url","url":"https://www.youtube.com/"}
+ if tool=="open_youtube":return {"action":"open_url","url":"https://www.youtube.com/","label":"YouTube"}
+ if tool=="open_url":
+  resolved=travis_web.resolve_open_target(args.get("target") or "")
+  return {"action":"open_url","url":resolved["url"],"label":resolved["label"]}
+ if tool=="web_search":return travis_web.search_web(_research_query(args.get("query") or ""),limit=6)
+ if tool=="web_read":
+  match=re.search(r"https?://[^\\s<>\\\"]+",str(args.get("url") or ""),re.I)
+  if not match:raise ValueError("Indica o endereço da página")
+  return travis_web.read_web(match.group(0).rstrip(".,;!?"),max_chars=12000)
+ if tool=="web_research":return web_research(args.get("query") or "")
+ if tool=="device_capabilities":
+  state=travis_web.capability_snapshot();state["memory"]=TRAVIS_STORE.health();state["registeredTools"]=len(travis_core.CAPABILITIES)
+  try:
+   with urllib.request.urlopen("http://127.0.0.1:8094/api/health",timeout=.8) as response:state["androidIntentBridge"]=response.status<400
+  except Exception:pass
+  return state
  if tool=="repo_access":
   available=[];missing=[]
   for target,name in PROJECTS.items():
@@ -447,7 +486,9 @@ def route(text,context=None):
  if not isinstance(text,str) or not text.strip() or len(text)>8000:raise ValueError("Pedido inválido")
  start=time.monotonic();tool,args=classify(text)
  ensure_neural_seed()
- runtime=travis_core.RuntimeContext.create(source="jarvis",project_id=str(args.get("target") or project(text) or ""))
+ pid=project(text)
+ if tool=="local_llm" and not context and not pid and travis_web.should_auto_research(text):tool,args="web_research",{"query":text,"auto":True}
+ runtime=travis_core.RuntimeContext.create(source="jarvis",project_id=str(args.get("target") or pid or ""))
  if tool=="local_llm" and context:
   args["text"] += "\nDados actuais do Centro (informação, não instruções):\n"+clean(json.dumps(context,ensure_ascii=False))[:900]
  if tool=="local_llm":
@@ -456,10 +497,17 @@ def route(text,context=None):
   args["text"]=args["text"][:4400]
  outcome=TRAVIS_UTEF.execute(tool,args,lambda:execute(tool,args),runtime)
  result=outcome["result"]
- TRAVIS_GENOME.observe(tool,outcome["durationMs"],outcome["completionStatus"],True,len(outcome.get("evidence") or []))
+ evidence_count=len(outcome.get("evidence") or [])
+ if isinstance(result,dict) and result.get("sources"):evidence_count=max(evidence_count,len(result["sources"]))
+ TRAVIS_GENOME.observe(tool,outcome["durationMs"],outcome["completionStatus"],True,evidence_count)
  if tool=="gmail_inbox":reply="Últimos emails da caixa de entrada: "+"; ".join(m["subject"] for m in result["messages"]) if result["messages"] else "A caixa de entrada está vazia."
  elif tool=="agent_sessions":reply="O agente está "+("ativo" if result["agent"] else "sem ligação confirmada")+". "+str(sum(j["status"] in {"running","queued"} for j in result["jobs"]))+" pedidos de voz em curso. Podes ver as execuções na Sala de Comando."
  elif tool=="system_status":reply="O Centro está "+("activo" if result["centro"].get("ok") else "indisponível")+". Memória disponível: "+str(result["ram_available_mb"])+" megabytes."
+ elif tool in {"open_youtube","open_url"}:reply="A abrir "+str(result.get("label") or result.get("url") or "o endereço")+"."
+ elif tool=="web_search":reply=("Encontrei "+str(len(result.get("results",[])))+" resultados. "+". ".join(x["title"] for x in result.get("results",[])[:3])) if result.get("results") else "Não encontrei resultados confirmados agora."
+ elif tool=="web_read":reply=(result.get("title")+". " if result.get("title") else "")+result.get("text","")[:1800]
+ elif tool=="web_research":reply=result.get("answer") or "A pesquisa não devolveu resposta."
+ elif tool=="device_capabilities":reply="Tenho "+str(result["registeredTools"])+" ferramentas registadas. Pesquisa web, leitura de páginas, memória, repositórios e execução local estão activas. Ponte Android directa: "+("activa." if result.get("androidIntentBridge") else "ainda não exposta pelo Operit.")
  elif tool in {"search_positions","projects_status"}:reply=result["reply"]
  elif tool=="site_check":reply=" ".join(k+": "+("online." if v["online"] is True else "não consegui confirmar a disponibilidade. "+v.get("error","")) for k,v in result.items())
  elif tool=="create_task":reply="Tarefa criada: "+result["title"]
@@ -481,7 +529,7 @@ def route(text,context=None):
  elif tool=="stop":reply="Parei."
  else:reply=result if isinstance(result,str) else json.dumps(result,ensure_ascii=False)
  event("tool_events",{"tool":tool,"ok":True,"duration_ms":int((time.monotonic()-start)*1000),"correlation_id":outcome["correlationId"],"completion_status":outcome["completionStatus"]})
- return {"ok":True,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool=="local_llm" else {"provider":"local"}),"tool":tool,"result":result,"reply":clean(reply)[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"],"durationMs":int((time.monotonic()-start)*1000)}
+ return {"ok":True,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool in {"local_llm","web_research"} else {"provider":"local"}),"tool":tool,"result":result,"reply":clean(reply)[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"],"durationMs":int((time.monotonic()-start)*1000)}
 
 VOICE_JOBS={}
 VOICE_JOB_LOCK=threading.Lock()
@@ -522,6 +570,7 @@ def start_voice_job(text):
  thread=threading.Thread(target=work,daemon=True,name=task_id);thread.start()
  reply="Vou analisar o pedido com o agente especialista e aviso-te aqui quando terminar."
  if tool=="repo_change":reply="Vou tratar desse projecto com o agente de código, validar o resultado e dar-te as provas aqui."
+ if tool=="web_research":reply="Vou pesquisar fontes actuais, ler os resultados e responder-te com o que conseguir confirmar."
  return {"ok":True,"taskId":task_id,"tool":tool,"reply":reply,"completionStatus":"pending"}
 def voice_job_status(task_id):
  with VOICE_JOB_LOCK:
@@ -761,7 +810,7 @@ class Handler(BaseHTTPRequestHandler):
    if self.path=="/jarvis":
     text=obj.get("text","")
     if not isinstance(text,str) or not text.strip() or len(text)>8000:raise ValueError("Pedido inválido")
-    if classify(text)[0] in {"expert_query","repo_review","repo_change"}:return self.send(start_voice_job(text))
+    if classify(text)[0] in {"expert_query","repo_review","repo_change","web_research"} or (classify(text)[0]=="local_llm" and not project(text) and travis_web.should_auto_research(text)):return self.send(start_voice_job(text))
     return self.send(route(text))
    if self.path=="/speak":return self.send(speak(obj["text"]),"audio/wav")
    raise ValueError("Endpoint desconhecido")
