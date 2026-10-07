@@ -199,17 +199,43 @@ def search_web(query,limit=6,timeout=12):
   except Exception as exc:errors.append(kind+":"+type(exc).__name__)
  return {"query":q,"provider":"none","results":[],"errors":errors}
 
+def _rank_results(query,rows):
+ q=_norm(query)
+ stop={"qual","quais","quem","onde","quando","como","porque","versao","versoes","mais","recente","actual","atual","latest","official"}
+ tokens={x for x in re.findall(r"[a-z0-9]+",q) if len(x)>=3 and x not in stop}
+ fresh=any(term in q for term in ("mais recente","ultimo","versao","release","latest","hoje","agora","actual","atual"))
+ scored=[]
+ for index,row in enumerate(rows):
+  title=_norm(row.get("title",""));snippet=_norm(row.get("snippet",""))
+  try:host=(urllib.parse.urlsplit(row.get("url","")).hostname or "").lower()
+  except ValueError:host=""
+  score=max(0,8-index)*.05
+  score+=sum(2.2 for token in tokens if token in title)
+  score+=sum(1.4 for token in tokens if token in host)
+  score+=sum(.5 for token in tokens if token in snippet)
+  if fresh and re.search(r"\b\d+(?:\.\d+){1,3}(?:rc\d+|a\d+|b\d+)?\b",title):score+=3.0
+  if any(x in host for x in ("github.com","docs.","developer.","support.","blog.")):score+=.4
+  scored.append((score,index,row))
+ return [row for _,_,row in sorted(scored,key=lambda x:(-x[0],x[1]))]
+
 def research_context(query,max_sources=3,max_chars_each=4200):
- search=search_web(query,limit=max(5,max_sources))
+ search=search_web(query,limit=max(8,max_sources))
+ merged=list(search["results"]);seen={r["url"] for r in merged}
+ qnorm=_norm(query)
+ if any(term in qnorm for term in ("mais recente","ultimo","versao","release","latest","hoje","agora","actual","atual")):
+  extra=search_web(str(query)+" official latest",limit=8)
+  for row in extra["results"]:
+   if row["url"] not in seen:seen.add(row["url"]);merged.append(row)
+ ranked=_rank_results(query,merged)
  sources=[]
- for row in search["results"][:max_sources]:
+ for row in ranked[:max_sources]:
   item={**row,"text":""}
   try:
    page=read_web(row["url"],max_chars=max_chars_each)
    item["url"]=page["url"];item["pageTitle"]=page["title"];item["text"]=page["text"]
   except Exception as exc:item["readError"]=type(exc).__name__
   sources.append(item)
- return {"query":search["query"],"provider":search["provider"],"sources":sources,"searchResults":search["results"]}
+ return {"query":search["query"],"provider":search["provider"],"sources":sources,"searchResults":ranked}
 
 def should_auto_research(text):
  t=_norm(text)
