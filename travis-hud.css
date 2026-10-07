@@ -491,3 +491,17 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
 .travis-hud[data-form="face"] .travis-title h1{
   filter:drop-shadow(0 0 4px rgba(77,190,218,.18));
 }
+
+/* Travis entry: clear text button, above mobile navigation. */
+#travis-launcher{
+ width:auto;height:44px;padding:0 18px;border-radius:12px;
+ background:#172b32;border:1px solid #50666d;box-shadow:0 4px 16px #10202826;
+}
+#travis-launcher::before,#travis-launcher::after{display:none;animation:none}
+#travis-launcher .trv-launch-label{
+ position:static;transform:none;color:#f2f6f3;font:700 12px/1 system-ui,sans-serif;
+ letter-spacing:.12em;
+}
+@media(max-width:600px){
+ #travis-launcher{right:14px;bottom:calc(86px + env(safe-area-inset-bottom));width:auto;height:44px}
+}
