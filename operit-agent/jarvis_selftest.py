@@ -29,11 +29,11 @@ class Tests(unittest.TestCase):
   self.assertEqual(j.classify("não abrir o YouTube")[0],"local_llm")
  def test_web_research_uses_observed_sources(self):
   evidence={"query":"python","provider":"ddg","sources":[{"title":"Python","url":"https://python.org/","snippet":"Official","text":"Python 3 documentation and releases."}],"searchResults":[]}
-  with patch.object(j.travis_web,"research_context",return_value=evidence),patch.object(j,"infer",return_value="Python confirmado [1].") as inference:
+  with patch.object(j.travis_web,"research_context",return_value=evidence),patch.object(j,"_large_reasoner",return_value="Python confirmado [1].") as reasoner:
    result=j.route("Pesquisa na internet sobre Python")
    self.assertEqual(result["tool"],"web_research");self.assertTrue(result["result"]["verifiedOnline"])
    self.assertEqual(result["result"]["sources"][0]["url"],"https://python.org/")
-   self.assertIn("Fontes recolhidas agora",inference.call_args.args[0])
+   self.assertIn("Fontes recolhidas agora",reasoner.call_args.args[0])
  def test_factual_question_auto_researches(self):
   with patch.object(j,"web_research",return_value={"query":"x","answer":"Confirmado agora.","sources":[{"url":"https://example.com","title":"Fonte"}],"verifiedOnline":True}):
    result=j.route("Qual é a versão mais recente do Python?")
