@@ -18,11 +18,11 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
   <script src="./agent-room.js?v=jarvis-1" defer></script>
   <script src="./app.js?v=travis-panel-2" defer></script>
-  <link rel="stylesheet" href="./travis-hud.css?v=voicequality3">
+  <link rel="stylesheet" href="./travis-hud.css?v=connections1">
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
-  <script type="module" src="./travis-3d.mjs?v=voicequality3"></script>
+  <script type="module" src="./travis-3d.mjs?v=connections1"></script>
 </head>
 <body>
 <div class="shell">
@@ -648,6 +648,8 @@
   <aside id="travis-room" class="travis-room" aria-label="Sala de comando">
     <header><small>OPERAÇÕES / AO VIVO</small><h2>O teu centro.</h2><p id="travis-observed">À espera de ligação.</p></header>
     <div class="travis-system"><strong id="travis-agent-state">A verificar agente</strong><span id="travis-memory-state">A verificar memória</span></div>
+    <section><h3>Ligações do Travis</h3><p id="travis-connections-note">A verificar serviços e acessos.</p><ul id="travis-connections"></ul><button id="travis-connections-refresh" type="button">Verificar ligações</button></section>
+    <section><h3>Projetos e negócio</h3><ul id="travis-projects"></ul></section>
     <section><h3>Pedidos de voz</h3><ul id="travis-jobs"></ul></section>
     <section><h3>Execuções dos agentes</h3><ul id="travis-history"></ul><button id="travis-open-agents" type="button">Abrir sala dos agentes ↗</button></section>
     <section id="travis-gmail-section" tabindex="-1"><h3>Gmail</h3><p id="travis-gmail-note">Acesso à tua caixa de entrada com autorização Google.</p>
@@ -671,7 +673,7 @@
   <div class="travis-version">TRAVIS · QUASI NORTE</div>
 </section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script type="module" src="./travis-cockpit.mjs?v=voicequality3"></script>
+<script type="module" src="./travis-cockpit.mjs?v=connections1"></script>
 </body>
 </html>
 

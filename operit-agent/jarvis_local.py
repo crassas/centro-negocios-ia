@@ -234,6 +234,30 @@ def cockpit_snapshot():
          "history":[{k:clean(row.get(k,""))[:240] for k in ["timestamp","action","target","exitCode","durationMs","error","correlationId"]} for row in rows[-8:]],
          "gmail":travis_gmail.status()}
 
+def connections_snapshot():
+ snapshot=cockpit_snapshot();rows=[]
+ def add(name,ok,yes,no):rows.append({"name":name,"state":"connected" if ok else "attention","detail":yes if ok else no})
+ add("Centro",snapshot["centro"],"Servidor local a responder.","Servidor sem resposta.")
+ add("Agente de execução",snapshot["agent"],"Processo ativo; execuções na Sala dos Agentes.","Agente parado; requer recuperação no Ubuntu.")
+ add("Memória",snapshot["memory"].get("ok"),"Memória consultada com sucesso.","Não foi possível verificar a memória.")
+ def probe(pair):
+  name,url=pair
+  try:
+   with urllib.request.urlopen(url,timeout=2) as response:data=json.load(response)
+   ok=data.get("ok",data.get("status") in {"ok","ready"})
+   return name,bool(ok)
+  except Exception:return name,False
+ with ThreadPoolExecutor(max_workers=2) as pool:
+  for name,ok in pool.map(probe,[("Laya","http://127.0.0.1:18790/health"),("Modelo local de reserva","http://127.0.0.1:8771/health")]):add(name,ok,"Serviço a responder.","Serviço sem resposta.")
+ for name,worker in [("Transcrição",STT_WORKER),("Voz",TTS_WORKER)]:
+  add(name,worker.process is not None and worker.process.poll() is None,"Motor local ativo.","Motor ainda não iniciou ou terminou.")
+ gmail=snapshot["gmail"]
+ rows.append({"name":"Gmail","state":"configured" if gmail["authorized"] else "attention","detail":"Autorização guardada; abre a caixa para confirmar a leitura." if gmail["authorized"] else "Falta autorizar a conta Google." if gmail["configured"] else "Falta carregar o JSON OAuth da Google.","action":"gmail"})
+ rows.append({"name":"Search Console","state":"configured" if (ROOT/"gsc.token").is_file() else "attention","detail":"Autorização guardada; consulta as posições para validar o acesso." if (ROOT/"gsc.token").is_file() else "Liga os dados do Centro no painel de pesquisa."})
+ projects=projects_status()
+ add("Base de dados do negócio",projects["business"]["available"],"Registo de sites e tarefas acessível.","Base de dados indisponível.")
+ return {"ok":True,"observedAt":time.time(),"connections":rows,"projects":projects["projects"],"business":projects["business"]}
+
 def projects_status(target=None):
  names={"best-pizza":"Best Pizza","pentehouse":"Pentehouse","2-irmaos":"Dois Irmãos","beatriz":"Beatriz","centro":"Centro"}
  rows=[]
@@ -570,7 +594,7 @@ TRUSTED_WEB_ORIGINS={"https://crassas.github.io"}
 LOCAL_ORIGINS={"http://127.0.0.1:8770","http://localhost:8770"}
 WEB_VOICE_ENDPOINTS={"/health","/transcribe","/listen","/jarvis","/speak","/voice-task"}
 
-LOCAL_COCKPIT_ENDPOINTS={"/cockpit","/gmail/configure","/gmail/start","/gmail/inbox","/gmail/disconnect"}
+LOCAL_COCKPIT_ENDPOINTS={"/connections","/cockpit","/gmail/configure","/gmail/start","/gmail/inbox","/gmail/disconnect"}
 
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args):pass
@@ -641,6 +665,7 @@ class Handler(BaseHTTPRequestHandler):
     if self.path=="/transcribe":return self.send({"ok":True,"text":text,"durationMs":int((time.monotonic()-stage_start)*1000)})
     return self.send({"text":text,**route(text)})
    obj=json.loads(data)
+   if path=="/connections":return self.send(connections_snapshot())
    if path=="/cockpit":return self.send(cockpit_snapshot())
    if path=="/gmail/configure":return self.send(travis_gmail.configure(obj))
    if path=="/gmail/start":return self.send(travis_gmail.start())

@@ -115,3 +115,26 @@ $('travis-gmail-disconnect')?.addEventListener('click',async()=>{
   try {await api('/gmail/disconnect');$('travis-mail-list').replaceChildren();$('travis-gmail-note').textContent='Conta desligada deste dispositivo.';$('travis-gmail-connect').textContent='Ligar Gmail';}
   catch(error){$('travis-gmail-note').textContent=error.message;}
 });
+
+let connectionsBusy=false;
+async function refreshConnections(){
+  if(connectionsBusy)return;
+  connectionsBusy=true;$('travis-connections-refresh').disabled=true;
+  try{
+    const data=await api('/connections');
+    $('travis-connections').replaceChildren(...data.connections.map(c=>{
+      const row=item(c.name,c.detail,c.state==='connected'?'completed':c.state==='attention'?'failed':'');
+      if(c.action==='gmail'){const button=document.createElement('button');button.type='button';button.textContent='Abrir ligação Gmail';button.addEventListener('click',openGmail);row.append(button);}
+      return row;
+    }));
+    const sites=data.business.sites||[];
+    $('travis-projects').replaceChildren(...data.projects.map(p=>{
+      const site=sites.find(s=>String(s.repo||'').includes(p.project==='centro'?'centro-negocios':p.project==='beatriz'?'beatriz':p.project==='2-irmaos'?'2-irmaos':p.project==='best-pizza'?'best-pizza':'pente'));
+      return item(p.name,(p.available?'Código acessível':'Código indisponível')+(site?' · '+site.status:'')+(p.changedFiles?' · '+p.changedFiles+' alterações locais':''),p.available?'completed':'failed');
+    }));
+    $('travis-connections-note').textContent='Verificado às '+new Date(data.observedAt*1000).toLocaleTimeString('pt-PT')+'. Autorizações guardadas não confirmam uma sessão ativa.';
+  }catch(error){$('travis-connections-note').textContent='Verificação indisponível. Os estados anteriores podem estar desatualizados.';}
+  finally{connectionsBusy=false;$('travis-connections-refresh').disabled=false;}
+}
+$('travis-connections-refresh')?.addEventListener('click',refreshConnections);
+window.addEventListener('travis:open',refreshConnections);

@@ -1,7 +1,7 @@
 import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs';
 import { createSpeechFace } from './travis-speech-face.mjs';
-import { createBacklight } from './travis-atmosphere.mjs?v=voicequality3';
-import { createFaceRig } from './travis-face-rig.mjs?v=voicequality3';
+import { createBacklight } from './travis-atmosphere.mjs?v=connections1';
+import { createFaceRig } from './travis-face-rig.mjs?v=connections1';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
