@@ -1,7 +1,7 @@
 import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs';
 import { createSpeechFace } from './travis-speech-face.mjs';
-import { createBacklight } from './travis-atmosphere.mjs?v=voicequality2';
-import { createFaceRig } from './travis-face-rig.mjs?v=voicequality2';
+import { createBacklight } from './travis-atmosphere.mjs?v=voicequality3';
+import { createFaceRig } from './travis-face-rig.mjs?v=voicequality3';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -638,6 +638,14 @@ if (!hud || !launcher || !canvas) {
     },delay);
   }
 
+  function prepareSpeechFace(ac) {
+    if(!ac) return Promise.resolve(null);
+    if(!speechFacePromise) speechFacePromise=createSpeechFace(ac).then(driver=>speechFace=driver).catch(error=>{
+      hud.dataset.lipSync='audio-envelope-fallback';console.warn('Travis visemes unavailable',error.message);return null;
+    });
+    return speechFacePromise;
+  }
+
   async function playVoiceArrayBuffer(arrayBuffer,session,reply,metrics=null) {
     if (!opened || session!==voiceSession) return;
     const ac=audio();
@@ -647,10 +655,7 @@ if (!hud || !launcher || !canvas) {
     const decoded=await ac.decodeAudioData(arrayBuffer.slice(0));
     if (!opened || session!==voiceSession) return;
 
-    if(!speechFacePromise) speechFacePromise=createSpeechFace(ac).then(driver=>speechFace=driver).catch(error=>{
-      hud.dataset.lipSync='audio-envelope-fallback';console.warn('Travis visemes unavailable',error.message);return null;
-    });
-    await speechFacePromise;
+    await prepareSpeechFace(ac);
     if (!opened || session!==voiceSession) return;
     speechFace?.reset();
     hud.dataset.lipSync=speechFace?'audio-visemes':'audio-envelope-fallback';
@@ -916,6 +921,7 @@ if (!hud || !launcher || !canvas) {
     const controller=new AbortController();
     voiceRequestController=controller;
     try {
+      void prepareSpeechFace(audio());
       setState('booting','A ligar ao Travis local…');
       const health=await localHealth(controller.signal);
       if (!opened || session!==voiceSession) return;
