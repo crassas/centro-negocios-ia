@@ -47,8 +47,16 @@ fetch "$VOICE_BASE.onnx.json" "$MODEL_ROOT/tts/pt_PT-tugao-medium.onnx.json"
 VOICE_EN_BASE='https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium'
 fetch "$VOICE_EN_BASE.onnx" "$MODEL_ROOT/tts/en_GB-northern_english_male-medium.onnx"
 fetch "$VOICE_EN_BASE.onnx.json" "$MODEL_ROOT/tts/en_GB-northern_english_male-medium.onnx.json"
+if command -v npm >/dev/null 2>&1; then
+ BROWSER_ROOT="$HOME/.centro-browser";mkdir -p "$BROWSER_ROOT"
+ if [ ! -f "$BROWSER_ROOT/node_modules/playwright/package.json" ]; then
+  (cd "$BROWSER_ROOT" && [ -f package.json ] || npm init -y >/dev/null 2>&1)
+  (cd "$BROWSER_ROOT" && npm install --no-save playwright@1.64.0)
+ fi
+ (cd "$BROWSER_ROOT" && npx playwright install chromium)
+fi
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-for file in travis_core.py travis_genome.py travis_omni.py travis_gmail.py jarvis_local.py jarvis_whisper.py jarvis_voice.html; do cp "$SCRIPT_DIR/$file" "$HOME/$file"; done
+for file in travis_core.py travis_genome.py travis_omni.py travis_browser.mjs travis_gmail.py jarvis_local.py jarvis_whisper.py jarvis_voice.html; do cp "$SCRIPT_DIR/$file" "$HOME/$file"; done
 chmod +x "$SCRIPT_DIR/jarvisctl.sh"
 ln -sf "$SCRIPT_DIR/jarvisctl.sh" /usr/local/bin/jarvisctl
 printf 'Componentes instalados. Execute jarvisctl doctor e os testes antes de activar o planeador.\n'
