@@ -1,5 +1,5 @@
-const CACHE='centro-negocios-v43-backlight-gmail';
-const SHELL=['./','./index.html','./styles.css','./app.js?v=travis-panel-2','./agent-room.js?v=jarvis-1','./agent-room.css?v=status-fix-1','./product.css?v=world-8','./travis-hud.css?v=backlight2','./travis-3d.mjs?v=backlight2','./travis-atmosphere.mjs','./travis-face-rig.mjs','./travis-cockpit.mjs?v=backlight2','./assets/travis/travis-core.glb?v=1','./assets/travis/travis-face-bust.glb?v=1','./manifest.webmanifest','./icon.svg','./data/sites.json'];
+const CACHE='centro-negocios-v44-cinematic-rays';
+const SHELL=['./','./index.html','./styles.css','./app.js?v=travis-panel-2','./agent-room.js?v=jarvis-1','./agent-room.css?v=status-fix-1','./product.css?v=world-8','./travis-hud.css?v=cinema3','./travis-3d.mjs?v=cinema3','./travis-atmosphere.mjs?v=cinema3','./travis-face-rig.mjs','./travis-cockpit.mjs?v=cinema3','./assets/travis/travis-core.glb?v=1','./assets/travis/travis-face-bust.glb?v=1','./manifest.webmanifest','./icon.svg','./data/sites.json'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));

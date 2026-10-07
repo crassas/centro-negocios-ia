@@ -1,4 +1,4 @@
-import { createBacklight } from './travis-atmosphere.mjs';
+import { createBacklight } from './travis-atmosphere.mjs?v=cinema3';
 import { createFaceRig } from './travis-face-rig.mjs';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -217,7 +217,7 @@ if (!hud || !launcher || !canvas) {
           uv.x+=glitchLine;
 
           vec2 radial=uv-.5;
-          vec2 off=radial*uAberration*(1.0+uGlitch*4.0);
+          vec2 off=radial*uAberration*smoothstep(.08,.65,length(radial))*(1.0+uGlitch*4.0);
           float r=texture2D(tDiffuse,uv+off).r;
           float g=texture2D(tDiffuse,uv).g;
           float b=texture2D(tDiffuse,uv-off).b;
@@ -228,7 +228,7 @@ if (!hud || !launcher || !canvas) {
           base*=1.0-uScan*scan;
 
           float grain=(hash21(uv*uResolution.xy+uTime*vec2(31.7,17.3))-.5)*uGrain;
-          base+=grain;
+          base+=grain*smoothstep(.008,.12,dot(base,vec3(.2126,.7152,.0722)));
 
           float d=distance(uv,vec2(.5));
           float vignette=1.0-smoothstep(.48,.78,d)*.34;
@@ -419,9 +419,9 @@ if (!hud || !launcher || !canvas) {
         throw new Error('Escala do busto inválida.');
       }
       realFaceBaseMaterial=new THREE.MeshPhysicalMaterial({
-        color:0x285a70,metalness:.04,roughness:.52,
-        envMapIntensity:.28,specularIntensity:.3,
-        clearcoat:.04,clearcoatRoughness:.4,
+        color:0x496369,metalness:.12,roughness:.34,
+        envMapIntensity:.3,specularIntensity:.65,
+        clearcoat:.16,clearcoatRoughness:.28,
         transparent:false,opacity:1,
         emissive:new THREE.Color(0x021017),emissiveIntensity:.018,
         side:THREE.FrontSide,depthWrite:true
@@ -1119,21 +1119,21 @@ if (!hud || !launcher || !canvas) {
   }
 
   function createLights() {
-    const faceKey=new THREE.DirectionalLight(0xc6e5ed,3.1);
-    faceKey.position.set(-1.5,2.2,4);scene.add(faceKey);
-    const faceFill=new THREE.DirectionalLight(0x70a5bc,1.25);
-    faceFill.position.set(2,.3,3);scene.add(faceFill);
-    scene.add(new THREE.HemisphereLight(0x86dfff,0x020508,.28));
+    const faceKey=new THREE.DirectionalLight(0xd9eeed,3.7);
+    faceKey.position.set(-3.8,1.0,2.0);scene.add(faceKey);
+    const faceFill=new THREE.DirectionalLight(0x8db8bd,.42);
+    faceFill.position.set(2,-1.2,1.5);scene.add(faceFill);
+    scene.add(new THREE.HemisphereLight(0xa2c5cd,0x010203,.12));
 
-    const cyan=new THREE.PointLight(0x38cfff,5.5,12,2);
+    const cyan=new THREE.PointLight(0x8bd5d9,3.8,12,2);
     cyan.position.set(-3.5,2.4,4.2);
     scene.add(cyan);
 
-    const red=new THREE.PointLight(0xff3159,2.8,10,2);
+    const red=new THREE.PointLight(0xb9977c,1.1,10,2);
     red.position.set(3.4,-1.5,3.1);
     scene.add(red);
 
-    const rim=new THREE.PointLight(0xdafcff,3.5,9,2);
+    const rim=new THREE.PointLight(0xdafcff,2.2,9,2);
     rim.position.set(0,3.5,2.5);
     scene.add(rim);
   }
@@ -1486,7 +1486,7 @@ if (!hud || !launcher || !canvas) {
     finalPass.uniforms.uGlitch.value=glitchPower;
     finalPass.uniforms.uFlash.value=flashPower;
     finalPass.uniforms.uAberration.value=.00048+glitchPower*.0017+(state==='speaking'?.00013:0);
-    finalPass.uniforms.uGrain.value=formBlend.face>.5?.006:(innerWidth<700?.016:.019);
+    finalPass.uniforms.uGrain.value=formBlend.face>.5?.011:(innerWidth<700?.016:.019);
     finalPass.uniforms.uScan.value=formBlend.face>.5?.005:(innerWidth<700?.018:.022);
     finalComposer.render();
   }
