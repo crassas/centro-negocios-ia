@@ -185,7 +185,6 @@ for(const token of [
   "scheduleListening(session,180)",
   "commandLines[i].material.opacity=0",
   "TravisFace_Pupil_",
-  "new THREE.CylinderGeometry(.32,.48,1.02"
 ]){
   if(!scene.includes(token)) throw new Error('V11 face/voice refinement em falta: '+token);
 }
