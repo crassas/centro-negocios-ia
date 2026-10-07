@@ -21,15 +21,15 @@ class Tests(unittest.TestCase):
     reply=j.route(text)
     self.assertEqual(reply["tool"],"open_youtube")
     self.assertEqual(reply["result"]["url"],"https://www.youtube.com/")
-  self.assertEqual(j.classify("não abrir o YouTube")[0],"local_llm")
+  self.assertEqual(j.classify("não abrir o YouTube")[0],"smart_query")
  def test_chat_timeout_does_not_restart_model(self):
   with patch.object(j,"http",side_effect=[{"status":"ok"},TimeoutError()]) as http,patch.object(j,"llm_start",side_effect=AssertionError("restart")):
    with self.assertRaisesRegex(RuntimeError,"prazo"):j.infer("pedido")
    self.assertEqual(http.call_args.kwargs["timeout"],45)
  def test_shared_context_for_reasoning(self):
-  with patch.object(j,"infer",return_value="Resposta") as inference:
+  with patch.object(j,"execute",return_value="Resposta") as execution:
    j.route("Analisa o meu negócio",{"projects":[{"name":"Pentehouse"}]})
-   self.assertIn("Pentehouse",inference.call_args.args[0])
+   self.assertIn("Pentehouse",execution.call_args.args[1]["text"])
  def test_repository_access_is_verified_without_inference(self):
   with patch.object(j,"infer",side_effect=AssertionError("LLM called")),patch.object(j,"command",return_value="true"):
    reply=j.route("Já tens acesso aos repositórios das páginas internas?")
@@ -144,7 +144,7 @@ class Tests(unittest.TestCase):
  def test_rank_requests_are_not_availability_checks(self):
   for text in ["verifica as posições da Pentehouse","vê o ranking da Pentehouse","posição no Google da Pentehouse"]:
    self.assertEqual(j.classify(text)[0],"search_positions")
-  self.assertEqual(j.classify("verifica os preços da Pentehouse")[0],"local_llm")
+  self.assertEqual(j.classify("verifica os preços da Pentehouse")[0],"smart_query")
   with patch.object(j,"infer",side_effect=AssertionError("guessed rank")):
    result=j.route("verifica as posições da Pentehouse")
    self.assertEqual(result["tool"],"search_positions");self.assertFalse(result["result"]["available"])
@@ -165,6 +165,29 @@ class Tests(unittest.TestCase):
    self.assertFalse((self.root/"gsc.token").exists())
   with patch.object(j,"gsc_request",return_value={"configured":True,"authorized":True}):j.connect_gsc(token)
   self.assertEqual((self.root/"gsc.token").stat().st_mode & 0o777,0o600)
+ def test_omni_open_search_and_status(self):
+  self.assertEqual(j.classify("abre o Gmail")[0],"open_target")
+  opened=j.execute("open_target",{"text":"abre o Gmail"})
+  self.assertEqual(opened["action"],"open_url");self.assertIn("mail.google.com",opened["url"])
+  with patch.object(j.travis_omni,"web_search",return_value=[{"title":"Resultado","url":"https://example.com/","snippet":"Prova"}]):
+   rows=j.execute("web_search",{"query":"teste"});self.assertEqual(rows[0]["title"],"Resultado")
+  self.assertIn("services",j.execute("omni_status",{}))
+ def test_smart_query_prefers_expert(self):
+  original=j.execute
+  def fake(tool,args):
+   if tool=="expert_query":return "EXPERT_OK"
+   return original(tool,args)
+  with patch.object(j,"execute",side_effect=fake):
+   self.assertEqual(j.execute("smart_query",{"text":"Explica isto"}),"EXPERT_OK")
+ def test_web_research_synthesises_evidence(self):
+  research={"query":"x","results":[{"title":"Fonte","url":"https://example.com/","snippet":"Facto"}],"evidence":[{"index":1,"title":"Fonte","url":"https://example.com/","excerpt":"Facto"}],"context":"[1] Fonte\nFacto"}
+  original=j.execute
+  def fake(tool,args):
+   if tool=="expert_query":
+    self.assertIn("Facto",args["text"]);return "Resposta baseada em prova"
+   return original(tool,args)
+  with patch.object(j.travis_omni,"research",return_value=research),patch.object(j,"execute",side_effect=fake):
+   out=j.execute("web_research",{"query":"x"});self.assertEqual(out["answer"],"Resposta baseada em prova")
  def test_unknown_tool(self):
   with self.assertRaises(ValueError):j.execute("shell",{"command":"rm -rf /"})
  def test_cloud_off(self):
