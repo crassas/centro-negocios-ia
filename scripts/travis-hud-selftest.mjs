@@ -169,7 +169,7 @@ for(const token of [
 
 
 for(const token of [
-  './assets/travis/travis-face-realistic.glb?v=1',
+  './assets/travis/travis-face-realistic.glb?v=2',
   'TravisRealFace',
   'TravisFace_Head',
   'realFaceBaseMaterial',
@@ -180,7 +180,7 @@ for(const token of [
 }
 if(faceGlb.size < 1000000) throw new Error('GLB facial realista demasiado pequeno: '+faceGlb.size);
 if(html.includes('data-travis-form="auto"')) throw new Error('AUTO não deve aparecer no selector visual.');
-if(!sw.includes('travis-face-realistic.glb?v=1')) throw new Error('Rosto realista não está na cache PWA.');
+if(!sw.includes('travis-face-realistic.glb?v=2')) throw new Error('Rosto realista não está na cache PWA.');
 
 if(glb.size < 500000) throw new Error('GLB Travis demasiado pequeno: '+glb.size);
 if(!css.includes('#travis-three-canvas')) throw new Error('Canvas 3D CSS em falta.');

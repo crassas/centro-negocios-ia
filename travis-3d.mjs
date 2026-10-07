@@ -387,7 +387,7 @@ if (!hud || !launcher || !canvas) {
     // Real CC0 head from Blender Studio Human Base Meshes.
     try {
       const loader=new GLTFLoader();
-      const gltf=await loader.loadAsync('./assets/travis/travis-face-realistic.glb?v=1');
+      const gltf=await loader.loadAsync('./assets/travis/travis-face-realistic.glb?v=2');
       realFaceModel=gltf.scene;
       realFaceModel.name='TravisRealFace';
       realFaceModel.rotation.set(0,0,0);
