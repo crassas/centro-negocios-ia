@@ -407,7 +407,6 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
 }
 .travis-form-selector button.is-active::after{opacity:1;transform:scaleX(1)}
 .travis-hud[data-form="face"] .travis-form-selector button[data-travis-form="face"],
-.travis-hud[data-form="orb"] .travis-form-selector button[data-travis-form="orb"],
 .travis-hud[data-form="core"] .travis-form-selector button[data-travis-form="core"]{color:#e6fbff}
 
 @keyframes trv-title-holo{
@@ -439,7 +438,7 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
 
 
 /* V9 realistic face */
-.travis-form-selector button{flex:1 1 33.333%}
+.travis-form-selector button{flex:1 1 50%}
 .travis-form-selector button[data-travis-form="face"].is-active{
   background:radial-gradient(ellipse at 50% 100%,rgba(37,177,255,.11),transparent 68%);
 }
@@ -483,4 +482,12 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
 .travis-title h1::after{opacity:.11}
 .travis-hud[data-form="face"] .travis-title h1{
   filter:drop-shadow(0 0 5px rgba(93,224,255,.24)) drop-shadow(0 0 14px rgba(25,136,203,.10));
+}
+
+/* V12 — two-form identity: real face + core only */
+.travis-form-selector{width:min(350px,72vw)}
+.travis-form-selector button{flex:1 1 50%}
+.travis-hud[data-form="face"] .travis-title{top:72.5%}
+.travis-hud[data-form="face"] .travis-title h1{
+  filter:drop-shadow(0 0 4px rgba(77,190,218,.18));
 }
