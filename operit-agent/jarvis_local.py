@@ -469,10 +469,12 @@ class Handler(BaseHTTPRequestHandler):
   return self.serve_ui_file(self.path)
  def do_POST(self):
   global ACTIVE_REQUESTS
-  origin=self.headers.get("Origin","http://127.0.0.1:8770")
-  local_ok=origin in LOCAL_ORIGINS and self.headers.get("X-Jarvis-Key")==KEY
-  web_ok=origin in TRUSTED_WEB_ORIGINS and urllib.parse.urlparse(self.path).path in WEB_VOICE_ENDPOINTS
-  if not self.host_ok() or not (local_ok or web_ok):return self.send({"error":"Pedido recusado"},code=403)
+  origin=self.headers.get("Origin","")
+  path=urllib.parse.urlparse(self.path).path
+  local_browser_ok=origin in LOCAL_ORIGINS and path in WEB_VOICE_ENDPOINTS
+  local_key_ok=origin in LOCAL_ORIGINS and self.headers.get("X-Jarvis-Key")==KEY
+  trusted_web_ok=origin in TRUSTED_WEB_ORIGINS and path in WEB_VOICE_ENDPOINTS
+  if not self.host_ok() or not (local_browser_ok or local_key_ok or trusted_web_ok):return self.send({"error":"Pedido recusado"},code=403)
   with STATE_LOCK:ACTIVE_REQUESTS+=1
   try:
    n=int(self.headers.get("Content-Length","0"))
