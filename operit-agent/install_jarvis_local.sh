@@ -53,10 +53,27 @@ if command -v npm >/dev/null 2>&1; then
   (cd "$BROWSER_ROOT" && [ -f package.json ] || npm init -y >/dev/null 2>&1)
   (cd "$BROWSER_ROOT" && npm install --no-save playwright@1.64.0)
  fi
- (cd "$BROWSER_ROOT" && npx playwright install chromium)
+ (cd "$BROWSER_ROOT" && npx playwright install firefox)
+ [ -x "$BROWSER_ROOT/venv/bin/python" ] || /usr/bin/python3 -m venv "$BROWSER_ROOT/venv"
+ if ! "$BROWSER_ROOT/venv/bin/python" -c 'import selenium' >/dev/null 2>&1; then
+  "$BROWSER_ROOT/venv/bin/pip" install --no-cache-dir 'selenium==4.50.0'
+ fi
+ /usr/bin/python3 - <<'PY'
+import json,os,tarfile,urllib.request
+from pathlib import Path
+root=Path.home()/'.centro-browser';driver=root/'geckodriver'
+if not driver.is_file():
+ req=urllib.request.Request('https://api.github.com/repos/mozilla/geckodriver/releases/latest',headers={'User-Agent':'Centro-Travis/1.0'})
+ with urllib.request.urlopen(req,timeout=30) as response:data=json.load(response)
+ asset=next(a for a in data['assets'] if a['name'].endswith('linux-aarch64.tar.gz'))
+ archive=root/'geckodriver.tar.gz'
+ urllib.request.urlretrieve(asset['browser_download_url'],archive)
+ with tarfile.open(archive) as tar:tar.extractall(root,filter='data')
+ archive.unlink(missing_ok=True);driver.chmod(0o755)
+PY
 fi
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-for file in travis_core.py travis_genome.py travis_omni.py travis_browser.mjs travis_gmail.py jarvis_local.py jarvis_whisper.py jarvis_voice.html; do cp "$SCRIPT_DIR/$file" "$HOME/$file"; done
+for file in travis_core.py travis_genome.py travis_omni.py travis_browser.py travis_gmail.py jarvis_local.py jarvis_whisper.py jarvis_voice.html; do cp "$SCRIPT_DIR/$file" "$HOME/$file"; done
 chmod +x "$SCRIPT_DIR/jarvisctl.sh"
 ln -sf "$SCRIPT_DIR/jarvisctl.sh" /usr/local/bin/jarvisctl
 printf 'Componentes instalados. Execute jarvisctl doctor e os testes antes de activar o planeador.\n'
