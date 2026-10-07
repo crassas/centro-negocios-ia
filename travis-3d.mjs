@@ -286,8 +286,7 @@ if (!hud || !launcher || !canvas) {
   }
 
   function modeForState(next=state) {
-    if (next==='listening' || next==='speaking') return 'face';
-    if (next==='thinking' || next==='booting') return 'orb';
+    if (next==='listening' || next==='thinking' || next==='speaking') return 'face';
     return 'core';
   }
 
@@ -301,11 +300,11 @@ if (!hud || !launcher || !canvas) {
   }
 
   function applyForm(form='core') {
-    if (!['core','face','orb'].includes(form)) form='core';
+    if (!['core','face'].includes(form)) form='core';
     activeForm=form;
     formTarget.core=form==='core'?1:0;
     formTarget.face=form==='face'?1:0;
-    formTarget.orb=form==='orb'?1:0;
+    formTarget.orb=0;
     hud.dataset.form=form;
   }
 
@@ -313,7 +312,7 @@ if (!hud || !launcher || !canvas) {
     if (mode==='auto') {
       formPolicy='auto';
       applyForm(modeForState());
-    } else if (['core','face','orb'].includes(mode)) {
+    } else if (['core','face'].includes(mode)) {
       formPolicy=manual?mode:formPolicy;
       applyForm(mode);
     }
@@ -350,16 +349,6 @@ if (!hud || !launcher || !canvas) {
     faceRoot=new THREE.Group();
     faceRoot.visible=false;
 
-    const neckGeo=new THREE.CylinderGeometry(.32,.48,1.02,56,8,true);
-    const neckMat=hologramShader();
-    neckMat.uniforms.uColor.value.setRGB(.025,.46,.92);
-    neckMat.uniforms.uOpacity.value=.024;
-    const neck=new THREE.Mesh(neckGeo,neckMat);
-    neck.position.set(0,-1.56,-.12);
-    markBloom(neck);
-    faceRoot.add(neck);
-
-
 
     // Real CC0 head from Blender Studio Human Base Meshes.
     try {
@@ -385,9 +374,9 @@ if (!hud || !launcher || !canvas) {
         clearcoat:.22,
         clearcoatRoughness:.22,
         transparent:true,
-        opacity:.82,
-        emissive:new THREE.Color(0x031820),
-        emissiveIntensity:.075,
+        opacity:.96,
+        emissive:new THREE.Color(0x01090d),
+        emissiveIntensity:.02,
         side:THREE.FrontSide,
         depthWrite:true
       });
@@ -397,8 +386,8 @@ if (!hud || !launcher || !canvas) {
       // A second shell gives the bright holographic Fresnel without washing out the facial volume.
       const glowShell=new THREE.Mesh(head.geometry.clone(),hologramShader());
       glowShell.name='TravisFace_HologramShell';
-      glowShell.material.uniforms.uColor.value.setRGB(.018,.34,.72);
-      glowShell.material.uniforms.uOpacity.value=.052;
+      glowShell.material.uniforms.uColor.value.setRGB(.008,.18,.38);
+      glowShell.material.uniforms.uOpacity.value=.018;
       glowShell.scale.setScalar(1.006);
       glowShell.renderOrder=3;
       markBloom(glowShell);
@@ -409,7 +398,7 @@ if (!hud || !launcher || !canvas) {
       const wire=markBloom(new THREE.LineSegments(
         new THREE.WireframeGeometry(head.geometry),
         new THREE.LineBasicMaterial({
-          color:0x58cce8,transparent:true,opacity:.030,
+          color:0x3e9fb8,transparent:true,opacity:.016,
           blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
         })
       ));
@@ -421,13 +410,13 @@ if (!hud || !launcher || !canvas) {
       // Sparse vertices make the face read like the reference without becoming noisy.
       const src=head.geometry.attributes.position;
       const pts=[];
-      for(let i=0;i<src.count;i+=5){
+      for(let i=0;i<src.count;i+=10){
         pts.push(src.getX(i),src.getY(i),src.getZ(i));
       }
       const pg=new THREE.BufferGeometry();
       pg.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
       const points=markBloom(new THREE.Points(pg,new THREE.PointsMaterial({
-        color:0x8defff,size:.007,transparent:true,opacity:.070,
+        color:0x6fc9dc,size:.005,transparent:true,opacity:.028,
         blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
       })));
       points.scale.setScalar(1.012);
@@ -475,7 +464,7 @@ if (!hud || !launcher || !canvas) {
       });
       [irisL,irisR].filter(Boolean).forEach(iris=>{
         iris.material=new THREE.MeshBasicMaterial({
-          color:0x69dff5,transparent:true,opacity:.78,
+          color:0x4cc4df,transparent:true,opacity:.56,
           blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
         });
         markBloom(iris);
@@ -492,7 +481,7 @@ if (!hud || !launcher || !canvas) {
         new THREE.Vector3(0,-.585,.80),
         new THREE.Vector3(.12,-.575,.79),
         new THREE.Vector3(.27,-.54,.74)
-      ],0x9af4ff,.075);
+      ],0x78dceb,.025);
       faceMouthLower.renderOrder=6;
       realFaceModel.add(faceMouthLower);
 
@@ -585,7 +574,6 @@ if (!hud || !launcher || !canvas) {
 
   async function createAdaptiveForms() {
     await createFaceAvatar();
-    createOrbAvatar();
     formButtons.forEach(button=>{
       button.addEventListener('click',()=>{
         const mode=button.dataset.travisForm||'auto';
@@ -1531,7 +1519,7 @@ if (!hud || !launcher || !canvas) {
     const targetVoice=externalVoiceLevel==null?simulatedVoice:externalVoiceLevel;
     speechLevel+=(targetVoice-speechLevel)*Math.min(1,dt*13);
 
-    for (const key of ['core','face','orb']) {
+    for (const key of ['core','face']) {
       formBlend[key]+=(formTarget[key]-formBlend[key])*Math.min(1,dt*7.5);
     }
 
@@ -1610,8 +1598,8 @@ if (!hud || !launcher || !canvas) {
       if (realFaceBaseMaterial) {
         const listening=state==='listening'?1:0;
         const speaking=state==='speaking'?speechLevel:0;
-        realFaceBaseMaterial.opacity=.54+listening*.04+speaking*.055;
-        realFaceBaseMaterial.emissiveIntensity=.16+listening*.04+speaking*.10;
+        realFaceBaseMaterial.opacity=.92+listening*.015+speaking*.02;
+        realFaceBaseMaterial.emissiveIntensity=.02+listening*.008+speaking*.018;
       }
       realFaceIris.forEach((iris,i)=>{
         const pulse=.92+.08*Math.sin(t*2.4+i*.7)+(state==='listening'?.12:0)+(state==='speaking'?speechLevel*.18:0);
@@ -1626,7 +1614,7 @@ if (!hud || !launcher || !canvas) {
         avatarMaterial.uniforms.uTime.value=t;
         avatarMaterial.uniforms.uGlitch.value=glitchPower*(state==='thinking'?1.2:.55);
         avatarMaterial.uniforms.uState.value=state==='speaking'?.95:state==='listening'?.78:state==='thinking'?.62:.24;
-        avatarMaterial.uniforms.uOpacity.value=.16+(state==='speaking'?speechLevel*.07:state==='listening'?.035:0);
+        avatarMaterial.uniforms.uOpacity.value=.018+(state==='speaking'?speechLevel*.008:state==='listening'?.006:0);
       }
     }
 
