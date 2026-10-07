@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Local-first voice and deterministic tools. No mandatory cloud provider."""
-import argparse, datetime, fcntl, json, os, re, secrets, select, shutil, signal
-import sqlite3, subprocess, tempfile, threading, time, unicodedata, urllib.request
+import argparse, datetime, fcntl, json, os, re, secrets, select, shutil, signal, mimetypes
+import sqlite3, subprocess, tempfile, threading, time, unicodedata, urllib.request, urllib.parse
 from pathlib import Path
 from contextlib import contextmanager
 from zoneinfo import ZoneInfo
@@ -10,6 +10,7 @@ import travis_core
 ROOT=Path.home()/".centro-jarvis"
 MODELS=Path.home()/".centro-models"
 REPOS=Path.home()/"repos"
+CENTRO_UI=Path.home()/".centro-ui"
 KEY=secrets.token_urlsafe(32)
 LOCK=threading.RLock()
 STATE_LOCK=threading.Lock()
@@ -279,6 +280,29 @@ def execute(tool,args):
   with database() as c:return [dict(zip(["id","title","due","status"],r)) for r in c.execute("SELECT id,title,due,status FROM tasks WHERE status='pendente' ORDER BY id LIMIT 30")]
  if tool=="laya_status":return http("http://127.0.0.1:18790/health")
  if tool=="laya_decide":return http("http://127.0.0.1:18790/v1/systemone",{"state":clean(args["text"]),"questions":{"route":{"type":"choice","instructions":"Escolhe a ferramenta.","criteria":{"git":"Git","status":"estado da estação","reasoning":"análise"}}},"model":"multilingual"},timeout=120)
+ if tool=="repo_review":
+  if args.get("target") not in PROJECTS:raise ValueError("Indica o projecto a analisar")
+  target=PROJECTS[args["target"]]
+  token=(Path.home()/".centro-server/token").read_text().strip()
+  prompt=clean(args.get("prompt") or "")
+  review_prompt=("Analisa este projecto como agente técnico do Centro. Não alteres ficheiros. "
+                 "Inspecciona o repositório real, identifica problemas concretos, trabalho por fazer e a próxima acção mais útil. "
+                 "Responde em português de Portugal, curto, com provas específicas do repositório. Pedido do operador: "+prompt)
+  task={"id":"jarvis-review-"+secrets.token_hex(8),"action":"claude_query","target":target,"args":{"prompt":review_prompt}}
+  req=urllib.request.Request("http://127.0.0.1:8765/execute",data=json.dumps(task).encode(),headers={"Content-Type":"application/json","Authorization":"Bearer "+token})
+  try:
+   with urllib.request.urlopen(req,timeout=70) as response:data=json.load(response)
+   result=data.get("result",{})
+   if result.get("exitCode")==0 and clean(result.get("stdout","")).strip():return clean(result.get("stdout",""))[:5000]
+  except Exception:
+   result={}
+  root=REPOS/target
+  status=command(["git","status","--short","--branch"],root,10).strip() or "working tree limpo"
+  recent=command(["git","log","-1","--pretty=%h %s"],root,10).strip()
+  files=command(["git","ls-files"],root,10).splitlines()
+  return ("Agente de análise avançada indisponível; fiz verificação local segura. "
+          f"Git: {status}. Último commit: {recent}. Ficheiros versionados: {len(files)}. "
+          "Posso analisar um ponto específico ou executar uma alteração se me disseres o que queres corrigir.")
  if tool=="repo_change":
   if args.get("target") not in PROJECTS:raise ValueError("Indica o projecto a corrigir")
   if not (ROOT/"planner_enabled").exists():raise RuntimeError("Planeador local ainda em validação; alteração não executada")
@@ -395,20 +419,60 @@ def centro_activity():
  token=(Path.home()/".centro-server/token").read_text().strip()
  request=urllib.request.Request("http://127.0.0.1:8765/history",headers={"Authorization":"Bearer "+token})
  with urllib.request.urlopen(request,timeout=5) as response:return json.load(response)
+TRUSTED_WEB_ORIGINS={"https://crassas.github.io"}
+LOCAL_ORIGINS={"http://127.0.0.1:8770","http://localhost:8770"}
+WEB_VOICE_ENDPOINTS={"/health","/transcribe","/listen","/jarvis","/speak"}
+
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args):pass
+ def origin(self):return self.headers.get("Origin","")
+ def cors_ok(self):return self.origin() in TRUSTED_WEB_ORIGINS
+ def send_cors(self):
+  if self.cors_ok():
+   self.send_header("Access-Control-Allow-Origin",self.origin())
+   self.send_header("Vary","Origin")
+   self.send_header("Access-Control-Allow-Private-Network","true")
  def send(self,obj,ctype="application/json",code=200):
   data=json.dumps(obj,ensure_ascii=False).encode() if ctype=="application/json" else obj
-  self.send_response(code);self.send_header("Content-Type",ctype);self.send_header("Cache-Control","no-store");self.send_header("X-Content-Type-Options","nosniff");self.send_header("Content-Length",str(len(data)));self.end_headers();self.wfile.write(data)
+  self.send_response(code);self.send_header("Content-Type",ctype);self.send_header("Cache-Control","no-store");self.send_header("X-Content-Type-Options","nosniff");self.send_cors();self.send_header("Content-Length",str(len(data)));self.end_headers();self.wfile.write(data)
  def host_ok(self):return self.headers.get("Host") in {"127.0.0.1:8770","localhost:8770"}
+ def serve_ui_file(self,url_path):
+  parsed=urllib.parse.urlparse(url_path)
+  rel=urllib.parse.unquote(parsed.path).lstrip("/") or "index.html"
+  rel_path=Path(rel)
+  if rel_path.is_absolute() or ".." in rel_path.parts or any(part.startswith(".") for part in rel_path.parts):return self.send({"error":"Caminho recusado"},code=403)
+  path=(CENTRO_UI/rel_path).resolve();root=CENTRO_UI.resolve()
+  if path!=root and root not in path.parents:return self.send({"error":"Caminho recusado"},code=403)
+  if path.is_dir():path=path/"index.html"
+  if not path.is_file():return self.send({"error":"Não encontrado"},code=404)
+  ctype=mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+  if path.suffix==".mjs":ctype="text/javascript"
+  if path.suffix==".webmanifest":ctype="application/manifest+json"
+  return self.send(path.read_bytes(),ctype)
+ def do_OPTIONS(self):
+  if not self.host_ok():return self.send({"error":"Host recusado"},code=403)
+  if not self.cors_ok() or urllib.parse.urlparse(self.path).path not in WEB_VOICE_ENDPOINTS:return self.send({"error":"Origem recusada"},code=403)
+  self.send_response(204)
+  self.send_header("Access-Control-Allow-Origin",self.origin())
+  self.send_header("Vary","Origin")
+  self.send_header("Access-Control-Allow-Methods","GET, POST, OPTIONS")
+  self.send_header("Access-Control-Allow-Headers","Content-Type, X-Jarvis-Key")
+  self.send_header("Access-Control-Allow-Private-Network","true")
+  self.send_header("Access-Control-Max-Age","3600")
+  self.send_header("Content-Length","0")
+  self.end_headers()
  def do_GET(self):
   if not self.host_ok():return self.send({"error":"Host recusado"},code=403)
-  if self.path=="/health":return self.send({"ok":True,"service":"jarvis","cloud":False,"busy":ACTIVE_REQUESTS>0})
-  if self.path=="/":return self.send(Path(__file__).with_name("jarvis_voice.html").read_text().replace("__KEY__",KEY).encode(),"text/html; charset=utf-8")
-  self.send({"error":"Não encontrado"},code=404)
+  path=urllib.parse.urlparse(self.path).path
+  if path=="/health":return self.send({"ok":True,"service":"jarvis","cloud":False,"busy":ACTIVE_REQUESTS>0,"ui":CENTRO_UI.is_dir()})
+  if path=="/voice":return self.send(Path(__file__).with_name("jarvis_voice.html").read_text().replace("__KEY__",KEY).encode(),"text/html; charset=utf-8")
+  return self.serve_ui_file(self.path)
  def do_POST(self):
   global ACTIVE_REQUESTS
-  if not self.host_ok() or self.headers.get("X-Jarvis-Key")!=KEY or self.headers.get("Origin","http://127.0.0.1:8770") not in {"http://127.0.0.1:8770","http://localhost:8770"}:return self.send({"error":"Pedido recusado"},code=403)
+  origin=self.headers.get("Origin","http://127.0.0.1:8770")
+  local_ok=origin in LOCAL_ORIGINS and self.headers.get("X-Jarvis-Key")==KEY
+  web_ok=origin in TRUSTED_WEB_ORIGINS and urllib.parse.urlparse(self.path).path in WEB_VOICE_ENDPOINTS
+  if not self.host_ok() or not (local_ok or web_ok):return self.send({"error":"Pedido recusado"},code=403)
   with STATE_LOCK:ACTIVE_REQUESTS+=1
   try:
    n=int(self.headers.get("Content-Length","0"))
