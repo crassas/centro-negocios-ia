@@ -22,6 +22,26 @@ class Tests(unittest.TestCase):
     self.assertEqual(reply["tool"],"open_youtube")
     self.assertEqual(reply["result"]["url"],"https://www.youtube.com/")
   self.assertEqual(j.classify("não abrir o YouTube")[0],"local_llm")
+ def test_generic_sites_open_without_llm(self):
+  with patch.object(j,"infer",side_effect=AssertionError("LLM called")),patch.object(j.travis_web,"resolve_open_target",return_value={"url":"https://github.com/","label":"github"}):
+   reply=j.route("Travis, abre o GitHub")
+   self.assertEqual(reply["tool"],"open_url");self.assertEqual(reply["result"]["url"],"https://github.com/")
+  self.assertEqual(j.classify("não abrir o YouTube")[0],"local_llm")
+ def test_web_research_uses_observed_sources(self):
+  evidence={"query":"python","provider":"ddg","sources":[{"title":"Python","url":"https://python.org/","snippet":"Official","text":"Python 3 documentation and releases."}],"searchResults":[]}
+  with patch.object(j.travis_web,"research_context",return_value=evidence),patch.object(j,"infer",return_value="Python confirmado [1].") as inference:
+   result=j.route("Pesquisa na internet sobre Python")
+   self.assertEqual(result["tool"],"web_research");self.assertTrue(result["result"]["verifiedOnline"])
+   self.assertEqual(result["result"]["sources"][0]["url"],"https://python.org/")
+   self.assertIn("Fontes recolhidas agora",inference.call_args.args[0])
+ def test_factual_question_auto_researches(self):
+  with patch.object(j,"web_research",return_value={"query":"x","answer":"Confirmado agora.","sources":[{"url":"https://example.com","title":"Fonte"}],"verifiedOnline":True}):
+   result=j.route("Qual é a versão mais recente do Python?")
+   self.assertEqual(result["tool"],"web_research");self.assertEqual(result["reply"],"Confirmado agora.")
+ def test_device_capabilities_report_bridge_state(self):
+  with patch.object(j.urllib.request,"urlopen",side_effect=OSError("off")):
+   result=j.execute("device_capabilities",{})
+   self.assertTrue(result["webSearch"]);self.assertFalse(result["androidIntentBridge"])
  def test_chat_timeout_does_not_restart_model(self):
   with patch.object(j,"http",side_effect=[{"status":"ok"},TimeoutError()]) as http,patch.object(j,"llm_start",side_effect=AssertionError("restart")):
    with self.assertRaisesRegex(RuntimeError,"prazo"):j.infer("pedido")
