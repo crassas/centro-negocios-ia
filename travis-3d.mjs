@@ -1,7 +1,7 @@
 import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs';
 import { createSpeechFace } from './travis-speech-face.mjs';
-import { createBacklight } from './travis-atmosphere.mjs?v=voicequality1';
-import { createFaceRig } from './travis-face-rig.mjs?v=voicequality1';
+import { createBacklight } from './travis-atmosphere.mjs?v=voicequality2';
+import { createFaceRig } from './travis-face-rig.mjs?v=voicequality2';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -1493,6 +1493,8 @@ if (!hud || !launcher || !canvas) {
     requestAnimationFrame(animate);
     if (!renderer || !bloomComposer || !finalComposer) return;
     if (!opened || webglLost || renderer.getContext().isContextLost()) { lastFrame=now; return; }
+    // Prioritise recognition/inference/TTS on the phone; DOM status remains live.
+    if(state==='thinking'){lastFrame=now;return;}
     const dt=Math.min(.05,(now-lastFrame)/1000);
     lastFrame=now;
 
