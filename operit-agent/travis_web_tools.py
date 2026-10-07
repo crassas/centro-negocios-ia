@@ -110,9 +110,33 @@ def _last():
  try:return json.loads(LAST_WEB.read_text(encoding="utf-8"))
  except Exception:return {}
 
-def search(query,limit=5):
- query=re.sub(r"\s+"," ",str(query or "")).strip()[:300]
- if not query:raise ValueError("Pesquisa vazia")
+SEARCH_STOPWORDS={"qual","quais","que","quem","como","onde","quando","porque","porquê","para","com","sem","uma","umas","uns","dos","das","do","da","de","em","no","na","nos","nas","mais","hoje","agora","actual","atual","actualmente","atualmente","recente","recentes","versão","versao","última","ultima","últimas","ultimas","notícia","noticia","notícias","noticias","the","and","for","from","what","which","who","how","latest","version","news"}
+def _norm_token(value):
+ return "".join(c for c in __import__("unicodedata").normalize("NFD",str(value).lower()) if not __import__("unicodedata").combining(c))
+def _key_terms(query):
+ terms=[]
+ for token in re.findall(r"[A-Za-zÀ-ÿ0-9_.+-]+",str(query)):
+  n=_norm_token(token)
+  if len(n)>=3 and n not in SEARCH_STOPWORDS:terms.append((token,n))
+ return terms[:8]
+def _search_variant(query):
+ q=_norm_token(query);intent=[]
+ if ("versao" in q and any(x in q for x in ("recente","ultima","atual","hoje"))):intent=["latest","version"]
+ elif any(x in q for x in ("noticia","noticias")) and any(x in q for x in ("recente","ultima","hoje","atual")):intent=["latest","news"]
+ elif "preco" in q or "preços" in q:intent=["price"]
+ elif "documentacao" in q:intent=["documentation"]
+ elif "lancamento" in q:intent=["release"]
+ elif q.startswith("como "):intent=["how","to"]
+ terms=[token for token,_ in _key_terms(query)]
+ variant=" ".join(terms+intent).strip()
+ return variant[:300] if variant and variant.lower()!=str(query).lower().strip() else ""
+def _relevant(query,rows):
+ keys=[n for _,n in _key_terms(query)]
+ if not keys:return bool(rows)
+ corpus=_norm_token(" ".join((r.get("title","")+" "+r.get("snippet","")) for r in rows[:3]))
+ return any(key in corpus for key in keys)
+
+def _search_once(query,limit=5):
  url="https://www.bing.com/search?"+urllib.parse.urlencode({"q":query,"setlang":"pt-PT","count":max(5,min(int(limit),10))})
  _,_,page=_fetch(url,max_bytes=800_000)
  blocks=re.findall(r'<li class="b_algo"[^>]*>(.*?)</li>',page,re.I|re.S);rows=[]
@@ -125,6 +149,20 @@ def search(query,limit=5):
   snippet=_clean_text(sm.group(1)) if sm else ""
   if title:rows.append({"title":title[:240],"url":target,"snippet":snippet[:650]})
   if len(rows)>=limit:break
+ return rows
+
+def search(query,limit=5):
+ query=re.sub(r"\s+"," ",str(query or "")).strip()[:300]
+ if not query:raise ValueError("Pesquisa vazia")
+ rows=_search_once(query,limit)
+ if not _relevant(query,rows):
+  variant=_search_variant(query)
+  if variant:
+   alternate=_search_once(variant,limit);seen=set();merged=[]
+   for row in alternate+rows:
+    if row["url"] in seen:continue
+    seen.add(row["url"]);merged.append(row)
+   rows=merged[:limit]
  _remember({"kind":"search","query":query,"results":rows});return rows
 
 def read(url,max_chars=9000):
