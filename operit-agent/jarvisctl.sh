@@ -2,7 +2,6 @@
 set -euo pipefail
 STATE="${HOME}/.centro-jarvis"
 SCRIPT_ROOT="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
-if [ -f "$HOME/jarvis_local.py" ] && [ -f "$HOME/jarvis_voice.html" ]; then SCRIPT_ROOT="$HOME"; fi
 SOURCE="${JARVIS_SOURCE:-$SCRIPT_ROOT}"
 mkdir -p "$STATE"
 stop_router() {
