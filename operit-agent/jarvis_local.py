@@ -76,7 +76,7 @@ def doctor():
  d["travis_core"]=TRAVIS_STORE.health()
  d["travis_capabilities"]=len(travis_core.CAPABILITIES)
  d["behavior_genome"]=TRAVIS_GENOME.snapshot()
- d["omni"]={**travis_omni.status(),"browserInstalled":(Path.home()/".centro-browser/node_modules/playwright").is_dir(),"browserWorker":bool(globals().get("BROWSER_WORKER") and BROWSER_WORKER.process is not None and BROWSER_WORKER.process.poll() is None)}
+ d["omni"]={**travis_omni.status(),"browserInstalled":(Path.home()/".centro-browser/venv/bin/python").is_file() and (Path.home()/".centro-browser/geckodriver").is_file() and any(Path.home().glob(".cache/ms-playwright/firefox-*/firefox/firefox")),"browserWorker":bool(globals().get("BROWSER_WORKER") and BROWSER_WORKER.process is not None and BROWSER_WORKER.process.poll() is None)}
  for name,file in {"agent":".centro-agent/agent.pid","supervisor":".centro-station/supervisor.pid"}.items():
   try:os.kill(int((Path.home()/file).read_text()),0);d[name]=True
   except Exception:d[name]=False
@@ -303,10 +303,12 @@ class BrowserWorker:
  def __init__(self):self.process=None;self.buffer=b"";self.lock=threading.RLock()
  def start(self):
   if self.process is not None and self.process.poll() is None:return
-  script=Path(__file__).with_name("travis_browser.mjs")
+  script=Path(__file__).with_name("travis_browser.py")
+  python=Path.home()/".centro-browser/venv/bin/python"
+  driver=Path.home()/".centro-browser/geckodriver"
   if not script.is_file():raise RuntimeError("Worker de browser não instalado")
-  if not (Path.home()/".centro-browser/node_modules/playwright").is_dir():raise RuntimeError("Playwright local ainda não instalado")
-  self.process=subprocess.Popen(["node",str(script)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=(ROOT/"browser-worker.log").open("ab"),bufsize=0)
+  if not python.is_file() or not driver.is_file():raise RuntimeError("Runtime Selenium/Firefox ainda não instalado")
+  self.process=subprocess.Popen([str(python),str(script)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=(ROOT/"browser-worker.log").open("ab"),bufsize=0)
   self.buffer=b""
   ready=json.loads(self.line(20).removeprefix("TRAVIS_BROWSER:"))
   if not ready.get("ready"):raise RuntimeError("Browser não ficou pronto")
