@@ -60,7 +60,7 @@ def validate_public_url(url):
 def resolve_open_target(target):
  raw=str(target or "").strip()
  if not raw:raise ValueError("Indica o site ou endereço a abrir")
- explicit=re.search(r"https?://[^\s<>"]+",raw,re.I)
+ explicit=re.search(r'https?://[^\s<>"]+',raw,re.I)
  if explicit:return {"url":validate_public_url(explicit.group(0).rstrip(".,;!?")),"label":explicit.group(0)}
  domain=re.search(r"(?<![@\w])(?:www\.)?[a-z0-9](?:[a-z0-9.-]{0,120}[a-z0-9])?\.(?:com|pt|org|net|io|ai|dev|app|co|eu)(?:/[^\s<>]*)?",raw,re.I)
  if domain:
