@@ -165,6 +165,15 @@ class Tests(unittest.TestCase):
    self.assertFalse((self.root/"gsc.token").exists())
   with patch.object(j,"gsc_request",return_value={"configured":True,"authorized":True}):j.connect_gsc(token)
   self.assertEqual((self.root/"gsc.token").stat().st_mode & 0o777,0o600)
+ def test_browser_agent_uses_observed_dom_steps(self):
+  self.assertEqual(j.classify("abre o Google e pesquisa gatos")[0],"browser_task")
+  snap1={"ok":True,"title":"Google","url":"https://www.google.com/","text":"Pesquisa","elements":[{"index":0,"tag":"input","placeholder":"Pesquisar"}]}
+  snap2={"ok":True,"title":"Google","url":"https://www.google.com/","text":"gatos","elements":[{"index":0,"tag":"input","value":"gatos"}]}
+  with patch.object(j.BROWSER_WORKER,"request",side_effect=[snap1,snap2]) as browser,patch.object(j,"execute",side_effect=['{"action":"fill","index":0,"value":"gatos"}','{"action":"done","answer":"Pesquisa preparada."}']):
+   out=j.browser_agent("abre o Google e pesquisa gatos",max_steps=3)
+  self.assertTrue(out["ok"]);self.assertEqual(out["answer"],"Pesquisa preparada.")
+  self.assertEqual(browser.call_args_list[0].args[0]["action"],"goto")
+  self.assertEqual(browser.call_args_list[1].args[0]["action"],"fill")
  def test_omni_open_search_and_status(self):
   self.assertEqual(j.classify("abre o Gmail")[0],"open_target")
   opened=j.execute("open_target",{"text":"abre o Gmail"})
