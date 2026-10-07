@@ -78,7 +78,7 @@ class Tests(unittest.TestCase):
  def test_voice_worker_reuse_and_cleanup(self):
   binary=self.root/"bin"/"piper";binary.parent.mkdir()
   binary.write_text("#!/usr/bin/env python3\nimport json,sys,wave\nfor line in sys.stdin:\n d=json.loads(line)\n with wave.open(d['output_file'],'wb') as w:w.setnchannels(1);w.setsampwidth(2);w.setframerate(22050);w.writeframes(b'\\0'*440)\n print(d['output_file'],flush=True)\n")
-  binary.chmod(0o755);worker=j.VoiceWorker("tts")
+  binary.chmod(0o755);model=self.root/"voice.onnx";model.touch();worker=j.VoiceWorker("tts",model)
   try:
    with patch.object(j,"TTS_WORKER",worker):
     first=j.speak("Primeira resposta");pid=worker.process.pid
@@ -87,6 +87,22 @@ class Tests(unittest.TestCase):
     self.assertTrue(first.startswith(b"RIFF"));self.assertTrue(second.startswith(b"RIFF"))
    process=worker.process;worker.stop();self.assertIsNotNone(process.poll())
   finally:worker.stop()
+ def test_bilingual_speech_segments_and_merge(self):
+  segments=j.speech_segments("Bem-vindo, Mr. Richard. GitHub pronto.")
+  self.assertEqual(segments,[("pt","Bem-vindo, "),("en","Mr. Richard"),("pt",". "),("en","GitHub"),("pt"," pronto.")])
+  binary=self.root/"bin"/"piper";binary.parent.mkdir()
+  binary.write_text("#!/usr/bin/env python3\nimport json,sys,wave\nfor line in sys.stdin:\n d=json.loads(line)\n with wave.open(d['output_file'],'wb') as w:w.setnchannels(1);w.setsampwidth(2);w.setframerate(22050);w.writeframes(b'\\0'*440)\n print(d['output_file'],flush=True)\n")
+  binary.chmod(0o755)
+  pt=self.root/"pt.onnx";en=self.root/"en.onnx";pt.touch();en.touch()
+  pt_worker=j.VoiceWorker("tts",pt);en_worker=j.VoiceWorker("tts",en)
+  try:
+   with patch.object(j,"TTS_WORKER",pt_worker),patch.object(j,"TTS_EN_WORKER",en_worker):
+    audio=j.speak("Bem-vindo, Mr. Richard.")
+    self.assertTrue(audio.startswith(b"RIFF"))
+    self.assertIsNotNone(pt_worker.process);self.assertIsNotNone(en_worker.process)
+  finally:pt_worker.stop();en_worker.stop()
+ def test_portuguese_fallback_keeps_english_name_pleasant(self):
+  self.assertIn("Míster Ríchard",j.portuguese_pronunciation_fallback("Bem-vindo, Mr. Richard."))
  def test_transcription_endpoint_returns_before_reasoning(self):
   server=j.ThreadingHTTPServer(("127.0.0.1",0),j.Handler)
   thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
