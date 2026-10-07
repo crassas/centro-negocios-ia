@@ -122,6 +122,7 @@ if (!hud || !launcher || !canvas) {
   let micSourceNode=null;
   let micAnalyser=null;
   let voiceSpeechEndedAt=0;
+  const WELCOME_GREETING='Bem-vindo, Mr. Richard.';
   const voiceMetrics=[];
   const pendingVoiceTasks=new Map();
   let voiceTaskTimer=0;
@@ -914,7 +915,7 @@ if (!hud || !launcher || !canvas) {
     }
   }
 
-  async function startVoiceConversation() {
+  async function startVoiceConversation({greet=true}={}) {
     stopVoiceConversation();
     const session=voiceSession;
     voiceBusy=true;
@@ -930,10 +931,28 @@ if (!hud || !launcher || !canvas) {
         loadingLabel.textContent='TRAVIS LOCAL · VOZ LIGADA';
         loadingLabel.classList.add('is-done');
       }
+      scheduleVoiceTaskPoll();
+      if (greet) {
+        setState('thinking','A iniciar sistema de voz…');
+        try {
+          const speech=await localFetch('/speak',{
+            body:{text:WELCOME_GREETING,mode:'welcome'},
+            type:'application/json',
+            signal:controller.signal
+          });
+          if(!speech.ok)throw new Error('Saudação indisponível.');
+          const wav=await speech.arrayBuffer();
+          if (!opened || session!==voiceSession) return;
+          await playVoiceArrayBuffer(wav,session,WELCOME_GREETING);
+          return;
+        } catch(error) {
+          if(controller.signal.aborted || session!==voiceSession)return;
+          console.warn('Travis greeting:',error);
+        }
+      }
       voiceBusy=false;
       setState('ready','Estou aqui.');
       await startListening(session);
-      scheduleVoiceTaskPoll();
     } catch (error) {
       if (controller.signal.aborted || session!==voiceSession) return;
       voiceBusy=false;
@@ -1811,7 +1830,7 @@ if (!hud || !launcher || !canvas) {
     commands:toggleCommands,
     ask(text){if(!opened)return;stopVoiceConversation();handleVoiceBlob(String(text),'',voiceSession);},
     pause(){stopVoiceConversation();faceRig?.update(0);setState('ready','Conversa em pausa.');},
-    resume(){if(opened)startVoiceConversation();},
+    resume(){if(opened)startVoiceConversation({greet:false});},
     setState,
     diagnostics() {
       return {ready,opened,state,renderedFrames,contextLost:renderer?.getContext().isContextLost(),form:activeForm,faceAsset:hud.dataset.faceAsset,

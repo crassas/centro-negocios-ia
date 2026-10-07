@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Local-first voice and deterministic tools. No mandatory cloud provider."""
 import argparse, datetime, fcntl, json, os, re, secrets, select, shutil, signal, mimetypes
-import sqlite3, subprocess, tempfile, threading, time, unicodedata, urllib.request, urllib.parse
+import sqlite3, subprocess, tempfile, threading, time, unicodedata, urllib.request, urllib.parse, wave
 from pathlib import Path
 from contextlib import contextmanager
 from zoneinfo import ZoneInfo
@@ -66,7 +66,7 @@ def doctor():
  for name,url in {"centro":"http://127.0.0.1:8765/health","laya":"http://127.0.0.1:18790/health","llm":"http://127.0.0.1:8771/health","router":"http://127.0.0.1:8770/health"}.items():
   try:d[name]=http(url,timeout=2)
   except Exception:d[name]={"ok":False}
- for name,path in {"stt_cli":ROOT/"bin/whisper-cli","tts":ROOT/"bin/piper","llm_runtime":ROOT/"bin/llama-server","stt_model":MODELS/"stt/ggml-base.bin","tts_model":MODELS/"tts/pt_PT-tugao-medium.onnx","main_model":MODELS/"llm/main.gguf","small_model":MODELS/"llm/small.gguf"}.items():d[name]=path.is_file()
+ for name,path in {"stt_cli":ROOT/"bin/whisper-cli","tts":ROOT/"bin/piper","llm_runtime":ROOT/"bin/llama-server","stt_model":MODELS/"stt/ggml-base.bin","tts_model":MODELS/"tts/pt_PT-tugao-medium.onnx","tts_en_model":MODELS/"tts/en_GB-northern_english_male-medium.onnx","main_model":MODELS/"llm/main.gguf","small_model":MODELS/"llm/small.gguf"}.items():d[name]=path.is_file()
  d["stt_binding"]=(ROOT/"venv/lib/python3.12/site-packages/pywhispercpp").is_dir()
  d["stt"]=d.get("stt_cli",False) or d["stt_binding"]
  with database() as c:
@@ -529,11 +529,14 @@ def voice_job_status(task_id):
   return dict(VOICE_JOBS[task_id])
 
 class VoiceWorker:
- def __init__(self,kind):self.kind=kind;self.process=None;self.buffer=b"";self.lock=threading.RLock()
+ def __init__(self,kind,model=None):self.kind=kind;self.model=Path(model) if model else None;self.process=None;self.buffer=b"";self.lock=threading.RLock()
  def start(self):
   if self.process is not None and self.process.poll() is None:return
   if self.kind=="stt":args=[str(ROOT/"venv/bin/python"),str(Path(__file__).with_name("jarvis_whisper.py")),str(MODELS/"stt/ggml-base.bin"),"--worker"]
-  else:args=[str(ROOT/"bin/piper"),"-m",str(MODELS/"tts/pt_PT-tugao-medium.onnx"),"--json-input","-q"]
+  else:
+   model=self.model or MODELS/"tts/pt_PT-tugao-medium.onnx"
+   if not model.is_file():raise RuntimeError("Modelo de voz indisponível: "+model.name)
+   args=[str(ROOT/"bin/piper"),"-m",str(model),"--json-input","-q"]
   ROOT.mkdir(parents=True,exist_ok=True)
   with (ROOT/(self.kind+"-worker.log")).open("ab") as log:self.process=subprocess.Popen(args,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=log,bufsize=0)
   self.buffer=b""
@@ -569,9 +572,63 @@ class VoiceWorker:
    self.process=None
   self.buffer=b""
 STT_WORKER=VoiceWorker("stt")
-TTS_WORKER=VoiceWorker("tts")
+TTS_WORKER=VoiceWorker("tts",MODELS/"tts/pt_PT-tugao-medium.onnx")
+TTS_EN_WORKER=VoiceWorker("tts",MODELS/"tts/en_GB-northern_english_male-medium.onnx")
+DEFAULT_ENGLISH_TERMS=(
+ "Mr. Richard","Mr Richard","Richard","Travis","GitHub","Google","YouTube","WhatsApp","Cloudflare Pages",
+ "Cloudflare Workers","Cloudflare","JavaScript","WordPress","Gmail","Search Console","Workers AI","OpenAI",
+ "ChatGPT","Claude","Grok","Gemini","Python","Node.js","Node","Linux","Ubuntu","Android","Telegram",
+ "Remote Desktop Commander","Piper","Whisper","Llama","Ollama","WorkManager","SEO","AI","API","URL","HTML","CSS","Git"
+)
+def pronunciation_terms():
+ terms=list(DEFAULT_ENGLISH_TERMS)
+ path=ROOT/"pronunciation-lexicon.json"
+ try:
+  data=json.loads(path.read_text(encoding="utf-8"))
+  custom=data.get("englishTerms",[]) if isinstance(data,dict) else []
+  terms.extend(str(x).strip() for x in custom if str(x).strip())
+ except (OSError,ValueError,TypeError):pass
+ return sorted(set(terms),key=len,reverse=True)
+def speech_segments(text):
+ text=clean(text)
+ terms=pronunciation_terms()
+ if not terms:return [("pt",text)]
+ pattern=re.compile(r"(?<![\wÀ-ÿ])("+"|".join(re.escape(term) for term in terms)+r")(?![\wÀ-ÿ])",re.I)
+ rows=[];pos=0
+ for match in pattern.finditer(text):
+  if match.start()>pos:rows.append(("pt",text[pos:match.start()]))
+  rows.append(("en",match.group(0)));pos=match.end()
+ if pos<len(text):rows.append(("pt",text[pos:]))
+ merged=[]
+ for lang,part in rows:
+  if not part:continue
+  if merged and merged[-1][0]==lang:merged[-1]=(lang,merged[-1][1]+part)
+  else:merged.append((lang,part))
+ return merged or [("pt",text)]
+def portuguese_pronunciation_fallback(text):
+ replacements={"Mr. Richard":"Míster Ríchard","Mr Richard":"Míster Ríchard","Richard":"Ríchard","GitHub":"Guít Râb","YouTube":"Iú Tiúb","WhatsApp":"Uótsap","Cloudflare":"Cláud Flér","JavaScript":"Djáva Script","WordPress":"Uârd Press","Gmail":"Djí meil"}
+ out=text
+ for source,target in replacements.items():out=re.sub(r"\b"+re.escape(source)+r"\b",target,out,flags=re.I)
+ return out
+def _merge_wavs(paths,out):
+ params=None;chunks=[]
+ for path in paths:
+  with wave.open(str(path),"rb") as wav:
+   current=(wav.getnchannels(),wav.getsampwidth(),wav.getframerate(),wav.getcomptype(),wav.getcompname())
+   if params is None:params=current
+   elif current!=params:raise RuntimeError("Vozes com formatos WAV incompatíveis")
+   chunks.append(wav.readframes(wav.getnframes()))
+ channels,width,rate,comptype,compname=params
+ pause=b"\0"*int(rate*.045)*channels*width
+ with wave.open(str(out),"wb") as wav:
+  wav.setnchannels(channels);wav.setsampwidth(width);wav.setframerate(rate);wav.setcomptype(comptype,compname)
+  for i,chunk in enumerate(chunks):
+   if i:wav.writeframes(pause)
+   wav.writeframes(chunk)
 def warm_voice():
- for worker in [STT_WORKER,TTS_WORKER]:
+ workers=[STT_WORKER,TTS_WORKER]
+ if TTS_EN_WORKER.model and TTS_EN_WORKER.model.is_file():workers.append(TTS_EN_WORKER)
+ for worker in workers:
   try:
    with worker.lock:worker.start()
   except Exception as exc:event("executions",{"voice_warmup_error":worker.kind+": "+clean(str(exc))[:180]})
@@ -593,13 +650,25 @@ def transcribe(audio):
  return text
 def speak(text):
  if not str(text).strip() or len(text)>3000:raise ValueError("Resposta vazia ou demasiado longa")
- start=time.monotonic()
+ start=time.monotonic();raw=clean(text);segments=speech_segments(raw)
  with tempfile.TemporaryDirectory(prefix="jarvis-tts-") as tmp:
-  out=Path(tmp)/"speech.wav"
-  reported=TTS_WORKER.request({"text":clean(text),"output_file":str(out)})
-  if reported!=str(out):raise RuntimeError("Piper devolveu um ficheiro inesperado")
+  tmp=Path(tmp);parts=[]
+  bilingual=TTS_EN_WORKER.model is not None and TTS_EN_WORKER.model.is_file() and any(lang=="en" for lang,_ in segments)
+  if not bilingual:
+   out=tmp/"speech.wav";spoken=portuguese_pronunciation_fallback(raw)
+   reported=TTS_WORKER.request({"text":spoken,"output_file":str(out)})
+   if reported!=str(out):raise RuntimeError("Piper devolveu um ficheiro inesperado")
+  else:
+   for index,(lang,part) in enumerate(segments):
+    if not part.strip():continue
+    out_part=tmp/f"part-{index:02d}.wav";worker=TTS_EN_WORKER if lang=="en" else TTS_WORKER
+    reported=worker.request({"text":part,"output_file":str(out_part)})
+    if reported!=str(out_part):raise RuntimeError("Piper devolveu um ficheiro inesperado")
+    parts.append(out_part)
+   if not parts:raise RuntimeError("A segmentação da voz ficou vazia")
+   out=tmp/"speech.wav";_merge_wavs(parts,out)
   audio=out.read_bytes()
- event("executions",{"stage":"tts","latency_ms":int((time.monotonic()-start)*1000)})
+ event("executions",{"stage":"tts","latency_ms":int((time.monotonic()-start)*1000),"bilingual":bilingual,"segments":len(segments)})
  return audio
 def centro_activity():
  token=(Path.home()/".centro-server/token").read_text().strip()
@@ -713,7 +782,7 @@ def main():
    threading.Thread(target=warm_voice,daemon=True).start()
    try:ThreadingHTTPServer(("127.0.0.1",8770),Handler).serve_forever()
    finally:
-    STT_WORKER.stop();TTS_WORKER.stop()
+    STT_WORKER.stop();TTS_WORKER.stop();TTS_EN_WORKER.stop()
  elif a.action=="doctor":print(json.dumps(doctor(),indent=2,ensure_ascii=False))
  elif a.action=="ask":print(json.dumps(route(a.text),ensure_ascii=False))
  elif a.action=="llm-start":llm_start(a.text or "small")
