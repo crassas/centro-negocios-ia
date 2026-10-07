@@ -86,7 +86,7 @@ for(const token of [
 
 
 for(const token of [
-  'TRAVIS · ADAPTIVE 3D · LOCAL',
+  'TRAVIS · REAL FACE · LOCAL',
   'new THREE.ConeGeometry(1.7,8.2,48,1,true)',
   'new THREE.ConeGeometry(1.45,6.8,48,1,true)',
   'return .62;',
