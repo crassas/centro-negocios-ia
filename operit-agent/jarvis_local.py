@@ -280,6 +280,22 @@ def execute(tool,args):
   with database() as c:return [dict(zip(["id","title","due","status"],r)) for r in c.execute("SELECT id,title,due,status FROM tasks WHERE status='pendente' ORDER BY id LIMIT 30")]
  if tool=="laya_status":return http("http://127.0.0.1:18790/health")
  if tool=="laya_decide":return http("http://127.0.0.1:18790/v1/systemone",{"state":clean(args["text"]),"questions":{"route":{"type":"choice","instructions":"Escolhe a ferramenta.","criteria":{"git":"Git","status":"estado da estação","reasoning":"análise"}}},"model":"multilingual"},timeout=120)
+ if tool=="expert_query":
+  prompt=clean(args.get("text") or "")
+  if not prompt:raise ValueError("Pedido expert vazio")
+  try:
+   token=(Path.home()/".centro-server/token").read_text().strip()
+   expert_prompt=("És o agente especialista do Travis. Analisa com profundidade, mas responde de forma operacional e curta em português de Portugal. "
+                  "Não alteres ficheiros nem executes acções destrutivas. Se o pedido implicar execução, indica a melhor próxima acção. Pedido: "+prompt)
+   task={"id":"travis-expert-"+secrets.token_hex(8),"action":"claude_query","target":"local","args":{"prompt":expert_prompt}}
+   req=urllib.request.Request("http://127.0.0.1:8765/execute",data=json.dumps(task).encode(),headers={"Content-Type":"application/json","Authorization":"Bearer "+token})
+   with urllib.request.urlopen(req,timeout=150) as response:data=json.load(response)
+   result=data.get("result",{})
+   answer=clean(result.get("stdout","")).strip()
+   if result.get("exitCode")==0 and answer:return answer[:5000]
+  except Exception as exc:
+   event("executions",{"expert_fallback":clean(str(exc))[:180]})
+  return infer(prompt)
  if tool=="repo_review":
   if args.get("target") not in PROJECTS:raise ValueError("Indica o projecto a analisar")
   target=PROJECTS[args["target"]]

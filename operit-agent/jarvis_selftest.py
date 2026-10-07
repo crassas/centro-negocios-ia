@@ -93,10 +93,14 @@ class Tests(unittest.TestCase):
   connection=http.client.HTTPConnection("127.0.0.1",server.server_port,timeout=3)
   try:
    with patch.object(j,"transcribe",return_value="estás aí?") as transcription,patch.object(j,"route",side_effect=AssertionError("reasoning during transcription")):
-    connection.request("POST","/transcribe",body=b"audio",headers={"Host":"127.0.0.1:8770","X-Jarvis-Key":j.KEY,"Content-Type":"audio/webm"})
+    connection.request("POST","/transcribe",body=b"audio",headers={"Host":"127.0.0.1:8770","Origin":"http://127.0.0.1:8770","Content-Type":"audio/webm"})
     response=connection.getresponse();self.assertEqual(response.status,200)
     self.assertEqual(json.loads(response.read()),{"ok":True,"text":"estás aí?"});transcription.assert_called_once_with(b"audio")
   finally:connection.close();server.shutdown();server.server_close();thread.join()
+ def test_expert_requests_route_to_large_agent_capability(self):
+  tool,args=j.classify("Analisa a fundo a melhor arquitectura para este sistema")
+  self.assertEqual(tool,"expert_query");self.assertIn("text",args)
+  self.assertIn("expert_query",j.travis_core.CAPABILITIES)
  def test_rank_requests_are_not_availability_checks(self):
   for text in ["verifica as posições da Pentehouse","vê o ranking da Pentehouse","posição no Google da Pentehouse"]:
    self.assertEqual(j.classify(text)[0],"search_positions")

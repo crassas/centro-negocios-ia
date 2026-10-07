@@ -462,3 +462,25 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
   border-color:rgba(89,202,232,.14);
   box-shadow:none
 }
+
+
+/* V11 — holographic wordmark, facial detail first. */
+.travis-title h1{
+  -webkit-text-stroke:.65px rgba(145,238,255,.68);
+  background:
+    repeating-linear-gradient(
+      180deg,
+      rgba(228,253,255,.96) 0 1px,
+      rgba(76,218,255,.72) 1px 2px,
+      rgba(20,112,166,.24) 2px 4px
+    ),
+    linear-gradient(180deg,#dffcff 0%,#58dcff 46%,#168fd5 100%);
+  -webkit-background-clip:text;
+  background-clip:text;
+  opacity:.92;
+}
+.travis-title h1::before{opacity:.20}
+.travis-title h1::after{opacity:.11}
+.travis-hud[data-form="face"] .travis-title h1{
+  filter:drop-shadow(0 0 5px rgba(93,224,255,.24)) drop-shadow(0 0 14px rgba(25,136,203,.10));
+}

@@ -350,24 +350,14 @@ if (!hud || !launcher || !canvas) {
     faceRoot=new THREE.Group();
     faceRoot.visible=false;
 
-    const neckGeo=new THREE.CylinderGeometry(.42,.60,1.28,48,12,true);
+    const neckGeo=new THREE.CylinderGeometry(.32,.48,1.02,56,8,true);
     const neckMat=hologramShader();
     neckMat.uniforms.uColor.value.setRGB(.025,.46,.92);
-    neckMat.uniforms.uOpacity.value=.075;
+    neckMat.uniforms.uOpacity.value=.024;
     const neck=new THREE.Mesh(neckGeo,neckMat);
-    neck.position.set(0,-1.70,-.10);
+    neck.position.set(0,-1.56,-.12);
     markBloom(neck);
     faceRoot.add(neck);
-
-    const neckWire=markBloom(new THREE.LineSegments(
-      new THREE.WireframeGeometry(neckGeo),
-      new THREE.LineBasicMaterial({
-        color:0x5fdfff,transparent:true,opacity:.10,
-        blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
-      })
-    ));
-    neckWire.position.copy(neck.position);
-    faceRoot.add(neckWire);
 
 
 
@@ -419,7 +409,7 @@ if (!hud || !launcher || !canvas) {
       const wire=markBloom(new THREE.LineSegments(
         new THREE.WireframeGeometry(head.geometry),
         new THREE.LineBasicMaterial({
-          color:0x58cce8,transparent:true,opacity:.048,
+          color:0x58cce8,transparent:true,opacity:.030,
           blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
         })
       ));
@@ -437,7 +427,7 @@ if (!hud || !launcher || !canvas) {
       const pg=new THREE.BufferGeometry();
       pg.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
       const points=markBloom(new THREE.Points(pg,new THREE.PointsMaterial({
-        color:0x8defff,size:.008,transparent:true,opacity:.11,
+        color:0x8defff,size:.007,transparent:true,opacity:.070,
         blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
       })));
       points.scale.setScalar(1.012);
@@ -459,6 +449,17 @@ if (!hud || !launcher || !canvas) {
           o.position.sub(center);
           pivot.add(o);
         });
+        if (iris) {
+          const pupil=iris.clone();
+          pupil.name='TravisFace_Pupil_'+label;
+          pupil.material=new THREE.MeshBasicMaterial({
+            color:0x01070b,transparent:true,opacity:.92,depthWrite:false,toneMapped:false
+          });
+          pupil.scale.multiplyScalar(.34);
+          pupil.position.z+=.004;
+          pupil.renderOrder=8;
+          pivot.add(pupil);
+        }
         realFaceModel.add(pivot);
         faceEyeGroups.push(pivot);
       };
@@ -491,7 +492,7 @@ if (!hud || !launcher || !canvas) {
         new THREE.Vector3(0,-.585,.80),
         new THREE.Vector3(.12,-.575,.79),
         new THREE.Vector3(.27,-.54,.74)
-      ],0x9af4ff,.30);
+      ],0x9af4ff,.075);
       faceMouthLower.renderOrder=6;
       realFaceModel.add(faceMouthLower);
 
@@ -798,7 +799,7 @@ if (!hud || !launcher || !canvas) {
       if (opened && session===voiceSession) {
         voiceBusy=false;
         setState('ready','Estou aqui.');
-        scheduleListening(session,320);
+        scheduleListening(session,180);
       }
     };
 
@@ -814,25 +815,16 @@ if (!hud || !launcher || !canvas) {
     voiceRequestController=controller;
 
     try {
-      setState('thinking','A transcrever a tua voz…');
-      const transcript=await localJson('/transcribe',{
+      setState('thinking','A perceber…');
+      const answer=await localJson('/listen',{
         body:blob,
         type:mime||'application/octet-stream',
         signal:controller.signal
       });
       if (!opened || session!==voiceSession) return;
 
-      const text=String(transcript.text||'').trim();
+      const text=String(answer.text||'').trim();
       if (!text) throw new Error('Não consegui perceber a voz.');
-      setState('thinking','Ouvi: '+text.slice(0,82));
-
-      const answer=await localJson('/jarvis',{
-        body:{text},
-        type:'application/json',
-        signal:controller.signal
-      });
-      if (!opened || session!==voiceSession) return;
-
       const reply=String(answer.reply||'').trim();
       if (!reply) throw new Error('O Travis devolveu uma resposta vazia.');
       setState('speaking',reply.slice(0,96));
@@ -903,7 +895,7 @@ if (!hud || !launcher || !canvas) {
         if (valid) handleVoiceBlob(blob,mime,session);
         else if (opened && session===voiceSession) {
           setState('ready','Não ouvi voz.');
-          scheduleListening(session,500);
+          scheduleListening(session,300);
         }
       };
 
@@ -1358,7 +1350,7 @@ if (!hud || !launcher || !canvas) {
       arr[4]=node.group.position.y*.84;
       arr[5]=node.group.position.z-.1;
       commandLines[i].geometry.attributes.position.needsUpdate=true;
-      commandLines[i].material.opacity=.22*commandAmount;
+      commandLines[i].material.opacity=0;
     });
   }
 

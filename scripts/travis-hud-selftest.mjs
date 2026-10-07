@@ -11,8 +11,8 @@ for(const token of [
   'id="travis-hud"',
   'id="travis-three-canvas"',
   'id="travis-loading"',
-  './travis-hud.css?v=marble1',
-  './travis-3d.mjs?v=marble1',
+  './travis-hud.css?v=facefinal1',
+  './travis-3d.mjs?v=facefinal1',
   'type="importmap"',
   '"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"'
 ]){
@@ -86,7 +86,7 @@ for(const token of [
 
 
 for(const token of [
-  'TRAVIS V8',
+  'TRAVIS · ADAPTIVE 3D · LOCAL',
   'new THREE.ConeGeometry(1.7,8.2,48,1,true)',
   'new THREE.ConeGeometry(1.45,6.8,48,1,true)',
   'return .62;',
@@ -99,8 +99,7 @@ for(const token of [
 
 for(const token of [
   "LOCAL_TRAVIS_BASE",
-  "localJson('/transcribe'",
-  "localJson('/jarvis'",
+  "localJson('/listen'",
   "localFetch('/speak'",
   'navigator.mediaDevices.getUserMedia',
   'new MediaRecorder',
@@ -183,8 +182,19 @@ for(const forbidden of ['class="travis-reticle"','class="travis-telemetry left"'
   if(html.includes(forbidden)) throw new Error('HUD genérico ainda presente: '+forbidden);
 }
 
+
+for(const token of [
+  "localJson('/listen'",
+  "scheduleListening(session,180)",
+  "commandLines[i].material.opacity=0",
+  "TravisFace_Pupil_",
+  "new THREE.CylinderGeometry(.32,.48,1.02"
+]){
+  if(!scene.includes(token)) throw new Error('V11 face/voice refinement em falta: '+token);
+}
+
 if(glb.size < 500000) throw new Error('GLB Travis demasiado pequeno: '+glb.size);
 if(!css.includes('#travis-three-canvas')) throw new Error('Canvas 3D CSS em falta.');
-if(!sw.includes('travis-3d.mjs?v=marble1') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
+if(!sw.includes('travis-3d.mjs?v=facefinal1') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
 
 console.log('TRAVIS REAL 3D SELFTEST OK',glb.size,'bytes');
