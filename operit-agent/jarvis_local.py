@@ -170,6 +170,19 @@ def _research_query(text):
  q=clean(text).strip()
  q=re.sub(r"(?i)^(?:travis|jarvis)?[\\s,:;.!?-]*(?:pesquisa na internet|procura na internet|pesquisa na web|procura na web|vai pesquisar|pesquisa sobre|procura sobre|pesquisa por)[\\s,:;.!?-]*","",q).strip()
  return q or clean(text).strip()
+def _large_reasoner(prompt,timeout=90):
+ try:
+  token=(Path.home()/".centro-server/token").read_text().strip()
+  task={"id":"travis-research-"+secrets.token_hex(8),"action":"claude_query","target":"local","args":{"prompt":clean(prompt)[:12000]}}
+  req=urllib.request.Request("http://127.0.0.1:8765/execute",data=json.dumps(task).encode(),headers={"Content-Type":"application/json","Authorization":"Bearer "+token})
+  with urllib.request.urlopen(req,timeout=timeout) as response:data=json.load(response)
+  result=data.get("result",{})
+  answer=clean(result.get("stdout","")).strip()
+  if result.get("exitCode")==0 and answer:
+   answer=re.sub(r"^FALLBACK WORKERS AI[^\\n]*\\n","",answer).strip()
+   return answer[:5000]
+ except Exception as exc:event("executions",{"large_reasoner_fallback":type(exc).__name__})
+ return ""
 def web_research(query):
  q=_research_query(query)
  data=travis_web.research_context(q,max_sources=3,max_chars_each=1600)
@@ -185,12 +198,14 @@ def web_research(query):
  system=("Responde em português de Portugal. Usa prioritariamente as fontes fornecidas e não inventes factos ausentes. "
          "Para afirmações factuais importantes, indica [1], [2] ou [3]. Se as fontes discordarem, diz isso. "
          "Distingue informação confirmada de inferência. Responde directamente e com detalhe suficiente.")
- try:
-  answer=infer(prompt,system=system,max_tokens_override=180)
- except Exception as exc:
-  event("executions",{"web_research_inference_fallback":type(exc).__name__})
-  titles=[str(x.get("pageTitle") or x.get("title") or x.get("url")) for x in sources]
-  answer="Encontrei fontes actuais, mas o sintetizador não concluiu. Fontes: "+"; ".join(titles[:3])+"."
+ answer=_large_reasoner(system+"\\n\\n"+prompt)
+ if not answer:
+  try:
+   answer=infer(prompt,system=system,max_tokens_override=180)
+  except Exception as exc:
+   event("executions",{"web_research_inference_fallback":type(exc).__name__})
+   titles=[str(x.get("pageTitle") or x.get("title") or x.get("url")) for x in sources]
+   answer="Encontrei fontes actuais, mas o sintetizador não concluiu. Fontes: "+"; ".join(titles[:3])+"."
  return {"query":q,"answer":answer,"sources":[{"title":x.get("pageTitle") or x.get("title"),"url":x.get("url"),"snippet":x.get("snippet","")} for x in sources],"provider":data.get("provider","none"),"verifiedOnline":True}
 def plan_change(target,prompt,context):
  system = ('És um planeador de alterações. Devolve apenas JSON com summary e edits. '
