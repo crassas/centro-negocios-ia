@@ -124,10 +124,11 @@ def inference_lock(timeout):
  if not LOCK.acquire(timeout=timeout):raise RuntimeError("O modelo está ocupado. Tenta novamente dentro de alguns segundos.")
  try:yield
  finally:LOCK.release()
-def conversation_cloud(text):
+def conversation_cloud(text,system="",max_words=45):
  # Existing Workers AI deployment. Never selects an alternative paid provider.
- policy=TRAVIS_GENOME.inference_policy(False)
- payload={"question":"Responde directamente em português de Portugal, sem gerúndio, sem Markdown e no máximo 45 palavras. Não afirmes executar acções. "+clean(policy["systemSuffix"])+" Pedido: "+clean(text)[:3400],"context":{}}
+ instruction=clean(system).strip() or "Responde directamente em português de Portugal, sem gerúndio. Não afirmes executar acções que não executaste."
+ max_words=max(20,min(int(max_words),220))
+ payload={"question":instruction[:2200]+"\\nLimite aproximado: "+str(max_words)+" palavras.\\n\\nPedido/contexto:\\n"+clean(text)[:5600],"context":{}}
  request=urllib.request.Request("https://centro-negocios-ai.travisthejarvis.workers.dev/api/assist",data=json.dumps(payload,ensure_ascii=False).encode(),headers={"Content-Type":"application/json","User-Agent":"Centro-Server/1.0"})
  start=time.monotonic()
  with urllib.request.urlopen(request,timeout=8) as response:result=json.load(response)
@@ -139,12 +140,13 @@ def conversation_cloud(text):
 
 def infer(text,system="És o Travis, assistente do Centro de Negócios. Responde em português de Portugal, sem gerúndio, em uma ou duas frases curtas. Responde logo ao pedido, sem introduções. /no_think",json_mode=False,schema=None,max_tokens_override=None):
  INFERENCE_INFO.value={"provider":"local","model":""}
+ policy=TRAVIS_GENOME.inference_policy(json_mode)
+ system=system+"\\n"+policy["systemSuffix"]
  mode=ROOT/"conversation-mode"
  if not json_mode and mode.is_file() and mode.read_text().strip()=="hybrid":
-  try:return conversation_cloud(text)
+  cloud_words=160 if max_tokens_override is not None and int(max_tokens_override)>100 else 45
+  try:return conversation_cloud(text,system=system,max_words=cloud_words)
   except Exception as exc:event("executions",{"conversation_fallback":"local","reason":type(exc).__name__})
- policy=TRAVIS_GENOME.inference_policy(json_mode)
- system=system+"\n"+policy["systemSuffix"]
  with inference_lock(240 if json_mode else 2):
   try:http("http://127.0.0.1:8771/health",timeout=2)
   except Exception:
