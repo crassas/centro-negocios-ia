@@ -1,5 +1,6 @@
-import { createBacklight } from './travis-atmosphere.mjs?v=cinema3';
-import { createFaceRig } from './travis-face-rig.mjs';
+import { createSpeechFace } from './travis-speech-face.mjs';
+import { createBacklight } from './travis-atmosphere.mjs?v=visemes1';
+import { createFaceRig } from './travis-face-rig.mjs?v=visemes1';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -50,6 +51,7 @@ if (!hud || !launcher || !canvas) {
   let realFaceModel=null;
   let realFaceHead=null;
   let faceRig=null;
+  let speechFace=null,speechFacePromise=null,voiceFinishTimer=0,voiceOutputDelay=null;
   let realFaceIris=[];
   let realFaceBaseMaterial=null;
   let realFaceReady=false;
@@ -419,13 +421,37 @@ if (!hud || !launcher || !canvas) {
         throw new Error('Escala do busto inválida.');
       }
       realFaceBaseMaterial=new THREE.MeshPhysicalMaterial({
-        color:0x496369,metalness:.12,roughness:.34,
-        envMapIntensity:.3,specularIntensity:.65,
-        clearcoat:.16,clearcoatRoughness:.28,
+        color:0xffffff,vertexColors:true,metalness:0,roughness:.68,
+        envMapIntensity:.035,specularIntensity:.24,
+        clearcoat:0,clearcoatRoughness:.8,
         transparent:false,opacity:1,
         emissive:new THREE.Color(0x021017),emissiveIntensity:.018,
         side:THREE.FrontSide,depthWrite:true
       });
+      // Fine surface variation breaks up the synthetic, polished appearance.
+      const pores=new Uint8Array(256*256*4);let seed=719;
+      for(let i=0;i<pores.length;i+=4){seed=(Math.imul(seed,1664525)+1013904223)>>>0;const v=112+(seed>>>27);pores[i]=pores[i+1]=pores[i+2]=v;pores[i+3]=255;}
+      const skinDetail=new THREE.DataTexture(pores,256,256,THREE.RGBAFormat);
+      skinDetail.wrapS=skinDetail.wrapT=THREE.RepeatWrapping;skinDetail.repeat.set(9,9);skinDetail.needsUpdate=true;
+      realFaceBaseMaterial.bumpMap=skinDetail;realFaceBaseMaterial.bumpScale=.00065;
+      const skinPositions=head.geometry.attributes.position;
+      const skinColours=new Float32Array(skinPositions.count*3);
+      const skin=new THREE.Color(0x756458),lipTint=new THREE.Color(0x654039),cheekTint=new THREE.Color(0x86594b),browTint=new THREE.Color(0x292623);
+      const shade=new THREE.Color();
+      const patch=(x,y,cx,cy,rx,ry)=>Math.exp(-(((x-cx)/rx)**2+((y-cy)/ry)**2)*2);
+      for(let i=0;i<skinPositions.count;i++){
+        const x=skinPositions.getX(i),y=skinPositions.getY(i),z=skinPositions.getZ(i);
+        const front=THREE.MathUtils.smoothstep(z,.38,.51);
+        shade.copy(skin);
+        shade.lerp(cheekTint,patch(Math.abs(x),y,.23,.49,.17,.14)*front*.24);
+        shade.lerp(lipTint,patch(x,y,0,.334,.13,.027)*front*.7);
+        const arch=.75-Math.abs(Math.abs(x)-.15)*.28;
+        const brow=patch(Math.abs(x),y,.158,arch,.115,.018)*front;
+        shade.lerp(browTint,brow*(.65+.15*Math.sin(x*1250+y*310)));
+        shade.multiplyScalar(1+.018*Math.sin(x*319+y*187)*Math.sin(z*251));
+        shade.toArray(skinColours,i*3);
+      }
+      head.geometry.setAttribute('color',new THREE.BufferAttribute(skinColours,3));
       head.material=realFaceBaseMaterial;
       // The anatomical surface writes depth and never belongs to the bloom layer.
       head.layers.disable(BLOOM_LAYER);
@@ -636,6 +662,10 @@ if (!hud || !launcher || !canvas) {
 
   function stopVoiceConversation() {
     voiceSession++;
+    clearTimeout(voiceFinishTimer);
+    speechFace?.reset();
+    try { voiceOutputDelay?.disconnect(); } catch {}
+    voiceOutputDelay=null;
     voiceBusy=false;
     clearVoiceTimers();
     voiceRequestController?.abort();
@@ -668,12 +698,23 @@ if (!hud || !launcher || !canvas) {
     const decoded=await ac.decodeAudioData(arrayBuffer.slice(0));
     if (!opened || session!==voiceSession) return;
 
+    if(!speechFacePromise) speechFacePromise=createSpeechFace(ac).then(driver=>speechFace=driver).catch(error=>{
+      hud.dataset.lipSync='audio-envelope-fallback';console.warn('Travis visemes unavailable',error.message);return null;
+    });
+    await speechFacePromise;
+    if (!opened || session!==voiceSession) return;
+    speechFace?.reset();
+    hud.dataset.lipSync=speechFace?'audio-visemes':'audio-envelope-fallback';
     const analyser=ac.createAnalyser();
     analyser.fftSize=1024;
     const samples=new Float32Array(analyser.fftSize);
     const source=ac.createBufferSource();
     source.buffer=decoded;
-    source.connect(analyser);
+    if(speechFace){
+      source.connect(speechFace.node);
+      voiceOutputDelay=ac.createDelay(.2);voiceOutputDelay.delayTime.value=.08;
+      source.connect(voiceOutputDelay);voiceOutputDelay.connect(analyser);
+    } else source.connect(analyser);
     analyser.connect(ac.destination);
     voiceSource=source;
 
@@ -691,7 +732,10 @@ if (!hud || !launcher || !canvas) {
       voicePlaybackRaf=requestAnimationFrame(meter);
     };
 
-    source.onended=()=>{
+    source.onended=()=>{voiceFinishTimer=setTimeout(()=>{
+      speechFace?.reset();
+      try {voiceOutputDelay?.disconnect();} catch {}
+      voiceOutputDelay=null;
       if (voicePlaybackRaf) cancelAnimationFrame(voicePlaybackRaf);
       voicePlaybackRaf=0;
       try { analyser.disconnect(); } catch {}
@@ -703,7 +747,7 @@ if (!hud || !launcher || !canvas) {
         setState('ready','Estou aqui.');
         scheduleListening(session,180);
       }
-    };
+    },speechFace?85:0);};
 
     meter();
     source.start();
@@ -1119,9 +1163,9 @@ if (!hud || !launcher || !canvas) {
   }
 
   function createLights() {
-    const faceKey=new THREE.DirectionalLight(0xd9eeed,3.7);
+    const faceKey=new THREE.DirectionalLight(0xd9eeed,2.4);
     faceKey.position.set(-3.8,1.0,2.0);scene.add(faceKey);
-    const faceFill=new THREE.DirectionalLight(0x8db8bd,.42);
+    const faceFill=new THREE.DirectionalLight(0x8db8bd,.22);
     faceFill.position.set(2,-1.2,1.5);scene.add(faceFill);
     scene.add(new THREE.HemisphereLight(0xa2c5cd,0x010203,.12));
 
@@ -1573,7 +1617,8 @@ if (!hud || !launcher || !canvas) {
     }
 
     cinematicBacklight?.update(reducedMotion?0:t,state==='speaking'?speechLevel:0);
-    faceRig?.update(state==='speaking'?speechLevel:0);
+    if(state==='speaking')speechFace?.update(dt);
+    faceRig?.update(state==='speaking'?speechLevel:0,state==='speaking'?speechFace?.weights:null);
     hud.dataset.mouthLevel=speechLevel.toFixed(2);
     if (faceRoot) {
       const faceMix=Math.max(.001,formBlend.face);
@@ -1597,7 +1642,7 @@ if (!hud || !launcher || !canvas) {
         avatarMaterial.uniforms.uTime.value=t;
         avatarMaterial.uniforms.uGlitch.value=0;
         avatarMaterial.uniforms.uState.value=state==='speaking'?.95:state==='listening'?.78:state==='thinking'?.62:.24;
-        avatarMaterial.uniforms.uOpacity.value=.16+(state==='speaking'?speechLevel*.02:state==='listening'?.012:0);
+        avatarMaterial.uniforms.uOpacity.value=.055+(state==='speaking'?speechLevel*.02:state==='listening'?.012:0);
       }
     }
 
@@ -1801,7 +1846,7 @@ if (!hud || !launcher || !canvas) {
     setState,
     diagnostics() {
       return {ready,opened,state,renderedFrames,contextLost:renderer?.getContext().isContextLost(),form:activeForm,faceAsset:hud.dataset.faceAsset,
-        baseBloom:realFaceHead?.layers.isEnabled(BLOOM_LAYER),
+        baseBloom:realFaceHead?.layers.isEnabled(BLOOM_LAYER),lipSync:speechFace?.diagnostics()||{engine:hud.dataset.lipSync},
         meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,
         recording:voiceRecorder?.state,pendingTasks:[...pendingVoiceTasks.keys()],lastTaskResult:lastVoiceTaskResult,voiceMetrics:voiceMetrics.map(m=>({...m}))};
     },
