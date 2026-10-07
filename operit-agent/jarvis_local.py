@@ -87,8 +87,10 @@ def project(text):
  return None
 def classify(text):
  base=travis_core.classify_local_intent(text,project(text))
+ web=travis_web_tools.classify(text)
+ if web and web[0]=="web_open" and base[0] in {"local_llm","git_status"}:return web
  if base[0]!="local_llm":return base
- return travis_web_tools.classify(text) or base
+ return web or base
 def safe_path(target,path):
  if target not in PROJECTS:raise ValueError("Projeto desconhecido")
  rel=Path(path)
