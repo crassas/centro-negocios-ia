@@ -6,7 +6,7 @@ import travis_core as t
 class Tests(unittest.TestCase):
  def test_registry(self):
   s=t.registry_snapshot();self.assertTrue(s["localFirst"]);self.assertFalse(s["paidFallback"])
-  required={"presence","open_youtube","open_target","web_search","web_research","local_file_search","omni_status","smart_query","stop","system_status","repo_access","site_check","git_status","git_diff","create_task","task_list","neural_status","neural_recall","neural_consolidate","genome_status","genome_compare","genome_activate","laya_status","laya_decide","local_llm","repo_change","server_status","station_status","station_doctor","agents_status","autonomy_selftest","fault_timeout","fault_laya_recovery","git_pull","git_access_matrix","jarvis_query","claude_query","manus_status","manus_query"}
+  required={"presence","open_youtube","open_target","browser_task","web_search","web_research","local_file_search","omni_status","smart_query","stop","system_status","repo_access","site_check","git_status","git_diff","create_task","task_list","neural_status","neural_recall","neural_consolidate","genome_status","genome_compare","genome_activate","laya_status","laya_decide","local_llm","repo_change","server_status","station_status","station_doctor","agents_status","autonomy_selftest","fault_timeout","fault_laya_recovery","git_pull","git_access_matrix","jarvis_query","claude_query","manus_status","manus_query"}
   self.assertTrue(required.issubset(t.CAPABILITIES))
  def test_contracts(self):
   c=t.RuntimeContext.create(source="test",project_id="centro");e=t.EventEnvelope.create("TEST",c,priority="HIGH");self.assertEqual(e.correlation_id,c.correlation_id)
@@ -17,6 +17,7 @@ class Tests(unittest.TestCase):
   self.assertEqual(t.classify_local_intent("Travis, estás aí?")[0],"presence")
   self.assertEqual(t.classify_local_intent("Travis, abre o YouTube por favor")[0],"open_youtube")
   self.assertEqual(t.classify_local_intent("Travis, abre o Gmail")[0],"open_target")
+  self.assertEqual(t.classify_local_intent("Travis, abre o Google e pesquisa gatos")[0],"browser_task")
   self.assertEqual(t.classify_local_intent("Pesquisa na internet as notícias de hoje")[0],"web_research")
   self.assertEqual(t.classify_local_intent("Procura nos meus ficheiros contrato Beatriz")[0],"local_file_search")
   self.assertEqual(t.classify_local_intent("Que acesso tens?")[0],"omni_status")
