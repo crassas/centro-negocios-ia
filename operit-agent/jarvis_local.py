@@ -173,35 +173,35 @@ def _research_query(text):
 def _large_reasoner(prompt,timeout=90):
  try:
   token=(Path.home()/".centro-server/token").read_text().strip()
-  task={"id":"travis-research-"+secrets.token_hex(8),"action":"claude_query","target":"local","args":{"prompt":clean(prompt)[:12000]}}
+  task={"id":"travis-research-"+secrets.token_hex(8),"action":"claude_query","target":"local","args":{"prompt":clean(prompt)[:3500]}}
   req=urllib.request.Request("http://127.0.0.1:8765/execute",data=json.dumps(task).encode(),headers={"Content-Type":"application/json","Authorization":"Bearer "+token})
   with urllib.request.urlopen(req,timeout=timeout) as response:data=json.load(response)
   result=data.get("result",{})
   answer=clean(result.get("stdout","")).strip()
   if result.get("exitCode")==0 and answer:
-   answer=re.sub(r"^FALLBACK WORKERS AI[^\\n]*\\n","",answer).strip()
+   answer=re.sub(r"^FALLBACK WORKERS AI[^\n]*\n","",answer).strip()
    return answer[:5000]
  except Exception as exc:event("executions",{"large_reasoner_fallback":type(exc).__name__})
  return ""
 def web_research(query):
  q=_research_query(query)
- data=travis_web.research_context(q,max_sources=3,max_chars_each=1600)
+ data=travis_web.research_context(q,max_sources=2,max_chars_each=700)
  sources=data.get("sources") or []
  if not sources:
   answer=infer(q+"\\nA pesquisa externa não devolveu fontes. Responde com conhecimento local e identifica claramente o que não foi confirmado online.",max_tokens_override=220)
   return {"query":q,"answer":answer,"sources":[],"provider":data.get("provider","none"),"verifiedOnline":False}
  blocks=[]
  for index,item in enumerate(sources,1):
-  evidence=(item.get("text") or item.get("snippet") or "")[:1400]
+  evidence=(item.get("text") or item.get("snippet") or "")[:650]
   blocks.append(f"[{index}] {item.get('pageTitle') or item.get('title') or item.get('url')}\\nURL: {item.get('url')}\\n{evidence}")
  prompt="Pergunta do utilizador: "+q+"\\n\\nFontes recolhidas agora:\\n\\n"+"\\n\\n".join(blocks)
- system=("Responde em português de Portugal. Usa prioritariamente as fontes fornecidas e não inventes factos ausentes. "
-         "Para afirmações factuais importantes, indica [1], [2] ou [3]. Se as fontes discordarem, diz isso. "
-         "Distingue informação confirmada de inferência. Responde directamente e com detalhe suficiente.")
+ system=("Responde em português de Portugal usando apenas a evidência fornecida. Não substituas a evidência por memória do modelo. "
+         "Se um título ou excerto oficial indicar versão, data, nome ou estado, trata-o como observação. "
+         "Cita [1] ou [2] nas afirmações factuais e diz claramente quando a evidência não basta.")
  answer=_large_reasoner(system+"\\n\\n"+prompt)
  if not answer:
   try:
-   answer=infer(prompt,system=system,max_tokens_override=180)
+   answer=infer(prompt,system=system,max_tokens_override=140)
   except Exception as exc:
    event("executions",{"web_research_inference_fallback":type(exc).__name__})
    titles=[str(x.get("pageTitle") or x.get("title") or x.get("url")) for x in sources]
