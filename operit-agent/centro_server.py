@@ -1128,6 +1128,7 @@ def action_repo_change(task):
     prompt = str((task.get("args") or {}).get("prompt") or "").strip()
     target = str(task.get("target") or "")
     started = time.time()
+    expert_executor = (task.get("args") or {}).get("executor") == "expert"
 
     if target not in REPOS:
         return {"exitCode": 2, "stdout": "", "stderr": "Projecto não permitido.", "durationMs": 0}
@@ -1196,7 +1197,7 @@ def action_repo_change(task):
         # O plano estruturado é a via principal. Se o modelo inventar um bloco
         # "search" que não existe exactamente no ficheiro, o validador rejeita-o
         # sem escrever nada e damos ao planeador até duas rondas de correcção.
-        for plan_round in range(3):
+        for plan_round in range(0 if expert_executor else 3):
             report_task_progress(
                 task,
                 "planning",
@@ -1290,7 +1291,7 @@ def action_repo_change(task):
                 except Exception as exc:
                     openclaw_error = str(exc)
 
-        if plan is None and (HOME / ".centro-jarvis/planner_enabled").exists():
+        if plan is None and (HOME / ".centro-jarvis/planner_enabled").exists() and not expert_executor:
             return {"exitCode":67,"stdout":"","stderr":"Planeador local indisponível; cloud desactivada. " + planner_error[-1000:],"durationMs":int((time.time()-started)*1000)}
 
         if plan is None:
@@ -1406,6 +1407,19 @@ def action_repo_change(task):
 
         sha = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree, timeout=30)["stdout"].strip()
         stat = run_cmd(["git", "show", "--stat", "--oneline", "--format=%h %s", "HEAD"], cwd=worktree, timeout=60)
+
+        if (task.get("args") or {}).get("localOnly"):
+            report_task_progress(task, "completed", f"Alteração validada localmente · commit {sha[:8]}.")
+            return {
+                "exitCode": 0,
+                "stdout": (
+                    "ALTERAÇÃO VALIDADA LOCALMENTE\n"
+                    f"Projecto: {target}\nCommit: {sha}\nBranch local: {branch}\n"
+                    "Publicação: não solicitada; commit preservado na branch local.\n"
+                    + "Verificações: " + "; ".join(checks) + "\n" + stat["stdout"][-3500:]
+                ),
+                "stderr": "", "durationMs": int((time.time()-started)*1000),
+            }
 
         report_task_progress(task, "publishing", "Commit validado. A publicar no repositório remoto.")
         push_main = run_cmd_retry(

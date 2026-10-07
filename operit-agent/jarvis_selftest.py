@@ -95,11 +95,32 @@ class Tests(unittest.TestCase):
    with patch.object(j,"transcribe",return_value="estás aí?") as transcription,patch.object(j,"route",side_effect=AssertionError("reasoning during transcription")):
     connection.request("POST","/transcribe",body=b"audio",headers={"Host":"127.0.0.1:8770","Origin":"http://127.0.0.1:8770","Content-Type":"audio/webm"})
     response=connection.getresponse();self.assertEqual(response.status,200)
-    self.assertEqual(json.loads(response.read()),{"ok":True,"text":"estás aí?"});transcription.assert_called_once_with(b"audio")
+    result=json.loads(response.read());self.assertEqual({k:result[k] for k in ["ok","text"]},{"ok":True,"text":"estás aí?"});self.assertGreaterEqual(result["durationMs"],0);transcription.assert_called_once_with(b"audio")
   finally:connection.close();server.shutdown();server.server_close();thread.join()
  def test_voice_wake_tolerates_common_whisper_variant(self):
   self.assertEqual(j.classify("Travisse-se, estás aí?")[0],"presence")
   self.assertEqual(j.classify("Travis, estás aqui?")[0],"presence")
+ def test_long_agent_work_returns_pending_before_result(self):
+  gate=threading.Event();finished=threading.Event()
+  def route(text):
+   gate.wait(2);finished.set();return {"ok":True,"reply":"Prova do agente","tool":"repo_review"}
+  with patch.object(j,"route",side_effect=route):
+   answer=j.start_voice_job("Travis, analisa a Pentehouse")
+   self.assertEqual(answer["completionStatus"],"pending")
+   self.assertIn(j.voice_job_status(answer["taskId"])["status"],{"queued","running"})
+   gate.set();self.assertTrue(finished.wait(2))
+   for unused in range(100):
+    if j.voice_job_status(answer["taskId"])["status"]=="completed":break
+    threading.Event().wait(.01)
+   self.assertEqual(j.voice_job_status(answer["taskId"])["answer"]["reply"],"Prova do agente")
+ def test_single_wake_word_does_not_invoke_local_model(self):
+  for text in ["Travis","Travis!","Jarvis","Travisse"]:
+   tool,args=j.classify(text)
+   self.assertEqual(tool,"presence",text)
+ def test_project_execution_selects_real_executor(self):
+  tool,args=j.classify("Travis, vai ao repo da Pentehouse, vê o que falta e trata disso.")
+  self.assertEqual(tool,"repo_change")
+  self.assertEqual(args["target"],"pentehouse")
  def test_expert_requests_route_to_large_agent_capability(self):
   tool,args=j.classify("Analisa a fundo a melhor arquitectura para este sistema")
   self.assertEqual(tool,"expert_query");self.assertIn("text",args)

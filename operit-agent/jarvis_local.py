@@ -7,6 +7,8 @@ from contextlib import contextmanager
 from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import travis_core
+import travis_gmail
+from concurrent.futures import ThreadPoolExecutor
 ROOT=Path.home()/".centro-jarvis"
 MODELS=Path.home()/".centro-models"
 REPOS=Path.home()/"repos"
@@ -194,6 +196,24 @@ def search_positions(target):
   reply+=("; ".join(str(r["query"])+": "+str(round(r["position"],1)).replace(".",",") for r in rows[:5])) if rows else "Não há consultas com posição registada neste período."
   return {"available":True,"source":"Google Search Console","siteUrl":site,"startDate":str(start),"endDate":str(end),"rows":rows[:20],"reply":reply}
  except Exception:return {"available":False,"exitCode":78,"requiresConnection":True,"reply":"Não consegui consultar o Search Console do Centro. Verifica a autorização em Ligar dados do Centro. Não tenho posições confirmadas para te indicar."}
+def cockpit_snapshot():
+ def fetch_part(path):
+  try:
+   token=(Path.home()/".centro-server/token").read_text().strip()
+   req=urllib.request.Request("http://127.0.0.1:8765"+path,headers={"Authorization":"Bearer "+token})
+   with urllib.request.urlopen(req,timeout=3) as response:return json.load(response)
+  except Exception:return {"ok":False}
+ with ThreadPoolExecutor(max_workers=2) as pool:
+  status,history=list(pool.map(fetch_part,["/status","/history"]))
+ with VOICE_JOB_LOCK:
+  jobs=[{k:j.get(k) for k in ["taskId","status","tool","createdAt","error"]} for j in VOICE_JOBS.values()]
+ rows=history.get("history",[]) if isinstance(history,dict) else []
+ return {"ok":True,"observedAt":time.time(),"centro":bool(status.get("ok")),
+         "agent":bool(status.get("ok") and status.get("agent",{}).get("active")),
+         "memory":status.get("travisCore",{}),"jobs":jobs[-8:],
+         "history":[{k:clean(row.get(k,""))[:240] for k in ["timestamp","action","target","exitCode","durationMs","error","correlationId"]} for row in rows[-8:]],
+         "gmail":travis_gmail.status()}
+
 def projects_status(target=None):
  names={"best-pizza":"Best Pizza","pentehouse":"Pentehouse","2-irmaos":"Dois Irmãos","beatriz":"Beatriz","centro":"Centro"}
  rows=[]
@@ -228,6 +248,8 @@ def projects_status(target=None):
  parts.append("A disponibilidade dos sites publicados não foi testada nesta consulta.")
  return {"projects":rows,"business":business,"reply":" ".join(parts)}
 def execute(tool,args):
+ if tool=="gmail_inbox":return travis_gmail.inbox()
+ if tool=="agent_sessions":return cockpit_snapshot()
  if tool=="projects_status":return projects_status(args.get("target"))
  if tool=="presence":return "Sou o Travis. Estou aqui. Podes pedir o estado do Centro, verificar os sites ou indicar o projecto e o que queres fazer."
  if tool=="open_youtube":return {"action":"open_url","url":"https://www.youtube.com/"}
@@ -360,7 +382,7 @@ def execute(tool,args):
    pauses=[json.loads(r[0]) for r in c.execute("SELECT data FROM facts ORDER BY id DESC LIMIT 50")]
   if any(p.get("paused_project")==args["target"] and p.get("day")==datetime.datetime.now(ZoneInfo("Europe/Lisbon")).date().isoformat() for p in pauses):raise ValueError("Projecto pausado até ao fim do dia")
   token=(Path.home()/".centro-server/token").read_text().strip()
-  task={"id":"jarvis-"+secrets.token_hex(8),"action":"repo_change","target":PROJECTS[args["target"]],"args":{"prompt":clean(args["prompt"]),"localOnly":True}}
+  task={"id":"jarvis-"+secrets.token_hex(8),"action":"repo_change","target":PROJECTS[args["target"]],"args":{"prompt":clean(args["prompt"]),"localOnly":not bool(re.search(r"\b(publica|publicar|publicacao)\b",norm(args["prompt"]))),"executor":"expert"}}
   req=urllib.request.Request("http://127.0.0.1:8765/execute",data=json.dumps(task).encode(),headers={"Content-Type":"application/json","Authorization":"Bearer "+token})
   with urllib.request.urlopen(req,timeout=850) as response:data=json.load(response)
   result=data.get("result",{})
@@ -381,7 +403,9 @@ def route(text,context=None):
   args["text"]=args["text"][:4400]
  outcome=TRAVIS_UTEF.execute(tool,args,lambda:execute(tool,args),runtime)
  result=outcome["result"]
- if tool=="system_status":reply="O Centro está "+("activo" if result["centro"].get("ok") else "indisponível")+". Memória disponível: "+str(result["ram_available_mb"])+" megabytes."
+ if tool=="gmail_inbox":reply="Últimos emails da caixa de entrada: "+"; ".join(m["subject"] for m in result["messages"]) if result["messages"] else "A caixa de entrada está vazia."
+ elif tool=="agent_sessions":reply="O agente está "+("ativo" if result["agent"] else "sem ligação confirmada")+". "+str(sum(j["status"] in {"running","queued"} for j in result["jobs"]))+" pedidos de voz em curso. Podes ver as execuções na Sala de Comando."
+ elif tool=="system_status":reply="O Centro está "+("activo" if result["centro"].get("ok") else "indisponível")+". Memória disponível: "+str(result["ram_available_mb"])+" megabytes."
  elif tool in {"search_positions","projects_status"}:reply=result["reply"]
  elif tool=="site_check":reply=" ".join(k+": "+("online." if v["online"] is True else "não consegui confirmar a disponibilidade. "+v.get("error","")) for k,v in result.items())
  elif tool=="create_task":reply="Tarefa criada: "+result["title"]
@@ -389,10 +413,62 @@ def route(text,context=None):
  elif tool=="neural_status":reply="Cérebro local: "+str(result["neurons"])+" neurónios e "+str(result["synapses"])+" sinapses."
  elif tool=="neural_recall":reply=("Encontrei "+str(len(result))+" neurónios relevantes. "+". ".join(x["title"] for x in result[:5])) if result else "Não encontrei memória confirmada relevante."
  elif tool=="neural_consolidate":reply="Ciclo neural concluído: "+str(result["neurons"])+" neurónios, "+str(result["synapses"])+" sinapses, "+str(result["decayed"])+" ligações ajustadas."
+ elif tool=="repo_change":
+  commit=re.search(r"Commit: ([0-9a-f]{40})",str(result))
+  if commit:
+   published=re.search(r"Publicado em: ([^\n]+)",str(result))
+   reply="Alteração validada no projecto "+str(args.get("target"))+". Commit "+commit.group(1)[:8]+". "+("Publicado em "+published.group(1)+"." if published else "O commit está preservado numa branch local; não foi publicado.")
+  else:reply=str(result)
  elif tool=="stop":reply="Parei."
  else:reply=result if isinstance(result,str) else json.dumps(result,ensure_ascii=False)
  event("tool_events",{"tool":tool,"ok":True,"duration_ms":int((time.monotonic()-start)*1000),"correlation_id":outcome["correlationId"],"completion_status":outcome["completionStatus"]})
- return {"ok":True,"provider":"local","tool":tool,"result":result,"reply":clean(reply)[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"]}
+ return {"ok":True,"provider":"local","tool":tool,"result":result,"reply":clean(reply)[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"],"durationMs":int((time.monotonic()-start)*1000)}
+
+VOICE_JOBS={}
+VOICE_JOB_LOCK=threading.Lock()
+def save_voice_jobs_locked():
+ ROOT.mkdir(parents=True,exist_ok=True)
+ tmp=ROOT/"voice-jobs.tmp"
+ tmp.write_text(json.dumps(VOICE_JOBS,ensure_ascii=False));tmp.chmod(0o600)
+ tmp.replace(ROOT/"voice-jobs.json")
+def restore_voice_jobs():
+ try:
+  data=json.loads((ROOT/"voice-jobs.json").read_text())
+  if not isinstance(data,dict):return
+  with VOICE_JOB_LOCK:
+   for key,value in list(data.items())[-22:]:
+    if not re.fullmatch(r"travis-job-[0-9a-f]{16}",key) or not isinstance(value,dict):continue
+    if value.get("status") in {"queued","running"}:value.update(status="failed",error="O Travis reiniciou antes de confirmar o resultado. O Centro pode ainda ter a tarefa; não vou repetir a execução sem verificar.")
+    VOICE_JOBS[key]=value
+   save_voice_jobs_locked()
+ except (OSError,ValueError):pass
+
+def start_voice_job(text):
+ tool,args=classify(text)
+ with VOICE_JOB_LOCK:
+  if sum(j["status"] in {"queued","running"} for j in VOICE_JOBS.values())>=2:
+   raise RuntimeError("Já estou a tratar de dois pedidos; tenta quando um terminar.")
+  task_id="travis-job-"+secrets.token_hex(8)
+  VOICE_JOBS[task_id]={"taskId":task_id,"status":"queued","tool":tool,"createdAt":time.time()}
+  completed=[k for k,j in VOICE_JOBS.items() if j["status"] in {"completed","failed"}]
+  for key in completed[:-20]:VOICE_JOBS.pop(key,None)
+  save_voice_jobs_locked()
+ def work():
+  with VOICE_JOB_LOCK:VOICE_JOBS[task_id]["status"]="running"
+  try:
+   result=route(text)
+   with VOICE_JOB_LOCK:VOICE_JOBS[task_id].update(status="completed",answer=result);save_voice_jobs_locked()
+  except Exception as exc:
+   with VOICE_JOB_LOCK:VOICE_JOBS[task_id].update(status="failed",error=clean(str(exc))[:500]);save_voice_jobs_locked()
+ thread=threading.Thread(target=work,daemon=True,name=task_id);thread.start()
+ reply="Vou analisar o pedido com o agente especialista e aviso-te aqui quando terminar."
+ if tool=="repo_change":reply="Vou tratar desse projecto com o agente de código, validar o resultado e dar-te as provas aqui."
+ return {"ok":True,"taskId":task_id,"tool":tool,"reply":reply,"completionStatus":"pending"}
+def voice_job_status(task_id):
+ with VOICE_JOB_LOCK:
+  if task_id not in VOICE_JOBS:raise ValueError("Tarefa de voz não encontrada.")
+  return dict(VOICE_JOBS[task_id])
+
 class VoiceWorker:
  def __init__(self,kind):self.kind=kind;self.process=None;self.buffer=b"";self.lock=threading.RLock()
  def start(self):
@@ -472,7 +548,9 @@ def centro_activity():
  with urllib.request.urlopen(request,timeout=5) as response:return json.load(response)
 TRUSTED_WEB_ORIGINS={"https://crassas.github.io"}
 LOCAL_ORIGINS={"http://127.0.0.1:8770","http://localhost:8770"}
-WEB_VOICE_ENDPOINTS={"/health","/transcribe","/listen","/jarvis","/speak"}
+WEB_VOICE_ENDPOINTS={"/health","/transcribe","/listen","/jarvis","/speak","/voice-task"}
+
+LOCAL_COCKPIT_ENDPOINTS={"/cockpit","/gmail/configure","/gmail/start","/gmail/inbox","/gmail/disconnect"}
 
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args):pass
@@ -515,14 +593,20 @@ class Handler(BaseHTTPRequestHandler):
  def do_GET(self):
   if not self.host_ok():return self.send({"error":"Host recusado"},code=403)
   path=urllib.parse.urlparse(self.path).path
+  if path=="/gmail/callback":
+   try:
+    travis_gmail.callback(urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query))
+    page='<meta charset="utf-8"><title>Travis · Gmail</title><p>Conta autorizada. Volta ao Travis e abre o Gmail para confirmar a leitura.</p><a href="/?travis=1">Voltar ao Travis</a>'
+   except Exception:page='<meta charset="utf-8"><p>A autorização não foi concluída. Volta ao Travis e tenta novamente.</p><a href="/?travis=1">Voltar ao Travis</a>'
+   return self.send(page.encode(),"text/html; charset=utf-8")
   if path=="/health":return self.send({"ok":True,"service":"jarvis","cloud":False,"busy":ACTIVE_REQUESTS>0,"ui":CENTRO_UI.is_dir()})
-  if path=="/voice":return self.send(Path(__file__).with_name("jarvis_voice.html").read_text().replace("__KEY__",KEY).encode(),"text/html; charset=utf-8")
+  if path=="/voice":return self.send(Path(__file__).with_name("jarvis_voice.html").read_text().replace("__KEY__","").encode(),"text/html; charset=utf-8")
   return self.serve_ui_file(self.path)
  def do_POST(self):
   global ACTIVE_REQUESTS
   origin=self.headers.get("Origin","")
   path=urllib.parse.urlparse(self.path).path
-  local_browser_ok=origin in LOCAL_ORIGINS and path in WEB_VOICE_ENDPOINTS
+  local_browser_ok=origin in LOCAL_ORIGINS and path in (WEB_VOICE_ENDPOINTS|LOCAL_COCKPIT_ENDPOINTS)
   local_key_ok=origin in LOCAL_ORIGINS and self.headers.get("X-Jarvis-Key")==KEY
   trusted_web_ok=origin in TRUSTED_WEB_ORIGINS and path in WEB_VOICE_ENDPOINTS
   if not self.host_ok() or not (local_browser_ok or local_key_ok or trusted_web_ok):return self.send({"error":"Pedido recusado"},code=403)
@@ -532,13 +616,24 @@ class Handler(BaseHTTPRequestHandler):
    if not 0<n<=12*1024*1024:raise ValueError("Tamanho inválido")
    data=self.rfile.read(n)
    if self.path in {"/transcribe","/listen"}:
+    stage_start=time.monotonic()
     text=transcribe(data)
-    if self.path=="/transcribe":return self.send({"ok":True,"text":text})
+    if self.path=="/transcribe":return self.send({"ok":True,"text":text,"durationMs":int((time.monotonic()-stage_start)*1000)})
     return self.send({"text":text,**route(text)})
    obj=json.loads(data)
+   if path=="/cockpit":return self.send(cockpit_snapshot())
+   if path=="/gmail/configure":return self.send(travis_gmail.configure(obj))
+   if path=="/gmail/start":return self.send(travis_gmail.start())
+   if path=="/gmail/inbox":return self.send(travis_gmail.inbox())
+   if path=="/gmail/disconnect":return self.send(travis_gmail.disconnect())
    if self.path=="/connect-gsc":return self.send(connect_gsc(obj.get("token")))
    if self.path=="/activity":return self.send(centro_activity())
-   if self.path=="/jarvis":return self.send(route(obj.get("text","")))
+   if self.path=="/voice-task":return self.send(voice_job_status(str(obj.get("taskId",""))))
+   if self.path=="/jarvis":
+    text=obj.get("text","")
+    if not isinstance(text,str) or not text.strip() or len(text)>8000:raise ValueError("Pedido inválido")
+    if classify(text)[0] in {"expert_query","repo_review","repo_change"}:return self.send(start_voice_job(text))
+    return self.send(route(text))
    if self.path=="/speak":return self.send(speak(obj["text"]),"audio/wav")
    raise ValueError("Endpoint desconhecido")
   except (BrokenPipeError,ConnectionResetError):
@@ -550,6 +645,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
  ap=argparse.ArgumentParser();ap.add_argument("action",choices=["serve","doctor","ask","llm-start","llm-stop"]);ap.add_argument("text",nargs="?",default="");a=ap.parse_args();ROOT.mkdir(parents=True,exist_ok=True)
  if a.action=="serve":
+  restore_voice_jobs()
   with (ROOT/"router.lock").open("w") as lock:
    fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
    def shutdown(*args):raise SystemExit(0)

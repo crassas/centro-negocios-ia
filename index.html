@@ -18,11 +18,11 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
   <script src="./agent-room.js?v=jarvis-1" defer></script>
   <script src="./app.js?v=travis-panel-2" defer></script>
-  <link rel="stylesheet" href="./travis-hud.css?v=status-fix-1">
+  <link rel="stylesheet" href="./travis-hud.css?v=immersive1">
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
-  <script type="module" src="./travis-3d.mjs?v=faceclean1"></script>
+  <script type="module" src="./travis-3d.mjs?v=immersive1"></script>
 </head>
 <body>
 <div class="shell">
@@ -640,9 +640,29 @@
     <div id="travis-status-state" class="travis-status-state">EM ESPERA</div>
   </div>
 
-  <div class="travis-version">TRAVIS · REAL FACE · LOCAL</div>
+  <div class="travis-operations">
+    <span id="travis-link-state">A VERIFICAR CENTRO</span>
+    <button id="travis-room-toggle" type="button" aria-expanded="false" aria-controls="travis-room">Sala de comando</button>
+    <button id="travis-pause" type="button">Pausar voz</button>
+  </div>
+  <aside id="travis-room" class="travis-room" aria-label="Sala de comando">
+    <header><small>OPERAÇÕES / AO VIVO</small><h2>O teu centro.</h2><p id="travis-observed">À espera de ligação.</p></header>
+    <div class="travis-system"><strong id="travis-agent-state">A verificar agente</strong><span id="travis-memory-state">A verificar memória</span></div>
+    <section><h3>Pedidos de voz</h3><ul id="travis-jobs"></ul></section>
+    <section><h3>Execuções dos agentes</h3><ul id="travis-history"></ul><button id="travis-open-agents" type="button">Abrir sala dos agentes ↗</button></section>
+    <section><h3>Gmail</h3><p id="travis-gmail-note">Acesso à tua caixa de entrada com autorização Google.</p>
+      <button id="travis-gmail-connect" type="button">Ligar Gmail</button>
+      <button id="travis-gmail-disconnect" type="button">Desligar conta</button>
+      <div id="travis-gmail-setup" hidden><p>Google Cloud → Gmail API ativa → credenciais OAuth → aplicação para computador → transferir JSON.</p><label>Selecionar JSON OAuth<input id="travis-gmail-file" type="file" accept="application/json,.json"></label></div>
+      <ul id="travis-mail-list"></ul>
+    </section>
+    <section><h3>Conversa</h3><ul id="travis-transcript" aria-live="polite"></ul></section>
+  </aside>
+  <form id="travis-command" class="travis-command"><label class="sr-only" for="travis-command-text">Pedido ao Travis</label><input id="travis-command-text" placeholder="Fala comigo ou escreve um pedido…" maxlength="8000" autocomplete="off"><button type="submit" aria-label="Enviar pedido">↗</button></form>
+  <div class="travis-version">TRAVIS · QUASI NORTE</div>
 </section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="./travis-cockpit.mjs?v=immersive1"></script>
 </body>
 </html>
 

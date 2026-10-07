@@ -4,6 +4,7 @@
   --trv-white:#eefcff;
   --trv-muted:#7393a5;
 }
+
 body.travis-hud-open{overflow:hidden;background:#02060a}
 
 /* Compact launcher only; the hologram itself is real 3D. */
@@ -492,6 +493,54 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
   filter:drop-shadow(0 0 4px rgba(77,190,218,.18));
 }
 
+/* Operational cockpit: real data, readable controls, no decorative telemetry. */
+.travis-operations{position:absolute;z-index:12;top:104px;left:clamp(20px,4vw,56px);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.travis-operations span{font-size:9px;letter-spacing:.14em;color:#adbac5;margin-right:12px}
+.travis-operations span[data-online="true"]{color:#a4d8c2}
+.travis-operations span[data-online="false"]{color:#e9b69e}
+.travis-hud .travis-operations button,.travis-room button{color:#dce9f0;background:#111e29;border:1px solid #344550;border-radius:5px;padding:10px 14px;font:500 12px/1.4 inherit;cursor:pointer;min-height:40px}
+.travis-room{position:absolute;z-index:11;right:28px;top:160px;bottom:160px;width:min(350px,33vw);padding:24px;background:#09121ef5;border:1px solid #283d4e;border-radius:8px;overflow:auto;overscroll-behavior:contain;touch-action:pan-y;display:none;color:#d5e2eb;box-sizing:border-box;box-shadow:0 20px 70px #0008}
+.travis-hud.room-open .travis-room{display:block}
+.travis-room header small{font-size:9px;letter-spacing:.2em;color:#83a4bb}
+.travis-room h2{font-size:26px;letter-spacing:-.04em;margin:10px 0}
+.travis-room p,.travis-system span{font-size:11px;line-height:1.65;color:#9cb0c0}
+.travis-room section{border-top:1px solid #263441;margin-top:22px;padding-top:14px}
+.travis-room h3{font-size:11px;letter-spacing:.09em;text-transform:uppercase;margin:0 0 12px;color:#c4d6e4}
+.travis-room ul{list-style:none;padding:0;margin:0 0 12px}
+.travis-room li{padding:9px 0;border-bottom:1px solid #ffffff08}
+.travis-room li strong,.travis-room li span,.travis-system strong,.travis-system span{display:block;overflow-wrap:anywhere}
+.travis-room li strong{font-size:12px;line-height:1.5;font-weight:550}
+.travis-room li span{font-size:11px;color:#90a5b6;line-height:1.6;margin-top:3px}
+.travis-room li[data-kind="running"] span{color:#bdddf1}
+.travis-room li[data-kind="failed"] span{color:#edb8a5}
+.travis-room li[data-kind="completed"] span{color:#9fc6b1}
+.travis-room input{max-width:100%;font-size:12px;margin:12px 0}
+.travis-room button{margin:4px 0}
+#travis-transcript{max-height:200px;overflow:auto;touch-action:pan-y}
+.travis-command{position:absolute;z-index:12;bottom:calc(18px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:min(520px,88vw);display:flex;border:1px solid #415565;background:#0d1722;border-radius:8px;padding:4px}
+.travis-command input{flex:1;min-width:0;background:none;border:0;color:#eff7fc;padding:12px;font:14px/1.5 system-ui}
+.travis-command button{width:44px;border:0;border-radius:5px;background:#b6ccda;color:#0a1520;font-size:24px;cursor:pointer}
+.travis-command input::placeholder{color:#95a9b9}
+.travis-command .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.travis-hud .travis-status{bottom:calc(86px + env(safe-area-inset-bottom))}
+.travis-hud .travis-version,.travis-hud .travis-hint{display:none}
+.travis-hud .travis-title{top:66%}
+.travis-hud .travis-title h1{font-size:clamp(38px,5vw,68px)}
+.travis-hud .travis-form-selector{top:76%}
+@media(max-width:700px){
+ .travis-operations{top:88px;left:20px;right:20px;gap:8px}
+ .travis-operations span{width:100%;font-size:8px}
+ .travis-hud .travis-operations button{font-size:11px;padding:7px 12px;min-height:38px}
+ .travis-room{top:172px;bottom:155px;left:16px;right:16px;width:auto;padding:20px;background:#09121e}
+ .travis-hud .travis-title,.travis-hud[data-form="face"] .travis-title{top:64%}
+ .travis-hud .travis-title h1{font-size:40px}
+ .travis-hud .travis-form-selector{top:73%;width:65vw}
+ .travis-hud .travis-form-selector button{height:32px}
+ .travis-hud .travis-status{bottom:calc(82px + env(safe-area-inset-bottom));width:88vw}
+ .travis-hud.room-open .travis-title,.travis-hud.room-open .travis-form-selector{visibility:hidden}
+}
+@media(max-height:650px){.travis-hud .travis-title{display:none}.travis-hud .travis-form-selector{top:auto;bottom:145px}.travis-room{top:155px;bottom:155px}}
+
 /* Travis entry: clear text button, above mobile navigation. */
 #travis-launcher{
  width:auto;height:44px;padding:0 18px;border-radius:12px;
@@ -505,3 +554,5 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
 @media(max-width:600px){
  #travis-launcher{right:14px;bottom:calc(86px + env(safe-area-inset-bottom));width:auto;height:44px}
 }
+
+.travis-hud .travis-command input{background:transparent!important;color:#eff7fc!important;border:0!important;font-size:16px!important}

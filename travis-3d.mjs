@@ -1,3 +1,4 @@
+import { createFaceRig } from './travis-face-rig.mjs';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -43,23 +44,19 @@ if (!hud || !launcher || !canvas) {
   let model;
   let coreRoot;
   let faceRoot;
-  let orbRoot;
   let faceHit;
-  let orbHit;
-  let faceMouthLower;
   let faceEyeGroups=[];
   let realFaceModel=null;
   let realFaceHead=null;
+  let faceRig=null;
   let realFaceIris=[];
   let realFaceBaseMaterial=null;
   let realFaceReady=false;
-  let orbRings=[];
   let avatarMaterial;
-  let orbMaterial;
   let formPolicy='auto';
-  let activeForm='core';
-  const formBlend={core:1,face:0,orb:0};
-  const formTarget={core:1,face:0,orb:0};
+  let activeForm='face';
+  const formBlend={core:0,face:1};
+  const formTarget={core:0,face:1};
   let energyMesh;
   let glassMesh;
   let emblem;
@@ -77,6 +74,8 @@ if (!hud || !launcher || !canvas) {
   let commandLines = [];
   let coreHit;
   let ready = false;
+  let webglLost=false;
+  let renderedFrames=0;
   let opened = false;
   let commandsOpen = false;
   let state = 'idle';
@@ -115,8 +114,26 @@ if (!hud || !launcher || !canvas) {
   let voicePlaybackRaf=0;
   let micSourceNode=null;
   let micAnalyser=null;
+  let voiceSpeechEndedAt=0;
+  const voiceMetrics=[];
+  const pendingVoiceTasks=new Map();
+  let voiceTaskTimer=0;
+  let lastVoiceTaskResult=null;
+  try {
+    const saved=JSON.parse(localStorage.getItem('travis.voiceTasks')||'[]');
+    if(Array.isArray(saved))saved.slice(0,4).forEach(taskId=>{
+      if(/^travis-job-[0-9a-f]{16}$/.test(taskId))pendingVoiceTasks.set(taskId,{});
+    });
+  } catch {}
+  function persistVoiceTasks() {
+    try {localStorage.setItem('travis.voiceTasks',JSON.stringify([...pendingVoiceTasks.keys()]));} catch {}
+  }
 
   const BLOOM_LAYER = 1;
+  const bloomLayer=new THREE.Layers();bloomLayer.set(BLOOM_LAYER);
+  const bloomOccluder=new THREE.MeshBasicMaterial({color:0x000000,depthWrite:true});
+  const bloomRestore=new Map();
+
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
 
@@ -139,6 +156,7 @@ if (!hud || !launcher || !canvas) {
     if (next==='speaking' && previous!=='speaking') flashPower=1;
     if (next==='listening' && previous!=='listening') flashPower=Math.max(flashPower,.38);
     hud.dataset.state = next;
+    window.dispatchEvent(new CustomEvent('travis:state',{detail:{state:next,message}}));
     const [copy,label] = stateCopy[next] || stateCopy.ready;
     if (statusMessage) statusMessage.textContent = message || copy;
     if (statusState) statusState.textContent = label;
@@ -287,7 +305,7 @@ if (!hud || !launcher || !canvas) {
 
   function modeForState(next=state) {
     if (next==='listening' || next==='thinking' || next==='speaking') return 'face';
-    return 'core';
+    return 'face';
   }
 
   function syncFormButtons() {
@@ -304,7 +322,6 @@ if (!hud || !launcher || !canvas) {
     activeForm=form;
     formTarget.core=form==='core'?1:0;
     formTarget.face=form==='face'?1:0;
-    formTarget.orb=0;
     hud.dataset.form=form;
   }
 
@@ -345,231 +362,124 @@ if (!hud || !launcher || !canvas) {
     return holoLine(points,color,opacity,true);
   }
 
-  async function createFaceAvatar() {
-    faceRoot=new THREE.Group();
-    faceRoot.visible=false;
 
-
-    // Real CC0 head from Blender Studio Human Base Meshes.
-    try {
-      const loader=new GLTFLoader();
-      const gltf=await loader.loadAsync('./assets/travis/travis-face-realistic.glb?v=2');
-      realFaceModel=gltf.scene;
-      realFaceModel.name='TravisRealFace';
-      realFaceModel.rotation.set(0,0,0);
-      realFaceModel.position.set(0,.02,.03);
-
-      const head=realFaceModel.getObjectByName('TravisFace_Head');
-      const scleraL=realFaceModel.getObjectByName('TravisFace_Sclera_L');
-      const scleraR=realFaceModel.getObjectByName('TravisFace_Sclera_R');
-      const irisL=realFaceModel.getObjectByName('TravisFace_Iris_L');
-      const irisR=realFaceModel.getObjectByName('TravisFace_Iris_R');
-
-      if (!head) throw new Error('Malha facial em falta.');
-
-      realFaceBaseMaterial=new THREE.MeshPhysicalMaterial({
-        color:0x09151b,
-        metalness:.18,
-        roughness:.42,
-        clearcoat:.22,
-        clearcoatRoughness:.22,
-        transparent:true,
-        opacity:.96,
-        emissive:new THREE.Color(0x01090d),
-        emissiveIntensity:.02,
-        side:THREE.FrontSide,
-        depthWrite:true
-      });
-      head.material=realFaceBaseMaterial;
-      realFaceHead=head;
-
-      // A second shell gives the bright holographic Fresnel without washing out the facial volume.
-      const glowShell=new THREE.Mesh(head.geometry.clone(),hologramShader());
-      glowShell.name='TravisFace_HologramShell';
-      glowShell.material.uniforms.uColor.value.setRGB(.008,.18,.38);
-      glowShell.material.uniforms.uOpacity.value=.018;
-      glowShell.scale.setScalar(1.006);
-      glowShell.renderOrder=3;
-      markBloom(glowShell);
-      realFaceModel.add(glowShell);
-      avatarMaterial=glowShell.material;
-
-      // Fine wire topology over the physical face.
-      const wire=markBloom(new THREE.LineSegments(
-        new THREE.WireframeGeometry(head.geometry),
-        new THREE.LineBasicMaterial({
-          color:0x3e9fb8,transparent:true,opacity:.016,
-          blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
-        })
-      ));
-      wire.name='TravisFace_Wire';
-      wire.scale.setScalar(1.009);
-      wire.renderOrder=4;
-      realFaceModel.add(wire);
-
-      // Sparse vertices make the face read like the reference without becoming noisy.
-      const src=head.geometry.attributes.position;
-      const pts=[];
-      for(let i=0;i<src.count;i+=10){
-        pts.push(src.getX(i),src.getY(i),src.getZ(i));
-      }
-      const pg=new THREE.BufferGeometry();
-      pg.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
-      const points=markBloom(new THREE.Points(pg,new THREE.PointsMaterial({
-        color:0x6fc9dc,size:.005,transparent:true,opacity:.028,
-        blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
-      })));
-      points.scale.setScalar(1.012);
-      points.renderOrder=5;
-      realFaceModel.add(points);
-
-      const makeEyePivot=(sclera,iris,label)=>{
-        if(!sclera&&!iris)return;
-        const pair=[sclera,iris].filter(Boolean);
-        const box=new THREE.Box3();
-        pair.forEach(o=>box.expandByObject(o));
-        const center=new THREE.Vector3();
-        box.getCenter(center);
-        const pivot=new THREE.Group();
-        pivot.name='TravisFace_Eye_'+label;
-        pivot.position.copy(center);
-        pair.forEach(o=>{
-          realFaceModel.remove(o);
-          o.position.sub(center);
-          pivot.add(o);
-        });
-        if (iris) {
-          const pupil=iris.clone();
-          pupil.name='TravisFace_Pupil_'+label;
-          pupil.material=new THREE.MeshBasicMaterial({
-            color:0x01070b,transparent:true,opacity:.92,depthWrite:false,toneMapped:false
-          });
-          pupil.scale.multiplyScalar(.34);
-          pupil.position.z+=.004;
-          pupil.renderOrder=8;
-          pivot.add(pupil);
+  function faceShellShader() {
+    return new THREE.ShaderMaterial({
+      uniforms:{
+        uTime:{value:0},uColor:{value:new THREE.Color(.025,.48,.68)},
+        uOpacity:{value:.16},uState:{value:0},uGlitch:{value:0}
+      },
+      vertexShader:`
+        varying vec3 vNormalV;
+        varying vec3 vViewDir;
+        void main(){
+          vec4 mv=modelViewMatrix*vec4(position+normal*.002,1.0);
+          vNormalV=normalize(normalMatrix*normal);
+          vViewDir=normalize(-mv.xyz);
+          gl_Position=projectionMatrix*mv;
         }
-        realFaceModel.add(pivot);
-        faceEyeGroups.push(pivot);
-      };
-
-      [scleraL,scleraR].filter(Boolean).forEach(sclera=>{
-        sclera.material=new THREE.MeshPhysicalMaterial({
-          color:0x09151b,
-          metalness:.05,roughness:.22,
-          transparent:true,opacity:.88,
-          emissive:new THREE.Color(0x03141b),emissiveIntensity:.05,
-          depthWrite:false
-        });
-      });
-      [irisL,irisR].filter(Boolean).forEach(iris=>{
-        iris.material=new THREE.MeshBasicMaterial({
-          color:0x4cc4df,transparent:true,opacity:.56,
-          blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
-        });
-        markBloom(iris);
-        realFaceIris.push(iris);
-      });
-
-      makeEyePivot(scleraL,irisL,'L');
-      makeEyePivot(scleraR,irisR,'R');
-
-      // Subtle luminous mouth line, driven by the real voice envelope.
-      faceMouthLower=holoLine([
-        new THREE.Vector3(-.27,-.54,.74),
-        new THREE.Vector3(-.12,-.575,.79),
-        new THREE.Vector3(0,-.585,.80),
-        new THREE.Vector3(.12,-.575,.79),
-        new THREE.Vector3(.27,-.54,.74)
-      ],0x78dceb,.025);
-      faceMouthLower.renderOrder=6;
-      realFaceModel.add(faceMouthLower);
-
-      faceRoot.add(realFaceModel);
-      realFaceReady=true;
-    } catch(error) {
-      console.warn('Travis realistic face fallback:',error);
-      // Fallback is deliberately minimal; the normal path is the real GLB above.
-      const fallbackGeo=new THREE.SphereGeometry(1,40,32);
-      const pos=fallbackGeo.attributes.position;
-      const v=new THREE.Vector3();
-      for(let i=0;i<pos.count;i++){
-        v.fromBufferAttribute(pos,i);
-        v.x*=.86*(v.y<-.18?.89:1);
-        v.y*=1.16;
-        v.z*=.88;
-        pos.setXYZ(i,v.x,v.y,v.z);
-      }
-      fallbackGeo.computeVertexNormals();
-      avatarMaterial=hologramShader();
-      avatarMaterial.uniforms.uColor.value.setRGB(.045,.62,1.1);
-      avatarMaterial.uniforms.uOpacity.value=.13;
-      const fallback=new THREE.Mesh(fallbackGeo,avatarMaterial);
-      markBloom(fallback);
-      faceRoot.add(fallback);
-    }
-
-    faceHit=new THREE.Mesh(
-      new THREE.SphereGeometry(1.22,18,14),
-      new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false})
-    );
-    faceHit.scale.set(.88,1.16,.94);
-    faceHit.userData.core=true;
-    faceRoot.add(faceHit);
-
-    scene.add(faceRoot);
+      `,
+      fragmentShader:`
+        varying vec3 vNormalV;
+        varying vec3 vViewDir;
+        uniform vec3 uColor;
+        uniform float uOpacity;
+        uniform float uState;
+        void main(){
+          float edge=pow(1.0-clamp(dot(normalize(vNormalV),normalize(vViewDir)),0.0,1.0),4.0);
+          gl_FragColor=vec4(uColor*(.85+uState*.12),uOpacity*edge);
+        }
+      `,
+      transparent:true,blending:THREE.AdditiveBlending,
+      depthWrite:false,depthTest:true,side:THREE.FrontSide,toneMapped:false
+    });
   }
 
-  function createOrbAvatar() {
-    orbRoot=new THREE.Group();
-    orbRoot.visible=false;
-
-    orbMaterial=hologramShader();
-    orbMaterial.uniforms.uColor.value.setRGB(.04,.78,1.4);
-    orbMaterial.uniforms.uOpacity.value=.26;
-    const sphere=markBloom(new THREE.Mesh(new THREE.SphereGeometry(1.05,48,36),orbMaterial));
-    orbRoot.add(sphere);
-
-    const wire=markBloom(new THREE.LineSegments(
-      new THREE.WireframeGeometry(new THREE.IcosahedronGeometry(1.12,3)),
-      new THREE.LineBasicMaterial({
-        color:0x77eaff,transparent:true,opacity:.16,
-        blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
-      })
-    ));
-    orbRoot.add(wire);
-
-    for(let i=0;i<6;i++){
-      const mat=new THREE.MeshBasicMaterial({
-        color:i===4?0xff456d:0x64e8ff,
-        transparent:true,opacity:i===4?.12:.20,
-        blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
+  async function createFaceAvatar() {
+    faceRoot=new THREE.Group();
+    faceRoot.name='TravisAnatomicalPortrait';
+    faceRoot.visible=false;
+    hud.dataset.faceAsset='loading';
+    try {
+      const gltf=await new GLTFLoader().loadAsync('./assets/travis/travis-face-bust.glb?v=1');
+      realFaceModel=gltf.scene;
+      realFaceModel.name='TravisRealFace';
+      const head=realFaceModel.getObjectByName('TravisFace_Bust');
+      if (!head?.isMesh) throw new Error('Busto anatómico em falta.');
+      realFaceHead=head;
+      faceRig=createFaceRig(head.geometry);
+      hud.dataset.lipSync="audio-envelope";
+      const box=new THREE.Box3().setFromObject(realFaceModel);
+      const size=box.getSize(new THREE.Vector3());
+      const center=box.getCenter(new THREE.Vector3());
+      if (![size.x,size.y,size.z].every(Number.isFinite) ||
+          size.x<1 || size.x>4 || size.y<1 || size.y>4 || size.z<.2) {
+        throw new Error('Escala do busto inválida.');
+      }
+      realFaceBaseMaterial=new THREE.MeshPhysicalMaterial({
+        color:0x285a70,metalness:.04,roughness:.52,
+        envMapIntensity:.28,specularIntensity:.3,
+        clearcoat:.04,clearcoatRoughness:.4,
+        transparent:false,opacity:1,
+        emissive:new THREE.Color(0x021017),emissiveIntensity:.018,
+        side:THREE.FrontSide,depthWrite:true
       });
-      const ring=markBloom(new THREE.Mesh(new THREE.TorusGeometry(1.28+i*.16,.012,5,128),mat));
-      ring.rotation.x=.35+i*.22;
-      ring.rotation.y=i*.47;
-      ring.userData.speed=(i%2?1:-1)*(.12+i*.025);
-      orbRoot.add(ring);
-      orbRings.push(ring);
+      head.material=realFaceBaseMaterial;
+      // The anatomical surface writes depth and never belongs to the bloom layer.
+      head.layers.disable(BLOOM_LAYER);
+      const glowShell=new THREE.Mesh(head.geometry,faceShellShader());
+      glowShell.name='TravisFace_HologramShell';
+      glowShell.position.copy(head.position);
+      glowShell.quaternion.copy(head.quaternion);
+      glowShell.scale.copy(head.scale);
+      glowShell.renderOrder=3;
+      markBloom(glowShell);
+      head.parent.add(glowShell);
+      avatarMaterial=glowShell.material;
+
+      for(const label of ['L','R']) {
+        const sclera=realFaceModel.getObjectByName('TravisFace_Eye_'+label);
+        const iris=realFaceModel.getObjectByName('TravisFace_Iris_'+label);
+        const pupil=realFaceModel.getObjectByName('TravisFace_Pupil_'+label);
+        if(!sclera?.isMesh || !iris?.isMesh || !pupil?.isMesh) throw new Error('Olho anatómico incompleto: '+label);
+        sclera.material=new THREE.MeshPhysicalMaterial({
+          color:0x192f3c,roughness:.42,metalness:.02,envMapIntensity:.15,specularIntensity:.22,
+          clearcoat:.22,transparent:false,depthWrite:true
+        });
+        iris.material=new THREE.MeshPhysicalMaterial({
+          color:0x14536b,roughness:.38,metalness:.03,envMapIntensity:.16,specularIntensity:.3,
+          emissive:0x063744,emissiveIntensity:.06,depthWrite:true
+        });
+        pupil.material=new THREE.MeshPhysicalMaterial({
+          color:0x010509,roughness:.2,metalness:0,depthWrite:true
+        });
+        const eyeCenter=new THREE.Box3().setFromObject(sclera).getCenter(new THREE.Vector3());
+        realFaceModel.worldToLocal(eyeCenter);
+        const pivot=new THREE.Group();pivot.name='TravisFace_Gaze_'+label;
+        realFaceModel.add(pivot);pivot.position.copy(eyeCenter);
+        pivot.updateMatrixWorld(true);
+        [sclera,iris,pupil].forEach(mesh=>pivot.attach(mesh));
+        const glint=markBloom(new THREE.Mesh(new THREE.SphereGeometry(.0017,8,6),
+          new THREE.MeshBasicMaterial({color:0x68bdd4,toneMapped:false})));
+        glint.name='TravisFace_EyeAccent_'+label;
+        glint.position.set(-.009,.012,.053);pivot.add(glint);
+        faceEyeGroups.push(pivot);realFaceIris.push(iris);
+      }
+      realFaceModel.position.set(-center.x,-center.y+.02,-center.z+.04);
+      faceRoot.add(realFaceModel);realFaceReady=true;
+      hud.dataset.faceAsset='bust';
+      console.info('Travis bust loaded',{meshes:realFaceModel.children.map(o=>o.name),
+        bounds:size.toArray(),baseBloom:head.layers.isEnabled(BLOOM_LAYER),source:'Blender GLB'});
+    } catch(error) {
+      hud.dataset.faceAsset='error';
+      console.error('Travis anatomical bust failed:',error);
+      // Keep the real core available; never display a synthetic substitute head.
+      setLoading('Busto indisponível; núcleo disponível');
+      throw error;
     }
-
-    const core=markBloom(new THREE.Mesh(
-      new THREE.SphereGeometry(.26,28,20),
-      new THREE.MeshBasicMaterial({
-        color:0xa9f8ff,transparent:true,opacity:.78,
-        blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
-      })
-    ));
-    orbRoot.add(core);
-
-    orbHit=new THREE.Mesh(
-      new THREE.SphereGeometry(1.28,18,14),
-      new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false})
-    );
-    orbHit.userData.core=true;
-    orbRoot.add(orbHit);
-
-    scene.add(orbRoot);
+    scene.add(faceRoot);
+    faceHit=realFaceHead;
+    faceHit.userData.core=true;
   }
 
   async function createAdaptiveForms() {
@@ -699,6 +609,7 @@ if (!hud || !launcher || !canvas) {
     voiceVadTimer=0;
     voiceRecordTimer=0;
     voiceRestartTimer=0;
+    clearTimeout(voiceTaskTimer);voiceTaskTimer=0;
   }
 
   function releaseVoiceMic({stopRecorder=false}={}) {
@@ -746,7 +657,7 @@ if (!hud || !launcher || !canvas) {
     },delay);
   }
 
-  async function playVoiceArrayBuffer(arrayBuffer,session,reply) {
+  async function playVoiceArrayBuffer(arrayBuffer,session,reply,metrics=null) {
     if (!opened || session!==voiceSession) return;
     const ac=audio();
     if (!ac) throw new Error('Áudio indisponível.');
@@ -764,8 +675,9 @@ if (!hud || !launcher || !canvas) {
     analyser.connect(ac.destination);
     voiceSource=source;
 
+    window.dispatchEvent(new CustomEvent('travis:transcript',{detail:{role:'assistant',text:reply}}));
     setState('speaking',String(reply||'A responder.').slice(0,96));
-    flashPower=1;
+    flashPower=.08;
 
     const meter=()=>{
       if (!voiceSource || session!==voiceSession || !opened) return;
@@ -793,6 +705,50 @@ if (!hud || !launcher || !canvas) {
 
     meter();
     source.start();
+    if(metrics) {
+      metrics.replyToFirstAudioMs=Math.round(performance.now()-metrics.replyAt);
+      metrics.speechEndToFirstAudioMs=Math.round(performance.now()-metrics.speechEndedAt);
+      voiceMetrics.push({...metrics});if(voiceMetrics.length>20)voiceMetrics.shift();
+      console.info('Travis voice latency',metrics);
+    }
+  }
+
+
+  function scheduleVoiceTaskPoll() {
+    clearTimeout(voiceTaskTimer);
+    if(!opened || !pendingVoiceTasks.size) return;
+    voiceTaskTimer=setTimeout(pollVoiceTasks,2200);
+  }
+
+  async function pollVoiceTasks() {
+    const session=voiceSession;
+    try {
+      for(const [taskId] of pendingVoiceTasks) {
+        if(!opened || session!==voiceSession) return;
+        const task=await localJson('/voice-task',{body:{taskId}});
+        if(!opened || session!==voiceSession) return;
+        if(!['completed','failed'].includes(task.status) || voiceBusy) continue;
+        voiceBusy=true;releaseVoiceMic({stopRecorder:true});
+        const reply=task.status==='completed'
+          ? String(task.answer?.reply||'O agente terminou sem resposta.')
+          : 'Não consegui concluir a tarefa: '+String(task.error||'Falha do executor.');
+        lastVoiceTaskResult=task;
+        console.info('Travis agent result',task);
+        setState('thinking','O agente terminou. A preparar a voz…');
+        try {
+          const speech=await localFetch('/speak',{body:{text:reply.slice(0,1800)}});
+          if(!speech.ok) throw new Error('Voz da conclusão indisponível.');
+          const wav=await speech.arrayBuffer();
+          await playVoiceArrayBuffer(wav,session,reply);
+          if(opened && session===voiceSession) {pendingVoiceTasks.delete(taskId);persistVoiceTasks();}
+        } catch(error) {
+          voiceBusy=false;setState('ready',error.message);scheduleListening(session,900);
+        }
+        break;
+      }
+    } catch(error) {
+      console.warn('Travis task status:',error);
+    } finally {scheduleVoiceTaskPoll();}
   }
 
   async function handleVoiceBlob(blob,mime,session) {
@@ -804,18 +760,32 @@ if (!hud || !launcher || !canvas) {
 
     try {
       setState('thinking','A perceber…');
-      const answer=await localJson('/listen',{
+      const metrics={speechEndedAt:voiceSpeechEndedAt||performance.now()};
+      const transcript=typeof blob==='string'?{text:blob}:await localJson('/transcribe',{
         body:blob,
         type:mime||'application/octet-stream',
         signal:controller.signal
       });
       if (!opened || session!==voiceSession) return;
 
-      const text=String(answer.text||'').trim();
+      metrics.transcriptAt=performance.now();
+      metrics.speechEndToTranscriptMs=Math.round(metrics.transcriptAt-metrics.speechEndedAt);
+      const text=String(transcript.text||'').trim();
+      window.dispatchEvent(new CustomEvent('travis:transcript',{detail:{role:'user',text}}));
       if (!text) throw new Error('Não consegui perceber a voz.');
+      setState('thinking','A tratar do pedido…');
+      const answer=await localJson('/jarvis',{body:{text},signal:controller.signal});
+      if (!opened || session!==voiceSession) return;
+      metrics.replyAt=performance.now();
+      metrics.transcriptToReplyMs=Math.round(metrics.replyAt-metrics.transcriptAt);
+      metrics.tool=answer.tool;metrics.correlationId=answer.correlationId;
+      if(answer.taskId) {
+        pendingVoiceTasks.set(answer.taskId,{tool:answer.tool});persistVoiceTasks();
+        scheduleVoiceTaskPoll();
+      }
       const reply=String(answer.reply||'').trim();
       if (!reply) throw new Error('O Travis devolveu uma resposta vazia.');
-      setState('speaking',reply.slice(0,96));
+      setState('thinking','A preparar a voz…');
 
       const speech=await localFetch('/speak',{
         body:{text:reply},
@@ -826,7 +796,7 @@ if (!hud || !launcher || !canvas) {
       const wav=await speech.arrayBuffer();
       if (!opened || session!==voiceSession) return;
 
-      await playVoiceArrayBuffer(wav,session,reply);
+      await playVoiceArrayBuffer(wav,session,reply,metrics);
 
       if (answer.result?.action==='open_url' && answer.result?.url) {
         const url=String(answer.result.url);
@@ -871,6 +841,7 @@ if (!hud || !launcher || !canvas) {
       const mime=recorder.mimeType||stream.getAudioTracks()[0]?.getSettings?.().mimeType||'audio/webm';
       let heardSpeech=false;
       let speechFrames=0;
+      voiceSpeechEndedAt=0;
 
       recorder.ondataavailable=event=>{
         if (event.data?.size) voiceChunks.push(event.data);
@@ -912,6 +883,7 @@ if (!hud || !launcher || !canvas) {
             heardSpeech=true;
             speechFrames++;
             lastSpeech=performance.now();
+            voiceSpeechEndedAt=lastSpeech;
           }
           const now=performance.now();
           if (heardSpeech && speechFrames>=3 && now-lastSpeech>620) {
@@ -955,6 +927,7 @@ if (!hud || !launcher || !canvas) {
       voiceBusy=false;
       setState('ready','Estou aqui.');
       await startListening(session);
+      scheduleVoiceTaskPoll();
     } catch (error) {
       if (controller.signal.aborted || session!==voiceSession) return;
       voiceBusy=false;
@@ -1144,6 +1117,10 @@ if (!hud || !launcher || !canvas) {
   }
 
   function createLights() {
+    const faceKey=new THREE.DirectionalLight(0xc6e5ed,3.1);
+    faceKey.position.set(-1.5,2.2,4);scene.add(faceKey);
+    const faceFill=new THREE.DirectionalLight(0x70a5bc,1.25);
+    faceFill.position.set(2,.3,3);scene.add(faceFill);
     scene.add(new THREE.HemisphereLight(0x86dfff,0x020508,.28));
 
     const cyan=new THREE.PointLight(0x38cfff,5.5,12,2);
@@ -1378,8 +1355,8 @@ if (!hud || !launcher || !canvas) {
     sizeForViewport();
     renderer.setPixelRatio(dpr);
     renderer.setSize(w,h,false);
-    bloomComposer?.setPixelRatio(dpr);
-    bloomComposer?.setSize(w,h);
+    bloomComposer?.setPixelRatio(Math.min(dpr,1));
+    bloomComposer?.setSize(Math.round(w*.7),Math.round(h*.7));
     finalComposer?.setPixelRatio(dpr);
     finalComposer?.setSize(w,h);
     finalPass?.uniforms?.uResolution?.value.set(w*dpr,h*dpr);
@@ -1396,10 +1373,18 @@ if (!hud || !launcher || !canvas) {
     renderer=new THREE.WebGLRenderer({
       canvas,alpha:false,antialias:false,powerPreference:'high-performance'
     });
+    canvas.addEventListener('webglcontextlost',event=>{
+      event.preventDefault();webglLost=true;
+      setLoading('A recuperar a imagem 3D…');
+    });
+    canvas.addEventListener('webglcontextrestored',()=>{
+      webglLost=false;resize();lastFrame=performance.now();
+      setLoading('BUSTO 3D PRONTO',true);
+    });
     renderer.setClearColor(0x02070b,1);
     renderer.outputColorSpace=THREE.SRGBColorSpace;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure=.78;
+    renderer.toneMappingExposure=.98;
 
     scene=new THREE.Scene();
     scene.background=new THREE.Color(0x02070b);
@@ -1466,6 +1451,7 @@ if (!hud || !launcher || !canvas) {
   }
 
   function stateBloom() {
+    if (formBlend.face>.5) return .28+(state==='speaking'?speechLevel*.04:0);
     if (state==='booting') return .72;
     if (state==='listening') return .76;
     if (state==='thinking') return .88;
@@ -1475,9 +1461,19 @@ if (!hud || !launcher || !canvas) {
 
   function renderComposed(t) {
     const background=scene.background;
-    camera.layers.set(BLOOM_LAYER);
+    scene.traverse(object=>{
+      if(!object.visible || !(object.isMesh || object.isLine || object.isPoints) || bloomLayer.test(object.layers)) return;
+      bloomRestore.set(object,{material:object.material,visible:object.visible});
+      if(object.isMesh && object.material?.depthWrite && !object.material?.transparent) object.material=bloomOccluder;
+      else object.visible=false;
+    });
+    camera.layers.set(0);
     scene.background=new THREE.Color(0x000000);
-    bloomComposer.render();
+    try { bloomComposer.render(); }
+    finally {
+      bloomRestore.forEach((saved,object)=>{object.material=saved.material;object.visible=saved.visible;});
+      bloomRestore.clear();
+    }
 
     camera.layers.set(0);
     scene.background=background;
@@ -1486,20 +1482,20 @@ if (!hud || !launcher || !canvas) {
     finalPass.uniforms.uGlitch.value=glitchPower;
     finalPass.uniforms.uFlash.value=flashPower;
     finalPass.uniforms.uAberration.value=.00048+glitchPower*.0017+(state==='speaking'?.00013:0);
-    finalPass.uniforms.uGrain.value=innerWidth<700?.016:.019;
-    finalPass.uniforms.uScan.value=innerWidth<700?.018:.022;
+    finalPass.uniforms.uGrain.value=formBlend.face>.5?.006:(innerWidth<700?.016:.019);
+    finalPass.uniforms.uScan.value=formBlend.face>.5?.005:(innerWidth<700?.018:.022);
     finalComposer.render();
   }
 
   function animate(now) {
     requestAnimationFrame(animate);
     if (!renderer || !bloomComposer || !finalComposer) return;
-    if (!opened) { lastFrame=now; return; }
+    if (!opened || webglLost || renderer.getContext().isContextLost()) { lastFrame=now; return; }
     const dt=Math.min(.05,(now-lastFrame)/1000);
     lastFrame=now;
 
     const t=(now-startTime)/1000;
-    if (opened) intro=Math.min(1,intro+dt*1.05);
+    if (opened) intro=clamp(t/1.05,0,1);
     else intro=Math.max(0,intro-dt*2.4);
     const introEase=easeOutCubic(intro);
 
@@ -1507,16 +1503,13 @@ if (!hud || !launcher || !canvas) {
     tiltNow.lerp(tiltTarget,.05);
 
     if (now>nextGlitchAt) {
-      glitchPower=state==='thinking'?.86:.48;
+      glitchPower=formBlend.face>.1?0:(state==='thinking'?.15:.06);
       nextGlitchAt=now+4200+Math.random()*7600;
     }
     glitchPower*=Math.exp(-dt*18);
     flashPower*=Math.exp(-dt*6.5);
 
-    const simulatedVoice=state==='speaking'
-      ? clamp(.18+Math.abs(Math.sin(t*6.2))*.5+Math.abs(Math.sin(t*11.7))*.24,0,1)
-      : 0;
-    const targetVoice=externalVoiceLevel==null?simulatedVoice:externalVoiceLevel;
+    const targetVoice=state==='speaking'?(externalVoiceLevel||0):0;
     speechLevel+=(targetVoice-speechLevel)*Math.min(1,dt*13);
 
     for (const key of ['core','face']) {
@@ -1575,67 +1568,31 @@ if (!hud || !launcher || !canvas) {
       if (emblem) emblem.position.z=Math.sin(t*1.7)*.015+flashPower*.025;
     }
 
+    faceRig?.update(state==='speaking'?speechLevel:0);
+    hud.dataset.mouthLevel=speechLevel.toFixed(2);
     if (faceRoot) {
       const faceMix=Math.max(.001,formBlend.face);
       faceRoot.visible=faceMix>.012;
       const portrait=innerWidth/innerHeight<.72;
-      const faceBase=(portrait?1.28:1.08)*(.42+.58*introEase);
-      faceRoot.scale.setScalar(faceBase*faceMix*(1+(state==='speaking'?speechLevel*.018:0)));
+      const faceBase=(portrait?1.28:1.36)*(.42+.58*introEase);
+      faceRoot.scale.setScalar(faceBase*faceMix);
       faceRoot.position.set(cameraNow.x*.07,(portrait?.60:.34)+(1-introEase)*-.42,0);
-      faceRoot.rotation.y=tiltNow.x*.11+cameraNow.x*.045;
-      faceRoot.rotation.x=-.03-tiltNow.y*.06;
-      faceRoot.rotation.z=Math.sin(t*.21)*.008;
+      faceRoot.rotation.y=tiltNow.x*.025+cameraNow.x*.018+Math.sin(t*.21)*.004;
+      faceRoot.rotation.x=tiltNow.y*.02+Math.sin(t*.29)*.003+(state==='speaking'?speechLevel*.003:0);
+      faceRoot.rotation.z=Math.sin(t*.21)*.003;
 
-      const blink=Math.pow(Math.max(0,Math.sin(t*.43+1.4)),38);
-      faceEyeGroups.forEach((eye,i)=>{
-        eye.scale.y=1-blink*.80;
-        eye.rotation.y=Math.sin(t*.31+i*.9)*.018;
+      faceEyeGroups.forEach(eye=>{
+        eye.rotation.y=Math.sin(t*.31)*.018;
+        eye.rotation.x=Math.sin(t*.23)*.008;
       });
-      if (faceMouthLower) {
-        faceMouthLower.position.y=-(state==='speaking'?speechLevel*.060:0);
-        faceMouthLower.scale.x=1+(state==='speaking'?speechLevel*.025:0);
-      }
       if (realFaceBaseMaterial) {
-        const listening=state==='listening'?1:0;
-        const speaking=state==='speaking'?speechLevel:0;
-        realFaceBaseMaterial.opacity=.92+listening*.015+speaking*.02;
-        realFaceBaseMaterial.emissiveIntensity=.02+listening*.008+speaking*.018;
-      }
-      realFaceIris.forEach((iris,i)=>{
-        const pulse=.92+.08*Math.sin(t*2.4+i*.7)+(state==='listening'?.12:0)+(state==='speaking'?speechLevel*.18:0);
-        iris.scale.setScalar(pulse);
-      });
-      if (faceRoot) {
-        faceRoot.children.forEach(child=>{
-          if(child.userData?.faceHaloSpeed) child.rotation.z+=child.userData.faceHaloSpeed*dt*(state==='thinking'?1.8:1);
-        });
+        realFaceBaseMaterial.emissiveIntensity=.018+(state==='speaking'?speechLevel*.012:0);
       }
       if (avatarMaterial) {
         avatarMaterial.uniforms.uTime.value=t;
-        avatarMaterial.uniforms.uGlitch.value=glitchPower*(state==='thinking'?1.2:.55);
+        avatarMaterial.uniforms.uGlitch.value=0;
         avatarMaterial.uniforms.uState.value=state==='speaking'?.95:state==='listening'?.78:state==='thinking'?.62:.24;
-        avatarMaterial.uniforms.uOpacity.value=.018+(state==='speaking'?speechLevel*.008:state==='listening'?.006:0);
-      }
-    }
-
-    if (orbRoot) {
-      const orbMix=Math.max(.001,formBlend.orb);
-      orbRoot.visible=orbMix>.012;
-      const portrait=innerWidth/innerHeight<.72;
-      const orbBase=(portrait?1.52:1.34)*(.42+.58*introEase);
-      orbRoot.scale.setScalar(orbBase*orbMix*(1+(state==='thinking'?.04*Math.sin(t*3.0):0)));
-      orbRoot.position.set(cameraNow.x*.06,(portrait?.58:.32)+(1-introEase)*-.46,0);
-      orbRoot.rotation.y=t*.11+tiltNow.x*.09;
-      orbRoot.rotation.x=tiltNow.y*.06;
-      orbRings.forEach((ring,i)=>{
-        ring.rotation.z+=ring.userData.speed*dt*(state==='thinking'?2.1:state==='listening'?1.45:1);
-        ring.rotation.x+=Math.sin(t*.27+i)*.0005;
-      });
-      if (orbMaterial) {
-        orbMaterial.uniforms.uTime.value=t;
-        orbMaterial.uniforms.uGlitch.value=glitchPower*.65;
-        orbMaterial.uniforms.uState.value=state==='thinking'?1:state==='listening'?.65:state==='speaking'?.75:.28;
-        orbMaterial.uniforms.uOpacity.value=.22+(state==='thinking'?.08:state==='speaking'?speechLevel*.045:0);
+        avatarMaterial.uniforms.uOpacity.value=.16+(state==='speaking'?speechLevel*.02:state==='listening'?.012:0);
       }
     }
 
@@ -1659,10 +1616,12 @@ if (!hud || !launcher || !canvas) {
     updateCommandLines();
 
     if (dust) {
+      dust.visible=formBlend.face<.02;
       dust.rotation.z=t*.006;
       dust.position.y=Math.sin(t*.18)*.08;
     }
     if (orbitParticles) {
+      orbitParticles.visible=false;
       orbitParticles.rotation.z=t*.025*(state==='thinking'?1.7:1);
       orbitParticles.rotation.x=Math.sin(t*.18)*.045;
       orbitParticles.material.opacity=.36+(state==='listening'?.09:state==='thinking'?.14:0);
@@ -1678,6 +1637,7 @@ if (!hud || !launcher || !canvas) {
       gridFloor.material.opacity=.06+(state==='thinking'?.035:0);
     }
     if (floorHalo) {
+      floorHalo.visible=formBlend.face<.02;
       floorHalo.material.opacity=.055+.025*Math.sin(t*1.1)+(state==='listening'?.025:0);
       floorHalo.rotation.z=t*.035;
     }
@@ -1687,13 +1647,14 @@ if (!hud || !launcher || !canvas) {
     if (bloomPass) bloomPass.strength += (stateBloom()-bloomPass.strength)*.055;
 
     const portrait=innerWidth/innerHeight<.72;
-    const cameraBaseZ=portrait?10.4:8.3;
+    const cameraBaseZ=lerp(portrait?10.4:8.3,portrait?6.4:6.8,formBlend.face);
     camera.position.x += ((cameraNow.x*(portrait?.18:.28))-camera.position.x)*.06;
-    camera.position.y += ((portrait?.22:.28)+cameraNow.y*.16-camera.position.y)*.06;
-    camera.position.z += (cameraBaseZ-camera.position.z)*.08;
+    camera.position.y += ((portrait?.48:.26)+cameraNow.y*.04-camera.position.y)*.06;
+    camera.position.z += (cameraBaseZ-camera.position.z)*Math.min(1,dt*10);
     camera.lookAt(0,portrait?.48:.26,0);
 
     renderComposed(t);
+    renderedFrames++;
   }
 
   function rayFromEvent(event) {
@@ -1705,7 +1666,7 @@ if (!hud || !launcher || !canvas) {
 
   function interactiveObjects() {
     const nodes=commandsOpen?commandNodes.map(n=>n.hit):[];
-    return [...nodes,coreHit,faceHit,orbHit].filter(Boolean);
+    return [...nodes,coreHit,faceHit].filter(Boolean);
   }
 
   function onPointerMove(event) {
@@ -1765,6 +1726,7 @@ if (!hud || !launcher || !canvas) {
     hud.setAttribute('aria-hidden','false');
     launcher.setAttribute('aria-expanded','true');
     document.body.classList.add('travis-hud-open');
+    window.dispatchEvent(new Event('travis:open'));
     setState('booting');
     bootSound();
     haptic([10,35,10]);
@@ -1778,6 +1740,8 @@ if (!hud || !launcher || !canvas) {
 
   function closeHud() {
     stopVoiceConversation();
+    faceRig?.update(0);
+    window.dispatchEvent(new Event('travis:close'));
     opened=false;
     commandsOpen=false;
     commandTarget=0;
@@ -1826,7 +1790,16 @@ if (!hud || !launcher || !canvas) {
     open:launchHud,
     close:closeHud,
     commands:toggleCommands,
+    ask(text){if(!opened)return;stopVoiceConversation();handleVoiceBlob(String(text),'',voiceSession);},
+    pause(){stopVoiceConversation();faceRig?.update(0);setState('ready','Conversa em pausa.');},
+    resume(){if(opened)startVoiceConversation();},
     setState,
+    diagnostics() {
+      return {ready,opened,state,renderedFrames,contextLost:renderer?.getContext().isContextLost(),form:activeForm,faceAsset:hud.dataset.faceAsset,
+        baseBloom:realFaceHead?.layers.isEnabled(BLOOM_LAYER),
+        meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,
+        recording:voiceRecorder?.state,pendingTasks:[...pendingVoiceTasks.keys()],lastTaskResult:lastVoiceTaskResult,voiceMetrics:voiceMetrics.map(m=>({...m}))};
+    },
     form(mode='auto') {
       setForm(mode,{manual:mode!=='auto'});
       return activeForm;

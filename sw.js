@@ -1,5 +1,5 @@
-const CACHE='centro-negocios-v40-faceclean';
-const SHELL=['./','./index.html','./styles.css','./app.js?v=travis-panel-2','./agent-room.js?v=jarvis-1','./agent-room.css?v=world-10','./product.css?v=world-8','./travis-hud.css?v=faceclean1','./travis-3d.mjs?v=faceclean1','./assets/travis/travis-core.glb?v=1','./assets/travis/travis-face-realistic.glb?v=2','./manifest.webmanifest','./icon.svg','./data/sites.json'];
+const CACHE='centro-negocios-v42-immersive-voice';
+const SHELL=['./','./index.html','./styles.css','./app.js?v=travis-panel-2','./agent-room.js?v=jarvis-1','./agent-room.css?v=status-fix-1','./product.css?v=world-8','./travis-hud.css?v=immersive1','./travis-3d.mjs?v=immersive1','./travis-face-rig.mjs','./travis-cockpit.mjs?v=immersive1','./assets/travis/travis-core.glb?v=1','./assets/travis/travis-face-bust.glb?v=1','./manifest.webmanifest','./icon.svg','./data/sites.json'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));
@@ -30,6 +30,7 @@ self.addEventListener('fetch',event=>{
   if(event.request.method!=='GET')return;
   const url=new URL(event.request.url);
   if(url.origin!==self.location.origin)return;
+  if(/^\/(gmail(?:\/|$)|health$|voice$)/.test(url.pathname))return;
 
   const freshAsset=
     event.request.mode==='navigate' ||

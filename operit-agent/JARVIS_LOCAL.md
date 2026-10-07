@@ -69,3 +69,11 @@ O filtro do log Remote ignora conteúdo MCP com palavras de erro e preserva a de
 jarvisctl stop
 Remover apenas ~/.centro-jarvis/enabled e planner_enabled para desligar integração.
 Cópias *.before-jarvis do runtime conservam versões anteriores. Preservar modelos, SQLite e credenciais.
+
+
+### Holograma anatómico e tarefas longas
+
+O HUD em 8770 usa o mesmo router, Whisper e Piper. A voz percorre `/transcribe`, `/jarvis` e `/speak`; o console regista fim da fala até transcrição, transcrição até resposta e resposta até início do áudio.
+Pedidos complexos recebem uma confirmação rápida com `taskId`. O HUD consulta `/voice-task` e anuncia o resultado do Centro sem sair da conversa.
+Alterações de código usam o executor especialista no worktree isolado, sem carregar um modelo maior no telefone. `localOnly` é respeitado: cria e valida um commit local e preserva a branch, sem push. Uma instrução explícita de publicação permite seguir a política de publicação já existente.
+A malha base do busto escreve profundidade e não contribui para bloom. Apenas a shell Fresnel e os pequenos reflexos o fazem; a base oculta a parte posterior da shell durante o passe de bloom.
