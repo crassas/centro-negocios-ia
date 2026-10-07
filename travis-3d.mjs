@@ -406,7 +406,7 @@ if (!hud || !launcher || !canvas) {
       }
       realFaceBaseMaterial=createHolographicHeadMaterial(THREE);
       head.material=realFaceBaseMaterial;
-      // Keep the translucent face readable; only its light contours receive bloom.
+      // Keep the projected face readable; only its light contours receive bloom.
       head.layers.disable(BLOOM_LAYER);
       const glowShell=new THREE.Mesh(head.geometry,faceShellShader());
       glowShell.name='TravisFace_HologramShell';

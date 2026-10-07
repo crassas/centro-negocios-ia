@@ -32,11 +32,12 @@ export function createHolographicHeadMaterial(THREE,shell=false) {
         colour+=vec3(.19,.61,.67)*(edge*.46+contour*.095+fine*.018+sweep*.13);
         colour+=vec3(.63,.91,.98)*assembly*.72;
         colour*=neck*(.95+uState*.05);
-        gl_FragColor=vec4(colour,neck*.92);
+        if(fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)>neck)discard;
+        gl_FragColor=vec4(colour/max(neck,.001),1.0);
         `}
       }`,
-    transparent:true,blending:shell?THREE.AdditiveBlending:THREE.NormalBlending,
-    depthWrite:false,depthTest:true,side:THREE.FrontSide,toneMapped:false
+    transparent:shell,blending:shell?THREE.AdditiveBlending:THREE.NormalBlending,
+    depthWrite:!shell,depthTest:true,side:THREE.FrontSide,toneMapped:false
   });
 }
 
