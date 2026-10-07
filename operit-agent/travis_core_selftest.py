@@ -6,7 +6,7 @@ import travis_core as t
 class Tests(unittest.TestCase):
  def test_registry(self):
   s=t.registry_snapshot();self.assertTrue(s["localFirst"]);self.assertFalse(s["paidFallback"])
-  required={"presence","open_youtube","stop","system_status","repo_access","site_check","git_status","git_diff","create_task","task_list","neural_status","neural_recall","neural_consolidate","genome_status","genome_compare","genome_activate","laya_status","laya_decide","local_llm","repo_change","server_status","station_status","station_doctor","agents_status","autonomy_selftest","fault_timeout","fault_laya_recovery","git_pull","git_access_matrix","jarvis_query","claude_query","manus_status","manus_query"}
+  required={"presence","open_youtube","open_target","web_search","web_research","local_file_search","omni_status","smart_query","stop","system_status","repo_access","site_check","git_status","git_diff","create_task","task_list","neural_status","neural_recall","neural_consolidate","genome_status","genome_compare","genome_activate","laya_status","laya_decide","local_llm","repo_change","server_status","station_status","station_doctor","agents_status","autonomy_selftest","fault_timeout","fault_laya_recovery","git_pull","git_access_matrix","jarvis_query","claude_query","manus_status","manus_query"}
   self.assertTrue(required.issubset(t.CAPABILITIES))
  def test_contracts(self):
   c=t.RuntimeContext.create(source="test",project_id="centro");e=t.EventEnvelope.create("TEST",c,priority="HIGH");self.assertEqual(e.correlation_id,c.correlation_id)
@@ -16,6 +16,10 @@ class Tests(unittest.TestCase):
  def test_router(self):
   self.assertEqual(t.classify_local_intent("Travis, estás aí?")[0],"presence")
   self.assertEqual(t.classify_local_intent("Travis, abre o YouTube por favor")[0],"open_youtube")
+  self.assertEqual(t.classify_local_intent("Travis, abre o Gmail")[0],"open_target")
+  self.assertEqual(t.classify_local_intent("Pesquisa na internet as notícias de hoje")[0],"web_research")
+  self.assertEqual(t.classify_local_intent("Procura nos meus ficheiros contrato Beatriz")[0],"local_file_search")
+  self.assertEqual(t.classify_local_intent("Que acesso tens?")[0],"omni_status")
   self.assertEqual(t.classify_local_intent("Jarvis, para")[0],"stop")
   self.assertEqual(t.classify_local_intent("Travis, lembra-te que a Beatriz entrega em 72 horas")[0],"note_fact")
   self.assertEqual(t.classify_local_intent("Estado dos neurónios")[0],"neural_status")
@@ -26,7 +30,8 @@ class Tests(unittest.TestCase):
   self.assertEqual(t.classify_local_intent("Ativa o perfil rápido"),("genome_activate",{"profile":"speed-v1"}))
   self.assertEqual(t.classify_local_intent("Como está o Git da Pentehouse?","pentehouse")[0],"git_status")
   self.assertEqual(t.classify_local_intent("A Pentehouse está online?","pentehouse")[0],"site_check")
-  self.assertEqual(t.classify_local_intent("O Centro está online?","centro")[0],"local_llm")
+  self.assertEqual(t.classify_local_intent("O Centro está online?","centro")[0],"smart_query")
+  self.assertEqual(t.classify_local_intent("Explica-me computação quântica")[0],"smart_query")
   self.assertEqual(t.classify_local_intent("Corrige o hero","pentehouse")[0],"repo_change")
  def test_validation(self):
   t.validate_centro_task({"action":"server_status","target":"local","args":{}},["server_status","repo_change"],["centro-negocios-ia"])
