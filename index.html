@@ -18,11 +18,11 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
   <script src="./agent-room.js?v=jarvis-1" defer></script>
   <script src="./app.js?v=travis-panel-2" defer></script>
-  <link rel="stylesheet" href="./travis-hud.css?v=71">
+  <link rel="stylesheet" href="./travis-hud.css?v=8">
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
-  <script type="module" src="./travis-3d.mjs?v=unified1"></script>
+  <script type="module" src="./travis-3d.mjs?v=avatar1"></script>
 </head>
 <body>
 <div class="shell">
@@ -642,11 +642,18 @@
   <div class="travis-ticker" aria-hidden="true"><span>CORE MATRIX 07 · LOCAL FIRST · QUASI NORTE · VECTOR LINK · ACTIVE · </span></div>
 
   <div class="travis-title" aria-hidden="true">
-    <h1>TR<span class="a">A</span>VIS</h1>
+    <h1 data-text="TRAVIS">TR<span class="a">A</span>VIS</h1>
     <p>INTERFACE DE COMANDO · QUASI NORTE</p>
   </div>
 
-  <div class="travis-hint">TOCA NO NÚCLEO</div>
+  <nav class="travis-form-selector" aria-label="Forma visual do Travis">
+    <button type="button" data-travis-form="auto" class="is-active">AUTO</button>
+    <button type="button" data-travis-form="core">NÚCLEO</button>
+    <button type="button" data-travis-form="face">ROSTO</button>
+    <button type="button" data-travis-form="orb">ORBE</button>
+  </nav>
+
+  <div class="travis-hint">TOCA NO TRAVIS</div>
 
   <div class="travis-status" role="status" aria-live="polite">
     <div class="travis-wave" aria-hidden="true">
@@ -656,7 +663,7 @@
     <div id="travis-status-state" class="travis-status-state">EM ESPERA</div>
   </div>
 
-  <div class="travis-version">TRAVIS V7.1 · HDR · SELECTIVE BLOOM · HOLOGRAM SHADER</div>
+  <div class="travis-version">TRAVIS V8 · ADAPTIVE 3D · FACE · ORB · CORE</div>
 </section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>

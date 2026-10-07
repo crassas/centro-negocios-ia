@@ -10,8 +10,8 @@ for(const token of [
   'id="travis-hud"',
   'id="travis-three-canvas"',
   'id="travis-loading"',
-  './travis-hud.css?v=71',
-  './travis-3d.mjs?v=unified1',
+  './travis-hud.css?v=8',
+  './travis-3d.mjs?v=avatar1',
   'type="importmap"',
   '"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"'
 ]){
@@ -88,14 +88,14 @@ for(const token of [
   'class="travis-reticle"',
   'class="travis-telemetry left"',
   'class="travis-scan-sweep"',
-  'TRAVIS V7'
+  'TRAVIS V8'
 ]){
   if(!html.includes(token)) throw new Error('V7 HUD fino em falta: '+token);
 }
 
 
 for(const token of [
-  'TRAVIS V7.1',
+  'TRAVIS V8',
   'new THREE.ConeGeometry(1.7,8.2,48,1,true)',
   'new THREE.ConeGeometry(1.45,6.8,48,1,true)',
   'return .62;',
@@ -132,8 +132,43 @@ for(const token of [
   if(!scene.includes(token)) throw new Error('Handoff local unificado em falta: '+token);
 }
 
+
+for(const token of [
+  'data-travis-form="auto"',
+  'data-travis-form="core"',
+  'data-travis-form="face"',
+  'data-travis-form="orb"',
+  'data-text="TRAVIS"'
+]){
+  if(!html.includes(token)) throw new Error('Identidade adaptativa V8 em falta: '+token);
+}
+
+for(const token of [
+  'createFaceAvatar',
+  'createOrbAvatar',
+  "modeForState(next=state)",
+  "if (next==='listening' || next==='speaking') return 'face'",
+  "if (next==='thinking' || next==='booting') return 'orb'",
+  'faceMouthLower.position.y',
+  'faceEyeGroups',
+  'formBlend',
+  'formTarget',
+  "form(mode='auto')"
+]){
+  if(!scene.includes(token)) throw new Error('Motor adaptativo V8 em falta: '+token);
+}
+
+for(const token of [
+  '.travis-form-selector',
+  'trv-title-holo',
+  'trv-title-slice-a',
+  'trv-title-slice-b'
+]){
+  if(!css.includes(token)) throw new Error('Holograma textual V8 em falta: '+token);
+}
+
 if(glb.size < 500000) throw new Error('GLB Travis demasiado pequeno: '+glb.size);
 if(!css.includes('#travis-three-canvas')) throw new Error('Canvas 3D CSS em falta.');
-if(!sw.includes('travis-3d.mjs?v=unified1') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
+if(!sw.includes('travis-3d.mjs?v=avatar1') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
 
 console.log('TRAVIS REAL 3D SELFTEST OK',glb.size,'bytes');

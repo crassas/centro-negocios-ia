@@ -17,6 +17,7 @@ const statusState = $('#travis-status-state');
 const loadingLabel = $('#travis-loading');
 const clockEl = $('#travis-clock-time');
 const dateEl = $('#travis-clock-date');
+const formButtons=[...document.querySelectorAll('[data-travis-form]')];
 
 if (!hud || !launcher || !canvas) {
   console.warn('Travis 3D: interface em falta.');
@@ -41,6 +42,19 @@ if (!hud || !launcher || !canvas) {
   let pmrem;
   let model;
   let coreRoot;
+  let faceRoot;
+  let orbRoot;
+  let faceHit;
+  let orbHit;
+  let faceMouthLower;
+  let faceEyeGroups=[];
+  let orbRings=[];
+  let avatarMaterial;
+  let orbMaterial;
+  let formPolicy='auto';
+  let activeForm='core';
+  const formBlend={core:1,face:0,orb:0};
+  const formTarget={core:1,face:0,orb:0};
   let energyMesh;
   let glassMesh;
   let emblem;
@@ -123,6 +137,7 @@ if (!hud || !launcher || !canvas) {
     const [copy,label] = stateCopy[next] || stateCopy.ready;
     if (statusMessage) statusMessage.textContent = message || copy;
     if (statusState) statusState.textContent = label;
+    syncAutoForm(next);
   }
 
   function markBloom(object) {
@@ -263,6 +278,299 @@ if (!hud || !launcher || !canvas) {
       side:THREE.DoubleSide,
       toneMapped:false
     });
+  }
+
+  function modeForState(next=state) {
+    if (next==='listening' || next==='speaking') return 'face';
+    if (next==='thinking' || next==='booting') return 'orb';
+    return 'core';
+  }
+
+  function syncFormButtons() {
+    formButtons.forEach(button=>{
+      const value=button.dataset.travisForm;
+      button.classList.toggle('is-active',value===formPolicy || (formPolicy==='auto' && value==='auto'));
+    });
+    hud.dataset.form=activeForm;
+    hud.dataset.formPolicy=formPolicy;
+  }
+
+  function applyForm(form='core') {
+    if (!['core','face','orb'].includes(form)) form='core';
+    activeForm=form;
+    formTarget.core=form==='core'?1:0;
+    formTarget.face=form==='face'?1:0;
+    formTarget.orb=form==='orb'?1:0;
+    hud.dataset.form=form;
+  }
+
+  function setForm(mode='auto',{manual=false}={}) {
+    if (mode==='auto') {
+      formPolicy='auto';
+      applyForm(modeForState());
+    } else if (['core','face','orb'].includes(mode)) {
+      formPolicy=manual?mode:formPolicy;
+      applyForm(mode);
+    }
+    syncFormButtons();
+  }
+
+  function syncAutoForm(next=state) {
+    if (formPolicy!=='auto') return;
+    applyForm(modeForState(next));
+    syncFormButtons();
+  }
+
+  function holoLine(points,color=0x6ce8ff,opacity=.35,closed=false) {
+    const geometry=new THREE.BufferGeometry().setFromPoints(points);
+    const material=new THREE.LineBasicMaterial({
+      color,transparent:true,opacity,
+      blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
+    });
+    const line=closed?new THREE.LineLoop(geometry,material):new THREE.Line(geometry,material);
+    markBloom(line);
+    return line;
+  }
+
+  function ellipseLine(rx,ry,z,color=0x76eaff,opacity=.36,segments=64) {
+    const points=[];
+    for(let i=0;i<=segments;i++){
+      const a=i/segments*Math.PI*2;
+      points.push(new THREE.Vector3(Math.cos(a)*rx,Math.sin(a)*ry,z));
+    }
+    return holoLine(points,color,opacity,true);
+  }
+
+  function createFaceAvatar() {
+    faceRoot=new THREE.Group();
+    faceRoot.visible=false;
+
+    const headGeo=new THREE.SphereGeometry(1,56,44);
+    const pos=headGeo.attributes.position;
+    const v=new THREE.Vector3();
+    for(let i=0;i<pos.count;i++){
+      v.fromBufferAttribute(pos,i);
+      const ny=v.y;
+      let jaw=1;
+      if(ny<-.15) jaw=1-Math.min(.22,(-ny-.15)*.24);
+      const cheek=1+.055*Math.exp(-Math.pow((ny-.05)/.38,2));
+      v.x*=.88*jaw*cheek;
+      v.y*=1.18;
+      v.z*=.89;
+      if(v.z>.2){
+        const forehead=Math.max(0,(v.y-.45));
+        v.z+=forehead*.035;
+      }
+      pos.setXYZ(i,v.x,v.y,v.z);
+    }
+    pos.needsUpdate=true;
+    headGeo.computeVertexNormals();
+
+    avatarMaterial=hologramShader();
+    avatarMaterial.uniforms.uColor.value.setRGB(.055,.74,1.25);
+    avatarMaterial.uniforms.uOpacity.value=.19;
+    const head=new THREE.Mesh(headGeo,avatarMaterial);
+    markBloom(head);
+    faceRoot.add(head);
+
+    const wireMat=new THREE.LineBasicMaterial({
+      color:0x64dfff,transparent:true,opacity:.13,
+      blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
+    });
+    const wire=markBloom(new THREE.LineSegments(new THREE.WireframeGeometry(headGeo),wireMat));
+    faceRoot.add(wire);
+
+    const pointGeo=new THREE.BufferGeometry();
+    const source=pos.array;
+    const points=[];
+    for(let i=0;i<source.length;i+=9){
+      if(source[i+2]>.15) points.push(source[i],source[i+1],source[i+2]+.006);
+    }
+    pointGeo.setAttribute('position',new THREE.Float32BufferAttribute(points,3));
+    const facePoints=markBloom(new THREE.Points(pointGeo,new THREE.PointsMaterial({
+      color:0x9af4ff,size:.013,transparent:true,opacity:.52,
+      blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
+    })));
+    faceRoot.add(facePoints);
+
+    const neckGeo=new THREE.CylinderGeometry(.46,.63,1.35,40,10,true);
+    const neckMat=hologramShader();
+    neckMat.uniforms.uColor.value.setRGB(.04,.58,1.05);
+    neckMat.uniforms.uOpacity.value=.12;
+    const neck=new THREE.Mesh(neckGeo,neckMat);
+    neck.position.y=-1.62;
+    neck.position.z=-.05;
+    markBloom(neck);
+    faceRoot.add(neck);
+    const neckWire=markBloom(new THREE.LineSegments(
+      new THREE.WireframeGeometry(neckGeo),
+      new THREE.LineBasicMaterial({
+        color:0x5fdfff,transparent:true,opacity:.10,
+        blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
+      })
+    ));
+    neckWire.position.copy(neck.position);
+    faceRoot.add(neckWire);
+
+    [-1,1].forEach(side=>{
+      const eye=new THREE.Group();
+      eye.position.set(side*.34,.19,.88);
+      const sclera=new THREE.Mesh(
+        new THREE.SphereGeometry(.145,24,16),
+        new THREE.MeshBasicMaterial({
+          color:0x07131b,transparent:true,opacity:.82,depthWrite:false
+        })
+      );
+      sclera.scale.set(1,.56,.34);
+      eye.add(sclera);
+
+      const iris=markBloom(new THREE.Mesh(
+        new THREE.SphereGeometry(.066,20,12),
+        new THREE.MeshBasicMaterial({
+          color:0x73ecff,transparent:true,opacity:.92,
+          blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
+        })
+      ));
+      iris.position.z=.055;
+      eye.add(iris);
+
+      const ring=ellipseLine(.18,.095,.065,0x79edff,.55,48);
+      eye.add(ring);
+      faceRoot.add(eye);
+      faceEyeGroups.push(eye);
+
+      const browPts=[
+        new THREE.Vector3(side*.53,.43,.88),
+        new THREE.Vector3(side*.38,.47,.94),
+        new THREE.Vector3(side*.20,.45,.96)
+      ];
+      faceRoot.add(holoLine(browPts,0x70e7ff,.32));
+    });
+
+    faceRoot.add(holoLine([
+      new THREE.Vector3(0,.35,.93),
+      new THREE.Vector3(0,.08,1.02),
+      new THREE.Vector3(-.055,-.08,1.06),
+      new THREE.Vector3(0,-.12,1.08),
+      new THREE.Vector3(.055,-.08,1.06)
+    ],0x79eaff,.30));
+
+    faceRoot.add(holoLine([
+      new THREE.Vector3(-.30,-.37,.93),
+      new THREE.Vector3(-.14,-.34,1.00),
+      new THREE.Vector3(0,-.35,1.02),
+      new THREE.Vector3(.14,-.34,1.00),
+      new THREE.Vector3(.30,-.37,.93)
+    ],0x79eaff,.36));
+
+    faceMouthLower=holoLine([
+      new THREE.Vector3(-.28,-.39,.93),
+      new THREE.Vector3(-.12,-.43,.99),
+      new THREE.Vector3(0,-.445,1.0),
+      new THREE.Vector3(.12,-.43,.99),
+      new THREE.Vector3(.28,-.39,.93)
+    ],0x8cf1ff,.42);
+    faceRoot.add(faceMouthLower);
+
+    const earL=ellipseLine(.10,.22,.02,0x55d7ff,.18,40);
+    earL.position.set(-.89,.04,.05);
+    earL.rotation.y=.28;
+    faceRoot.add(earL);
+    const earR=earL.clone();
+    earR.material=earL.material.clone();
+    earR.position.x=.89;
+    earR.rotation.y=-.28;
+    faceRoot.add(earR);
+
+    for(let i=0;i<3;i++){
+      const halo=markBloom(new THREE.Mesh(
+        new THREE.TorusGeometry(1.30+i*.13,.008,5,128),
+        new THREE.MeshBasicMaterial({
+          color:i===2?0xff456d:0x5fe6ff,
+          transparent:true,opacity:i===2?.08:.13,
+          blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
+        })
+      ));
+      halo.rotation.x=.02+i*.025;
+      halo.position.z=-.18-i*.06;
+      faceRoot.add(halo);
+    }
+
+    faceHit=new THREE.Mesh(
+      new THREE.SphereGeometry(1.18,18,14),
+      new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false})
+    );
+    faceHit.scale.set(.9,1.18,.9);
+    faceHit.userData.core=true;
+    faceRoot.add(faceHit);
+
+    scene.add(faceRoot);
+  }
+
+  function createOrbAvatar() {
+    orbRoot=new THREE.Group();
+    orbRoot.visible=false;
+
+    orbMaterial=hologramShader();
+    orbMaterial.uniforms.uColor.value.setRGB(.04,.78,1.4);
+    orbMaterial.uniforms.uOpacity.value=.26;
+    const sphere=markBloom(new THREE.Mesh(new THREE.SphereGeometry(1.05,48,36),orbMaterial));
+    orbRoot.add(sphere);
+
+    const wire=markBloom(new THREE.LineSegments(
+      new THREE.WireframeGeometry(new THREE.IcosahedronGeometry(1.12,3)),
+      new THREE.LineBasicMaterial({
+        color:0x77eaff,transparent:true,opacity:.16,
+        blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
+      })
+    ));
+    orbRoot.add(wire);
+
+    for(let i=0;i<6;i++){
+      const mat=new THREE.MeshBasicMaterial({
+        color:i===4?0xff456d:0x64e8ff,
+        transparent:true,opacity:i===4?.12:.20,
+        blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
+      });
+      const ring=markBloom(new THREE.Mesh(new THREE.TorusGeometry(1.28+i*.16,.012,5,128),mat));
+      ring.rotation.x=.35+i*.22;
+      ring.rotation.y=i*.47;
+      ring.userData.speed=(i%2?1:-1)*(.12+i*.025);
+      orbRoot.add(ring);
+      orbRings.push(ring);
+    }
+
+    const core=markBloom(new THREE.Mesh(
+      new THREE.SphereGeometry(.26,28,20),
+      new THREE.MeshBasicMaterial({
+        color:0xa9f8ff,transparent:true,opacity:.78,
+        blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
+      })
+    ));
+    orbRoot.add(core);
+
+    orbHit=new THREE.Mesh(
+      new THREE.SphereGeometry(1.28,18,14),
+      new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false})
+    );
+    orbHit.userData.core=true;
+    orbRoot.add(orbHit);
+
+    scene.add(orbRoot);
+  }
+
+  function createAdaptiveForms() {
+    createFaceAvatar();
+    createOrbAvatar();
+    formButtons.forEach(button=>{
+      button.addEventListener('click',()=>{
+        const mode=button.dataset.travisForm||'auto';
+        setForm(mode,{manual:mode!=='auto'});
+        haptic(8);
+        pulseTone(true);
+      });
+    });
+    syncFormButtons();
   }
 
   function updateClock() {
@@ -1141,6 +1449,7 @@ if (!hud || !launcher || !canvas) {
     coreRoot.add(model);
     scene.add(coreRoot);
     createCoreHit();
+    createAdaptiveForms();
     createCommands();
 
     sizeForViewport();
@@ -1203,10 +1512,16 @@ if (!hud || !launcher || !canvas) {
     const targetVoice=externalVoiceLevel==null?simulatedVoice:externalVoiceLevel;
     speechLevel+=(targetVoice-speechLevel)*Math.min(1,dt*13);
 
+    for (const key of ['core','face','orb']) {
+      formBlend[key]+=(formTarget[key]-formBlend[key])*Math.min(1,dt*7.5);
+    }
+
     if (coreRoot) {
       const baseScale=(innerWidth/innerHeight<.72?.47:.70)*(.35+.65*introEase);
       const speechExpand=state==='speaking'?speechLevel*.045:0;
-      coreRoot.scale.setScalar(baseScale*(1+speechExpand));
+      const coreScale=Math.max(.001,formBlend.core);
+      coreRoot.visible=coreScale>.012;
+      coreRoot.scale.setScalar(baseScale*(1+speechExpand)*coreScale);
       coreRoot.rotation.x=lerp(-.24,-.08,introEase)+tiltNow.y*.045;
       coreRoot.rotation.y=tiltNow.x*.07;
       coreRoot.rotation.z=Math.sin(t*.12)*.01;
@@ -1251,6 +1566,55 @@ if (!hud || !launcher || !canvas) {
         }
       }
       if (emblem) emblem.position.z=Math.sin(t*1.7)*.015+flashPower*.025;
+    }
+
+    if (faceRoot) {
+      const faceMix=Math.max(.001,formBlend.face);
+      faceRoot.visible=faceMix>.012;
+      const portrait=innerWidth/innerHeight<.72;
+      const faceBase=(portrait?1.28:1.08)*(.42+.58*introEase);
+      faceRoot.scale.setScalar(faceBase*faceMix*(1+(state==='speaking'?speechLevel*.018:0)));
+      faceRoot.position.set(cameraNow.x*.07,(portrait?.60:.34)+(1-introEase)*-.42,0);
+      faceRoot.rotation.y=tiltNow.x*.11+cameraNow.x*.045;
+      faceRoot.rotation.x=-.03-tiltNow.y*.06;
+      faceRoot.rotation.z=Math.sin(t*.21)*.008;
+
+      const blink=Math.pow(Math.max(0,Math.sin(t*.43+1.4)),38);
+      faceEyeGroups.forEach((eye,i)=>{
+        eye.scale.y=1-blink*.80;
+        eye.rotation.y=Math.sin(t*.31+i*.9)*.018;
+      });
+      if (faceMouthLower) {
+        faceMouthLower.position.y=-(state==='speaking'?speechLevel*.095:0);
+        faceMouthLower.scale.x=1+(state==='speaking'?speechLevel*.035:0);
+      }
+      if (avatarMaterial) {
+        avatarMaterial.uniforms.uTime.value=t;
+        avatarMaterial.uniforms.uGlitch.value=glitchPower*(state==='thinking'?1.2:.55);
+        avatarMaterial.uniforms.uState.value=state==='speaking'?.95:state==='listening'?.78:state==='thinking'?.62:.24;
+        avatarMaterial.uniforms.uOpacity.value=.16+(state==='speaking'?speechLevel*.07:state==='listening'?.035:0);
+      }
+    }
+
+    if (orbRoot) {
+      const orbMix=Math.max(.001,formBlend.orb);
+      orbRoot.visible=orbMix>.012;
+      const portrait=innerWidth/innerHeight<.72;
+      const orbBase=(portrait?1.52:1.34)*(.42+.58*introEase);
+      orbRoot.scale.setScalar(orbBase*orbMix*(1+(state==='thinking'?.04*Math.sin(t*3.0):0)));
+      orbRoot.position.set(cameraNow.x*.06,(portrait?.58:.32)+(1-introEase)*-.46,0);
+      orbRoot.rotation.y=t*.11+tiltNow.x*.09;
+      orbRoot.rotation.x=tiltNow.y*.06;
+      orbRings.forEach((ring,i)=>{
+        ring.rotation.z+=ring.userData.speed*dt*(state==='thinking'?2.1:state==='listening'?1.45:1);
+        ring.rotation.x+=Math.sin(t*.27+i)*.0005;
+      });
+      if (orbMaterial) {
+        orbMaterial.uniforms.uTime.value=t;
+        orbMaterial.uniforms.uGlitch.value=glitchPower*.65;
+        orbMaterial.uniforms.uState.value=state==='thinking'?1:state==='listening'?.65:state==='speaking'?.75:.28;
+        orbMaterial.uniforms.uOpacity.value=.22+(state==='thinking'?.08:state==='speaking'?speechLevel*.045:0);
+      }
     }
 
     if (hologramMaterial) {
@@ -1319,7 +1683,7 @@ if (!hud || !launcher || !canvas) {
 
   function interactiveObjects() {
     const nodes=commandsOpen?commandNodes.map(n=>n.hit):[];
-    return [...nodes,coreHit].filter(Boolean);
+    return [...nodes,coreHit,faceHit,orbHit].filter(Boolean);
   }
 
   function onPointerMove(event) {
@@ -1441,6 +1805,10 @@ if (!hud || !launcher || !canvas) {
     close:closeHud,
     commands:toggleCommands,
     setState,
+    form(mode='auto') {
+      setForm(mode,{manual:mode!=='auto'});
+      return activeForm;
+    },
     ready(message='Estou aqui.') {
       if (!opened) openHud();
       setState('ready',message);
