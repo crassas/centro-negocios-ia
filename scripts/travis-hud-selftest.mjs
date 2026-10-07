@@ -11,8 +11,8 @@ for(const token of [
   'id="travis-hud"',
   'id="travis-three-canvas"',
   'id="travis-loading"',
-  './travis-hud.css?v=8',
-  './travis-3d.mjs?v=face1',
+  './travis-hud.css?v=marble1',
+  './travis-3d.mjs?v=marble1',
   'type="importmap"',
   '"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"'
 ]){
@@ -73,7 +73,6 @@ for(const token of [
   'finalFxPass',
   'hologramShader',
   'BLOOM_LAYER',
-  'GridHelper',
   'orbitParticles',
   'filamentGroup',
   'setVoiceLevel',
@@ -83,15 +82,6 @@ for(const token of [
   'uGlitch'
 ]){
   if(!scene.includes(token)) throw new Error('V7 cinematic layer em falta: '+token);
-}
-
-for(const token of [
-  'class="travis-reticle"',
-  'class="travis-telemetry left"',
-  'class="travis-scan-sweep"',
-  'TRAVIS V8'
-]){
-  if(!html.includes(token)) throw new Error('V7 HUD fino em falta: '+token);
 }
 
 
@@ -182,8 +172,19 @@ if(faceGlb.size < 1000000) throw new Error('GLB facial realista demasiado pequen
 if(html.includes('data-travis-form="auto"')) throw new Error('AUTO não deve aparecer no selector visual.');
 if(!sw.includes('travis-face-realistic.glb?v=2')) throw new Error('Rosto realista não está na cache PWA.');
 
+
+for(const token of [
+  'now-lastSpeech>620',
+  'recorder.start(120)',
+  'filamentGroup.visible=false',
+  'gridFloor=null'
+]){ if(!scene.includes(token)) throw new Error('V8 Marble em falta: '+token); }
+for(const forbidden of ['class="travis-reticle"','class="travis-telemetry left"','class="travis-ticker"']){
+  if(html.includes(forbidden)) throw new Error('HUD genérico ainda presente: '+forbidden);
+}
+
 if(glb.size < 500000) throw new Error('GLB Travis demasiado pequeno: '+glb.size);
 if(!css.includes('#travis-three-canvas')) throw new Error('Canvas 3D CSS em falta.');
-if(!sw.includes('travis-3d.mjs?v=face1') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
+if(!sw.includes('travis-3d.mjs?v=marble1') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
 
 console.log('TRAVIS REAL 3D SELFTEST OK',glb.size,'bytes');

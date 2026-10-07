@@ -369,20 +369,7 @@ if (!hud || !launcher || !canvas) {
     neckWire.position.copy(neck.position);
     faceRoot.add(neckWire);
 
-    for(let i=0;i<4;i++){
-      const halo=markBloom(new THREE.Mesh(
-        new THREE.TorusGeometry(1.32+i*.13,.008,5,160),
-        new THREE.MeshBasicMaterial({
-          color:i===3?0xff456d:0x5fe6ff,
-          transparent:true,opacity:i===3?.07:.10,
-          blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
-        })
-      ));
-      halo.rotation.x=.02+i*.018;
-      halo.position.z=-.30-i*.055;
-      halo.userData.faceHaloSpeed=(i%2?1:-1)*(.025+i*.006);
-      faceRoot.add(halo);
-    }
+
 
     // Real CC0 head from Blender Studio Human Base Meshes.
     try {
@@ -402,15 +389,15 @@ if (!hud || !launcher || !canvas) {
       if (!head) throw new Error('Malha facial em falta.');
 
       realFaceBaseMaterial=new THREE.MeshPhysicalMaterial({
-        color:0x06131d,
+        color:0x09151b,
         metalness:.18,
-        roughness:.34,
-        clearcoat:.34,
+        roughness:.42,
+        clearcoat:.22,
         clearcoatRoughness:.22,
         transparent:true,
-        opacity:.58,
-        emissive:new THREE.Color(0x063c52),
-        emissiveIntensity:.18,
+        opacity:.82,
+        emissive:new THREE.Color(0x031820),
+        emissiveIntensity:.075,
         side:THREE.FrontSide,
         depthWrite:true
       });
@@ -420,8 +407,8 @@ if (!hud || !launcher || !canvas) {
       // A second shell gives the bright holographic Fresnel without washing out the facial volume.
       const glowShell=new THREE.Mesh(head.geometry.clone(),hologramShader());
       glowShell.name='TravisFace_HologramShell';
-      glowShell.material.uniforms.uColor.value.setRGB(.035,.64,1.25);
-      glowShell.material.uniforms.uOpacity.value=.105;
+      glowShell.material.uniforms.uColor.value.setRGB(.018,.34,.72);
+      glowShell.material.uniforms.uOpacity.value=.052;
       glowShell.scale.setScalar(1.006);
       glowShell.renderOrder=3;
       markBloom(glowShell);
@@ -432,7 +419,7 @@ if (!hud || !launcher || !canvas) {
       const wire=markBloom(new THREE.LineSegments(
         new THREE.WireframeGeometry(head.geometry),
         new THREE.LineBasicMaterial({
-          color:0x6eeaff,transparent:true,opacity:.105,
+          color:0x58cce8,transparent:true,opacity:.048,
           blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
         })
       ));
@@ -450,7 +437,7 @@ if (!hud || !launcher || !canvas) {
       const pg=new THREE.BufferGeometry();
       pg.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
       const points=markBloom(new THREE.Points(pg,new THREE.PointsMaterial({
-        color:0xa5f4ff,size:.012,transparent:true,opacity:.30,
+        color:0x8defff,size:.008,transparent:true,opacity:.11,
         blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
       })));
       points.scale.setScalar(1.012);
@@ -478,16 +465,16 @@ if (!hud || !launcher || !canvas) {
 
       [scleraL,scleraR].filter(Boolean).forEach(sclera=>{
         sclera.material=new THREE.MeshPhysicalMaterial({
-          color:0x07141c,
+          color:0x09151b,
           metalness:.05,roughness:.22,
-          transparent:true,opacity:.70,
-          emissive:new THREE.Color(0x082c39),emissiveIntensity:.16,
+          transparent:true,opacity:.88,
+          emissive:new THREE.Color(0x03141b),emissiveIntensity:.05,
           depthWrite:false
         });
       });
       [irisL,irisR].filter(Boolean).forEach(iris=>{
         iris.material=new THREE.MeshBasicMaterial({
-          color:0x8ff5ff,transparent:true,opacity:.94,
+          color:0x69dff5,transparent:true,opacity:.78,
           blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
         });
         markBloom(iris);
@@ -920,7 +907,7 @@ if (!hud || !launcher || !canvas) {
         }
       };
 
-      recorder.start(180);
+      recorder.start(120);
 
       const ac=audio();
       if (ac) {
@@ -947,17 +934,17 @@ if (!hud || !launcher || !canvas) {
             lastSpeech=performance.now();
           }
           const now=performance.now();
-          if (heardSpeech && speechFrames>=3 && now-lastSpeech>1150) {
+          if (heardSpeech && speechFrames>=3 && now-lastSpeech>620) {
             recorder.stop();
             return;
           }
-          if (!heardSpeech && now-began>12000) recorder.stop();
+          if (!heardSpeech && now-began>7000) recorder.stop();
         },50);
       }
 
       voiceRecordTimer=setTimeout(()=>{
         if (recorder.state==='recording') recorder.stop();
-      },30000);
+      },20000);
     } catch (error) {
       releaseVoiceMic({stopRecorder:true});
       if (!opened || session!==voiceSession) return;
@@ -1105,6 +1092,7 @@ if (!hud || !launcher || !canvas) {
     floorHalo=markBloom(new THREE.Mesh(new THREE.RingGeometry(1.55,3.6,128),haloMat));
     floorHalo.rotation.x=1.18;
     floorHalo.position.set(0,-2.35,-1.15);
+    floorHalo.visible=false;
     scene.add(floorHalo);
 
     const glow=markBloom(new THREE.Sprite(new THREE.SpriteMaterial({
@@ -1115,13 +1103,14 @@ if (!hud || !launcher || !canvas) {
     glow.position.set(0,.2,-1.8);
     scene.add(glow);
 
-    gridFloor=new THREE.GridHelper(18,36,0x1c91b7,0x0a2a38);
+    gridFloor=null; /* V8: generic floor grid removed */
+    /*
     gridFloor.position.set(0,-2.72,-1.2);
     gridFloor.material.transparent=true;
     gridFloor.material.opacity=.085;
     gridFloor.material.depthWrite=false;
     gridFloor.material.blending=THREE.AdditiveBlending;
-    scene.add(gridFloor);
+    scene.add(gridFloor); */
 
     const orbitCount=innerWidth<700?150:260;
     const orbitPos=new Float32Array(orbitCount*3);
@@ -1144,6 +1133,7 @@ if (!hud || !launcher || !canvas) {
     scene.add(orbitParticles);
 
     filamentGroup=new THREE.Group();
+    filamentGroup.visible=false;
     for(let j=0;j<7;j++){
       const pts=[];
       const rx=1.5+j*.23;
@@ -1254,7 +1244,7 @@ if (!hud || !launcher || !canvas) {
     group.userData.panel=panel;
 
     const plateMat=new THREE.MeshPhysicalMaterial({
-      color:0x06131d,metalness:.62,roughness:.28,clearcoat:.7,
+      color:0x09151b,metalness:.62,roughness:.28,clearcoat:.7,
       clearcoatRoughness:.16,envMapIntensity:.9,
       transparent:true,opacity:.72
     });
