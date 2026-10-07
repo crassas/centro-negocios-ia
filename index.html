@@ -18,11 +18,11 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
   <script src="./agent-room.js?v=jarvis-1" defer></script>
   <script src="./app.js?v=travis-panel-2" defer></script>
-  <link rel="stylesheet" href="./travis-hud.css?v=immersive1">
+  <link rel="stylesheet" href="./travis-hud.css?v=backlight2">
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
-  <script type="module" src="./travis-3d.mjs?v=immersive1"></script>
+  <script type="module" src="./travis-3d.mjs?v=backlight2"></script>
 </head>
 <body>
 <div class="shell">
@@ -152,7 +152,7 @@
       </section>
 
       <section class="panel-view is-active" id="agentes" data-panel="agentes">
-        <div class="room-heading"><div><span class="room-eyebrow">ESCRITÓRIO AUTÓNOMO</span><h1>A tua equipa. Sempre em movimento.</h1><p>Pedidos teus têm prioridade. Entre pedidos, a equipa vigia, revê e procura novas oportunidades.</p></div><button class="btn" id="room-refresh" type="button">↻ Actualizar</button></div>
+        <div class="room-heading"><div><span class="room-eyebrow">ESCRITÓRIO AUTÓNOMO</span><h1>A tua equipa. Sempre em movimento.</h1><p>Pedidos teus têm prioridade. Entre pedidos, a equipa vigia, revê e procura novas oportunidades.</p></div><button class="btn" id="room-gmail" type="button">Gmail ↗</button><button class="btn" id="room-refresh" type="button">↻ Actualizar</button></div>
         <div class="room-operation-bar"><div><i></i><span id="room-operation-state" data-connected="false">A ligar à actividade</span></div><span><b id="room-running-count">—</b> em execução</span><span><b id="room-queued-count">—</b> na fila</span><button class="text-link" data-panel-target="visao" type="button">Visão do negócio ↗</button></div>
         <div class="room-layout"><article class="agent-office"><div class="office-top"><span>◈ CENTRO DE NEGÓCIOS</span><small id="room-sync">A receber dados…</small></div>
           <div class="office-floor office-expanded">
@@ -650,10 +650,19 @@
     <div class="travis-system"><strong id="travis-agent-state">A verificar agente</strong><span id="travis-memory-state">A verificar memória</span></div>
     <section><h3>Pedidos de voz</h3><ul id="travis-jobs"></ul></section>
     <section><h3>Execuções dos agentes</h3><ul id="travis-history"></ul><button id="travis-open-agents" type="button">Abrir sala dos agentes ↗</button></section>
-    <section><h3>Gmail</h3><p id="travis-gmail-note">Acesso à tua caixa de entrada com autorização Google.</p>
+    <section id="travis-gmail-section" tabindex="-1"><h3>Gmail</h3><p id="travis-gmail-note">Acesso à tua caixa de entrada com autorização Google.</p>
       <button id="travis-gmail-connect" type="button">Ligar Gmail</button>
-      <button id="travis-gmail-disconnect" type="button">Desligar conta</button>
-      <div id="travis-gmail-setup" hidden><p>Google Cloud → Gmail API ativa → credenciais OAuth → aplicação para computador → transferir JSON.</p><label>Selecionar JSON OAuth<input id="travis-gmail-file" type="file" accept="application/json,.json"></label></div>
+      <button id="travis-gmail-disconnect" type="button" hidden>Desligar conta</button>
+      <div id="travis-gmail-setup" hidden>
+        <p><strong>Preparar a ligação — uma vez.</strong><br>A sessão Gmail do navegador não dá acesso automático ao Travis. A configuração fica guardada no teu Ubuntu.</p>
+        <ol>
+          <li><a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank" rel="noopener noreferrer">Abrir Google Cloud e ativar Gmail API ↗</a><span>Seleciona ou cria o projeto do Travis.</span></li>
+          <li><a href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener noreferrer">Configurar Google Auth Platform ↗</a><span>Se estiver em teste, adiciona o teu email em Público-alvo → Utilizadores de teste.</span></li>
+          <li><a href="https://console.cloud.google.com/auth/clients" target="_blank" rel="noopener noreferrer">Criar cliente OAuth ↗</a><span>Escolhe «Aplicação para computador» e transfere o JSON.</span></li>
+          <li><label class="travis-file-label">Carregar o JSON no Travis<input id="travis-gmail-file" type="file" accept="application/json,.json"></label></li>
+        </ol>
+        <p>Depois aparece «Autorizar conta Google». Não é a palavra-passe do Gmail.</p>
+      </div>
       <ul id="travis-mail-list"></ul>
     </section>
     <section><h3>Conversa</h3><ul id="travis-transcript" aria-live="polite"></ul></section>
@@ -662,7 +671,7 @@
   <div class="travis-version">TRAVIS · QUASI NORTE</div>
 </section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script type="module" src="./travis-cockpit.mjs?v=immersive1"></script>
+<script type="module" src="./travis-cockpit.mjs?v=backlight2"></script>
 </body>
 </html>
 

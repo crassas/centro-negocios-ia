@@ -1,5 +1,6 @@
 const hud=document.querySelector('#travis-hud');
 const $=id=>document.getElementById(id);
+let gmailRequested=new URLSearchParams(location.search).get('connect')==='gmail';
 let timer=0,active=false,paused=false,controller=null;
 const statusNames={queued:'Na fila',running:'Em execução',completed:'Concluído',failed:'Falhou'};
 async function api(path,body={}) {
@@ -33,7 +34,8 @@ async function refresh() {
     $('travis-history').replaceChildren(...data.history.slice().reverse().slice(0,5).map(r=>
       item(`${r.action} · ${r.target||'Centro'}`,Number(r.exitCode)===0?'Execução concluída':r.error||'Execução falhou',Number(r.exitCode)===0?'completed':'failed')));
     if(!data.history.length)$('travis-history').append(item('Sem histórico disponível','Ainda não há execuções confirmadas.'));
-    $('travis-gmail-connect').textContent=data.gmail.authorized?'Abrir caixa de entrada':'Ligar Gmail';
+    $('travis-gmail-disconnect').hidden=!data.gmail.authorized;
+    $('travis-gmail-connect').textContent=data.gmail.authorized?'Abrir caixa de entrada':data.gmail.configured?'Autorizar conta Google':'Preparar ligação Gmail';
     $('travis-observed').textContent='Verificado às '+new Date(data.observedAt*1000).toLocaleTimeString('pt-PT');
   } catch(error) {
     if(!active)return;
@@ -49,7 +51,7 @@ function transcript(role,text) {
   $('travis-transcript').scrollTop=$('travis-transcript').scrollHeight;
 }
 window.addEventListener('travis:transcript',e=>transcript(e.detail.role,e.detail.text));
-window.addEventListener('travis:open',()=>{active=true;paused=false;clearTimeout(timer);refresh();});
+window.addEventListener('travis:open',()=>{active=true;paused=false;clearTimeout(timer);refresh();if(gmailRequested){gmailRequested=false;setTimeout(openGmail,80);}});
 window.addEventListener('travis:close',()=>{active=false;clearTimeout(timer);controller?.abort();});
 $('travis-room-toggle')?.addEventListener('click',()=>{
   const open=hud.classList.toggle('room-open');$('travis-room-toggle').setAttribute('aria-expanded',String(open));
@@ -66,6 +68,18 @@ $('travis-open-agents')?.addEventListener('click',()=>{
   window.TravisVisual?.close();document.querySelector('[data-panel-target="agentes"]')?.click();
   location.hash='agentes';
 });
+function openGmail(){
+  hud.classList.add('room-open');$('travis-room-toggle').setAttribute('aria-expanded','true');
+  window.TravisVisual?.pause();paused=true;$('travis-pause').textContent='Retomar voz';
+  $('travis-gmail-section').scrollIntoView({block:'start'});$('travis-gmail-section').focus({preventScroll:true});
+  $('travis-gmail-connect').click();
+}
+$('room-gmail')?.addEventListener('click',()=>{
+  if(!['127.0.0.1','localhost'].includes(location.hostname)||location.port!=='8770'){
+    location.assign('http://127.0.0.1:8770/?travis=1&connect=gmail');return;
+  }
+  gmailRequested=true;window.TravisVisual?.open();
+});
 $('travis-gmail-connect')?.addEventListener('click',async()=>{
   const button=$('travis-gmail-connect');button.disabled=true;
   try {
@@ -79,7 +93,8 @@ $('travis-gmail-connect')?.addEventListener('click',async()=>{
       const data=await api('/gmail/start');
       if(data.requiresConfiguration) {
         $('travis-gmail-setup').hidden=false;
-        $('travis-gmail-note').textContent='Falta o JSON OAuth do Google Cloud. Carrega-o abaixo para autorizar a tua conta.';
+        $('travis-gmail-section').scrollIntoView({block:'start'});
+        $('travis-gmail-note').textContent='Ainda não existe configuração Google neste Centro. Segue os quatro passos abaixo.';
       } else if(data.url && new URL(data.url).origin==='https://accounts.google.com')location.assign(data.url);
     }
   } catch(error){$('travis-gmail-note').textContent=error.message;}
@@ -90,8 +105,9 @@ $('travis-gmail-file')?.addEventListener('change',async event=>{
   try {
     if(file.size>32000)throw new Error('JSON demasiado grande.');
     await api('/gmail/configure',JSON.parse(await file.text()));
-    $('travis-gmail-note').textContent='Configuração guardada. Carrega em Ligar Gmail para autorizar.';
+    $('travis-gmail-note').textContent='Configuração pronta. Carrega em Autorizar conta Google e escolhe a tua conta.';
     $('travis-gmail-setup').hidden=true;
+    $('travis-gmail-connect').textContent='Autorizar conta Google';
   } catch(error){$('travis-gmail-note').textContent=error.message;}
   event.target.value='';
 });

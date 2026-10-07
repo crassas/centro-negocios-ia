@@ -556,3 +556,13 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
 }
 
 .travis-hud .travis-command input{background:transparent!important;color:#eff7fc!important;border:0!important;font-size:16px!important}
+
+/* Account setup remains readable and scrollable on a phone. */
+#travis-gmail-section{scroll-margin-top:10px}
+#travis-gmail-setup ol{padding-left:20px;margin:14px 0}
+#travis-gmail-setup li{padding:10px 0;font-size:12px;line-height:1.65}
+#travis-gmail-setup a{color:#b0def0;text-decoration:underline;text-underline-offset:3px}
+#travis-gmail-setup li span{display:block;color:#a4b7c7;margin-top:6px;font-size:11px}
+.travis-file-label{display:block;color:#e3edf5}
+#travis-gmail-file{width:100%;color:#c6d9e5!important;background:#132432!important;padding:12px 6px}
+#room-gmail{white-space:nowrap}

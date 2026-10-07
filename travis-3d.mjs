@@ -1,3 +1,4 @@
+import { createBacklight } from './travis-atmosphere.mjs';
 import { createFaceRig } from './travis-face-rig.mjs';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -62,6 +63,7 @@ if (!hud || !launcher || !canvas) {
   let emblem;
   let rotors = [];
   let dust;
+  let cinematicBacklight;
   let floorHalo;
   let beamTop;
   let beamBottom;
@@ -1401,6 +1403,8 @@ if (!hud || !launcher || !canvas) {
 
     createLights();
     createAtmosphere();
+    cinematicBacklight=createBacklight(THREE,scene);
+    hud.dataset.backlight="cinematic";
 
     bloomComposer=new EffectComposer(renderer);
     bloomComposer.renderToScreen=false;
@@ -1568,6 +1572,7 @@ if (!hud || !launcher || !canvas) {
       if (emblem) emblem.position.z=Math.sin(t*1.7)*.015+flashPower*.025;
     }
 
+    cinematicBacklight?.update(reducedMotion?0:t,state==='speaking'?speechLevel:0);
     faceRig?.update(state==='speaking'?speechLevel:0);
     hud.dataset.mouthLevel=speechLevel.toFixed(2);
     if (faceRoot) {
