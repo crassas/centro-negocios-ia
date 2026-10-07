@@ -25,7 +25,7 @@ class Tests(unittest.TestCase):
  def test_chat_timeout_does_not_restart_model(self):
   with patch.object(j,"http",side_effect=[{"status":"ok"},TimeoutError()]) as http,patch.object(j,"llm_start",side_effect=AssertionError("restart")):
    with self.assertRaisesRegex(RuntimeError,"prazo"):j.infer("pedido")
-   self.assertEqual(http.call_args.kwargs["timeout"],20)
+   self.assertEqual(http.call_args.kwargs["timeout"],45)
  def test_shared_context_for_reasoning(self):
   with patch.object(j,"infer",return_value="Resposta") as inference:
    j.route("Analisa o meu negócio",{"projects":[{"name":"Pentehouse"}]})
