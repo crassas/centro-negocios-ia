@@ -44,6 +44,9 @@ fetch https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin "$
 VOICE_BASE='https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_PT/tug%C3%A3o/medium/pt_PT-tug%C3%A3o-medium'
 fetch "$VOICE_BASE.onnx" "$MODEL_ROOT/tts/pt_PT-tugao-medium.onnx"
 fetch "$VOICE_BASE.onnx.json" "$MODEL_ROOT/tts/pt_PT-tugao-medium.onnx.json"
+VOICE_EN_BASE='https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium'
+fetch "$VOICE_EN_BASE.onnx" "$MODEL_ROOT/tts/en_GB-northern_english_male-medium.onnx"
+fetch "$VOICE_EN_BASE.onnx.json" "$MODEL_ROOT/tts/en_GB-northern_english_male-medium.onnx.json"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 for file in travis_core.py jarvis_local.py jarvis_whisper.py jarvis_voice.html; do cp "$SCRIPT_DIR/$file" "$HOME/$file"; done
 chmod +x "$SCRIPT_DIR/jarvisctl.sh"
