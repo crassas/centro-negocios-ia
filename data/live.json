@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-07T19:00:30.355Z",
+  "generatedAt": "2026-10-07T23:33:58.938Z",
   "source": "github-actions",
   "intervalMinutes": 15,
   "sites": [
@@ -8,10 +8,10 @@
       "name": "Pentehouse",
       "url": "https://pentehouse.pt/",
       "area": "Marquês / Constituição",
-      "checkedAt": "2026-10-07T19:00:30.355Z",
+      "checkedAt": "2026-10-07T23:33:58.938Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 459,
+      "responseTimeMs": 391,
       "renderMode": "html",
       "finalUrl": "https://pentehouse.pt/",
       "title": "Pentehouse | Barbearia no Marquês, Porto",
@@ -49,7 +49,7 @@
         }
       ],
       "contentHash": "b61a843dda510e5dfdc9b97b58bc5e7550d12330c21c8a4a5b90dba4aa9736b5",
-      "changed": true,
+      "changed": false,
       "changedAt": "2026-10-07T19:00:30.355Z",
       "robotsStatus": 200,
       "sitemapStatus": 200
@@ -59,10 +59,10 @@
       "name": "Best Pizza & Kebab",
       "url": "https://bestpizzaandkebab.pt/",
       "area": "Campanhã / São Roque",
-      "checkedAt": "2026-10-07T19:00:30.355Z",
+      "checkedAt": "2026-10-07T23:33:58.938Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 609,
+      "responseTimeMs": 96,
       "renderMode": "browser",
       "finalUrl": "https://bestpizzaandkebab.pt/",
       "title": "Kebab e Pizza em São Roque da Lameira, Porto | Best Pizza & Kebab",
@@ -98,9 +98,9 @@
         }
       ],
       "seoSignals": [],
-      "contentHash": "c446e2de568345a23247a087f0490a3ae2b29c122194fbdd974021ab7c9eb5c3",
+      "contentHash": "e8c448973ed6fdcd72399b4923d216220d95c287b9db879527080cc9bb9b0171",
       "changed": true,
-      "changedAt": "2026-10-07T19:00:30.355Z",
+      "changedAt": "2026-10-07T23:33:58.938Z",
       "robotsStatus": 200,
       "sitemapStatus": 200
     },
@@ -109,16 +109,16 @@
       "name": "Restaurante 2 Irmãos",
       "url": "https://restaurantedoisirmaos.pt/",
       "area": "Campanhã / São Roque",
-      "checkedAt": "2026-10-07T19:00:30.355Z",
+      "checkedAt": "2026-10-07T23:33:58.938Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 302,
-      "renderMode": "html",
+      "responseTimeMs": 196,
+      "renderMode": "browser",
       "finalUrl": "https://restaurantedoisirmaos.pt/",
       "title": "Restaurante 2 Irmãos | Comida Caseira em São Roque, Porto",
       "description": "Comida caseira portuguesa na Rua de São Roque da Lameira, Porto. Restaurante 2 Irmãos — “Os Miúdos do Aleixo” — com pratos de tacho, francesinha, tripas e bacalhau.",
-      "h1Count": 0,
-      "firstH1": "",
+      "h1Count": 1,
+      "firstH1": "Restaurante 2 Irmãos",
       "canonical": "https://restaurantedoisirmaos.pt/",
       "robotsMeta": "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1",
       "schemaCount": 1,
@@ -134,7 +134,7 @@
       "checks": {
         "title": true,
         "description": true,
-        "h1": false,
+        "h1": true,
         "canonical": true,
         "canonicalSelf": true,
         "robots": true,
@@ -144,17 +144,13 @@
       "issues": [
         {
           "level": "warn",
-          "message": "Nenhum H1 detectado após duas leituras."
-        },
-        {
-          "level": "warn",
           "message": "A versão HTTP não consolidou automaticamente na versão HTTPS."
         }
       ],
       "seoSignals": [],
-      "contentHash": "10c54498fa2708b229efa176aa42c56d39800696f80c22ccd81e16dcea723b84",
+      "contentHash": "8fbd7801f7af509931b88ccc79c98bfed54d6e2ca2a499f0ba548466dadcde40",
       "changed": true,
-      "changedAt": "2026-10-07T19:00:30.355Z",
+      "changedAt": "2026-10-07T23:33:58.938Z",
       "robotsStatus": 200,
       "sitemapStatus": 200
     },
@@ -163,10 +159,10 @@
       "name": "Engomadoria Beatriz",
       "url": "https://engomadoriabeatriz.pt/",
       "area": "Porto",
-      "checkedAt": "2026-10-07T19:00:30.355Z",
+      "checkedAt": "2026-10-07T23:33:58.938Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 378,
+      "responseTimeMs": 185,
       "renderMode": "html",
       "finalUrl": "https://engomadoriabeatriz.pt/",
       "title": "Engomadoria Beatriz | Packs mensais de engomadoria",
@@ -203,7 +199,7 @@
       ],
       "seoSignals": [],
       "contentHash": "caefcca5cbedc8a10571ccc0be8d43c947b3102a25537010a2ef13f341b28ec0",
-      "changed": true,
+      "changed": false,
       "changedAt": "2026-10-07T19:00:30.355Z",
       "robotsStatus": 200,
       "sitemapStatus": 200
