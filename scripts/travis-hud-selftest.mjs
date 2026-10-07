@@ -195,7 +195,7 @@ if(scene.includes("new THREE.CylinderGeometry(.32,.48,1.02")) throw new Error('P
 
 if(glb.size < 500000) throw new Error('GLB Travis demasiado pequeno: '+glb.size);
 if(!css.includes('#travis-three-canvas')) throw new Error('Canvas 3D CSS em falta.');
-if(!sw.includes('travis-3d.mjs?v=connections1') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
+if(!sw.includes('travis-3d.mjs?v=bilingual-voice-1') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
 
 console.log('TRAVIS REAL 3D SELFTEST OK',glb.size,'bytes');
 const bust=fs.readFileSync('assets/travis/travis-face-bust.glb');
@@ -207,7 +207,7 @@ for(const name of ['TravisFace_Bust','TravisFace_Eye_L','TravisFace_Eye_R','Trav
 for(const forbidden of ['createOrbAvatar','orbRoot','CylinderGeometry','realistic face fallback','faceMouthLower','eye.scale.y=1-blink']) {
   if(scene.includes(forbidden)) throw new Error('Geometria sintética ou deformação presente: '+forbidden);
 }
-for(const token of ["localJson('/transcribe'","localJson('/jarvis'",'speechEndToTranscriptMs','transcriptToReplyMs','replyToFirstAudioMs','head.layers.disable(BLOOM_LAYER)','bloomOccluder','webglcontextrestored']) {
+for(const token of ["localJson('/transcribe'","localJson('/jarvis'",'speechEndToTranscriptMs','transcriptToReplyMs','replyToFirstAudioMs','head.layers.disable(BLOOM_LAYER)','bloomOccluder','webglcontextrestored',"WELCOME_GREETING='Bem-vindo, Mr. Richard.'","startVoiceConversation({greet=true}={})","resume(){if(opened)startVoiceConversation({greet:false});}"]) {
   if(!scene.includes(token)) throw new Error('Regressão de busto/voz: '+token);
 }
 console.log('ANATOMICAL BUST / SELECTIVE BLOOM / STAGED VOICE OK',bust.length,'bytes');
