@@ -6,6 +6,7 @@ HOME_DIR="${HOME:-/root}"
 AGENT="$HOME_DIR/centro_agent.py"
 SERVER="$HOME_DIR/centro_server.py"
 TRAVIS_CORE="$HOME_DIR/travis_core.py"
+BUSINESS_DB="$HOME_DIR/business_db.py"
 SUPERVISOR="$HOME_DIR/centro_station.py"
 
 if command -v curl >/dev/null 2>&1; then
@@ -35,6 +36,9 @@ chmod 700 "$SERVER"
 
 fetch_to "$RAW/travis_core.py" "$TRAVIS_CORE"
 chmod 600 "$TRAVIS_CORE"
+
+fetch_to "$RAW/business_db.py" "$BUSINESS_DB"
+chmod 600 "$BUSINESS_DB"
 
 fetch_to "$RAW/centro_station.py" "$SUPERVISOR"
 chmod 700 "$SUPERVISOR"

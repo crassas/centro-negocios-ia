@@ -5,6 +5,7 @@ RAW="https://raw.githubusercontent.com/crassas/centro-negocios-ia/main/operit-ag
 HOME_DIR="${HOME:-/root}"
 SERVER="$HOME_DIR/centro_server.py"
 TRAVIS_CORE="$HOME_DIR/travis_core.py"
+BUSINESS_DB="$HOME_DIR/business_db.py"
 
 fetch_to() {
   URL="$1"
@@ -24,6 +25,9 @@ chmod 700 "$SERVER"
 
 fetch_to "$RAW/travis_core.py" "$TRAVIS_CORE"
 chmod 600 "$TRAVIS_CORE"
+
+fetch_to "$RAW/business_db.py" "$BUSINESS_DB"
+chmod 600 "$BUSINESS_DB"
 
 if [ -w "/usr/local/bin" ]; then
   SERVER_CTL="/usr/local/bin/centroserver"

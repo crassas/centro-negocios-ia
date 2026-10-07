@@ -19,5 +19,12 @@
     "url": "https://restaurantedoisirmaos.pt/",
     "area": "Campanhã / São Roque",
     "repo": "https://github.com/crassas/restaurante-2-irmaos"
+  },
+  {
+    "id": "engomadoria-beatriz",
+    "name": "Engomadoria Beatriz",
+    "url": "https://engomadoriabeatriz.pt/",
+    "area": "Porto",
+    "repo": "https://github.com/crassas/engomadoria-beatriz"
   }
 ]

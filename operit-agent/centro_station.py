@@ -60,6 +60,7 @@ RUNTIME_FILES = {
     "centro_station.py": SUPERVISOR_PATH,
     "centro_soak.py": HOME / "centro_soak.py",
     "travis_core.py": HOME / "travis_core.py",
+    "business_db.py": HOME / "business_db.py",
     "jarvis_local.py": HOME / "jarvis_local.py",
     "jarvis_whisper.py": HOME / "jarvis_whisper.py",
     "jarvis_voice.html": HOME / "jarvis_voice.html",
@@ -598,7 +599,7 @@ def main():
             if changed:
                 if any(name in changed for name in ("jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh")):
                     pending_jarvis_restart = True
-                if "centro_server.py" in changed:
+                if any(name in changed for name in ("centro_server.py", "business_db.py", "travis_core.py")):
                     pending_server_restart = True
                     actions.append({"service": "autoupdate/server", "ok": True, "output": "actualização validada e preparada"})
                 if "centro_agent.py" in changed:

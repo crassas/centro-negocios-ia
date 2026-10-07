@@ -15,6 +15,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 import travis_core
+try:
+    import business_db
+except ImportError:
+    business_db = None
 
 HOST = "127.0.0.1"
 PORT = 8765
@@ -44,6 +48,7 @@ CLOUD_BASE = "https://centro-negocios-ai.travisthejarvis.workers.dev"
 AGENT_TOKEN_FILE = HOME / ".centro-agent" / "token"
 TRAVIS_STORE = travis_core.RuntimeStore(STATE_DIR / "runtime.sqlite")
 TRAVIS_UTEF = travis_core.UnifiedExecutionFramework(TRAVIS_STORE)
+BUSINESS_DB = business_db.BusinessDB(STATE_DIR / "negocio.db") if business_db else None
 
 REPOS = {
     "centro-negocios-ia": "https://github.com/crassas/centro-negocios-ia.git",
@@ -57,6 +62,7 @@ SITES = [
     ("Pentehouse", "https://pentehouse.pt/"),
     ("Best Pizza & Kebab", "https://bestpizzaandkebab.pt/"),
     ("Restaurante 2 Irmãos", "https://restaurantedoisirmaos.pt/"),
+    ("Engomadoria Beatriz", "https://engomadoriabeatriz.pt/"),
 ]
 
 
@@ -171,6 +177,13 @@ def capabilities():
             "laya_decide",
             "manus_status",
             "manus_query",
+            "business_db_status",
+            "business_snapshot",
+            "business_add_lead",
+            "business_update_lead",
+            "business_add_site",
+            "business_add_payment",
+            "business_add_task",
         ],
         "repos": list(REPOS.keys()),
         "sites": [name for name, _ in SITES],
@@ -1652,6 +1665,24 @@ def execute_action(task):
     if not OPENCLAW_ENABLED and (action.startswith("openclaw_") or action == "fault_openclaw_recovery"):
         return {"exitCode": 78, "stdout": "OpenClaw DESACTIVADO pelo operador.", "stderr": "", "durationMs": 0}
 
+    if action.startswith("business_"):
+        started = time.time()
+        args = task.get("args") or {}
+        if BUSINESS_DB is None:
+            return {"exitCode": 69, "stdout": "", "stderr": "Módulo business_db ainda não instalado; aguardar sincronização do Centro Station.", "durationMs": int((time.time()-started)*1000)}
+        try:
+            if action == "business_db_status": data = BUSINESS_DB.summary()
+            elif action == "business_snapshot": data = {"summary":BUSINESS_DB.summary(),"sites":BUSINESS_DB.list_sites(),"leads":BUSINESS_DB.list_leads(),"payments":BUSINESS_DB.list_payments(),"tasks":BUSINESS_DB.list_tasks(),"activity":BUSINESS_DB.list_activity(30)}
+            elif action == "business_add_lead": data = BUSINESS_DB.add_lead(args)
+            elif action == "business_update_lead": data = BUSINESS_DB.update_lead(args.get("id"),args)
+            elif action == "business_add_site": data = BUSINESS_DB.add_site(args)
+            elif action == "business_add_payment": data = BUSINESS_DB.add_payment(args)
+            elif action == "business_add_task": data = BUSINESS_DB.add_task(args)
+            else: raise ValueError("Acção de negócio não reconhecida.")
+            return {"exitCode":0,"stdout":json.dumps(data,ensure_ascii=False,indent=2),"stderr":"","durationMs":int((time.time()-started)*1000)}
+        except Exception as exc:
+            return {"exitCode":2 if isinstance(exc,(ValueError,TypeError)) else 1,"stdout":"","stderr":type(exc).__name__+": "+str(exc)[:1200],"durationMs":int((time.time()-started)*1000)}
+
     if action == "server_status":
         agent_active, agent_pid = pid_running(AGENT_PID_FILE)
         supervisor_active, supervisor_pid = pid_running(SUPERVISOR_PID_FILE)
@@ -2480,6 +2511,21 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(401, {"ok": False, "error": "Não autorizado."})
             return
 
+        if path.startswith("/business/") and BUSINESS_DB is None:
+            self.send_json(503, {"ok": False, "error": "Base de dados ainda não instalada."}); return
+        if path == "/business/summary":
+            self.send_json(200, {"ok": True, "business": BUSINESS_DB.summary()}); return
+        if path == "/business/sites":
+            self.send_json(200, {"ok": True, "sites": BUSINESS_DB.list_sites()}); return
+        if path == "/business/leads":
+            self.send_json(200, {"ok": True, "leads": BUSINESS_DB.list_leads()}); return
+        if path == "/business/payments":
+            self.send_json(200, {"ok": True, "payments": BUSINESS_DB.list_payments()}); return
+        if path == "/business/tasks":
+            self.send_json(200, {"ok": True, "tasks": BUSINESS_DB.list_tasks()}); return
+        if path == "/business/activity":
+            self.send_json(200, {"ok": True, "activity": BUSINESS_DB.list_activity(50)}); return
+
         if path == "/capabilities":
             self.send_json(200, {"ok": True, "capabilities": capabilities()})
             return
@@ -2506,6 +2552,7 @@ class Handler(BaseHTTPRequestHandler):
                         "pid": agent_pid,
                     },
                     "travisCore": TRAVIS_STORE.health(),
+                    "business": BUSINESS_DB.summary() if BUSINESS_DB else {"ready": False, "private": True},
                 },
             )
             return
@@ -2517,6 +2564,24 @@ class Handler(BaseHTTPRequestHandler):
 
         if not self.authorised():
             self.send_json(401, {"ok": False, "error": "Não autorizado."})
+            return
+
+        if path.startswith("/business/"):
+            if BUSINESS_DB is None:
+                self.send_json(503, {"ok": False, "error": "Base de dados ainda não instalada."}); return
+            size=min(int(self.headers.get("content-length","0") or 0),65536); raw=self.rfile.read(size) if size else b""
+            try:
+                payload=json.loads(raw.decode("utf-8")) if raw else {}
+                if not isinstance(payload,dict): raise ValueError("JSON deve ser um objecto.")
+                if path=="/business/leads": data=BUSINESS_DB.add_lead(payload)
+                elif path=="/business/leads/update": data=BUSINESS_DB.update_lead(payload.get("id"),payload)
+                elif path=="/business/sites": data=BUSINESS_DB.add_site(payload)
+                elif path=="/business/payments": data=BUSINESS_DB.add_payment(payload)
+                elif path=="/business/tasks": data=BUSINESS_DB.add_task(payload)
+                else: self.send_json(404,{"ok":False,"error":"Rota de negócio não encontrada."}); return
+                self.send_json(200,{"ok":True,"data":data})
+            except Exception as exc:
+                self.send_json(400,{"ok":False,"error":type(exc).__name__+": "+str(exc)[:1200]})
             return
 
         if path == "/execute":
