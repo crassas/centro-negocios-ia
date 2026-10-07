@@ -59,7 +59,7 @@ def _bootstrap():
  for k,v in defs.items():register_capability(k,v[0],v[1],bool(v[2]),bool(v[3]),v[4])
 _bootstrap()
 register_capability("gmail_inbox","jarvis","API_CALL")
-register_capability("agent_sessions","jarvis","READ")
+register_capability("agent_sessions","jarvis","READ")\nfor _tool in ("web_open","web_read","web_follow"):register_capability(_tool,"jarvis","READ",False,True,"none")\nregister_capability("web_research","jarvis","API_CALL",False,True,"local_llm_fallback")
 def registry_snapshot():return {"version":CORE_VERSION,"localFirst":True,"paidFallback":False,"capabilities":[asdict(CAPABILITIES[k]) for k in sorted(CAPABILITIES)]}
 
 def validate_centro_task(task,allowed_actions:Iterable[str],allowed_targets:Iterable[str]):
