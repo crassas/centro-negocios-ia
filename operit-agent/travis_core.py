@@ -72,7 +72,7 @@ def validate_centro_task(task,allowed_actions:Iterable[str],allowed_targets:Iter
  if len(json.dumps(args,ensure_ascii=False))>56000:raise ValueError("Parâmetros excedem o limite")
 
 def classify_local_intent(text,project_id=""):
- t=re.sub(r"^(?:travis|jarvis)\b[\s,:;.!?-]*","",_norm(text)).strip();g=re.sub(r"[^a-z0-9 ]","",t).strip();p={"target":project_id or None}
+ t=re.sub(r"^(?:travis|jarvis|travisse(?:-se)?|travisse|travis-se|travi)\b[\s,:;.!?-]*","",_norm(text)).strip();g=re.sub(r"[^a-z0-9 ]","",t).strip();p={"target":project_id or None}
  if g in {"estas ai","estas aqui","ola","oi","bom dia","boa tarde","boa noite","alo"}:return "presence",{}
  if re.fullmatch(r"(?:por favor[, ]+)?(?:(?:consegues|podes|poderias)\s+)?(?:abrir|abre)\s+(?:o\s+)?youtube[\s?.!]*(?:por favor[\s?.!]*)?",t):return "open_youtube",{}
  if t in {"para","cancela","silencio","jarvis para","travis para"}:return "stop",{}

@@ -97,6 +97,9 @@ class Tests(unittest.TestCase):
     response=connection.getresponse();self.assertEqual(response.status,200)
     self.assertEqual(json.loads(response.read()),{"ok":True,"text":"estás aí?"});transcription.assert_called_once_with(b"audio")
   finally:connection.close();server.shutdown();server.server_close();thread.join()
+ def test_voice_wake_tolerates_common_whisper_variant(self):
+  self.assertEqual(j.classify("Travisse-se, estás aí?")[0],"presence")
+  self.assertEqual(j.classify("Travis, estás aqui?")[0],"presence")
  def test_expert_requests_route_to_large_agent_capability(self):
   tool,args=j.classify("Analisa a fundo a melhor arquitectura para este sistema")
   self.assertEqual(tool,"expert_query");self.assertIn("text",args)

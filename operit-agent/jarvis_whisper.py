@@ -3,7 +3,7 @@
 import json,math,sys,wave
 from pathlib import Path
 from pywhispercpp.model import Model
-model=Model(sys.argv[1],n_threads=4,print_realtime=False,print_progress=False,no_context=True,single_segment=True,greedy={'best_of':1},initial_prompt="Travis. Centro de Negócios. Pentehouse. Best Pizza. Dois Irmãos. Beatriz.")
+model=Model(sys.argv[1],n_threads=4,print_realtime=False,print_progress=False,no_context=True,single_segment=True,greedy={'best_of':1},initial_prompt="Travis. Travis, estás aí? Centro de Negócios. Pentehouse. Best Pizza. Dois Irmãos. Beatriz.")
 def transcribe(path):
  with wave.open(path) as wav:duration=wav.getnframes()/wav.getframerate()
  segments=model.transcribe(path,language='pt',audio_ctx=min(1500,max(512,math.ceil((duration+1)*50))))
