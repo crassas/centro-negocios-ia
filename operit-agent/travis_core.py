@@ -81,7 +81,7 @@ def classify_local_intent(text,project_id=""):
  if any(w in t for w in ["sessoes dos agentes","estado dos agentes","sala dos agentes","sala de comando"]):return "agent_sessions",{}
  if (not g and raw.strip(" ,:;.!?-") in {"travis","jarvis"}) or g in {"ai","tas ai","estas ai","estas aqui","ola","oi","bom dia","boa tarde","boa noite","alo"}:return "presence",{}
  if re.fullmatch(r"(?:por favor[, ]+)?(?:(?:consegues|podes|poderias)\s+)?(?:abrir|abre)\s+(?:o\s+)?youtube[\s?.!]*(?:por favor[\s?.!]*)?",t):return "open_youtube",{}
- if re.search(r"\b(?:abre|abrir|visita|entra em|vai a)\b",t) and (re.search(r"https?://",t) or re.search(r"\b(?:google|gmail|maps|drive|github|wikipedia|reddit|instagram|facebook|linkedin|chatgpt|openai|cloudflare)\b",t) or re.search(r"\b[a-z0-9.-]+\.(?:com|pt|org|net|io|ai|dev|app|co|eu)\b",t)):return "open_url",{"target":text}
+ if not re.search(r"\bnao\s+(?:abre|abrir|visita|entra|vai)\b",t) and re.search(r"\b(?:abre|abrir|visita|entra em|vai a)\b",t) and (re.search(r"https?://",t) or re.search(r"\b(?:google|gmail|maps|drive|github|wikipedia|reddit|instagram|facebook|linkedin|chatgpt|openai|cloudflare)\b",t) or re.search(r"\b[a-z0-9.-]+\.(?:com|pt|org|net|io|ai|dev|app|co|eu)\b",t)):return "open_url",{"target":text}
  if t in {"para","cancela","silencio","jarvis para","travis para"}:return "stop",{}
  if any(w in t for w in ["cria uma tarefa","criar tarefa","adiciona uma tarefa"]):return "create_task",{"title":text}
  if any(w in t for w in ["que tarefas","lista de tarefas","tarefas pendentes","que trabalho tens"]):return "task_list",{}
