@@ -15,6 +15,7 @@ REPOS=Path.home()/"repos"
 CENTRO_UI=Path.home()/".centro-ui"
 KEY=secrets.token_urlsafe(32)
 LOCK=threading.RLock()
+INFERENCE_INFO=threading.local()
 STATE_LOCK=threading.Lock()
 ACTIVE_REQUESTS=0
 SITES={"best-pizza":"https://bestpizzaandkebab.pt","pentehouse":"https://pentehouse.pt","2-irmaos":"https://restaurantedoisirmaos.pt"}
@@ -118,13 +119,31 @@ def inference_lock(timeout):
  if not LOCK.acquire(timeout=timeout):raise RuntimeError("O modelo está ocupado. Tenta novamente dentro de alguns segundos.")
  try:yield
  finally:LOCK.release()
+def conversation_cloud(text):
+ # Existing Workers AI deployment. Never selects an alternative paid provider.
+ payload={"question":"Responde directamente em português de Portugal, sem gerúndio, sem Markdown e no máximo 45 palavras. Não afirmes executar acções. Pedido: "+clean(text)[:3400],"context":{}}
+ request=urllib.request.Request("https://centro-negocios-ai.travisthejarvis.workers.dev/api/assist",data=json.dumps(payload,ensure_ascii=False).encode(),headers={"Content-Type":"application/json","User-Agent":"Centro-Server/1.0"})
+ start=time.monotonic()
+ with urllib.request.urlopen(request,timeout=8) as response:result=json.load(response)
+ answer=str(result.get("answer") or "").strip();model=str(result.get("model") or "")
+ if not result.get("ok") or not answer or not model.startswith("@cf/"):raise RuntimeError("Modelo remoto indisponível")
+ INFERENCE_INFO.value={"provider":"workers-ai","model":model}
+ event("executions",{"provider":"workers-ai","model":model,"latency_ms":int((time.monotonic()-start)*1000)})
+ return clean(answer)[:900]
+
 def infer(text,system="És o Travis, assistente do Centro de Negócios. Responde em português de Portugal, sem gerúndio, em uma ou duas frases curtas. Responde logo ao pedido, sem introduções. /no_think",json_mode=False,schema=None):
+ INFERENCE_INFO.value={"provider":"local","model":""}
+ mode=ROOT/"conversation-mode"
+ if not json_mode and mode.is_file() and mode.read_text().strip()=="hybrid":
+  try:return conversation_cloud(text)
+  except Exception as exc:event("executions",{"conversation_fallback":"local","reason":type(exc).__name__})
  with inference_lock(240 if json_mode else 2):
   try:http("http://127.0.0.1:8771/health",timeout=2)
   except Exception:
    try:llm_start("small")
    except Exception:llm_start("fallback")
   data={"messages":[{"role":"system","content":clean(system)},{"role":"user","content":clean(text)[:6000]}],"temperature":0.1,"max_tokens":320 if json_mode else 80,"stream":False}
+  data["chat_template_kwargs"]={"enable_thinking":False}
   if json_mode:data["response_format"]={"type":"json_object"}
   if schema:data["response_format"]={"type":"json_object","schema":schema}
   start=time.monotonic()
@@ -133,6 +152,7 @@ def infer(text,system="És o Travis, assistente do Centro de Negócios. Responde
    if not json_mode:raise RuntimeError("O modelo não respondeu no prazo. Podes pedir o estado do Centro ou tentar novamente.")
    if not (ROOT/"llm.model").exists() or (ROOT/"llm.model").read_text()=="fallback":raise
    llm_start("fallback");r=http("http://127.0.0.1:8771/v1/chat/completions",data,timeout=240)
+  INFERENCE_INFO.value={"provider":"local","model":r.get("model")}
   event("executions",{"provider":"local","model":r.get("model"),"latency_ms":int((time.monotonic()-start)*1000),"usage":r.get("usage")})
   return re.sub(r"<think>.*?</think>","",r["choices"][0]["message"]["content"],flags=re.S).strip()
 def plan_change(target,prompt,context):
@@ -251,7 +271,7 @@ def execute(tool,args):
  if tool=="gmail_inbox":return travis_gmail.inbox()
  if tool=="agent_sessions":return cockpit_snapshot()
  if tool=="projects_status":return projects_status(args.get("target"))
- if tool=="presence":return "Sou o Travis. Estou aqui. Podes pedir o estado do Centro, verificar os sites ou indicar o projecto e o que queres fazer."
+ if tool=="presence":return "Sou o Travis. Estou aqui. Diz-me o que precisas."
  if tool=="open_youtube":return {"action":"open_url","url":"https://www.youtube.com/"}
  if tool=="repo_access":
   available=[];missing=[]
@@ -422,7 +442,7 @@ def route(text,context=None):
  elif tool=="stop":reply="Parei."
  else:reply=result if isinstance(result,str) else json.dumps(result,ensure_ascii=False)
  event("tool_events",{"tool":tool,"ok":True,"duration_ms":int((time.monotonic()-start)*1000),"correlation_id":outcome["correlationId"],"completion_status":outcome["completionStatus"]})
- return {"ok":True,"provider":"local","tool":tool,"result":result,"reply":clean(reply)[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"],"durationMs":int((time.monotonic()-start)*1000)}
+ return {"ok":True,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool=="local_llm" else {"provider":"local"}),"tool":tool,"result":result,"reply":clean(reply)[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"],"durationMs":int((time.monotonic()-start)*1000)}
 
 VOICE_JOBS={}
 VOICE_JOB_LOCK=threading.Lock()

@@ -1,7 +1,7 @@
 import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs';
 import { createSpeechFace } from './travis-speech-face.mjs';
-import { createBacklight } from './travis-atmosphere.mjs?v=hologram1';
-import { createFaceRig } from './travis-face-rig.mjs?v=hologram1';
+import { createBacklight } from './travis-atmosphere.mjs?v=voicequality1';
+import { createFaceRig } from './travis-face-rig.mjs?v=voicequality1';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -820,7 +820,7 @@ if (!hud || !launcher || !canvas) {
     try {
       setState('listening','Estou a ouvir.');
       const stream=await navigator.mediaDevices.getUserMedia({
-        audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}
+        audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}
       });
       if (!opened || session!==voiceSession) {
         stream.getTracks().forEach(track=>track.stop());
@@ -830,7 +830,7 @@ if (!hud || !launcher || !canvas) {
       voiceChunks=[];
 
       const preferred='audio/webm;codecs=opus';
-      const options=MediaRecorder.isTypeSupported?.(preferred)?{mimeType:preferred}:undefined;
+      const options=MediaRecorder.isTypeSupported?.(preferred)?{mimeType:preferred,audioBitsPerSecond:64000}:undefined;
       const recorder=new MediaRecorder(stream,options);
       voiceRecorder=recorder;
       const mime=recorder.mimeType||stream.getAudioTracks()[0]?.getSettings?.().mimeType||'audio/webm';
@@ -865,6 +865,7 @@ if (!hud || !launcher || !canvas) {
         const samples=new Float32Array(micAnalyser.fftSize);
         const began=performance.now();
         let lastSpeech=began;
+        let noiseFloor=.004;let firstSpeech=0;
 
         voiceVadTimer=setInterval(()=>{
           if (!voiceRecorder || voiceRecorder!==recorder || recorder.state!=='recording') return;
@@ -874,14 +875,18 @@ if (!hud || !launcher || !canvas) {
           const rms=Math.sqrt(energy/samples.length);
           externalVoiceLevel=clamp((rms-.006)/.065,0,1);
 
-          if (rms>.018) {
+          const now=performance.now();
+          if(!heardSpeech && rms<.018)noiseFloor=noiseFloor*.92+rms*.08;
+          const threshold=clamp(noiseFloor*2.8,.008,.026);
+          if (rms>threshold) {
+            if(!heardSpeech)firstSpeech=now;
             heardSpeech=true;
             speechFrames++;
             lastSpeech=performance.now();
             voiceSpeechEndedAt=lastSpeech;
           }
-          const now=performance.now();
-          if (heardSpeech && speechFrames>=3 && now-lastSpeech>620) {
+          const pause=now-firstSpeech<1800?1100:850;
+          if (heardSpeech && speechFrames>=3 && now-lastSpeech>pause) {
             recorder.stop();
             return;
           }

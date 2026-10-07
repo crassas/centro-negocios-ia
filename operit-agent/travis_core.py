@@ -79,7 +79,7 @@ def classify_local_intent(text,project_id=""):
  t=re.sub(r"^(?:travis|jarvis)\b[\s,:;.!?-]*","",raw).strip();g=re.sub(r"[^a-z0-9 ]","",t).strip();p={"target":project_id or None}
  if re.search(r"\b(?:le|ler|mostra|ver|consulta|consultar)\b",t) and any(w in t for w in ["gmail","emails","e-mails","correio"]):return "gmail_inbox",{}
  if any(w in t for w in ["sessoes dos agentes","estado dos agentes","sala dos agentes","sala de comando"]):return "agent_sessions",{}
- if (not g and raw.strip(" ,:;.!?-") in {"travis","jarvis"}) or g in {"estas ai","estas aqui","ola","oi","bom dia","boa tarde","boa noite","alo"}:return "presence",{}
+ if (not g and raw.strip(" ,:;.!?-") in {"travis","jarvis"}) or g in {"ai","tas ai","estas ai","estas aqui","ola","oi","bom dia","boa tarde","boa noite","alo"}:return "presence",{}
  if re.fullmatch(r"(?:por favor[, ]+)?(?:(?:consegues|podes|poderias)\s+)?(?:abrir|abre)\s+(?:o\s+)?youtube[\s?.!]*(?:por favor[\s?.!]*)?",t):return "open_youtube",{}
  if t in {"para","cancela","silencio","jarvis para","travis para"}:return "stop",{}
  if any(w in t for w in ["cria uma tarefa","criar tarefa","adiciona uma tarefa"]):return "create_task",{"title":text}
