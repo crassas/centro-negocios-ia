@@ -11,20 +11,40 @@ stop_router() {
   /usr/bin/python3 - "$STATE/router.pid" <<'PY'
 import os,signal,sys,time
 from pathlib import Path
-p=Path(sys.argv[1])
+pidfile=Path(sys.argv[1])
+pids=set()
 try:
- pid=int(p.read_text())
- if b"jarvis_local.py" in Path(f"/proc/{pid}/cmdline").read_bytes():
-  os.kill(pid,signal.SIGTERM)
-  deadline=time.monotonic()+8
-  while time.monotonic()<deadline:
-   try:
-    if b"jarvis_local.py" not in Path(f"/proc/{pid}/cmdline").read_bytes():break
-   except OSError:break
-   time.sleep(.1)
-  else:raise RuntimeError("O Travis ainda não terminou; novo arranque cancelado.")
-except (OSError,ValueError):pass
-p.unlink(missing_ok=True)
+ pids.add(int(pidfile.read_text()))
+except (OSError,ValueError):
+ pass
+for proc in Path("/proc").iterdir():
+ if not proc.name.isdigit():continue
+ try:
+  cmd=Path(proc/"cmdline").read_bytes()
+ except OSError:
+  continue
+ if b"jarvis_local.py" in cmd and b"serve" in cmd:
+  pids.add(int(proc.name))
+for pid in sorted(pids):
+ try:
+  cmd=Path(f"/proc/{pid}/cmdline").read_bytes()
+  if b"jarvis_local.py" in cmd and b"serve" in cmd:os.kill(pid,signal.SIGTERM)
+ except OSError:
+  pass
+deadline=time.monotonic()+8
+while time.monotonic()<deadline:
+ alive=[]
+ for pid in pids:
+  try:
+   cmd=Path(f"/proc/{pid}/cmdline").read_bytes()
+   if b"jarvis_local.py" in cmd and b"serve" in cmd:alive.append(pid)
+  except OSError:
+   pass
+ if not alive:break
+ time.sleep(.1)
+else:
+ raise RuntimeError("O Travis ainda não terminou; novo arranque cancelado.")
+pidfile.unlink(missing_ok=True)
 PY
 }
 case "${1:-doctor}" in
