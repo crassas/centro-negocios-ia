@@ -48,9 +48,9 @@ class Tests(unittest.TestCase):
   saved=j.route("Travis, lembra-te que a Beatriz entrega em até 72 horas")
   self.assertEqual(saved["tool"],"note_fact");self.assertTrue(saved["result"]["neuronId"].startswith("neuron-"))
   status=j.route("Estado dos neurónios");self.assertGreaterEqual(status["result"]["neurons"],6)
-  with patch.object(j,"infer",return_value="Resposta") as inference:
+  with patch.object(j,"execute",return_value="Resposta") as execution:
    j.route("Qual é o prazo de entrega da Beatriz?")
-   prompt=inference.call_args.args[0]
+   prompt=execution.call_args.args[1]["text"]
    self.assertIn("Memória semântica local confirmada",prompt);self.assertIn("72 horas",prompt)
   recalled=j.route("Procura na memória sobre a Beatriz");self.assertEqual(recalled["tool"],"neural_recall");self.assertTrue(recalled["result"])
  def test_memory_survives_connection(self):
