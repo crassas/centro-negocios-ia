@@ -48,6 +48,11 @@ if (!hud || !launcher || !canvas) {
   let orbHit;
   let faceMouthLower;
   let faceEyeGroups=[];
+  let realFaceModel=null;
+  let realFaceHead=null;
+  let realFaceIris=[];
+  let realFaceBaseMaterial=null;
+  let realFaceReady=false;
   let orbRings=[];
   let avatarMaterial;
   let orbMaterial;
@@ -341,67 +346,19 @@ if (!hud || !launcher || !canvas) {
     return holoLine(points,color,opacity,true);
   }
 
-  function createFaceAvatar() {
+  async function createFaceAvatar() {
     faceRoot=new THREE.Group();
     faceRoot.visible=false;
 
-    const headGeo=new THREE.SphereGeometry(1,56,44);
-    const pos=headGeo.attributes.position;
-    const v=new THREE.Vector3();
-    for(let i=0;i<pos.count;i++){
-      v.fromBufferAttribute(pos,i);
-      const ny=v.y;
-      let jaw=1;
-      if(ny<-.15) jaw=1-Math.min(.22,(-ny-.15)*.24);
-      const cheek=1+.055*Math.exp(-Math.pow((ny-.05)/.38,2));
-      v.x*=.88*jaw*cheek;
-      v.y*=1.18;
-      v.z*=.89;
-      if(v.z>.2){
-        const forehead=Math.max(0,(v.y-.45));
-        v.z+=forehead*.035;
-      }
-      pos.setXYZ(i,v.x,v.y,v.z);
-    }
-    pos.needsUpdate=true;
-    headGeo.computeVertexNormals();
-
-    avatarMaterial=hologramShader();
-    avatarMaterial.uniforms.uColor.value.setRGB(.055,.74,1.25);
-    avatarMaterial.uniforms.uOpacity.value=.19;
-    const head=new THREE.Mesh(headGeo,avatarMaterial);
-    markBloom(head);
-    faceRoot.add(head);
-
-    const wireMat=new THREE.LineBasicMaterial({
-      color:0x64dfff,transparent:true,opacity:.13,
-      blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
-    });
-    const wire=markBloom(new THREE.LineSegments(new THREE.WireframeGeometry(headGeo),wireMat));
-    faceRoot.add(wire);
-
-    const pointGeo=new THREE.BufferGeometry();
-    const source=pos.array;
-    const points=[];
-    for(let i=0;i<source.length;i+=9){
-      if(source[i+2]>.15) points.push(source[i],source[i+1],source[i+2]+.006);
-    }
-    pointGeo.setAttribute('position',new THREE.Float32BufferAttribute(points,3));
-    const facePoints=markBloom(new THREE.Points(pointGeo,new THREE.PointsMaterial({
-      color:0x9af4ff,size:.013,transparent:true,opacity:.52,
-      blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
-    })));
-    faceRoot.add(facePoints);
-
-    const neckGeo=new THREE.CylinderGeometry(.46,.63,1.35,40,10,true);
+    const neckGeo=new THREE.CylinderGeometry(.42,.60,1.28,48,12,true);
     const neckMat=hologramShader();
-    neckMat.uniforms.uColor.value.setRGB(.04,.58,1.05);
-    neckMat.uniforms.uOpacity.value=.12;
+    neckMat.uniforms.uColor.value.setRGB(.025,.46,.92);
+    neckMat.uniforms.uOpacity.value=.075;
     const neck=new THREE.Mesh(neckGeo,neckMat);
-    neck.position.y=-1.62;
-    neck.position.z=-.05;
+    neck.position.set(0,-1.70,-.10);
     markBloom(neck);
     faceRoot.add(neck);
+
     const neckWire=markBloom(new THREE.LineSegments(
       new THREE.WireframeGeometry(neckGeo),
       new THREE.LineBasicMaterial({
@@ -412,95 +369,174 @@ if (!hud || !launcher || !canvas) {
     neckWire.position.copy(neck.position);
     faceRoot.add(neckWire);
 
-    [-1,1].forEach(side=>{
-      const eye=new THREE.Group();
-      eye.position.set(side*.34,.19,.88);
-      const sclera=new THREE.Mesh(
-        new THREE.SphereGeometry(.145,24,16),
-        new THREE.MeshBasicMaterial({
-          color:0x07131b,transparent:true,opacity:.82,depthWrite:false
-        })
-      );
-      sclera.scale.set(1,.56,.34);
-      eye.add(sclera);
-
-      const iris=markBloom(new THREE.Mesh(
-        new THREE.SphereGeometry(.066,20,12),
-        new THREE.MeshBasicMaterial({
-          color:0x73ecff,transparent:true,opacity:.92,
-          blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
-        })
-      ));
-      iris.position.z=.055;
-      eye.add(iris);
-
-      const ring=ellipseLine(.18,.095,.065,0x79edff,.55,48);
-      eye.add(ring);
-      faceRoot.add(eye);
-      faceEyeGroups.push(eye);
-
-      const browPts=[
-        new THREE.Vector3(side*.53,.43,.88),
-        new THREE.Vector3(side*.38,.47,.94),
-        new THREE.Vector3(side*.20,.45,.96)
-      ];
-      faceRoot.add(holoLine(browPts,0x70e7ff,.32));
-    });
-
-    faceRoot.add(holoLine([
-      new THREE.Vector3(0,.35,.93),
-      new THREE.Vector3(0,.08,1.02),
-      new THREE.Vector3(-.055,-.08,1.06),
-      new THREE.Vector3(0,-.12,1.08),
-      new THREE.Vector3(.055,-.08,1.06)
-    ],0x79eaff,.30));
-
-    faceRoot.add(holoLine([
-      new THREE.Vector3(-.30,-.37,.93),
-      new THREE.Vector3(-.14,-.34,1.00),
-      new THREE.Vector3(0,-.35,1.02),
-      new THREE.Vector3(.14,-.34,1.00),
-      new THREE.Vector3(.30,-.37,.93)
-    ],0x79eaff,.36));
-
-    faceMouthLower=holoLine([
-      new THREE.Vector3(-.28,-.39,.93),
-      new THREE.Vector3(-.12,-.43,.99),
-      new THREE.Vector3(0,-.445,1.0),
-      new THREE.Vector3(.12,-.43,.99),
-      new THREE.Vector3(.28,-.39,.93)
-    ],0x8cf1ff,.42);
-    faceRoot.add(faceMouthLower);
-
-    const earL=ellipseLine(.10,.22,.02,0x55d7ff,.18,40);
-    earL.position.set(-.89,.04,.05);
-    earL.rotation.y=.28;
-    faceRoot.add(earL);
-    const earR=earL.clone();
-    earR.material=earL.material.clone();
-    earR.position.x=.89;
-    earR.rotation.y=-.28;
-    faceRoot.add(earR);
-
-    for(let i=0;i<3;i++){
+    for(let i=0;i<4;i++){
       const halo=markBloom(new THREE.Mesh(
-        new THREE.TorusGeometry(1.30+i*.13,.008,5,128),
+        new THREE.TorusGeometry(1.32+i*.13,.008,5,160),
         new THREE.MeshBasicMaterial({
-          color:i===2?0xff456d:0x5fe6ff,
-          transparent:true,opacity:i===2?.08:.13,
+          color:i===3?0xff456d:0x5fe6ff,
+          transparent:true,opacity:i===3?.07:.10,
           blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
         })
       ));
-      halo.rotation.x=.02+i*.025;
-      halo.position.z=-.18-i*.06;
+      halo.rotation.x=.02+i*.018;
+      halo.position.z=-.30-i*.055;
+      halo.userData.faceHaloSpeed=(i%2?1:-1)*(.025+i*.006);
       faceRoot.add(halo);
     }
 
+    // Real CC0 head from Blender Studio Human Base Meshes.
+    try {
+      const loader=new GLTFLoader();
+      const gltf=await loader.loadAsync('./assets/travis/travis-face-realistic.glb?v=1');
+      realFaceModel=gltf.scene;
+      realFaceModel.name='TravisRealFace';
+      realFaceModel.rotation.set(0,0,0);
+      realFaceModel.position.set(0,.02,.03);
+
+      const head=realFaceModel.getObjectByName('TravisFace_Head');
+      const scleraL=realFaceModel.getObjectByName('TravisFace_Sclera_L');
+      const scleraR=realFaceModel.getObjectByName('TravisFace_Sclera_R');
+      const irisL=realFaceModel.getObjectByName('TravisFace_Iris_L');
+      const irisR=realFaceModel.getObjectByName('TravisFace_Iris_R');
+
+      if (!head) throw new Error('Malha facial em falta.');
+
+      realFaceBaseMaterial=new THREE.MeshPhysicalMaterial({
+        color:0x06131d,
+        metalness:.18,
+        roughness:.34,
+        clearcoat:.34,
+        clearcoatRoughness:.22,
+        transparent:true,
+        opacity:.58,
+        emissive:new THREE.Color(0x063c52),
+        emissiveIntensity:.18,
+        side:THREE.FrontSide,
+        depthWrite:true
+      });
+      head.material=realFaceBaseMaterial;
+      realFaceHead=head;
+
+      // A second shell gives the bright holographic Fresnel without washing out the facial volume.
+      const glowShell=new THREE.Mesh(head.geometry.clone(),hologramShader());
+      glowShell.name='TravisFace_HologramShell';
+      glowShell.material.uniforms.uColor.value.setRGB(.035,.64,1.25);
+      glowShell.material.uniforms.uOpacity.value=.105;
+      glowShell.scale.setScalar(1.006);
+      glowShell.renderOrder=3;
+      markBloom(glowShell);
+      realFaceModel.add(glowShell);
+      avatarMaterial=glowShell.material;
+
+      // Fine wire topology over the physical face.
+      const wire=markBloom(new THREE.LineSegments(
+        new THREE.WireframeGeometry(head.geometry),
+        new THREE.LineBasicMaterial({
+          color:0x6eeaff,transparent:true,opacity:.105,
+          blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
+        })
+      ));
+      wire.name='TravisFace_Wire';
+      wire.scale.setScalar(1.009);
+      wire.renderOrder=4;
+      realFaceModel.add(wire);
+
+      // Sparse vertices make the face read like the reference without becoming noisy.
+      const src=head.geometry.attributes.position;
+      const pts=[];
+      for(let i=0;i<src.count;i+=5){
+        pts.push(src.getX(i),src.getY(i),src.getZ(i));
+      }
+      const pg=new THREE.BufferGeometry();
+      pg.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
+      const points=markBloom(new THREE.Points(pg,new THREE.PointsMaterial({
+        color:0xa5f4ff,size:.012,transparent:true,opacity:.30,
+        blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
+      })));
+      points.scale.setScalar(1.012);
+      points.renderOrder=5;
+      realFaceModel.add(points);
+
+      const makeEyePivot=(sclera,iris,label)=>{
+        if(!sclera&&!iris)return;
+        const pair=[sclera,iris].filter(Boolean);
+        const box=new THREE.Box3();
+        pair.forEach(o=>box.expandByObject(o));
+        const center=new THREE.Vector3();
+        box.getCenter(center);
+        const pivot=new THREE.Group();
+        pivot.name='TravisFace_Eye_'+label;
+        pivot.position.copy(center);
+        pair.forEach(o=>{
+          realFaceModel.remove(o);
+          o.position.sub(center);
+          pivot.add(o);
+        });
+        realFaceModel.add(pivot);
+        faceEyeGroups.push(pivot);
+      };
+
+      [scleraL,scleraR].filter(Boolean).forEach(sclera=>{
+        sclera.material=new THREE.MeshPhysicalMaterial({
+          color:0x07141c,
+          metalness:.05,roughness:.22,
+          transparent:true,opacity:.70,
+          emissive:new THREE.Color(0x082c39),emissiveIntensity:.16,
+          depthWrite:false
+        });
+      });
+      [irisL,irisR].filter(Boolean).forEach(iris=>{
+        iris.material=new THREE.MeshBasicMaterial({
+          color:0x8ff5ff,transparent:true,opacity:.94,
+          blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
+        });
+        markBloom(iris);
+        realFaceIris.push(iris);
+      });
+
+      makeEyePivot(scleraL,irisL,'L');
+      makeEyePivot(scleraR,irisR,'R');
+
+      // Subtle luminous mouth line, driven by the real voice envelope.
+      faceMouthLower=holoLine([
+        new THREE.Vector3(-.27,-.54,.74),
+        new THREE.Vector3(-.12,-.575,.79),
+        new THREE.Vector3(0,-.585,.80),
+        new THREE.Vector3(.12,-.575,.79),
+        new THREE.Vector3(.27,-.54,.74)
+      ],0x9af4ff,.30);
+      faceMouthLower.renderOrder=6;
+      realFaceModel.add(faceMouthLower);
+
+      faceRoot.add(realFaceModel);
+      realFaceReady=true;
+    } catch(error) {
+      console.warn('Travis realistic face fallback:',error);
+      // Fallback is deliberately minimal; the normal path is the real GLB above.
+      const fallbackGeo=new THREE.SphereGeometry(1,40,32);
+      const pos=fallbackGeo.attributes.position;
+      const v=new THREE.Vector3();
+      for(let i=0;i<pos.count;i++){
+        v.fromBufferAttribute(pos,i);
+        v.x*=.86*(v.y<-.18?.89:1);
+        v.y*=1.16;
+        v.z*=.88;
+        pos.setXYZ(i,v.x,v.y,v.z);
+      }
+      fallbackGeo.computeVertexNormals();
+      avatarMaterial=hologramShader();
+      avatarMaterial.uniforms.uColor.value.setRGB(.045,.62,1.1);
+      avatarMaterial.uniforms.uOpacity.value=.13;
+      const fallback=new THREE.Mesh(fallbackGeo,avatarMaterial);
+      markBloom(fallback);
+      faceRoot.add(fallback);
+    }
+
     faceHit=new THREE.Mesh(
-      new THREE.SphereGeometry(1.18,18,14),
+      new THREE.SphereGeometry(1.22,18,14),
       new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false})
     );
-    faceHit.scale.set(.9,1.18,.9);
+    faceHit.scale.set(.88,1.16,.94);
     faceHit.userData.core=true;
     faceRoot.add(faceHit);
 
@@ -559,13 +595,14 @@ if (!hud || !launcher || !canvas) {
     scene.add(orbRoot);
   }
 
-  function createAdaptiveForms() {
-    createFaceAvatar();
+  async function createAdaptiveForms() {
+    await createFaceAvatar();
     createOrbAvatar();
     formButtons.forEach(button=>{
       button.addEventListener('click',()=>{
         const mode=button.dataset.travisForm||'auto';
-        setForm(mode,{manual:mode!=='auto'});
+        if (mode!=='auto' && formPolicy===mode) setForm('auto');
+        else setForm(mode,{manual:mode!=='auto'});
         haptic(8);
         pulseTone(true);
       });
@@ -1449,7 +1486,7 @@ if (!hud || !launcher || !canvas) {
     coreRoot.add(model);
     scene.add(coreRoot);
     createCoreHit();
-    createAdaptiveForms();
+    await createAdaptiveForms();
     createCommands();
 
     sizeForViewport();
@@ -1585,8 +1622,23 @@ if (!hud || !launcher || !canvas) {
         eye.rotation.y=Math.sin(t*.31+i*.9)*.018;
       });
       if (faceMouthLower) {
-        faceMouthLower.position.y=-(state==='speaking'?speechLevel*.095:0);
-        faceMouthLower.scale.x=1+(state==='speaking'?speechLevel*.035:0);
+        faceMouthLower.position.y=-(state==='speaking'?speechLevel*.060:0);
+        faceMouthLower.scale.x=1+(state==='speaking'?speechLevel*.025:0);
+      }
+      if (realFaceBaseMaterial) {
+        const listening=state==='listening'?1:0;
+        const speaking=state==='speaking'?speechLevel:0;
+        realFaceBaseMaterial.opacity=.54+listening*.04+speaking*.055;
+        realFaceBaseMaterial.emissiveIntensity=.16+listening*.04+speaking*.10;
+      }
+      realFaceIris.forEach((iris,i)=>{
+        const pulse=.92+.08*Math.sin(t*2.4+i*.7)+(state==='listening'?.12:0)+(state==='speaking'?speechLevel*.18:0);
+        iris.scale.setScalar(pulse);
+      });
+      if (faceRoot) {
+        faceRoot.children.forEach(child=>{
+          if(child.userData?.faceHaloSpeed) child.rotation.z+=child.userData.faceHaloSpeed*dt*(state==='thinking'?1.8:1);
+        });
       }
       if (avatarMaterial) {
         avatarMaterial.uniforms.uTime.value=t;

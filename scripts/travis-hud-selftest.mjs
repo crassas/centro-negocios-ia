@@ -5,13 +5,14 @@ const css=fs.readFileSync('travis-hud.css','utf8');
 const scene=fs.readFileSync('travis-3d.mjs','utf8');
 const sw=fs.readFileSync('sw.js','utf8');
 const glb=fs.statSync('assets/travis/travis-core.glb');
+const faceGlb=fs.statSync('assets/travis/travis-face-realistic.glb');
 
 for(const token of [
   'id="travis-hud"',
   'id="travis-three-canvas"',
   'id="travis-loading"',
   './travis-hud.css?v=8',
-  './travis-3d.mjs?v=avatar1',
+  './travis-3d.mjs?v=face1',
   'type="importmap"',
   '"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"'
 ]){
@@ -134,7 +135,6 @@ for(const token of [
 
 
 for(const token of [
-  'data-travis-form="auto"',
   'data-travis-form="core"',
   'data-travis-form="face"',
   'data-travis-form="orb"',
@@ -167,8 +167,23 @@ for(const token of [
   if(!css.includes(token)) throw new Error('Holograma textual V8 em falta: '+token);
 }
 
+
+for(const token of [
+  './assets/travis/travis-face-realistic.glb?v=1',
+  'TravisRealFace',
+  'TravisFace_Head',
+  'realFaceBaseMaterial',
+  'realFaceIris',
+  'await createFaceAvatar()'
+]){
+  if(!scene.includes(token)) throw new Error('Rosto 3D real em falta: '+token);
+}
+if(faceGlb.size < 1000000) throw new Error('GLB facial realista demasiado pequeno: '+faceGlb.size);
+if(html.includes('data-travis-form="auto"')) throw new Error('AUTO não deve aparecer no selector visual.');
+if(!sw.includes('travis-face-realistic.glb?v=1')) throw new Error('Rosto realista não está na cache PWA.');
+
 if(glb.size < 500000) throw new Error('GLB Travis demasiado pequeno: '+glb.size);
 if(!css.includes('#travis-three-canvas')) throw new Error('Canvas 3D CSS em falta.');
-if(!sw.includes('travis-3d.mjs?v=avatar1') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
+if(!sw.includes('travis-3d.mjs?v=face1') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
 
 console.log('TRAVIS REAL 3D SELFTEST OK',glb.size,'bytes');

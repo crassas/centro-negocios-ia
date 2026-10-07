@@ -436,3 +436,13 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
   .travis-form-selector{top:76%}
   .travis-form-selector button{height:34px}
 }
+
+
+/* V9 realistic face */
+.travis-form-selector button{flex:1 1 33.333%}
+.travis-form-selector button[data-travis-form="face"].is-active{
+  background:radial-gradient(ellipse at 50% 100%,rgba(37,177,255,.11),transparent 68%);
+}
+@media(max-width:820px){
+  .travis-form-selector{top:78.8%;width:88vw}
+}
