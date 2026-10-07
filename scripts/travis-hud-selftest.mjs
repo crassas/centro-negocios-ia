@@ -11,7 +11,7 @@ for(const token of [
   'id="travis-three-canvas"',
   'id="travis-loading"',
   './travis-hud.css?v=71',
-  './travis-3d.mjs?v=voice1',
+  './travis-3d.mjs?v=unified1',
   'type="importmap"',
   '"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"'
 ]){
@@ -107,7 +107,7 @@ for(const token of [
 
 
 for(const token of [
-  "LOCAL_TRAVIS_BASE='http://127.0.0.1:8770'",
+  "LOCAL_TRAVIS_BASE",
   "localJson('/transcribe'",
   "localJson('/jarvis'",
   "localFetch('/speak'",
@@ -122,8 +122,18 @@ for(const token of [
   if(!scene.includes(token)) throw new Error('Integração de voz local em falta: '+token);
 }
 
+
+for(const token of [
+  'IS_LOCAL_TRAVIS_UI',
+  "location.assign('http://127.0.0.1:8770/?travis=1')",
+  "new URLSearchParams(location.search).get('travis')==='1'",
+  'open:launchHud'
+]){
+  if(!scene.includes(token)) throw new Error('Handoff local unificado em falta: '+token);
+}
+
 if(glb.size < 500000) throw new Error('GLB Travis demasiado pequeno: '+glb.size);
 if(!css.includes('#travis-three-canvas')) throw new Error('Canvas 3D CSS em falta.');
-if(!sw.includes('travis-3d.mjs?v=voice1') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
+if(!sw.includes('travis-3d.mjs?v=unified1') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
 
 console.log('TRAVIS REAL 3D SELFTEST OK',glb.size,'bytes');

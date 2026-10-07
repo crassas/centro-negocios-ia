@@ -81,7 +81,8 @@ if (!hud || !launcher || !canvas) {
   let nextGlitchAt = performance.now() + 4500;
   let stateChangedAt = performance.now();
 
-  const LOCAL_TRAVIS_BASE='http://127.0.0.1:8770';
+  const IS_LOCAL_TRAVIS_UI=['127.0.0.1','localhost'].includes(location.hostname) && location.port==='8770';
+  const LOCAL_TRAVIS_BASE=IS_LOCAL_TRAVIS_UI?location.origin:'http://127.0.0.1:8770';
   let voiceSession=0;
   let voiceBusy=false;
   let voiceStream=null;
@@ -344,9 +345,9 @@ if (!hud || !launcher || !canvas) {
       cache:'no-store',
       credentials:'omit',
       headers,
-      signal,
-      targetAddressSpace:'local'
+      signal
     };
+    if (!IS_LOCAL_TRAVIS_UI) init.targetAddressSpace='local';
     if (body!=null) init.body=type==='application/json'?JSON.stringify(body):body;
     return fetch(LOCAL_TRAVIS_BASE+path,init);
   }
@@ -1409,7 +1410,15 @@ if (!hud || !launcher || !canvas) {
     tiltTarget.y=clamp((event.beta-45)/50,-1,1);
   }
 
-  launcher.addEventListener('click',openHud);
+  function launchHud() {
+    if (!IS_LOCAL_TRAVIS_UI) {
+      location.assign('http://127.0.0.1:8770/?travis=1');
+      return;
+    }
+    openHud();
+  }
+
+  launcher.addEventListener('click',launchHud);
   closeButton?.addEventListener('click',closeHud);
   canvas.addEventListener('pointermove',onPointerMove,{passive:true});
   canvas.addEventListener('pointerdown',onPointerDown,{passive:true});
@@ -1428,7 +1437,7 @@ if (!hud || !launcher || !canvas) {
   updateClock();
 
   window.TravisVisual=Object.freeze({
-    open:openHud,
+    open:launchHud,
     close:closeHud,
     commands:toggleCommands,
     setState,
@@ -1458,13 +1467,18 @@ if (!hud || !launcher || !canvas) {
 
   // Keeps existing Centro callbacks from opening a second/legacy Travis.
   window.TravisPanel={
-    open:openHud,
+    open:launchHud,
     completeTask(id,text) {
       if (opened) setState('ready',text?'Tarefa concluída.':'Pronto.');
     }
   };
 
-  init3D().catch((error)=>{
+  init3D().then(()=>{
+    if (IS_LOCAL_TRAVIS_UI && new URLSearchParams(location.search).get('travis')==='1') {
+      history.replaceState(null,'',location.pathname);
+      setTimeout(openHud,120);
+    }
+  }).catch((error)=>{
     console.error('Travis 3D:',error);
     setLoading('Falha ao carregar o núcleo 3D');
     setState('ready','Interface 3D indisponível.');
