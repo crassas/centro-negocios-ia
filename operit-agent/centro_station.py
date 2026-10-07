@@ -60,6 +60,7 @@ RUNTIME_FILES = {
     "centro_station.py": SUPERVISOR_PATH,
     "centro_soak.py": HOME / "centro_soak.py",
     "travis_core.py": HOME / "travis_core.py",
+    "travis_genome.py": HOME / "travis_genome.py",
     "business_db.py": HOME / "business_db.py",
     "jarvis_local.py": HOME / "jarvis_local.py",
     "jarvis_whisper.py": HOME / "jarvis_whisper.py",

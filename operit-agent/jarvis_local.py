@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import travis_core
+import travis_genome
 import travis_gmail
 from concurrent.futures import ThreadPoolExecutor
 ROOT=Path.home()/".centro-jarvis"
@@ -23,6 +24,7 @@ PROJECTS={"best-pizza":"best-pizza-kebab","pentehouse":"pente_houselanding","2-i
 TABLES=("conversations","projects","facts","executions","tool_events","summaries")
 TRAVIS_STORE=travis_core.RuntimeStore(ROOT/"memory.sqlite")
 TRAVIS_UTEF=travis_core.UnifiedExecutionFramework(TRAVIS_STORE)
+TRAVIS_GENOME=travis_genome.BehaviorGenome(ROOT)
 NEURAL_SEEDED=False
 def ensure_neural_seed():
  global NEURAL_SEEDED
@@ -72,6 +74,7 @@ def doctor():
   d["llm_calls"]=c.execute("SELECT COUNT(*) FROM executions WHERE data LIKE '%\"provider\": \"local\"%'").fetchone()[0]
  d["travis_core"]=TRAVIS_STORE.health()
  d["travis_capabilities"]=len(travis_core.CAPABILITIES)
+ d["behavior_genome"]=TRAVIS_GENOME.snapshot()
  for name,file in {"agent":".centro-agent/agent.pid","supervisor":".centro-station/supervisor.pid"}.items():
   try:os.kill(int((Path.home()/file).read_text()),0);d[name]=True
   except Exception:d[name]=False
@@ -121,7 +124,8 @@ def inference_lock(timeout):
  finally:LOCK.release()
 def conversation_cloud(text):
  # Existing Workers AI deployment. Never selects an alternative paid provider.
- payload={"question":"Responde directamente em português de Portugal, sem gerúndio, sem Markdown e no máximo 45 palavras. Não afirmes executar acções. Pedido: "+clean(text)[:3400],"context":{}}
+ policy=TRAVIS_GENOME.inference_policy(False)
+ payload={"question":"Responde directamente em português de Portugal, sem gerúndio, sem Markdown e no máximo 45 palavras. Não afirmes executar acções. "+clean(policy["systemSuffix"])+" Pedido: "+clean(text)[:3400],"context":{}}
  request=urllib.request.Request("https://centro-negocios-ai.travisthejarvis.workers.dev/api/assist",data=json.dumps(payload,ensure_ascii=False).encode(),headers={"Content-Type":"application/json","User-Agent":"Centro-Server/1.0"})
  start=time.monotonic()
  with urllib.request.urlopen(request,timeout=8) as response:result=json.load(response)
@@ -137,12 +141,14 @@ def infer(text,system="És o Travis, assistente do Centro de Negócios. Responde
  if not json_mode and mode.is_file() and mode.read_text().strip()=="hybrid":
   try:return conversation_cloud(text)
   except Exception as exc:event("executions",{"conversation_fallback":"local","reason":type(exc).__name__})
+ policy=TRAVIS_GENOME.inference_policy(json_mode)
+ system=system+"\n"+policy["systemSuffix"]
  with inference_lock(240 if json_mode else 2):
   try:http("http://127.0.0.1:8771/health",timeout=2)
   except Exception:
    try:llm_start("small")
    except Exception:llm_start("fallback")
-  data={"messages":[{"role":"system","content":clean(system)},{"role":"user","content":clean(text)[:6000]}],"temperature":0.1,"max_tokens":320 if json_mode else 80,"stream":False}
+  data={"messages":[{"role":"system","content":clean(system)},{"role":"user","content":clean(text)[:6000]}],"temperature":policy["temperature"],"max_tokens":policy["max_tokens"],"stream":False}
   data["chat_template_kwargs"]={"enable_thinking":False}
   if json_mode:data["response_format"]={"type":"json_object"}
   if schema:data["response_format"]={"type":"json_object","schema":schema}
@@ -362,6 +368,9 @@ def execute(tool,args):
   ensure_neural_seed();q=str(args.get("query") or "");return TRAVIS_STORE.recall(q,project(q) or "",8)
  if tool=="neural_consolidate":
   ensure_neural_seed();return TRAVIS_STORE.consolidate_neurons()
+ if tool=="genome_status":return TRAVIS_GENOME.snapshot()
+ if tool=="genome_compare":return TRAVIS_GENOME.compare()
+ if tool=="genome_activate":return TRAVIS_GENOME.activate(str(args.get("profile") or ""))
  if tool=="note_fact":
   raw=clean(args["text"])[:1000]
   fact=re.sub(r"(?i)^(?:travis|jarvis)?[\s,:;.!?-]*(?:lembra-te que|lembra que|guarda que|memoriza que|recorda que)[\s,:;.!?-]*","",raw).strip() or raw
@@ -447,6 +456,7 @@ def route(text,context=None):
   args["text"]=args["text"][:4400]
  outcome=TRAVIS_UTEF.execute(tool,args,lambda:execute(tool,args),runtime)
  result=outcome["result"]
+ TRAVIS_GENOME.observe(tool,outcome["durationMs"],outcome["completionStatus"],True,len(outcome.get("evidence") or []))
  if tool=="gmail_inbox":reply="Últimos emails da caixa de entrada: "+"; ".join(m["subject"] for m in result["messages"]) if result["messages"] else "A caixa de entrada está vazia."
  elif tool=="agent_sessions":reply="O agente está "+("ativo" if result["agent"] else "sem ligação confirmada")+". "+str(sum(j["status"] in {"running","queued"} for j in result["jobs"]))+" pedidos de voz em curso. Podes ver as execuções na Sala de Comando."
  elif tool=="system_status":reply="O Centro está "+("activo" if result["centro"].get("ok") else "indisponível")+". Memória disponível: "+str(result["ram_available_mb"])+" megabytes."
@@ -457,6 +467,11 @@ def route(text,context=None):
  elif tool=="neural_status":reply="Cérebro local: "+str(result["neurons"])+" neurónios e "+str(result["synapses"])+" sinapses."
  elif tool=="neural_recall":reply=("Encontrei "+str(len(result))+" neurónios relevantes. "+". ".join(x["title"] for x in result[:5])) if result else "Não encontrei memória confirmada relevante."
  elif tool=="neural_consolidate":reply="Ciclo neural concluído: "+str(result["neurons"])+" neurónios, "+str(result["synapses"])+" sinapses, "+str(result["decayed"])+" ligações ajustadas."
+ elif tool=="genome_status":reply="Genoma activo: "+result["activeProfile"]+". Amostras medidas: "+str(result["metrics"].get("samples",0))+"."
+ elif tool=="genome_compare":
+  eligible=[p for p in result["profiles"] if p.get("eligible")]
+  reply=("Perfil com melhor pontuação medida: "+result["winner"]+"." if result.get("winner") else "Ainda não há amostras suficientes para escolher um vencedor.")+" Perfis elegíveis: "+str(len(eligible))+"."
+ elif tool=="genome_activate":reply="Perfil comportamental activo: "+result["activeProfile"]+". Geração "+str(result["generation"])+"."
  elif tool=="repo_change":
   commit=re.search(r"Commit: ([0-9a-f]{40})",str(result))
   if commit:
