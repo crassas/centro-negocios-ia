@@ -128,7 +128,7 @@ def conversation_cloud(text,system="",max_words=45):
  # Existing Workers AI deployment. Never selects an alternative paid provider.
  instruction=clean(system).strip() or "Responde directamente em português de Portugal, sem gerúndio. Não afirmes executar acções que não executaste."
  max_words=max(20,min(int(max_words),220))
- payload={"question":instruction[:2200]+"\\nLimite aproximado: "+str(max_words)+" palavras.\\n\\nPedido/contexto:\\n"+clean(text)[:5600],"context":{}}
+ payload={"question":instruction[:1200]+"\\nLimite aproximado: "+str(max_words)+" palavras.\\n\\nPedido/contexto:\\n"+clean(text)[:3600],"context":{}}
  request=urllib.request.Request("https://centro-negocios-ai.travisthejarvis.workers.dev/api/assist",data=json.dumps(payload,ensure_ascii=False).encode(),headers={"Content-Type":"application/json","User-Agent":"Centro-Server/1.0"})
  start=time.monotonic()
  with urllib.request.urlopen(request,timeout=8) as response:result=json.load(response)
@@ -172,20 +172,25 @@ def _research_query(text):
  return q or clean(text).strip()
 def web_research(query):
  q=_research_query(query)
- data=travis_web.research_context(q,max_sources=3,max_chars_each=3600)
+ data=travis_web.research_context(q,max_sources=3,max_chars_each=1600)
  sources=data.get("sources") or []
  if not sources:
   answer=infer(q+"\\nA pesquisa externa não devolveu fontes. Responde com conhecimento local e identifica claramente o que não foi confirmado online.",max_tokens_override=220)
   return {"query":q,"answer":answer,"sources":[],"provider":data.get("provider","none"),"verifiedOnline":False}
  blocks=[]
  for index,item in enumerate(sources,1):
-  evidence=(item.get("text") or item.get("snippet") or "")[:3600]
+  evidence=(item.get("text") or item.get("snippet") or "")[:1400]
   blocks.append(f"[{index}] {item.get('pageTitle') or item.get('title') or item.get('url')}\\nURL: {item.get('url')}\\n{evidence}")
  prompt="Pergunta do utilizador: "+q+"\\n\\nFontes recolhidas agora:\\n\\n"+"\\n\\n".join(blocks)
  system=("Responde em português de Portugal. Usa prioritariamente as fontes fornecidas e não inventes factos ausentes. "
          "Para afirmações factuais importantes, indica [1], [2] ou [3]. Se as fontes discordarem, diz isso. "
          "Distingue informação confirmada de inferência. Responde directamente e com detalhe suficiente.")
- answer=infer(prompt,system=system,max_tokens_override=260)
+ try:
+  answer=infer(prompt,system=system,max_tokens_override=180)
+ except Exception as exc:
+  event("executions",{"web_research_inference_fallback":type(exc).__name__})
+  titles=[str(x.get("pageTitle") or x.get("title") or x.get("url")) for x in sources]
+  answer="Encontrei fontes actuais, mas o sintetizador não concluiu. Fontes: "+"; ".join(titles[:3])+"."
  return {"query":q,"answer":answer,"sources":[{"title":x.get("pageTitle") or x.get("title"),"url":x.get("url"),"snippet":x.get("snippet","")} for x in sources],"provider":data.get("provider","none"),"verifiedOnline":True}
 def plan_change(target,prompt,context):
  system = ('És um planeador de alterações. Devolve apenas JSON com summary e edits. '
