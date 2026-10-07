@@ -62,6 +62,7 @@ RUNTIME_FILES = {
     "travis_core.py": HOME / "travis_core.py",
     "travis_genome.py": HOME / "travis_genome.py",
     "travis_gmail.py": HOME / "travis_gmail.py",
+    "travis_web_tools.py": HOME / "travis_web_tools.py",
     "business_db.py": HOME / "business_db.py",
     "jarvis_local.py": HOME / "jarvis_local.py",
     "jarvis_whisper.py": HOME / "jarvis_whisper.py",
