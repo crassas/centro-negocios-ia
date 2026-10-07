@@ -11,8 +11,8 @@ for(const token of [
   'id="travis-hud"',
   'id="travis-three-canvas"',
   'id="travis-loading"',
-  './travis-hud.css?v=facefinal1',
-  './travis-3d.mjs?v=facefinal1',
+  './travis-hud.css?v=faceclean1',
+  './travis-3d.mjs?v=faceclean1',
   'type="importmap"',
   '"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"'
 ]){
@@ -126,7 +126,6 @@ for(const token of [
 for(const token of [
   'data-travis-form="core"',
   'data-travis-form="face"',
-  'data-travis-form="orb"',
   'data-text="TRAVIS"'
 ]){
   if(!html.includes(token)) throw new Error('Identidade adaptativa V8 em falta: '+token);
@@ -134,10 +133,8 @@ for(const token of [
 
 for(const token of [
   'createFaceAvatar',
-  'createOrbAvatar',
   "modeForState(next=state)",
-  "if (next==='listening' || next==='speaking') return 'face'",
-  "if (next==='thinking' || next==='booting') return 'orb'",
+  "if (next==='listening' || next==='thinking' || next==='speaking') return 'face'",
   'faceMouthLower.position.y',
   'faceEyeGroups',
   'formBlend',
@@ -193,8 +190,12 @@ for(const token of [
   if(!scene.includes(token)) throw new Error('V11 face/voice refinement em falta: '+token);
 }
 
+
+if(html.includes('data-travis-form="orb"')) throw new Error('ORBE ainda aparece no selector.');
+if(scene.includes("new THREE.CylinderGeometry(.32,.48,1.02")) throw new Error('Pescoço cilíndrico ainda activo.');
+
 if(glb.size < 500000) throw new Error('GLB Travis demasiado pequeno: '+glb.size);
 if(!css.includes('#travis-three-canvas')) throw new Error('Canvas 3D CSS em falta.');
-if(!sw.includes('travis-3d.mjs?v=facefinal1') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
+if(!sw.includes('travis-3d.mjs?v=faceclean1') || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
 
 console.log('TRAVIS REAL 3D SELFTEST OK',glb.size,'bytes');
