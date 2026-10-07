@@ -6,7 +6,7 @@ import travis_core as t
 class Tests(unittest.TestCase):
  def test_registry(self):
   s=t.registry_snapshot();self.assertTrue(s["localFirst"]);self.assertFalse(s["paidFallback"])
-  required={"presence","open_youtube","stop","system_status","repo_access","site_check","git_status","git_diff","create_task","task_list","neural_status","neural_recall","neural_consolidate","genome_status","genome_compare","genome_activate","laya_status","laya_decide","local_llm","repo_change","server_status","station_status","station_doctor","agents_status","autonomy_selftest","fault_timeout","fault_laya_recovery","git_pull","git_access_matrix","jarvis_query","claude_query","manus_status","manus_query"}
+  required={"presence","open_youtube","open_url","web_search","web_read","web_research","device_capabilities","stop","system_status","repo_access","site_check","git_status","git_diff","create_task","task_list","neural_status","neural_recall","neural_consolidate","genome_status","genome_compare","genome_activate","laya_status","laya_decide","local_llm","repo_change","server_status","station_status","station_doctor","agents_status","autonomy_selftest","fault_timeout","fault_laya_recovery","git_pull","git_access_matrix","jarvis_query","claude_query","manus_status","manus_query"}
   self.assertTrue(required.issubset(t.CAPABILITIES))
  def test_contracts(self):
   c=t.RuntimeContext.create(source="test",project_id="centro");e=t.EventEnvelope.create("TEST",c,priority="HIGH");self.assertEqual(e.correlation_id,c.correlation_id)
@@ -16,6 +16,10 @@ class Tests(unittest.TestCase):
  def test_router(self):
   self.assertEqual(t.classify_local_intent("Travis, estás aí?")[0],"presence")
   self.assertEqual(t.classify_local_intent("Travis, abre o YouTube por favor")[0],"open_youtube")
+  self.assertEqual(t.classify_local_intent("Abre o GitHub")[0],"open_url")
+  self.assertEqual(t.classify_local_intent("Pesquisa na internet sobre modelos locais")[0],"web_research")
+  self.assertEqual(t.classify_local_intent("Lê esta página https://example.com")[0],"web_read")
+  self.assertEqual(t.classify_local_intent("Quais são as tuas capacidades?")[0],"device_capabilities")
   self.assertEqual(t.classify_local_intent("Jarvis, para")[0],"stop")
   self.assertEqual(t.classify_local_intent("Travis, lembra-te que a Beatriz entrega em 72 horas")[0],"note_fact")
   self.assertEqual(t.classify_local_intent("Estado dos neurónios")[0],"neural_status")
