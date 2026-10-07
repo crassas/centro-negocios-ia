@@ -1,6 +1,7 @@
+import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs';
 import { createSpeechFace } from './travis-speech-face.mjs';
-import { createBacklight } from './travis-atmosphere.mjs?v=visemes1';
-import { createFaceRig } from './travis-face-rig.mjs?v=visemes1';
+import { createBacklight } from './travis-atmosphere.mjs?v=hologram1';
+import { createFaceRig } from './travis-face-rig.mjs?v=hologram1';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -46,6 +47,8 @@ if (!hud || !launcher || !canvas) {
   let model;
   let coreRoot;
   let faceRoot;
+  let assemblyParticles=null;
+  const holographicEyeMaterials=[];
   let faceHit;
   let faceEyeGroups=[];
   let realFaceModel=null;
@@ -368,35 +371,7 @@ if (!hud || !launcher || !canvas) {
 
 
   function faceShellShader() {
-    return new THREE.ShaderMaterial({
-      uniforms:{
-        uTime:{value:0},uColor:{value:new THREE.Color(.025,.48,.68)},
-        uOpacity:{value:.16},uState:{value:0},uGlitch:{value:0}
-      },
-      vertexShader:`
-        varying vec3 vNormalV;
-        varying vec3 vViewDir;
-        void main(){
-          vec4 mv=modelViewMatrix*vec4(position+normal*.002,1.0);
-          vNormalV=normalize(normalMatrix*normal);
-          vViewDir=normalize(-mv.xyz);
-          gl_Position=projectionMatrix*mv;
-        }
-      `,
-      fragmentShader:`
-        varying vec3 vNormalV;
-        varying vec3 vViewDir;
-        uniform vec3 uColor;
-        uniform float uOpacity;
-        uniform float uState;
-        void main(){
-          float edge=pow(1.0-clamp(dot(normalize(vNormalV),normalize(vViewDir)),0.0,1.0),4.0);
-          gl_FragColor=vec4(uColor*(.85+uState*.12),uOpacity*edge);
-        }
-      `,
-      transparent:true,blending:THREE.AdditiveBlending,
-      depthWrite:false,depthTest:true,side:THREE.FrontSide,toneMapped:false
-    });
+    return createHolographicHeadMaterial(THREE,true);
   }
 
   async function createFaceAvatar() {
@@ -410,6 +385,15 @@ if (!hud || !launcher || !canvas) {
       realFaceModel.name='TravisRealFace';
       const head=realFaceModel.getObjectByName('TravisFace_Bust');
       if (!head?.isMesh) throw new Error('Busto anatómico em falta.');
+      // Remove torso triangles from every render pass, including bloom/depth.
+      const headPositions=head.geometry.attributes.position;
+      const headIndices=head.geometry.index?.array;
+      const clipped=[];
+      for(let i=0;i<(headIndices?.length||headPositions.count);i+=3){
+        const a=headIndices?headIndices[i]:i,b=headIndices?headIndices[i+1]:i+1,c=headIndices?headIndices[i+2]:i+2;
+        if(Math.min(headPositions.getY(a),headPositions.getY(b),headPositions.getY(c))>=.17)clipped.push(a,b,c);
+      }
+      head.geometry.setIndex(clipped);
       realFaceHead=head;
       faceRig=createFaceRig(head.geometry);
       hud.dataset.lipSync="audio-envelope";
@@ -420,40 +404,9 @@ if (!hud || !launcher || !canvas) {
           size.x<1 || size.x>4 || size.y<1 || size.y>4 || size.z<.2) {
         throw new Error('Escala do busto inválida.');
       }
-      realFaceBaseMaterial=new THREE.MeshPhysicalMaterial({
-        color:0xffffff,vertexColors:true,metalness:0,roughness:.68,
-        envMapIntensity:.035,specularIntensity:.24,
-        clearcoat:0,clearcoatRoughness:.8,
-        transparent:false,opacity:1,
-        emissive:new THREE.Color(0x021017),emissiveIntensity:.018,
-        side:THREE.FrontSide,depthWrite:true
-      });
-      // Fine surface variation breaks up the synthetic, polished appearance.
-      const pores=new Uint8Array(256*256*4);let seed=719;
-      for(let i=0;i<pores.length;i+=4){seed=(Math.imul(seed,1664525)+1013904223)>>>0;const v=112+(seed>>>27);pores[i]=pores[i+1]=pores[i+2]=v;pores[i+3]=255;}
-      const skinDetail=new THREE.DataTexture(pores,256,256,THREE.RGBAFormat);
-      skinDetail.wrapS=skinDetail.wrapT=THREE.RepeatWrapping;skinDetail.repeat.set(9,9);skinDetail.needsUpdate=true;
-      realFaceBaseMaterial.bumpMap=skinDetail;realFaceBaseMaterial.bumpScale=.00065;
-      const skinPositions=head.geometry.attributes.position;
-      const skinColours=new Float32Array(skinPositions.count*3);
-      const skin=new THREE.Color(0x756458),lipTint=new THREE.Color(0x654039),cheekTint=new THREE.Color(0x86594b),browTint=new THREE.Color(0x292623);
-      const shade=new THREE.Color();
-      const patch=(x,y,cx,cy,rx,ry)=>Math.exp(-(((x-cx)/rx)**2+((y-cy)/ry)**2)*2);
-      for(let i=0;i<skinPositions.count;i++){
-        const x=skinPositions.getX(i),y=skinPositions.getY(i),z=skinPositions.getZ(i);
-        const front=THREE.MathUtils.smoothstep(z,.38,.51);
-        shade.copy(skin);
-        shade.lerp(cheekTint,patch(Math.abs(x),y,.23,.49,.17,.14)*front*.24);
-        shade.lerp(lipTint,patch(x,y,0,.334,.13,.027)*front*.7);
-        const arch=.75-Math.abs(Math.abs(x)-.15)*.28;
-        const brow=patch(Math.abs(x),y,.158,arch,.115,.018)*front;
-        shade.lerp(browTint,brow*(.65+.15*Math.sin(x*1250+y*310)));
-        shade.multiplyScalar(1+.018*Math.sin(x*319+y*187)*Math.sin(z*251));
-        shade.toArray(skinColours,i*3);
-      }
-      head.geometry.setAttribute('color',new THREE.BufferAttribute(skinColours,3));
+      realFaceBaseMaterial=createHolographicHeadMaterial(THREE);
       head.material=realFaceBaseMaterial;
-      // The anatomical surface writes depth and never belongs to the bloom layer.
+      // Keep the translucent face readable; only its light contours receive bloom.
       head.layers.disable(BLOOM_LAYER);
       const glowShell=new THREE.Mesh(head.geometry,faceShellShader());
       glowShell.name='TravisFace_HologramShell';
@@ -464,23 +417,19 @@ if (!hud || !launcher || !canvas) {
       markBloom(glowShell);
       head.parent.add(glowShell);
       avatarMaterial=glowShell.material;
+      assemblyParticles=createAssemblyParticles(THREE,head.geometry);
+      assemblyParticles.position.copy(head.position);assemblyParticles.quaternion.copy(head.quaternion);
+      assemblyParticles.scale.copy(head.scale);markBloom(assemblyParticles);head.parent.add(assemblyParticles);
 
       for(const label of ['L','R']) {
         const sclera=realFaceModel.getObjectByName('TravisFace_Eye_'+label);
         const iris=realFaceModel.getObjectByName('TravisFace_Iris_'+label);
         const pupil=realFaceModel.getObjectByName('TravisFace_Pupil_'+label);
         if(!sclera?.isMesh || !iris?.isMesh || !pupil?.isMesh) throw new Error('Olho anatómico incompleto: '+label);
-        sclera.material=new THREE.MeshPhysicalMaterial({
-          color:0x192f3c,roughness:.42,metalness:.02,envMapIntensity:.15,specularIntensity:.22,
-          clearcoat:.22,transparent:false,depthWrite:true
-        });
-        iris.material=new THREE.MeshPhysicalMaterial({
-          color:0x14536b,roughness:.38,metalness:.03,envMapIntensity:.16,specularIntensity:.3,
-          emissive:0x063744,emissiveIntensity:.06,depthWrite:true
-        });
-        pupil.material=new THREE.MeshPhysicalMaterial({
-          color:0x010509,roughness:.2,metalness:0,depthWrite:true
-        });
+        for(const eyeMesh of [sclera,iris,pupil]){
+          eyeMesh.material=createHolographicHeadMaterial(THREE);
+          holographicEyeMaterials.push(eyeMesh.material);
+        }
         const eyeCenter=new THREE.Box3().setFromObject(sclera).getCenter(new THREE.Vector3());
         realFaceModel.worldToLocal(eyeCenter);
         const pivot=new THREE.Group();pivot.name='TravisFace_Gaze_'+label;
@@ -490,12 +439,12 @@ if (!hud || !launcher || !canvas) {
         const glint=markBloom(new THREE.Mesh(new THREE.SphereGeometry(.0017,8,6),
           new THREE.MeshBasicMaterial({color:0x68bdd4,toneMapped:false})));
         glint.name='TravisFace_EyeAccent_'+label;
-        glint.position.set(-.009,.012,.053);pivot.add(glint);
+        glint.position.set(-.009,.012,.053);pivot.add(glint);glint.visible=false;
         faceEyeGroups.push(pivot);realFaceIris.push(iris);
       }
-      realFaceModel.position.set(-center.x,-center.y+.02,-center.z+.04);
+      realFaceModel.position.set(-center.x,-.66,-center.z+.04);
       faceRoot.add(realFaceModel);realFaceReady=true;
-      hud.dataset.faceAsset='bust';
+      hud.dataset.faceAsset='bust';hud.dataset.avatarStyle='laser-hologram';
       console.info('Travis bust loaded',{meshes:realFaceModel.children.map(o=>o.name),
         bounds:size.toArray(),baseBloom:head.layers.isEnabled(BLOOM_LAYER),source:'Blender GLB'});
     } catch(error) {
@@ -1624,11 +1573,11 @@ if (!hud || !launcher || !canvas) {
       const faceMix=Math.max(.001,formBlend.face);
       faceRoot.visible=faceMix>.012;
       const portrait=innerWidth/innerHeight<.72;
-      const faceBase=(portrait?1.28:1.36)*(.42+.58*introEase);
+      const faceBase=(portrait?1.65:1.70);
       faceRoot.scale.setScalar(faceBase*faceMix);
-      faceRoot.position.set(cameraNow.x*.07,(portrait?.60:.34)+(1-introEase)*-.42,0);
-      faceRoot.rotation.y=tiltNow.x*.025+cameraNow.x*.018+Math.sin(t*.21)*.004;
-      faceRoot.rotation.x=tiltNow.y*.02+Math.sin(t*.29)*.003+(state==='speaking'?speechLevel*.003:0);
+      faceRoot.position.set(cameraNow.x*.07,(portrait?.86:.52)+Math.sin(t*.72)*.024,0);
+      faceRoot.rotation.y=tiltNow.x*.20+cameraNow.x*.04+Math.sin(t*.37)*.10;
+      faceRoot.rotation.x=tiltNow.y*.08+Math.sin(t*.29)*.015+(state==='speaking'?speechLevel*.009:0);
       faceRoot.rotation.z=Math.sin(t*.21)*.003;
 
       faceEyeGroups.forEach(eye=>{
@@ -1636,13 +1585,20 @@ if (!hud || !launcher || !canvas) {
         eye.rotation.x=Math.sin(t*.23)*.008;
       });
       if (realFaceBaseMaterial) {
-        realFaceBaseMaterial.emissiveIntensity=.018+(state==='speaking'?speechLevel*.012:0);
+        const build=reducedMotion?1:clamp(t/2.4,0,1);
+        for(const mat of [realFaceBaseMaterial,avatarMaterial,...holographicEyeMaterials]){
+          mat.uniforms.uTime.value=t;mat.uniforms.uBuild.value=build;
+          mat.uniforms.uState.value=state==='speaking'?speechLevel:0;
+        }
+        assemblyParticles.material.uniforms.uBuild.value=build;
+        assemblyParticles.material.uniforms.uTime.value=t;
+        hud.dataset.materialization=build.toFixed(2);
       }
       if (avatarMaterial) {
         avatarMaterial.uniforms.uTime.value=t;
         avatarMaterial.uniforms.uGlitch.value=0;
         avatarMaterial.uniforms.uState.value=state==='speaking'?.95:state==='listening'?.78:state==='thinking'?.62:.24;
-        avatarMaterial.uniforms.uOpacity.value=.055+(state==='speaking'?speechLevel*.02:state==='listening'?.012:0);
+        avatarMaterial.uniforms.uOpacity.value=.32+(state==='speaking'?speechLevel*.02:state==='listening'?.012:0);
       }
     }
 
