@@ -3,6 +3,7 @@ set -euo pipefail
 STATE="${HOME}/.centro-jarvis"
 SCRIPT_ROOT="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
 DEFAULT_SOURCE="$SCRIPT_ROOT"
+if [ ! -f "$DEFAULT_SOURCE/jarvis_local.py" ] && [ -f "$HOME/jarvis_local.py" ]; then DEFAULT_SOURCE="$HOME"; fi
 if [ ! -f "$DEFAULT_SOURCE/jarvis_local.py" ] && [ -f "$HOME/.centro-ui/operit-agent/jarvis_local.py" ]; then DEFAULT_SOURCE="$HOME/.centro-ui/operit-agent"; fi
 if [ ! -f "$DEFAULT_SOURCE/jarvis_local.py" ] && [ -f "$HOME/repos/centro-negocios-ia/operit-agent/jarvis_local.py" ]; then DEFAULT_SOURCE="$HOME/repos/centro-negocios-ia/operit-agent"; fi
 SOURCE="${JARVIS_SOURCE:-$DEFAULT_SOURCE}"
