@@ -32,6 +32,14 @@ class Tests(unittest.TestCase):
   self.assertFalse(w.should_auto_research("Escreve uma mensagem de agradecimento"))
   self.assertFalse(w.should_auto_research("Olá"))
 
+ def test_fresh_ranking_prefers_specific_version_evidence(self):
+  rows=[
+   {"title":"Download Python | Python.org","url":"https://www.python.org/downloads/","snippet":""},
+   {"title":"Python 3.10.22, 3.11.17, 3.12.15, 3.13.16 and 3.14.8 are now available","url":"https://blog.python.org/2026/10/releases.html","snippet":""},
+   {"title":"Random Python tutorial","url":"https://example.com/python","snippet":""},
+  ]
+  ranked=w._rank_results("Qual é a versão mais recente do Python?",rows)
+  self.assertEqual(ranked[0]["url"],"https://blog.python.org/2026/10/releases.html")
  def test_search_url(self):
   self.assertIn("energia+solar",w.search_url("energia solar"))
 
