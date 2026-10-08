@@ -80,9 +80,9 @@ class Tests(unittest.TestCase):
   binary.write_text("#!/usr/bin/env python3\nimport json,sys,wave\nfor line in sys.stdin:\n d=json.loads(line)\n with wave.open(d['output_file'],'wb') as w:w.setnchannels(1);w.setsampwidth(2);w.setframerate(22050);w.writeframes(b'\\0'*440)\n print(d['output_file'],flush=True)\n")
   binary.chmod(0o755);model=self.root/"voice.onnx";model.touch();worker=j.VoiceWorker("tts",model)
   try:
-   with patch.object(j,"TTS_WORKER",worker):
-    first=j.speak("Primeira resposta");pid=worker.process.pid
-    second=j.speak("Segunda resposta")
+   with patch.object(j,"TTS_EN_WORKER",worker):
+    first=j.speak("First response");pid=worker.process.pid
+    second=j.speak("Second response")
     self.assertEqual(pid,worker.process.pid)
     self.assertTrue(first.startswith(b"RIFF"));self.assertTrue(second.startswith(b"RIFF"))
    process=worker.process;worker.stop();self.assertIsNotNone(process.poll())
@@ -97,10 +97,21 @@ class Tests(unittest.TestCase):
   pt_worker=j.VoiceWorker("tts",pt);en_worker=j.VoiceWorker("tts",en)
   try:
    with patch.object(j,"TTS_WORKER",pt_worker),patch.object(j,"TTS_EN_WORKER",en_worker):
-    audio=j.speak("Bem-vindo, Mr. Richard.")
+    audio=j.speak("Bem-vindo, Mr. Richard.",language="auto")
     self.assertTrue(audio.startswith(b"RIFF"))
     self.assertIsNotNone(pt_worker.process);self.assertIsNotNone(en_worker.process)
   finally:pt_worker.stop();en_worker.stop()
+ def test_english_is_default_speech_voice(self):
+  binary=self.root/"bin"/"piper";binary.parent.mkdir()
+  binary.write_text("#!/usr/bin/env python3\nimport json,sys,wave\nfor line in sys.stdin:\n d=json.loads(line)\n with wave.open(d['output_file'],'wb') as w:w.setnchannels(1);w.setsampwidth(2);w.setframerate(22050);w.writeframes(b'\\0'*440)\n print(d['output_file'],flush=True)\n")
+  binary.chmod(0o755)
+  en=self.root/"english.onnx";en.touch();worker=j.VoiceWorker("tts",en)
+  try:
+   with patch.object(j,"TTS_EN_WORKER",worker),patch.object(j,"TTS_WORKER",j.VoiceWorker("tts",self.root/"missing.onnx")):
+    self.assertTrue(j.speak("Welcome back, Mr. Richard.").startswith(b"RIFF"))
+    self.assertIsNotNone(worker.process)
+    with self.assertRaises(ValueError):j.speak("Hello",language="unknown")
+  finally:worker.stop()
  def test_portuguese_fallback_keeps_english_name_pleasant(self):
   self.assertIn("Míster Ríchard",j.portuguese_pronunciation_fallback("Bem-vindo, Mr. Richard."))
  def test_transcription_endpoint_returns_before_reasoning(self):

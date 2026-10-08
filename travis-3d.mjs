@@ -122,7 +122,7 @@ if (!hud || !launcher || !canvas) {
   let micSourceNode=null;
   let micAnalyser=null;
   let voiceSpeechEndedAt=0;
-  const WELCOME_GREETING='Bem-vindo, Mr. Richard.';
+  const WELCOME_GREETING='Welcome back, Mr. Richard.';
   const voiceMetrics=[];
   const pendingVoiceTasks=new Map();
   let voiceTaskTimer=0;
@@ -737,7 +737,7 @@ if (!hud || !launcher || !canvas) {
         console.info('Travis agent result',task);
         setState('thinking','O agente terminou. A preparar a voz…');
         try {
-          const speech=await localFetch('/speak',{body:{text:reply.slice(0,1800)}});
+          const speech=await localFetch('/speak',{body:{text:reply.slice(0,1800),language:'en'}});
           if(!speech.ok) throw new Error('Voz da conclusão indisponível.');
           const wav=await speech.arrayBuffer();
           await playVoiceArrayBuffer(wav,session,reply);
@@ -789,7 +789,7 @@ if (!hud || !launcher || !canvas) {
       setState('thinking','A preparar a voz…');
 
       const speech=await localFetch('/speak',{
-        body:{text:reply},
+        body:{text:reply,language:'en'},
         type:'application/json',
         signal:controller.signal
       });
@@ -936,7 +936,7 @@ if (!hud || !launcher || !canvas) {
         setState('thinking','A iniciar sistema de voz…');
         try {
           const speech=await localFetch('/speak',{
-            body:{text:WELCOME_GREETING,mode:'welcome'},
+            body:{text:WELCOME_GREETING,language:'en',mode:'welcome'},
             type:'application/json',
             signal:controller.signal
           });

@@ -130,7 +130,7 @@ def inference_lock(timeout):
 def conversation_cloud(text):
  # Existing Workers AI deployment. Never selects an alternative paid provider.
  policy=TRAVIS_GENOME.inference_policy(False)
- payload={"question":"Responde directamente em português de Portugal, sem gerúndio, sem Markdown e no máximo 45 palavras. Não afirmes executar acções. "+clean(policy["systemSuffix"])+" Pedido: "+clean(text)[:3400],"context":{}}
+ payload={"question":"Reply in natural English, without Markdown, in at most 45 words. Understand Portuguese or English. Never claim actions you did not perform. "+clean(policy["systemSuffix"])+" User request: "+clean(text)[:3400],"context":{}}
  request=urllib.request.Request("https://centro-negocios-ai.travisthejarvis.workers.dev/api/assist",data=json.dumps(payload,ensure_ascii=False).encode(),headers={"Content-Type":"application/json","User-Agent":"Centro-Server/1.0"})
  start=time.monotonic()
  with urllib.request.urlopen(request,timeout=8) as response:result=json.load(response)
@@ -140,14 +140,14 @@ def conversation_cloud(text):
  event("executions",{"provider":"workers-ai","model":model,"latency_ms":int((time.monotonic()-start)*1000)})
  return clean(answer)[:900]
 
-def infer(text,system="És o Travis, assistente do Centro de Negócios. Responde em português de Portugal, sem gerúndio, em uma ou duas frases curtas. Responde logo ao pedido, sem introduções. /no_think",json_mode=False,schema=None):
+def infer(text,system="You are Travis, the Centro de Negócios AI assistant. Understand Portuguese and English requests. Reply naturally in English, briefly and accurately. Do not claim actions you did not perform. /no_think",json_mode=False,schema=None):
  INFERENCE_INFO.value={"provider":"local","model":""}
  mode=ROOT/"conversation-mode"
  if not json_mode and mode.is_file() and mode.read_text().strip()=="hybrid":
   try:return conversation_cloud(text)
   except Exception as exc:event("executions",{"conversation_fallback":"local","reason":type(exc).__name__})
  policy=TRAVIS_GENOME.inference_policy(json_mode)
- system=system+"\n"+policy["systemSuffix"]
+ system=system+"\n"+policy["systemSuffix"]+"\nThe final user-facing response must be in English, even if the user speaks Portuguese. Keep JSON outputs in the required schema."
  with inference_lock(240 if json_mode else 2):
   try:http("http://127.0.0.1:8771/health",timeout=2)
   except Exception:
@@ -689,8 +689,28 @@ def transcribe(audio):
    text=out.with_suffix(".txt").read_text().strip()
  event("executions",{"stage":"stt","latency_ms":int((time.monotonic()-start)*1000)})
  return text
-def speak(text):
+def speak(text,language="en"):
  if not str(text).strip() or len(text)>3000:raise ValueError("Resposta vazia ou demasiado longa")
+ if language not in {"en","pt","auto"}:raise ValueError("Idioma de voz inválido")
+ if language=="en":
+  if not TTS_EN_WORKER.model or not TTS_EN_WORKER.model.is_file():raise RuntimeError("English voice model is unavailable")
+  start=time.monotonic()
+  with tempfile.TemporaryDirectory(prefix="jarvis-tts-en-") as tmp:
+   out=Path(tmp)/"speech.wav"
+   reported=TTS_EN_WORKER.request({"text":clean(text),"output_file":str(out)})
+   if reported!=str(out):raise RuntimeError("Piper returned an unexpected file")
+   audio=out.read_bytes()
+  event("executions",{"stage":"tts","language":"en","latency_ms":int((time.monotonic()-start)*1000)})
+  return audio
+ if language=="pt":
+  start=time.monotonic()
+  with tempfile.TemporaryDirectory(prefix="jarvis-tts-pt-") as tmp:
+   out=Path(tmp)/"speech.wav"
+   reported=TTS_WORKER.request({"text":portuguese_pronunciation_fallback(clean(text)),"output_file":str(out)})
+   if reported!=str(out):raise RuntimeError("Piper returned an unexpected file")
+   audio=out.read_bytes()
+  event("executions",{"stage":"tts","language":"pt","latency_ms":int((time.monotonic()-start)*1000)})
+  return audio
  start=time.monotonic();raw=clean(text);segments=speech_segments(raw)
  with tempfile.TemporaryDirectory(prefix="jarvis-tts-") as tmp:
   tmp=Path(tmp);parts=[]
@@ -804,7 +824,7 @@ class Handler(BaseHTTPRequestHandler):
     if not isinstance(text,str) or not text.strip() or len(text)>8000:raise ValueError("Pedido inválido")
     if classify(text)[0] in {"expert_query","repo_review","repo_change"}:return self.send(start_voice_job(text))
     return self.send(route(text))
-   if self.path=="/speak":return self.send(speak(obj["text"]),"audio/wav")
+   if self.path=="/speak":return self.send(speak(obj["text"],obj.get("language","en")),"audio/wav")
    raise ValueError("Endpoint desconhecido")
   except (BrokenPipeError,ConnectionResetError):
    pass
