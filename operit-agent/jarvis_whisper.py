@@ -9,7 +9,7 @@ def transcribe(path):
  samples=prepare_audio(path)
  if len(samples)<1600:return ''
  duration=len(samples)/16000
- segments=model.transcribe(samples,language='pt',audio_ctx=min(1500,max(512,math.ceil((duration+1)*50))))
+ segments=model.transcribe(samples,language=None,audio_ctx=min(1500,max(512,math.ceil((duration+1)*50))))
  return ' '.join(segment.text.strip() for segment in segments)
 if sys.argv[2]=='--worker':
  print('TRAVIS_STT:'+json.dumps({'ready':True}),flush=True)
