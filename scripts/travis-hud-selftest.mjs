@@ -11,8 +11,8 @@ for(const token of [
   'id="travis-hud"',
   'id="travis-three-canvas"',
   'id="travis-loading"',
-  './travis-hud.css?v=connections1',
-  './travis-3d.mjs?v=connections1',
+  './travis-hud.css?v=english-ui-race-fix-1',
+  './travis-3d.mjs?v=english-ui-race-fix-1',
   'type="importmap"',
   '"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"'
 ]){
