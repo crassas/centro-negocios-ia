@@ -1530,7 +1530,7 @@ if (!hud || !launcher || !canvas) {
     if (!renderer || !bloomComposer || !finalComposer) return;
     if (!opened || webglLost || renderer.getContext().isContextLost()) { lastFrame=now; return; }
     // Prioritise recognition/inference/TTS on the phone; DOM status remains live.
-    if(state==='thinking' && intro>=1 && Number(hud.dataset.materialization||0)>=1){lastFrame=now;return;}
+    // Keep rendering the hologram while reasoning; stopping the frame loop can blank the WebGL layer on Android.
     const dt=Math.min(.05,(now-lastFrame)/1000);
     lastFrame=now;
 
