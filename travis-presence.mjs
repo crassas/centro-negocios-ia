@@ -36,17 +36,14 @@ export function createPresenceMotion({random=Math.random,reducedMotion=false}={}
 
 // Reversible, wall-clock transitions: a slow frame cannot strand half a face.
 export function createHologramPresentation({reducedMotion=false}={}){
-  let phase='face',from=0,to=0,started=0,deadline=0,automatic=false,busy=false,pinned=false;
+  let phase='face',from=0,to=0,started=0;
   const duration=reducedMotion?.001:.9;
   function sample(now){
     let amount=from+(to-from)*ease((now-started)/duration);
     if((phase==='dissolving'||phase==='returning')&&now-started>=duration){
       phase=to===1?'projecting':'face';amount=to;
     }
-    if(phase==='projecting'&&automatic&&!busy&&!pinned&&now>=deadline){
-      from=1;to=0;started=now;phase='returning';amount=1;
-    }
-    return {phase,amount,pinned,visible:phase!=='face',panel: ease((amount-.48)/.52)};
+    return {phase,amount,visible:phase!=='face',panel: ease((amount-.48)/.52)};
   }
   function transition(target,now){
     const value=sample(now).amount;
@@ -55,16 +52,12 @@ export function createHologramPresentation({reducedMotion=false}={}){
   }
   return {
     sample,
-    present(now,{auto=true,readingSeconds=10}={}){
-      automatic=auto;pinned=false;deadline=now+duration+Math.max(8,Math.min(30,readingSeconds));
+    present(now){
       const current=sample(now);
       if(current.phase!=='projecting'&&current.phase!=='dissolving')transition(1,now);
     },
-    close(now){automatic=false;pinned=false;if(phase!=='face'&&phase!=='returning')transition(0,now);},
-    speaking(value,now){busy=Boolean(value);if(!busy)deadline=Math.max(deadline,now+2.4);},
-    interact(now){deadline=Math.max(deadline,now+8);},
-    pin(value,now){pinned=Boolean(value);deadline=Math.max(deadline,now+8);return pinned;},
-    reset(){phase='face';from=to=started=deadline=0;automatic=busy=pinned=false;}
+    close(now){if(phase!=='face'&&phase!=='returning')transition(0,now);},
+    reset(){phase='face';from=to=started=0;}
   };
 }
 export const hologramPresentation=createHologramPresentation({

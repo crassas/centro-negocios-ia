@@ -6,23 +6,15 @@ p.present(0,{readingSeconds:8});
 assert.equal(p.sample(0).amount,0);
 assert(p.sample(.45).amount>0&&p.sample(.45).amount<1);
 assert.equal(p.sample(1).phase,'projecting');
-p.speaking(true,1);
-assert.equal(p.sample(60).phase,'projecting','Long speech keeps its actual result visible');
-p.speaking(false,60);
-assert.equal(p.sample(62).phase,'projecting');
-assert.equal(p.sample(63).phase,'returning');
-assert.equal(p.sample(70).amount,0,'A slow frame must completely restore the head');
-
-p.present(80);p.sample(81);p.pin(true,81);
-assert.equal(p.sample(180).phase,'projecting','Reading can be pinned without interrupting speech');
-p.pin(false,180);p.interact(187);
-assert.equal(p.sample(194).phase,'projecting','Touch/keyboard activity extends reading time');
-p.close(194);const midway=p.sample(194.45).amount;
-p.present(194.45);assert.equal(p.sample(194.45).amount,midway,'A new result reverses an in-flight return without a jump');
-assert.equal(p.sample(196).amount,1);
-p.reset();assert.equal(p.sample(200).amount,0);
-p.present(201,{auto:false});assert.equal(p.sample(220).phase,'projecting','A manually opened workspace never dismisses itself');
-p.close(221);p.sample(222);
+assert.equal(p.sample(60).phase,'projecting','Projection remains open after the explanation');
+assert.equal(p.sample(3600).phase,'projecting','No hidden auto-dismiss timeout');
+p.close(3600);
+assert.equal(p.sample(3602).amount,0,'Explicit dismissal completely restores the head');
+p.present(3610);p.sample(3611);p.close(3612);
+const midway=p.sample(3612.45).amount;
+p.present(3612.45);assert.equal(p.sample(3612.45).amount,midway,'Reverse an in-flight return without a jump');
+assert.equal(p.sample(3614).amount,1);
+p.reset();assert.equal(p.sample(4000).amount,0);
 
 const reduced=createHologramPresentation({reducedMotion:true});
 reduced.present(0);assert.equal(reduced.sample(.01).amount,1);
@@ -41,4 +33,4 @@ for(let i=0;i<3600;i++){
   poses.push(pose);
 }
 assert(Math.max(...poses.map(p=>p.yaw))-Math.min(...poses.map(p=>p.yaw))>.25,'Head turns autonomously without pointer input');
-console.log('PRESENCE_OK: autonomous gestures, speech hold, return, interruption, pin, reduced motion');
+console.log('PRESENCE_OK: autonomous gestures, persistent projection, explicit return, interruption, reduced motion');

@@ -50,9 +50,9 @@ class _SafeRedirect(urllib.request.HTTPRedirectHandler):
 
 def _opener():return urllib.request.build_opener(_SafeRedirect())
 
-def _fetch(url,max_bytes=1_500_000,timeout=12):
+def _fetch(url,max_bytes=1_500_000,timeout=12,user_agent=USER_AGENT):
  url=safe_url(url)
- req=urllib.request.Request(url,headers={"User-Agent":USER_AGENT,"Accept-Language":"pt-PT,pt;q=0.9,en;q=0.7"})
+ req=urllib.request.Request(url,headers={"User-Agent":user_agent,"Accept-Language":"pt-PT,pt;q=0.9,en;q=0.7"})
  with _opener().open(req,timeout=timeout) as response:
   final=safe_url(response.geturl());ctype=(response.headers.get("Content-Type") or "").lower()
   if not any(x in ctype for x in ("text/","application/xhtml","application/json","application/xml","application/rss")):raise ValueError("Conteúdo não textual")
@@ -214,6 +214,32 @@ def classify(text):
  if m:return "web_research",{"query":m.group(1).strip()[:300]}
  if re.search(r"\b(?:hoje|agora|actual|atual|actualmente|atualmente|mais recente|últim[oa]s?|recent[ea]s?|notícias|noticias|today|now|current|currently|latest|newest|recent|news)\b",t,re.I):return "web_research",{"query":t[:300]}
  return None
+
+def youtube_search(query,limit=8):
+ """Read public YouTube search results; no API key, account or inferred video IDs."""
+ query=str(query or "").strip()[:240]
+ if not query:raise ValueError("Indica o que queres ver no YouTube")
+ url="https://www.youtube.com/results?"+urllib.parse.urlencode({"search_query":query})
+ _,_,body=_fetch(url,max_bytes=6_000_000,timeout=15,user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36")
+ marker=re.search(r'(?:var\s+ytInitialData\s*=|window\["ytInitialData"\]\s*=|ytInitialData\s*=)\s*(?=\{)',body)
+ if not marker:raise RuntimeError("YouTube search is unavailable at the moment.")
+ data,_=json.JSONDecoder().raw_decode(body[marker.end():])
+ results=[];seen=set()
+ def label(value):
+  return str(value.get("simpleText") or "".join(str(x.get("text","")) for x in value.get("runs",[])))[:300] if isinstance(value,dict) else ""
+ def walk(node):
+  if len(results)>=limit:return
+  if isinstance(node,dict):
+   video=node.get("videoRenderer")
+   if isinstance(video,dict):
+    key=video.get("videoId","")
+    if re.fullmatch(r"[A-Za-z0-9_-]{11}",key) and key not in seen:
+     seen.add(key);results.append({"videoId":key,"title":label(video.get("title",{})),"channel":label(video.get("ownerText",{})),"duration":label(video.get("lengthText",{}))})
+   for value in node.values():walk(value)
+  elif isinstance(node,list):
+   for value in node:walk(value)
+ walk(data)
+ return {"query":query,"videos":results}
 
 def execute(tool,args):
  if tool=="web_open":

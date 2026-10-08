@@ -60,6 +60,8 @@ def _bootstrap():
 _bootstrap()
 register_capability("gmail_inbox","jarvis","API_CALL")
 register_capability("agent_sessions","jarvis","READ")
+for _tool in ("close_youtube","close_projection","play_youtube","pause_youtube","resume_youtube"):register_capability(_tool,"jarvis","READ")
+register_capability("search_youtube","jarvis","API_CALL")
 for _tool in ("web_open","web_read","web_follow"):register_capability(_tool,"jarvis","READ",False,True,"none")
 register_capability("web_research","jarvis","API_CALL",False,True,"local_llm_fallback")
 def registry_snapshot():return {"version":CORE_VERSION,"localFirst":True,"paidFallback":False,"capabilities":[asdict(CAPABILITIES[k]) for k in sorted(CAPABILITIES)]}
@@ -82,7 +84,18 @@ def classify_local_intent(text,project_id=""):
  if re.search(r"\b(?:le|ler|mostra|ver|consulta|consultar)\b",t) and any(w in t for w in ["gmail","emails","e-mails","correio"]):return "gmail_inbox",{}
  if any(w in t for w in ["sessoes dos agentes","estado dos agentes","sala dos agentes","sala de comando","show agents","agent sessions","command room"]):return "agent_sessions",{}
  if (not g and raw.strip(" ,:;.!?-") in {"travis","jarvis"}) or g in {"ai","tas ai","estas ai","estas aqui","ola","oi","bom dia","boa tarde","boa noite","alo","hi","hello","hey","are you there"}:return "presence",{}
- if re.fullmatch(r"(?:por favor[, ]+)?(?:(?:consegues|podes|poderias)\s+)?(?:abrir|abre)\s+(?:o\s+)?youtube[\s?.!]*(?:por favor[\s?.!]*)?",t):return "open_youtube",{}
+ polite=r"(?:(?:olha|entao)[, ]+)?(?:(?:por favor|please)[, ]+)?(?:(?:consegues|podes|poderias|can you|could you)\s+)?"
+ ending=r"[\s?.!]*(?:(?:por favor|please)[\s?.!]*)?"
+ if re.fullmatch(polite+r"(?:abrir|abre|open|show)\s+(?:o\s+|the\s+)?youtube"+ending,t):return "open_youtube",{}
+ if re.fullmatch(polite+r"(?:fecha|fechar|close|exit|sai do)\s+(?:o\s+|the\s+)?youtube"+ending,t):return "close_youtube",{}
+ if re.fullmatch(polite+r"(?:pausa|pausar|pause|stop)\s+(?:o\s+|the\s+)?(?:youtube|video)"+ending,t):return "pause_youtube",{}
+ if re.fullmatch(polite+r"(?:continua|retoma|resume|play)\s+(?:o\s+|the\s+)?(?:youtube|video)"+ending,t):return "resume_youtube",{}
+ if re.fullmatch(polite+r"(?:(?:fecha|fechar|close)\s+(?:o |a |the )?(?:holograma|projecao|projection)|(?:volta|regressa)\s+(?:ao |a )?travis)"+ending,t):return "close_projection",{}
+ video=re.fullmatch(r"(?:travis[, ]+)?(?:reproduz|play)\s+(?:video|vídeo)\s+([A-Za-z0-9_-]{11})[.!?]*",str(text).strip(),re.I)
+ if video:return "play_youtube",{"videoId":video.group(1)}
+ query=re.fullmatch(polite+r"(?:pesquisa|procura|search|find)(?:\s+(?:no|on))?\s+youtube\s+(.+)",t)
+ if not query:query=re.fullmatch(polite+r"(?:pesquisa|procura|search|find)\s+(.+?)\s+(?:no|on)\s+youtube"+ending,t)
+ if query:return "search_youtube",{"query":query.group(1).strip()[:240]}
  if t in {"para","cancela","silencio","jarvis para","travis para"}:return "stop",{}
  if re.search(r"\b(?:nao|do not|don't|never)\b.{0,25}\b(?:cria|criar|adiciona|create|add)\b",t):return "local_llm",{"text":text}
  task_create=re.match(r"^(?:(?:por favor|please)[, ]+)?(?:(?:podes|consegues|poderias|can you|could you)\s+)?(?:cria|criar|adiciona|adicionar|create|add)\s+(?:(?:uma|a|one|new|nova)\s+)*(?:tarefa|task)\b[ :,-]*(.*)",t)

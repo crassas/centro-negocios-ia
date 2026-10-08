@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
-import base64,tempfile,unittest
+import base64,tempfile,unittest,json
 from pathlib import Path
 from unittest.mock import patch
 import travis_web_tools as w
 
 class Tests(unittest.TestCase):
+ def test_youtube_results_are_observed_and_deduplicated(self):
+  video={"videoRenderer":{"videoId":"M7lc1UVf-VE","title":{"runs":[{"text":"Official demo"}]},"ownerText":{"runs":[{"text":"YouTube"}]},"lengthText":{"simpleText":"1:20"}}}
+  body='var ytInitialData = '+json.dumps({"contents":[video,video,{"videoRenderer":{"videoId":"bad-id"}}]})+';'
+  with patch.object(w,"_fetch",return_value=("https://www.youtube.com/results","text/html",body)):
+   result=w.youtube_search("demo")
+  self.assertEqual(result["videos"],[{"videoId":"M7lc1UVf-VE","title":"Official demo","channel":"YouTube","duration":"1:20"}])
+  with patch.object(w,"_fetch",return_value=("https://www.youtube.com/results","text/html","Consent required")):
+   with self.assertRaisesRegex(RuntimeError,"unavailable"):w.youtube_search("demo")
  def test_accented_and_english_open_requests(self):
   for text in ["Abre a Wikipédia", "Podes abrir a Wikipédia?", "Open Wikipedia", "Can you open Wikipedia please?"]:
    self.assertEqual(w.classify(text),("web_open",{"url":"https://pt.wikipedia.org/"}))

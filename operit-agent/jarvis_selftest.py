@@ -67,6 +67,21 @@ class Tests(unittest.TestCase):
     self.assertEqual(reply["tool"],"open_youtube")
     self.assertEqual(reply["result"]["url"],"https://www.youtube.com/")
   self.assertEqual(j.classify("não abrir o YouTube")[0],"local_llm")
+ def test_youtube_stays_in_travis_and_has_explicit_controls(self):
+  with patch.object(j,"infer",side_effect=AssertionError("LLM called")):
+   answer=j.route("Open YouTube")
+   self.assertEqual(answer["result"]["action"],"open_url")
+   self.assertTrue(answer["result"]["embedded"])
+   self.assertEqual(answer["ui"]["kind"],"youtube")
+   for text,tool in [("Olha, fecha o YouTube","close_youtube"),("close YouTube please","close_youtube"),("pausa o vídeo","pause_youtube"),("retoma o YouTube","resume_youtube"),("volta ao Travis","close_projection")]:
+    answer=j.route(text);self.assertEqual(answer["tool"],tool);self.assertEqual(answer["result"]["action"],tool)
+   answer=j.route("Reproduz vídeo M7lc1UVf-VE")
+   self.assertEqual(answer["result"]["videoId"],"M7lc1UVf-VE")
+   self.assertEqual(answer["ui"]["videoId"],"M7lc1UVf-VE")
+  for text in ["Não feches o YouTube","Do not close YouTube","Como fechar o YouTube?","Não abras o YouTube"]:
+   self.assertNotIn(j.classify(text)[0],{"open_youtube","close_youtube","close_projection"})
+  self.assertEqual(j.classify("Pesquisa no YouTube Carl Sagan"),("search_youtube",{"query":"carl sagan"}))
+  self.assertEqual(j.classify("Procura Carl Sagan no YouTube"),("search_youtube",{"query":"carl sagan"}))
  def test_chat_timeout_does_not_restart_model(self):
   with patch.object(j,"http",side_effect=[{"status":"ok"},TimeoutError()]) as http,patch.object(j,"llm_start",side_effect=AssertionError("restart")):
    with self.assertRaisesRegex(RuntimeError,"did not respond in time"):j.infer("pedido")

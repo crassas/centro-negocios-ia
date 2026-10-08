@@ -30,11 +30,11 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
   <script src="./agent-room.js?v=jarvis-1" defer></script>
   <script src="./app.js?v=travis-panel-2" defer></script>
-  <link rel="stylesheet" href="./travis-hud.css?v=neural-1">
+  <link rel="stylesheet" href="./travis-hud.css?v=holo-media-1">
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
-  <script type="module" src="./travis-3d.mjs?v=neural-1"></script>
+  <script type="module" src="./travis-3d.mjs?v=holo-media-1"></script>
 </head>
 <body>
 <section id="travis-hud" class="travis-hud" data-state="idle" aria-hidden="true" aria-label="Travis">
@@ -45,7 +45,7 @@
 
 
   <section id="travis-action-deck" class="travis-action-deck" aria-labelledby="travis-action-heading" hidden>
-    <header><div><small>TRAVIS / PROJECTION</small><h2 id="travis-action-heading">Your workspace</h2></div><div class="travis-projection-controls"><button id="travis-action-pin" type="button" aria-pressed="false" aria-label="Keep projection open">Keep</button><button id="travis-action-close" type="button" aria-label="Return to Travis">×</button></div></header>
+    <header><div><small>TRAVIS / HOLOGRAM</small><h2 id="travis-action-heading">Your workspace</h2></div><div class="travis-projection-controls"><button id="travis-action-close" type="button" aria-label="Return to Travis">×</button></div></header>
     <div id="travis-action-items" class="travis-action-items"></div>
   </section>
   <div class="travis-title" aria-hidden="true">
@@ -688,7 +688,7 @@
 
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script type="module" src="./travis-cockpit.mjs?v=presence-1"></script>
+<script type="module" src="./travis-cockpit.mjs?v=holo-media-1"></script>
 </body>
 </html>
 

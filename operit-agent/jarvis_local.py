@@ -346,7 +346,12 @@ def execute(tool,args):
  if tool=="agent_sessions":return cockpit_snapshot()
  if tool=="projects_status":return projects_status(args.get("target"))
  if tool=="presence":return "I’m Travis. I’m here. Tell me what you need."
- if tool=="open_youtube":return {"action":"open_url","url":"https://www.youtube.com/"}
+ if tool=="open_youtube":return {"action":"open_url","url":"https://www.youtube.com/","embedded":True}
+ if tool=="search_youtube":return travis_web_tools.youtube_search(args["query"])
+ if tool=="play_youtube":
+  if not re.fullmatch(r"[A-Za-z0-9_-]{11}",str(args.get("videoId",""))):raise ValueError("Vídeo inválido")
+  return {"action":"youtube_play","videoId":args["videoId"]}
+ if tool in {"close_youtube","close_projection","pause_youtube","resume_youtube"}:return {"action":tool}
  if tool=="repo_access":
   snapshot=projects_status();available=[r for r in snapshot["projects"] if r["available"]]
   reply=("Yes. I can read "+str(len(available))+" repositories: "+", ".join(r["project"] for r in available)+". Tell me which one you want me to inspect or change." if available else "I could not confirm access to any repository on the phone. The local check failed.")
@@ -530,6 +535,8 @@ def english_reply(value):
  return "I couldn't produce a reliable English response. Please try again."
 def result_cards(tool,args,result):
  project_id=args.get("target")
+ if tool in {"open_youtube","search_youtube","play_youtube"}:
+  return {"kind":"youtube","title":"YouTube","query":result.get("query",""),"videoId":result.get("videoId"),"items":[{"title":v["title"],"detail":" · ".join(x for x in [v["channel"],v["duration"]] if x),"videoId":v["videoId"],"request":"Reproduz vídeo "+v["videoId"]} for v in result.get("videos",[])]}
  if tool in {"repo_access","projects_status"}:
   items=[{"title":r["name"],"detail":("Code accessible" if r["available"] else "Code unavailable")+(" · "+str(r.get("changedFiles",0))+" changed files" if r["available"] else ""),"project":r["project"],"request":"Mostra o projeto "+r["project"],"available":r["available"]} for r in result["projects"]]
   return {"kind":"projects","title":"Your repositories","items":items,"project":project_id}
@@ -619,7 +626,13 @@ def route(text,context=None):
   reply="Yes. I can check your repositories, work on your sites, manage tasks, search the web and call the Centro agents. Tell me what you want done. I will check any connection needed for that request."
  elif tool in {"search_positions","projects_status","repo_access"}:reply=result["reply"]
  elif tool=="site_check":reply=" ".join(k+": "+("online." if v["online"] is True else "I could not confirm availability. "+v.get("error","")) for k,v in result.items())
- elif tool=="open_youtube":reply="Opening YouTube."
+ elif tool=="open_youtube":reply="YouTube, right here. What would you like to watch?"
+ elif tool=="search_youtube":reply=("Here are the YouTube results. Choose a video.") if result["videos"] else "No videos appeared for that search. Try another title."
+ elif tool=="play_youtube":reply="Loading the video here."
+ elif tool=="close_youtube":reply="Closing YouTube."
+ elif tool=="close_projection":reply="Back with you."
+ elif tool=="pause_youtube":reply="Pausing the video."
+ elif tool=="resume_youtube":reply="Resuming the video."
  elif tool=="create_task":reply="Task created: "+result["title"]
  elif tool=="task_list":
   rows=result["tasks"]

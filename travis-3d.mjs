@@ -1,5 +1,5 @@
 import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=presence-1';
-import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=1';
+import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=2';
 import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
 import { createBacklight } from './travis-atmosphere.mjs?v=connections1';
 import { createFaceRig } from './travis-face-rig.mjs?v=articulation-2';
@@ -721,6 +721,8 @@ if (!hud || !launcher || !canvas) {
 
 
   function presentToolResult(answer) {
+    const receipt=window.TravisProjection?.action(answer?.result);
+    if(receipt?.reply)answer.reply=receipt.reply;
     if(!answer?.ui)return;
     if(answer.ui.project)activeProject=answer.ui.project;
     window.dispatchEvent(new CustomEvent('travis:result',{detail:answer}));
@@ -783,9 +785,10 @@ if (!hud || !launcher || !canvas) {
 
       metrics.transcriptAt=performance.now();
       metrics.speechEndToTranscriptMs=Math.round(metrics.transcriptAt-metrics.speechEndedAt);
-      const text=String(transcript.text||'').trim();
+      let text=String(transcript.text||'').trim();
       window.dispatchEvent(new CustomEvent('travis:transcript',{detail:{role:'user',text}}));
       if (!text) throw new Error('I could not understand the speech.');
+      text=window.TravisProjection?.select(text)||text;
       setState('thinking','Handling your request…');
       const answer=await localJson('/jarvis',{body:{text,session:dialogueSession,project:activeProject},signal:controller.signal});
       if (!opened || session!==voiceSession) return;
@@ -812,9 +815,13 @@ if (!hud || !launcher || !canvas) {
 
       await playVoiceArrayBuffer(wav,session,reply,metrics);
 
-      if (answer.result?.action==='open_url' && answer.result?.url) {
+      if (answer.result?.action==='open_url' && answer.result?.url && answer.ui?.kind!=='youtube') {
         const url=String(answer.result.url);
         if (/^https?:\/\//i.test(url)) {
+          if(/^https?:\/\/(?:www\.|m\.)?youtube\.com\/?(?:\?.*)?$/i.test(url)){
+            presentToolResult({ui:{kind:'youtube',title:'YouTube',items:[]},result:{action:'youtube_open'}});
+            return;
+          }
           setTimeout(()=>{ if (opened && session===voiceSession) location.assign(url); },900);
         }
       }
@@ -1861,6 +1868,7 @@ if (!hud || !launcher || !canvas) {
         baseBloom:realFaceHead?.layers.isEnabled(BLOOM_LAYER),lipSync:speechFace?.diagnostics()||{engine:hud.dataset.lipSync},
         neural:neuralField?.diagnostics(),
         presence:{...presencePose},projection:hologramPresentation.sample(performance.now()/1000),
+        media:window.TravisProjection?.media(),
         meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,
         recording:voiceRecorder?.state,pendingTasks:[...pendingVoiceTasks.keys()],lastTaskResult:lastVoiceTaskResult,voiceMetrics:voiceMetrics.map(m=>({...m}))};
     },
