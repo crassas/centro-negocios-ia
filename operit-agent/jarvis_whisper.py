@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from pywhispercpp.model import Model
 
-PROMPT="Português de Portugal and English. Travis, YouTube, GitHub, bicicletas, bicycles, Beatriz."
+PROMPT="Português de Portugal and British English. Travis, YouTube, Google, search, open, close, pause, resume, pesquisar, procurar, selecionar, primeiro, segundo, vídeo, repositories, repositórios, tarefas, projects, Beatriz, GitHub."
 model_path=Path(sys.argv[1])
 precise_model=model_path.with_name('ggml-small-q5_1.bin')
 if precise_model.is_file():model_path=precise_model
@@ -36,7 +36,12 @@ def transcribe(path,language=None):
  if len(samples)<1600:return {"text":"","languageUsed":"pt"}
  # Preserve Whisper's full acoustic context: shortened windows corrupted compound
  # commands and project names even when the original audio was intelligible.
- used=language if language in {"pt","en"} else "auto"
+ used=language if language in {"pt","en"} else None
+ if used is None:
+  try:
+   detected,confidence=model.auto_detect_language(samples)[0]
+   used=detected if detected in {"pt","en"} and float(confidence)>=0.40 else "pt"
+  except Exception:used="auto"
  segments=model.transcribe(
   samples,
   language=used,

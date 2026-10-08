@@ -15,6 +15,8 @@ import travis_brain
 import travis_quantum
 import travis_web_tools
 import travis_dialogue
+import travis_semantic
+import travis_workflow
 from concurrent.futures import ThreadPoolExecutor
 ROOT=Path.home()/".centro-jarvis"
 MODELS=Path.home()/".centro-models"
@@ -37,7 +39,7 @@ TRAVIS_QUANTUM=travis_quantum.QuantumTravisBridge()
 TRAVIS_BRAIN=travis_brain.BrainRuntime(ROOT/"brain.sqlite",TRAVIS_STORE,TRAVIS_COG)
 for _tool,_mutation in [("brain_status",False),("brain_journal",False),("brain_pause",True)]:
  travis_core.register_capability(_tool,"jarvis","DB_MUTATION" if _mutation else "READ",_mutation,False)
-for _tool in ('conversation_control','connections_status','openclaw_status'):
+for _tool in ('conversation_control','connections_status','openclaw_status','agent_workflow','web_search'):
  travis_core.register_capability(_tool,'jarvis','READ',False,True)
 def brain_imagine(prompt,cancelled):
  # Local model only. No cloud calls, tool execution or promotion of imagined facts.
@@ -249,12 +251,17 @@ def classify(text,active_project=None):
  if any(x in normalized for x in ["estado do cerebro","brain status"]):return "brain_status",{}
  target=project(text)
  if not target and active_project in PROJECTS and re.search(r"\b(?:esse|este|isso|selecionado|seleccionado|that|this|it|selected)\b",norm(text)):target=active_project
+ workflow=travis_workflow.plan(text)
+ if workflow:return 'agent_workflow',{'request':text,'steps':workflow}
  base=travis_core.classify_local_intent(text,target)
  if base[0]=="local_llm" and re.search(r"\b(?:nao|do not|don't|never)\b.{0,25}\b(?:cria|criar|adiciona|create|add)\b",norm(text)):return base
  web=travis_web_tools.classify(text)
  if web and base[0]=='expert_query':return web
  if web and web[0]=="web_open" and base[0] in {"local_llm","git_status"}:return web
  if base[0]!="local_llm":return base
+ if web:return web
+ semantic=travis_semantic.fast_interpret(text)
+ if semantic and semantic[0] in travis_core.CAPABILITIES:return semantic
  return web or base
 def safe_path(target,path):
  if target not in PROJECTS:raise ValueError("Projeto desconhecido")
@@ -521,6 +528,8 @@ def execute(tool,args):
  if tool=="brain_status":return TRAVIS_BRAIN.status()
  if tool=="brain_journal":return {"journal":TRAVIS_BRAIN.status()["journal"]}
  if tool=="brain_pause":return TRAVIS_BRAIN.pause(args.get("paused"))
+ if tool=='agent_workflow':return travis_workflow.run(args['request'],args['steps'],execute)
+ if tool=='web_search':return {'query':args['query'],'results':travis_web_tools.search(args['query'],8)}
  if tool=="web_research":return web_research_answer(args["query"])
  if tool=="web_read":return web_read_answer(args["url"])
  if tool in {"web_open","web_follow"}:
@@ -753,6 +762,10 @@ def english_reply(value):
  return "I couldn't produce a reliable English response. Please try again."
 def result_cards(tool,args,result):
  project_id=args.get("target")
+ if tool=='agent_workflow':
+  return {'kind':'agents','title':'Travis · checked areas','items':[{'title':x['title'],'detail':x['detail'],'available':x['status']=='returned'} for x in result['steps']]}
+ if tool=='web_search':
+  return {'kind':'research','title':result['query'],'items':[{'title':x.get('title','Result'),'detail':x.get('snippet',''),'url':x['url'],'request':'Read '+x['url']} for x in result['results'][:12]]}
  if tool in {'connections_status','openclaw_status'}:
   rows=result['connections'] if tool=='connections_status' else [{'name':'OpenClaw','detail':result['reply']}]
   return {'kind':'connections','title':'Connections','items':[{'title':r['name'],'detail':r['detail']} for r in rows]}
@@ -856,6 +869,8 @@ def _route(text,context=None):
  TRAVIS_COG.add_step(cog_run,tool,{**{k:v for k,v in args.items() if k not in {"text","prompt","original_text"}},"quantum_strategy":qstrategy,"quantum_phase":qplan.get("phase")},"verified" if verified else ("failed" if verification["verdict"]=="failure" else "unknown"),outcome["durationMs"],evidence_count,str(result)[:1200])
  TRAVIS_COG.finish(cog_run,verification["verdict"]=="success",verified,str(result)[:2000],verification=verification["verdict"])
  if tool=="conversation_control":reply=travis_dialogue.control_reply(args,getattr(DIALOGUE_INFO,"language","en"))
+ elif tool=='agent_workflow':reply='I checked '+str(result['completed'])+' of '+str(result['total'])+' requested areas. '+'; '.join(x['title']+': '+x['detail'] for x in result['steps'])
+ elif tool=='web_search':reply='I found '+str(len(result['results']))+' public search results. You can choose one here.'
  elif tool=="openclaw_status":reply=result["reply"]
  elif tool=="connections_status":reply="; ".join(r["name"]+": "+r["detail"] for r in result["connections"])
  elif tool=="brain_status":reply="The cognitive runtime is "+result["phase"]+". It has "+str(result["counts"]["episodes"])+" consolidated task experiences and "+str(result["counts"]["cycles"])+" completed automatic cycles. These are software functions inspired by the brain; consciousness has not been established."
@@ -1262,7 +1277,7 @@ class Handler(BaseHTTPRequestHandler):
      session=dialogue_session(context)
      if session:event("conversations",{"session":session,"user":text,"assistant":"Which project should I work on?","tool":"select_project","pendingRequest":text})
      return self.send({"ok":True,"tool":"select_project","reply":"Which project should I work on? I have brought your repositories forward.","ui":result_cards("repo_access",{},snapshot)})
-    if tool in {"expert_query","repo_review","repo_change"}:return self.send(start_voice_job(text,context))
+    if tool in {"expert_query","repo_review","repo_change","agent_workflow"}:return self.send(start_voice_job(text,context))
     return self.send(route(text,context))
    if self.path=="/speak":
     with TRAVIS_BRAIN.request("Voice response"):

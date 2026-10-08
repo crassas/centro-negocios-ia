@@ -98,7 +98,7 @@ for(const token of [
 
 for(const token of [
   "LOCAL_TRAVIS_BASE",
-  "localJson('/transcribe'",
+  "localJson('/transcribe?language='",
   "localFetch('/speak'",
   'navigator.mediaDevices.getUserMedia',
   'new MediaRecorder',
@@ -180,7 +180,7 @@ for(const forbidden of ['class="travis-reticle"','class="travis-telemetry left"'
 
 
 for(const token of [
-  "localJson('/transcribe'",
+  "localJson('/transcribe?language='",
   "scheduleListening(session,180)",
   "commandLines[i].material.opacity=0",
   "TravisFace_Pupil_",
@@ -209,7 +209,7 @@ for(const name of ['TravisFace_Bust','TravisFace_Eye_L','TravisFace_Eye_R','Trav
 for(const forbidden of ['createOrbAvatar','orbRoot','CylinderGeometry','realistic face fallback','faceMouthLower','eye.scale.y=1-blink']) {
   if(scene.includes(forbidden)) throw new Error('Geometria sintética ou deformação presente: '+forbidden);
 }
-for(const token of ["localJson('/transcribe'","localJson('/jarvis'",'speechEndToTranscriptMs','transcriptToReplyMs','replyToFirstAudioMs','head.layers.disable(BLOOM_LAYER)','bloomOccluder','webglcontextrestored',"WELCOME_GREETING='Welcome back, Mister Richards.'","startVoiceConversation({greet=true}={})","resume(){if(opened)startVoiceConversation({greet:false});}",'let introVoiceTimer=0','let voiceStarting=false','introVoiceTimer=setTimeout']) {
+for(const token of ["localJson('/transcribe?language='","localJson('/jarvis'",'speechEndToTranscriptMs','transcriptToReplyMs','replyToFirstAudioMs','head.layers.disable(BLOOM_LAYER)','bloomOccluder','webglcontextrestored',"WELCOME_GREETING='Welcome back, Mister Richards.'","startVoiceConversation({greet=true}={})","resume(){voicePaused=false;if(opened)startVoiceConversation({greet:false});}",'let introVoiceTimer=0','let voiceStarting=false','introVoiceTimer=setTimeout']) {
   if(!scene.includes(token)) throw new Error('Regressão de busto/voz: '+token);
 }
 console.log('ANATOMICAL BUST / SELECTIVE BLOOM / STAGED VOICE OK',bust.length,'bytes');

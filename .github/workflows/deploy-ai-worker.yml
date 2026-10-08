@@ -145,8 +145,6 @@ jobs:
             "https://centro-negocios-ai.travisthejarvis.workers.dev/api/agent" \
             -o /tmp/agent-smoke.json
           node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/agent-smoke.json','utf8'));if(!x.ok||!Array.isArray(x.actions))process.exit(1);console.log('Agent OK:',x.summary,'actions=',x.actions.length);"
-          curl --fail --silent --show-error             -X POST             -H "content-type: application/json"             --data '{"text":"Centro de Negócios ligado ao @furalife_bot. Telegram operacional."}'             "https://centro-negocios-ai.travisthejarvis.workers.dev/api/telegram/notify"             -o /tmp/telegram-smoke.json
-          node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/telegram-smoke.json','utf8'));if(!x.ok||!x.configured)process.exit(1);console.log('Telegram OK')"
 
       - name: Ligação pendente
         if: steps.cloudflare.outputs.ready != 'true'

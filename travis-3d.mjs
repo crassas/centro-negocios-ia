@@ -1,6 +1,7 @@
 import { createConceptProjection } from './travis-concept-projection.mjs?v=conversation-2';
 import { createVoiceInput } from './travis-voice-input.mjs?v=conversation-2';
 import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=voice-flow-3';
+import { projectWebAnswer } from './travis-web-projection.mjs?v=agent-1';
 import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=3';
 import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
 import { createBacklight } from './travis-atmosphere.mjs?v=connections1';
@@ -67,7 +68,7 @@ if (!hud || !launcher || !canvas) {
   let realFaceBaseMaterial=null;
   let realFaceReady=false;
   let avatarMaterial;
-  let formPolicy='core';
+  let formPolicy='auto';
   let activeForm='core';
   const formBlend={core:1,face:0};
   const formTarget={core:1,face:0};
@@ -370,6 +371,7 @@ if (!hud || !launcher || !canvas) {
   }
 
   function modeForState(next=state) {
+    if (next==='listening' || next==='thinking' || next==='speaking') return 'face';
     return 'core';
   }
 
@@ -777,6 +779,7 @@ if (!hud || !launcher || !canvas) {
 
 
   function presentToolResult(answer) {
+    Object.assign(answer,projectWebAnswer(answer));
     const receipt=window.TravisProjection?.action(answer?.result);
     if(receipt?.reply&&receipt.ok===false){answer.reply=receipt.reply;replyLanguage='en';}
     if(!answer?.ui)return;
@@ -890,7 +893,7 @@ if (!hud || !launcher || !canvas) {
             presentToolResult({ui:{kind:'youtube',title:'YouTube',items:[]},result:{action:'youtube_open'}});
             return;
           }
-          setTimeout(()=>{ if (opened && session===voiceSession) location.assign(url); },900);
+          // Public pages remain inside the conversation as readable projections.
         }
       }
     } catch (error) {

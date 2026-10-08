@@ -41,8 +41,20 @@ class DialogueTests(unittest.TestCase):
   with patch.object(j.TRAVIS_BRAIN,'status',return_value=state):
    first=j.initiative(ctx)['event'];self.assertEqual(first['kind'],'hypothesis')
    self.assertIsNone(j.initiative(ctx)['event'])
-   j.dialogue_preferences(ctx['session'],{'standby':True})
-   self.assertIsNone(j.initiative(ctx)['event'])
+   other={'session':'dialogue-standby','idleSeconds':200}
+   j.dialogue_preferences(other['session'],{'standby':True})
+   self.assertIsNone(j.initiative(other)['event'])
+
+ def test_existing_phone_workflows_remain_bounded_and_registered(self):
+  steps=j.travis_workflow.plan('Check my tasks and repositories')
+  self.assertEqual([s['tool'] for s in steps],['task_list','repo_access'])
+  with patch.object(j,'execute',return_value={'completed':2,'total':2,'steps':[],'verified':False}):
+   self.assertEqual(j.route('Check my tasks and repositories')['tool'],'agent_workflow')
+  for request in ['Do not search for videos','não procures um vídeo','como abrir a web?']:
+   self.assertIsNone(j.travis_semantic.fast_interpret(request))
+  self.assertEqual(j.classify('pesquisa inteligência artificial')[0],'web_research')
+  with self.assertRaises(ValueError):
+   j.travis_workflow.run('invalid',[{'tool':'repo_change','args':{}},{'tool':'gmail_send','args':{}}],lambda *args:None)
 
 
 if __name__=='__main__':unittest.main()
