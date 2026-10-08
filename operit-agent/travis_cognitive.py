@@ -39,7 +39,12 @@ class CognitiveKernel:
  @contextmanager
  def db(self):
   con=self.connect()
-  try:yield con
+  try:
+   yield con
+   con.commit()
+  except Exception:
+   con.rollback()
+   raise
   finally:con.close()
 
  def _init(self):
