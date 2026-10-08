@@ -5,6 +5,11 @@ from unittest.mock import patch
 import travis_web_tools as w
 
 class Tests(unittest.TestCase):
+ def test_accented_and_english_open_requests(self):
+  for text in ["Abre a Wikipédia", "Podes abrir a Wikipédia?", "Open Wikipedia", "Can you open Wikipedia please?"]:
+   self.assertEqual(w.classify(text),("web_open",{"url":"https://pt.wikipedia.org/"}))
+  self.assertIsNone(w.classify("Não abras a Wikipédia"))
+  self.assertIsNone(w.classify("Do not open Wikipedia"))
  def test_classification(self):
   self.assertEqual(w.classify("abre o GitHub"),("web_open",{"url":"https://github.com/"}))
   self.assertEqual(w.classify("pesquisa inteligência artificial"),("web_research",{"query":"inteligência artificial"}))

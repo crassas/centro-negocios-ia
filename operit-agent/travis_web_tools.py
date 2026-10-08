@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Safe public-web tools for Travis: search, read, follow and open."""
 from __future__ import annotations
+import unicodedata
 import base64, html, ipaddress, json, re, socket, urllib.parse, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
@@ -201,9 +202,9 @@ def follow(link_text):
 
 def classify(text):
  raw=str(text or "").strip();t=re.sub(r"^(?:travis|jarvis)[,:;.!?\s]*","",raw,flags=re.I).strip()
- m=re.fullmatch(r"(?:abre|abrir|vai (?:a|ao|à)|visita|mostra)(?:-me)?\s+(?:o |a |os |as )?(.+?)(?:\s+por favor)?[.!?]*",t,flags=re.I)
+ m=re.fullmatch(r"(?:(?:podes|consegues|poderias|can you|could you|please)\s+)?(?:abre|abrir|open|go to|visit|vai (?:a|ao|à)|visita|mostra)(?:-me)?\s+(?:o |a |os |as |the )?(.+?)(?:\s+(?:por favor|please))?[.!?]*",t,flags=re.I)
  if m:
-  target=m.group(1).strip();key=target.lower()
+  target=m.group(1).strip();key="".join(c for c in unicodedata.normalize("NFD",target.lower()) if unicodedata.category(c)!="Mn")
   if key in SITES:return "web_open",{"url":SITES[key]}
   if re.fullmatch(r"(?:https?://)?[a-z0-9.-]+\.[a-z]{2,}(?:/[^\s]*)?",target,re.I):return "web_open",{"url":target}
   if key in {"primeiro resultado","o primeiro resultado","primeiro"}:return "web_follow",{"link":"primeiro"}
