@@ -80,9 +80,45 @@ class Tests(unittest.TestCase):
    reply=j.route("Já tens acesso aos repositórios das páginas internas?")
    self.assertEqual(reply["tool"],"repo_access")
    self.assertIn("pentehouse",reply["reply"])
-   self.assertIn("requires authorization",reply["reply"])
+   self.assertEqual(len(reply["ui"]["items"]),5)
   with patch.object(j,"command",side_effect=OSError("missing")):
-   self.assertIn("could not confirm access to any repository",j.execute("repo_access",{}))
+   self.assertIn("could not confirm access to any repository",j.execute("repo_access",{})["reply"])
+ def test_natural_requests_use_real_tools_and_front_cards(self):
+  for text,tool in [("Consegues ver os meus repositórios?","repo_access"),("Mostra as minhas tarefas","task_list"),("Can you see my repositories?","repo_access"),("Show my pending tasks","task_list"),("Que consegues fazer por mim?","capabilities_status")]:
+   self.assertEqual(j.classify(text)[0],tool,text)
+  for text in ["Não cries uma tarefa falsa","Do not create a task now","Como criar uma tarefa?"]:
+   self.assertEqual(j.classify(text)[0],"local_llm",text)
+  with patch.object(j,"infer",side_effect=AssertionError("No model for tool requests")):
+   created=j.route("Cria uma tarefa: rever o teste")
+   self.assertEqual(created["result"]["title"],"rever o teste")
+   self.assertEqual(created["ui"]["kind"],"tasks")
+   read=j.route("Mostra as minhas tarefas")
+   self.assertTrue(any(x["title"]=="rever o teste" for x in read["ui"]["items"]))
+  self.assertEqual(j.classify("Analisa esse projeto","beatriz"),("repo_review",{"target":"beatriz","prompt":"Analisa esse projeto"}))
+  self.assertEqual(j.classify("O que é uma estrela?","beatriz")[0],"local_llm")
+ def test_conversation_knows_host_tools_and_session(self):
+  with patch.object(j,"infer",return_value="A database stores organised records.") as model:
+   j.route("O que é uma base de dados?",{"session":"session-test-001"})
+   j.route("Dá-me um exemplo",{"session":"session-test-001"})
+   self.assertIn("base de dados",model.call_args.args[0])
+   self.assertIn("repo_change",model.call_args.args[1])
+   self.assertNotIn("QUANTUM UNIFIED AGENT GOVERNING CONTEXT",model.call_args.args[0])
+   j.route("Dá-me um exemplo",{"session":"session-other-001"})
+   self.assertNotIn("base de dados",model.call_args.args[0])
+ def test_business_tasks_are_read_without_creating_a_database(self):
+  import sqlite3
+  home=self.root/"business-home";db=home/".centro-server/negocio.db";db.parent.mkdir(parents=True)
+  with sqlite3.connect(db) as c:
+   c.executescript("CREATE TABLE tasks(id INTEGER,title TEXT,due_at TEXT,status TEXT);INSERT INTO tasks VALUES(1,'Follow up',NULL,'Pendente');INSERT INTO tasks VALUES(2,'Finished',NULL,'Concluída');")
+  before=db.read_bytes()
+  with patch.object(Path,"home",return_value=home):
+   result=j.execute("task_list",{})
+   self.assertTrue(result["businessAvailable"])
+   self.assertEqual(result["tasks"],[{"id":"business-1","title":"Follow up","due":None,"status":"Pendente","source":"centro"}])
+  self.assertEqual(db.read_bytes(),before)
+  with patch.object(Path,"home",return_value=home/"missing"):
+   self.assertFalse(j.execute("task_list",{})["businessAvailable"])
+  self.assertFalse((home/"missing").exists())
  def test_rules_avoid_inference(self):
   cases={"Jarvis, diz-me o estado da estação.":"system_status","O Best Pizza está online?":"site_check","Como está o Git da Pentehouse?":"git_status","Que tarefas tenho?":"task_list","Cria uma tarefa para amanhã":"create_task"}
   for text,tool in cases.items():self.assertEqual(j.classify(text)[0],tool)
@@ -100,7 +136,7 @@ class Tests(unittest.TestCase):
   recalled=j.route("Procura na memória sobre a Beatriz");self.assertEqual(recalled["tool"],"neural_recall");self.assertTrue(recalled["result"])
  def test_memory_survives_connection(self):
   task=j.execute("create_task",{"title":"Rever a página amanhã"})
-  self.assertEqual(j.execute("task_list",{})[0]["id"],task["id"])
+  self.assertEqual(j.execute("task_list",{})["tasks"][0]["id"],task["id"])
   with j.database() as con:self.assertEqual(con.execute("PRAGMA integrity_check").fetchone()[0],"ok")
  def test_protected_and_symlink(self):
   for path in [".env","../../etc/passwd","/etc/passwd","keys/private.key","vault.json","sub/.git/config"]:
@@ -115,7 +151,7 @@ class Tests(unittest.TestCase):
   self.assertEqual(j.execute("sqlite_query",{"query":"SELECT COUNT(*) AS n FROM tasks"})[0]["n"],1)
   for query in ["DELETE FROM tasks","DROP TABLE tasks","ATTACH DATABASE '/tmp/outside' AS other","SELECT load_extension('/tmp/x')"]:
    with self.assertRaises(Exception):j.execute("sqlite_query",{"query":query})
-  self.assertEqual(len(j.execute("task_list",{})),1)
+  self.assertEqual(len(j.execute("task_list",{})["tasks"]),1)
  def test_project_pause(self):
   j.execute("pause_project",{"target":"centro"})
   (j.ROOT/"planner_enabled").touch()
@@ -187,7 +223,7 @@ class Tests(unittest.TestCase):
   self.assertEqual(j.classify("Travis, estás aqui?")[0],"presence")
  def test_long_agent_work_returns_pending_before_result(self):
   gate=threading.Event();finished=threading.Event()
-  def route(text):
+  def route(text,context=None):
    gate.wait(2);finished.set();return {"ok":True,"reply":"Prova do agente","tool":"repo_review"}
   with patch.object(j,"route",side_effect=route):
    answer=j.start_voice_job("Travis, analisa a Pentehouse")

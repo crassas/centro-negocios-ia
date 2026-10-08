@@ -1,3 +1,4 @@
+import './travis-action-cards.mjs?v=1';
 const hud=document.querySelector('#travis-hud');
 const $=id=>document.getElementById(id);
 let gmailRequested=new URLSearchParams(location.search).get('connect')==='gmail';
@@ -138,3 +139,5 @@ async function refreshConnections(){
 }
 $('travis-connections-refresh')?.addEventListener('click',refreshConnections);
 window.addEventListener('travis:open',refreshConnections);
+
+if(window.TravisVisual?.diagnostics().opened){active=true;refresh();refreshConnections();}

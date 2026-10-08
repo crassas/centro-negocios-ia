@@ -80,12 +80,15 @@ def classify_local_intent(text,project_id=""):
  raw=re.sub(r"^(?:travisse(?:-se)?|travisse|travis-se|travi)\b","travis",raw)
  t=re.sub(r"^(?:travis|jarvis)\b[\s,:;.!?-]*","",raw).strip();g=re.sub(r"[^a-z0-9 ]","",t).strip();p={"target":project_id or None}
  if re.search(r"\b(?:le|ler|mostra|ver|consulta|consultar)\b",t) and any(w in t for w in ["gmail","emails","e-mails","correio"]):return "gmail_inbox",{}
- if any(w in t for w in ["sessoes dos agentes","estado dos agentes","sala dos agentes","sala de comando"]):return "agent_sessions",{}
- if (not g and raw.strip(" ,:;.!?-") in {"travis","jarvis"}) or g in {"ai","tas ai","estas ai","estas aqui","ola","oi","bom dia","boa tarde","boa noite","alo"}:return "presence",{}
+ if any(w in t for w in ["sessoes dos agentes","estado dos agentes","sala dos agentes","sala de comando","show agents","agent sessions","command room"]):return "agent_sessions",{}
+ if (not g and raw.strip(" ,:;.!?-") in {"travis","jarvis"}) or g in {"ai","tas ai","estas ai","estas aqui","ola","oi","bom dia","boa tarde","boa noite","alo","hi","hello","hey","are you there"}:return "presence",{}
  if re.fullmatch(r"(?:por favor[, ]+)?(?:(?:consegues|podes|poderias)\s+)?(?:abrir|abre)\s+(?:o\s+)?youtube[\s?.!]*(?:por favor[\s?.!]*)?",t):return "open_youtube",{}
  if t in {"para","cancela","silencio","jarvis para","travis para"}:return "stop",{}
- if any(w in t for w in ["cria uma tarefa","criar tarefa","adiciona uma tarefa"]):return "create_task",{"title":text}
- if any(w in t for w in ["que tarefas","lista de tarefas","tarefas pendentes","que trabalho tens"]):return "task_list",{}
+ if re.search(r"\b(?:nao|do not|don't|never)\b.{0,25}\b(?:cria|criar|adiciona|create|add)\b",t):return "local_llm",{"text":text}
+ task_create=re.match(r"^(?:(?:por favor|please)[, ]+)?(?:(?:podes|consegues|poderias|can you|could you)\s+)?(?:cria|criar|adiciona|adicionar|create|add)\s+(?:(?:uma|a|one|new|nova)\s+)*(?:tarefa|task)\b[ :,-]*(.*)",t)
+ if task_create and task_create.group(1).strip():return "create_task",{"title":re.sub(r"^(?:para|to)\s+","",text[-len(task_create.group(1)):],flags=re.I)}
+ if re.search(r"\b(?:tarefas?|tasks?|to-do)\b",t) and re.search(r"\b(?:que|quais|mostra|mostrar|ver|ve|lista|listar|tenho|tens|pendentes|show|list|my|pending|what)\b",t):return "task_list",{}
+ if any(w in t for w in ["que trabalho tens","what are you working on"]):return "task_list",{}
  if any(w in t for w in ["estado dos neuronios","estado do cerebro","quantos neuronios","mapa neural"]):return "neural_status",{}
  if any(w in t for w in ["procura na memoria","pesquisa na memoria","o que tens na memoria sobre"]):return "neural_recall",{"query":text}
  if any(w in t for w in ["consolida a memoria","consolida os neuronios","ciclo de sono","dream cycle"]):return "neural_consolidate",{}
@@ -96,18 +99,20 @@ def classify_local_intent(text,project_id=""):
  if any(w in t for w in ["estado do genoma","genoma comportamental","perfil comportamental"]):return "genome_status",{}
  if any(t.startswith(w) for w in ["lembra-te que","lembra que","guarda que","memoriza que","recorda que"]):return "note_fact",{"text":text}
  if "nao mexas" in t:return "pause_project",p
- action_terms=["trata disso","faz isso","resolve","corrige","melhora","altera","atualiza","actualiza","implementa","optimiza","aplica","faz as alteracoes","faz a alteracao","poe isso a funcionar","deixa isso pronto"]
- review_terms=["ve o que falta","ver o que falta","analisa","reve","revisa","inspeciona","audita","acede ao repositorio","acessa o repositorio","entra no repositorio","abre o repositorio","verifica o repositorio","olha para o repositorio","ve o repositorio"]
+ action_terms=["trata disso","faz isso","resolve","corrige","melhora","altera","atualiza","actualiza","implementa","optimiza","aplica","faz as alteracoes","faz a alteracao","poe isso a funcionar","deixa isso pronto","fix ","update ","improve ","implement "]
+ review_terms=["ve o que falta","ver o que falta","analisa","reve","revisa","inspeciona","audita","acede ao repositorio","acessa o repositorio","entra no repositorio","abre o repositorio","verifica o repositorio","olha para o repositorio","ve o repositorio","review ","inspect ","analyse ","analyze "]
  if project_id and any(w in t for w in action_terms):return "repo_change",{"target":project_id,"prompt":text}
  if project_id and any(w in t for w in review_terms):return "repo_review",{"target":project_id,"prompt":text}
- if any(w in t for w in ["repositorio","github","paginas internet","paginas internas"]) and any(w in t for w in ["acesso","ligado","ligacao","quais","lista"]):return "repo_access",{}
+ if project_id and re.search(r"\b(?:seleciona|selecciona|escolhe|mostra|abre|select|choose|show|open)\b",t):return "projects_status",p
+ if re.search(r"\b(?:repositorios?|repos?|repositories|repository|github)\b",t) and re.search(r"\b(?:acesso|ligado|ligacao|quais|lista|mostra|ver|ve|consegues|podes|show|list|see|access|can|which|what)\b",t):return "repo_access",{}
+ if re.search(r"\b(?:projetos|projectos|projects)\b",t) and re.search(r"\b(?:mostra|ver|ve|lista|quais|show|list|which|my)\b",t):return "projects_status",p
  if re.search(r"\b(posicao|posicoes|ranking|rankings|classificacao no google)\b",t):return "search_positions",p
  if "git" in t:return ("git_diff" if "diff" in t else "git_status"),p
  if "laya" in t and any(w in t for w in ["estado","ligado","online"]):return "laya_status",{}
  if "classifica" in t:return "laya_decide",{"text":text}
  # Operational status must use observed data, never model inference.
  if re.fullmatch(r"(?:(?:ola|amigo)[, ]+)?(?:tudo (?:bem|em ordem) com (?:os |o |a )?|como (?:estao|esta|vao|vai|andam|anda) (?:os |o |a )?|(?:qual (?:e )?o )?estado (?:dos |do |da )?)(?:meus |nossos )?(?:projectos?|projetos?|"+re.escape(_norm(project_id or "__none__"))+r")[\s?.!]*",t):return "projects_status",p
- if any(w in t for w in ["o que consegues fazer","o que podes fazer","quais sao as tuas capacidades","quais são as tuas capacidades","que capacidades tens","a que tens acesso","what can you do","what are your capabilities","which capabilities do you have","what can you access","what tools do you have"]):return "capabilities_status",{}
+ if re.search(r"\b(?:que|como)\b.{0,24}\b(?:consegues|podes)\b.{0,18}\b(?:fazer|ajudar)\b",t) or g in {"ajudame","help me","nao consegues fazer nada","que fazes","quem es"} or any(w in t for w in ["o que consegues fazer","o que podes fazer","quais sao as tuas capacidades","quais são as tuas capacidades","que capacidades tens","a que tens acesso","what can you do","what are your capabilities","which capabilities do you have","what can you access","what tools do you have"]):return "capabilities_status",{}
  if any(w in t for w in ["estado do quantum","quantum status","estado do cerebro quantum","estado do cérebro quantum"]):return "quantum_status",{}
  if any(w in t for w in ["estado da estacao","estado do centro","estado do sistema"]):return "system_status",{}
  if any(w in t for w in ["online","offline","site funciona","site esta disponivel","verifica o site","verifica os sites","como estao os sites"]) and ("site" in t or project_id in {"best-pizza","pentehouse","2-irmaos"}):return "site_check",p

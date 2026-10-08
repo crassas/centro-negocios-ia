@@ -109,6 +109,8 @@ if (!hud || !launcher || !canvas) {
   const IS_LOCAL_TRAVIS_UI=['127.0.0.1','localhost'].includes(location.hostname) && location.port==='8770';
   const LOCAL_TRAVIS_BASE=IS_LOCAL_TRAVIS_UI?location.origin:'http://127.0.0.1:8770';
   let voiceSession=0;
+  const dialogueSession=crypto.randomUUID();
+  let activeProject=null;
   let voiceBusy=false;
   let voiceStream=null;
   let voiceRecorder=null;
@@ -717,6 +719,12 @@ if (!hud || !launcher || !canvas) {
   }
 
 
+  function presentToolResult(answer) {
+    if(!answer?.ui)return;
+    if(answer.ui.project)activeProject=answer.ui.project;
+    window.dispatchEvent(new CustomEvent('travis:result',{detail:answer}));
+  }
+
   function scheduleVoiceTaskPoll() {
     clearTimeout(voiceTaskTimer);
     if(!opened || !pendingVoiceTasks.size) return;
@@ -736,6 +744,7 @@ if (!hud || !launcher || !canvas) {
           ? String(task.answer?.reply||'The agent finished without a response.')
           : 'I could not complete the task: '+String(task.error||'Executor failure.');
         lastVoiceTaskResult=task;
+        presentToolResult(task.answer || {ui:{kind:"agents",title:"Request failed",items:[{title:task.tool||"Agent",detail:task.error||"Execution failed"}]}});
         console.info('Travis agent result',task);
         setState('thinking','The agent finished. Preparing voice…');
         try {
@@ -777,8 +786,9 @@ if (!hud || !launcher || !canvas) {
       window.dispatchEvent(new CustomEvent('travis:transcript',{detail:{role:'user',text}}));
       if (!text) throw new Error('I could not understand the speech.');
       setState('thinking','Handling your request…');
-      const answer=await localJson('/jarvis',{body:{text},signal:controller.signal});
+      const answer=await localJson('/jarvis',{body:{text,session:dialogueSession,project:activeProject},signal:controller.signal});
       if (!opened || session!==voiceSession) return;
+      presentToolResult(answer);
       metrics.replyAt=performance.now();
       metrics.transcriptToReplyMs=Math.round(metrics.replyAt-metrics.transcriptAt);
       metrics.tool=answer.tool;metrics.correlationId=answer.correlationId;
@@ -1662,7 +1672,7 @@ if (!hud || !launcher || !canvas) {
       node.group.scale.setScalar(s*(node.group===hoverNode?1.08:1));
       node.edge.material.opacity=.18+.42*ca;
     });
-    if (commandRoot) commandRoot.visible=commandAmount>.01;
+    if (commandRoot) commandRoot.visible=false; // Controls live in the accessible front layer.
     updateCommandLines();
 
     if (dust) {
@@ -1715,8 +1725,7 @@ if (!hud || !launcher || !canvas) {
   }
 
   function interactiveObjects() {
-    const nodes=commandsOpen?commandNodes.map(n=>n.hit):[];
-    return [...nodes,coreHit,faceHit].filter(Boolean);
+    return [coreHit,faceHit].filter(Boolean);
   }
 
   function onPointerMove(event) {
@@ -1761,7 +1770,7 @@ if (!hud || !launcher || !canvas) {
     if (!ready) return;
     commandsOpen=typeof force==='boolean'?force:!commandsOpen;
     hud.classList.toggle('commands-open',commandsOpen);
-    setState('ready',commandsOpen?'Choose a module.':'I’m here.');
+    window.dispatchEvent(new CustomEvent('travis:commands',{detail:{open:commandsOpen}}));
     haptic(commandsOpen?18:10);
     pulseTone(commandsOpen);
   }
@@ -1799,7 +1808,7 @@ if (!hud || !launcher || !canvas) {
     commandTarget=0;
     document.documentElement.classList.remove('travis-entry');
     window.travisDirectEntry=false;
-    hud.classList.remove('commands-open','is-open');
+    hud.classList.remove('commands-open','cards-open','is-open');
     hud.setAttribute('aria-hidden','true');
     launcher.setAttribute('aria-expanded','false');
     document.body.classList.remove('travis-hud-open');
@@ -1844,6 +1853,7 @@ if (!hud || !launcher || !canvas) {
     open:launchHud,
     close:closeHud,
     commands:toggleCommands,
+    selectProject(project){if(["centro","pentehouse","best-pizza","2-irmaos","beatriz"].includes(project))activeProject=project;},
     ask(text){if(!opened)return;stopVoiceConversation();handleVoiceBlob(String(text),'',voiceSession);},
     pause(){stopVoiceConversation();faceRig?.update(0);setState('ready','Conversation paused.');},
     resume(){if(opened)startVoiceConversation({greet:false});},

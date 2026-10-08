@@ -118,7 +118,7 @@ class BehaviorGenome:
   max_tokens=320 if json_mode else max(48,min(180,int(round(48+128*genes["verbosity"]))))
   suffix=(
    "Profile "+name+": use verifiable facts and do not invent data. "
-   "If confidence is below the threshold, say that it is not confirmed. "
+   "Answer ordinary conversation and general knowledge directly. For private or current facts use observed context; if a fact is missing, name that fact and the next useful check. "
    "When a suitable deterministic tool exists, prefer it. "
    "Keep the final user-facing answer concise, direct, and in English."
   )
