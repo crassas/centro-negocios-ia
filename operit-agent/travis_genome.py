@@ -117,10 +117,10 @@ class BehaviorGenome:
   temperature=round(max(0.04,min(0.12,0.12-(genes["confidence_threshold"]-0.80)*0.20)),3)
   max_tokens=320 if json_mode else max(48,min(180,int(round(48+128*genes["verbosity"]))))
   suffix=(
-   "Perfil "+name+": usa factos verificáveis; não inventes dados. "
-   "Se a confiança não atingir o limiar, diz que não está confirmado. "
-   "Quando existir ferramenta determinística adequada, prefere-a. "
-   "Mantém a resposta curta e directa."
+   "Profile "+name+": use verifiable facts and do not invent data. "
+   "If confidence is below the threshold, say that it is not confirmed. "
+   "When a suitable deterministic tool exists, prefer it. "
+   "Keep the final user-facing answer concise, direct, and in English."
   )
   return {"profile":name,"temperature":temperature,"max_tokens":max_tokens,"systemSuffix":suffix}
 
