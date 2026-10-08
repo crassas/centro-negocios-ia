@@ -20,5 +20,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Test Rust kernel
         run: cargo test --manifest-path operit-agent/travis-rust/Cargo.toml --all-targets
+      - name: Build native executable
+        run: cargo build --manifest-path operit-agent/travis-rust/Cargo.toml
       - name: Test Python compatibility and fallback
         run: python3 operit-agent/travis_rust_bridge_selftest.py
+      - name: Test real Python SQLite against compiled Rust
+        env:
+          TRAVIS_RUST_BIN: ${{ github.workspace }}/operit-agent/travis-rust/target/debug/travis-core
+        run: python3 operit-agent/travis_rust_integration_selftest.py

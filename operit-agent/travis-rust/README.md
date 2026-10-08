@@ -28,6 +28,7 @@ cargo build --release --manifest-path operit-agent/travis-rust/Cargo.toml
 ```sh
 export TRAVIS_RUST_BIN="$HOME/repos/centro-negocios-ia/operit-agent/travis-rust/target/release/travis-core"
 python3 operit-agent/travis_rust_bridge_selftest.py
+python3 operit-agent/travis_rust_integration_selftest.py
 ```
 
 É necessário reiniciar de forma controlada o serviço Jarvis para herdar esta variável; não iniciar um segundo servidor na mesma porta. Se o binário não existir, demorar mais de 1,5 s, devolver JSON inválido ou falhar, o endpoint mantém o gráfico Python e devolve `engine: python-fallback`. Sem activar a variável, `engine: python`.
