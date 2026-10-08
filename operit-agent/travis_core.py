@@ -86,7 +86,7 @@ def youtube_intent(text):
  t=re.sub(r"[, ]+(?:por favor|please)$","",t).strip()
  ordinal=r"(?:primeir[oa]|first|segund[oa]|second|terceir[oa]|third|quart[oa]|fourth|quint[oa]|fifth|sext[oa]|sixth|setim[oa]|seventh|oitav[oa]|eighth|[1-9])"
  verb=r"(?:abre|abra|abrir|seleciona|selecione|selecionar|selecciona|seleccione|escolhe|escolher|reproduz|reproduzir|(?:poe|mete)(?: a dar| a tocar| a reproduzir)?|open|select|choose|play)"
- choice=verb+r"\s+(?:o |a |the )?(?:video |resultado )?("+ordinal+r")(?:\s+(?:video|resultado|video result))?"
+ choice=verb+r"\s+(?:o |a |no |na |the )?(?:video |resultado )?("+ordinal+r")(?:\s+(?:video|resultado|video result))?"
  def index(word):
   if word.isdigit():return int(word)-1
   return next(i for i,words in enumerate(("primeiro primeira first","segundo segunda second","terceiro terceira third","quarto quarta fourth","quinto quinta fifth","sexto sexta sixth","setimo setima seventh","oitavo oitava eighth")) if word in words.split())
@@ -95,7 +95,7 @@ def youtube_intent(text):
  if re.fullmatch(r"(?:"+verb+r"\s+)?(?:o |the )?(?:proximo|seguinte|next)(?: video| resultado)?",t):return "select_youtube",{"direction":1}
  if re.fullmatch(r"(?:"+verb+r"\s+)?(?:o |the )?(?:anterior|previous)(?: video| resultado)?",t):return "select_youtube",{"direction":-1}
  selected=None
- tail=re.search(r"\s*(?:,?\s+e\s+(?:depois\s+)?|,?\s+and\s+|,\s*|\s+depois\s+)"+choice+r"$",t)
+ tail=re.search(r"\s*(?:,?\s+e\s+(?:depois\s+)?|,?\s+and\s+|,\s*|\s+(?:depois|de)\s+)"+choice+r"$",t)
  if tail:selected=index(tail.group(1));t=t[:tail.start()].strip()
  search=r"(?:pesquisa|pesquise|pesquisar|procura|procure|procurar|encontra|encontrar|search|find|look for)"
  query=None

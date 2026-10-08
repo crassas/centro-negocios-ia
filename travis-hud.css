@@ -190,6 +190,8 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
 .travis-wave i:nth-child(5n){animation-delay:-.58s}
 .travis-status-message{font-size:14px;color:#dff9ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .travis-status-state{font-size:7px;letter-spacing:.2em;color:#64dcff;text-transform:uppercase}
+.travis-voice-start{position:absolute;z-index:40;left:50%;bottom:calc(230px + env(safe-area-inset-bottom));transform:translateX(-50%);max-width:calc(100% - 48px);padding:14px 22px;border:1px solid #7ed1df;border-radius:24px;background:#08212b;color:#e5fbff;font:500 15px/1.4 system-ui;cursor:pointer;box-shadow:0 0 24px #5ccddd22}
+.travis-voice-start[hidden]{display:none!important}
 
 .travis-hint{
   position:absolute;z-index:8;left:50%;top:60%;

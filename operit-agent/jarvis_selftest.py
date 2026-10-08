@@ -44,6 +44,15 @@ class Tests(unittest.TestCase):
    self.assertTrue(j.TRAVIS_BRAIN.paused())
    self.assertEqual(j.route('retoma os sonhos')['tool'],'brain_pause')
    self.assertFalse(j.TRAVIS_BRAIN.paused())
+ def test_microphone_request_interrupts_idle_reflection(self):
+  def recognise(data):
+   self.assertGreater(j.TRAVIS_BRAIN.active,0)
+   self.assertTrue(j.TRAVIS_BRAIN.cancelled())
+   return "o segundo"
+  with patch.object(j,"transcribe",side_effect=recognise):
+   response=self.brain_post('/transcribe',{'audio':'fixture'})
+  self.assertEqual(response['body']['text'],'o segundo')
+  self.assertEqual(j.TRAVIS_BRAIN.active,0)
  def test_missing_quantum_still_fails_closed(self):
   bridge=j.travis_quantum.QuantumTravisBridge(root=self.root/"missing-quantum")
   with self.assertRaises(j.travis_quantum.QuantumUnavailable):bridge.prepare(task="test",tool="presence",action_type="READ")
@@ -137,6 +146,7 @@ class Tests(unittest.TestCase):
  def test_media_phrases_do_not_execute_negation_or_explanations(self):
   for text in ["não procures um vídeo de bicicletas","como procurar um vídeo e abrir o primeiro?","não abras o primeiro","don't select the first video"]:
    self.assertEqual(j.classify(text)[0],"local_llm",text)
+  self.assertEqual(j.classify("Procura um vídeo sobre bicicleta de selecionar no primeiro vídeo."),("search_youtube",{"query":"bicicleta","index":0}))
  def test_shared_context_for_reasoning(self):
   with patch.object(j,"infer",return_value="Confirmed response.") as inference:
    j.route("Analisa o meu negócio",{"projects":[{"name":"Pentehouse"}]})

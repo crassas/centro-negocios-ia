@@ -30,12 +30,12 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
   <script src="./agent-room.js?v=jarvis-1" defer></script>
   <script src="./app.js?v=travis-panel-2" defer></script>
-  <link rel="stylesheet" href="./travis-hud.css?v=holo-media-2">
+  <link rel="stylesheet" href="./travis-hud.css?v=voice-flow-4">
   <link rel="stylesheet" href="./travis-brain.css?v=2">
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
-  <script type="module" src="./travis-3d.mjs?v=voice-flow-3"></script>
+  <script type="module" src="./travis-3d.mjs?v=voice-flow-4"></script>
 </head>
 <body>
 <section id="travis-hud" class="travis-hud" data-state="idle" aria-hidden="true" aria-label="Travis">
@@ -60,6 +60,7 @@
   </nav>
 
   <div class="travis-hint">TOCA NO TRAVIS</div>
+  <button id="travis-voice-start" class="travis-voice-start" type="button" hidden>Ativar conversa por voz</button>
 
   <div class="travis-status" role="status" aria-live="polite">
     <div class="travis-wave" aria-hidden="true">

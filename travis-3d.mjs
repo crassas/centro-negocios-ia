@@ -565,7 +565,7 @@ if (!hud || !launcher || !canvas) {
       cache:'no-store',
       credentials:'omit',
       headers,
-      signal
+      signal:signal?AbortSignal.any([signal,AbortSignal.timeout(path==='/jarvis'?120000:path==='/transcribe'?80000:30000)]):AbortSignal.timeout(path==='/jarvis'?120000:path==='/transcribe'?80000:30000)
     };
     if (!IS_LOCAL_TRAVIS_UI) init.targetAddressSpace='local';
     if (body!=null) init.body=type==='application/json'?JSON.stringify(body):body;
@@ -661,7 +661,7 @@ if (!hud || !launcher || !canvas) {
     if (!opened || session!==voiceSession) return;
     const ac=audio();
     if (!ac) throw new Error('Áudio indisponível.');
-    if (ac.state==='suspended') await ac.resume();
+    if (ac.state==='suspended') await Promise.race([ac.resume(),new Promise((_,reject)=>setTimeout(()=>reject(new Error('Toca em ativar conversa por voz.')),4000))]);
 
     const decoded=await ac.decodeAudioData(arrayBuffer.slice(0));
     if (!opened || session!==voiceSession) return;
@@ -893,7 +893,7 @@ if (!hud || !launcher || !canvas) {
 
       const ac=audio();
       if (ac) {
-        if (ac.state==='suspended') await ac.resume();
+        if (ac.state==='suspended') await Promise.race([ac.resume(),new Promise((_,reject)=>setTimeout(()=>reject(new Error('Toca em ativar conversa por voz.')),4000))]);
         micSourceNode=ac.createMediaStreamSource(stream);
         micAnalyser=ac.createAnalyser();
         micAnalyser.fftSize=1024;
@@ -943,7 +943,9 @@ if (!hud || !launcher || !canvas) {
           ? 'Allow microphone access so you can speak to me.'
           : 'Microphone: '+(error?.message||'unavailable.')
       );
-      if(!['NotAllowedError','SecurityError'].includes(error?.name))scheduleListening(session,1500);
+      if(['NotAllowedError','SecurityError'].includes(error?.name)||audioContext?.state==='suspended'){
+        const button=document.getElementById('travis-voice-start');if(button)button.hidden=false;
+      }else scheduleListening(session,1500);
     }
   }
 
@@ -968,6 +970,12 @@ if (!hud || !launcher || !canvas) {
 
   async function startVoiceConversation({greet=true}={}) {
     if (voiceStarting) return;
+    const button=document.getElementById('travis-voice-start');
+    if(audio()?.state==='suspended'){
+      if(button)button.hidden=false;
+      setState('ready','Toca uma vez para ativar a voz. Depois é só falar.');return;
+    }
+    if(button)button.hidden=true;
     voiceStarting=true;
     stopVoiceConversation();
     const session=voiceSession;
@@ -1869,6 +1877,10 @@ if (!hud || !launcher || !canvas) {
   }
 
   launcher.addEventListener('click',launchHud);
+  document.getElementById('travis-voice-start')?.addEventListener('click',()=>{
+    const ac=audio();
+    Promise.resolve(ac?.resume()).then(()=>startVoiceConversation({greet:false})).catch(()=>setState('ready','Não foi possível ativar o áudio.'));
+  });
   closeButton?.addEventListener('click',closeHud);
   canvas.addEventListener('pointermove',onPointerMove,{passive:true});
   canvas.addEventListener('pointerdown',onPointerDown,{passive:true});

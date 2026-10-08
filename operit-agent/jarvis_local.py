@@ -915,7 +915,7 @@ class VoiceWorker:
   if not self.lock.acquire(timeout=2):raise RuntimeError("Voz ocupada; tenta novamente dentro de alguns segundos")
   try:
    self.start();self.process.stdin.write((json.dumps(payload,ensure_ascii=False)+"\n").encode());self.process.stdin.flush()
-   return self.line(45)
+   return self.line(65 if self.kind=="stt" else 45)
   except Exception:self.stop();raise
   finally:self.lock.release()
  def stop(self):
@@ -1125,7 +1125,8 @@ class Handler(BaseHTTPRequestHandler):
    data=self.rfile.read(n)
    if self.path in {"/transcribe","/listen"}:
     stage_start=time.monotonic()
-    text=transcribe(data)
+    with TRAVIS_BRAIN.request("Voice transcription"):
+     text=transcribe(data)
     if self.path=="/transcribe":return self.send({"ok":True,"text":text,"durationMs":int((time.monotonic()-stage_start)*1000)})
     return self.send({"text":text,**route(text)})
    obj=json.loads(data)
@@ -1153,7 +1154,9 @@ class Handler(BaseHTTPRequestHandler):
      return self.send({"ok":True,"tool":"select_project","reply":"Which project should I work on? I have brought your repositories forward.","ui":result_cards("repo_access",{},snapshot)})
     if tool in {"expert_query","repo_review","repo_change"}:return self.send(start_voice_job(text,context))
     return self.send(route(text,context))
-   if self.path=="/speak":return self.send(speak(obj["text"],obj.get("language","en")),"audio/wav")
+   if self.path=="/speak":
+    with TRAVIS_BRAIN.request("Voice response"):
+     return self.send(speak(obj["text"],obj.get("language","en")),"audio/wav")
    raise ValueError("Endpoint desconhecido")
   except (BrokenPipeError,ConnectionResetError):
    pass

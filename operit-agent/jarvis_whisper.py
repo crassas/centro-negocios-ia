@@ -17,6 +17,9 @@ model=Model(
  print_progress=False,
  no_context=True,
  single_segment=True,
+ temperature=0.0,
+ temperature_inc=0.0,
+ suppress_non_speech_tokens=True,
  beam_search={'beam_size':3,'patience':-1.0},
  initial_prompt=PROMPT,
 )
