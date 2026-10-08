@@ -32,9 +32,9 @@ function listenToTravis(){
   if(!window.speechSynthesis){toast('Abre Falar com o Travis para ouvir a resposta no telemóvel.');return;}
   speechSynthesis.cancel();
   const voice=new SpeechSynthesisUtterance(travisReply);
-  voice.lang='pt-PT';voice.rate=1;
+  voice.lang='en-GB';voice.rate=1;
   const voices=speechSynthesis.getVoices();
-  voice.voice=voices.find(v=>v.lang.toLowerCase()==='pt-pt')||voices.find(v=>v.lang.toLowerCase().startsWith('pt'))||null;
+  voice.voice=voices.find(v=>v.lang.toLowerCase()==='en-gb')||voices.find(v=>v.lang.toLowerCase().startsWith('en-'))||voices.find(v=>v.lang.toLowerCase().startsWith('pt'))||null;
   voice.onerror=()=>toast('Não foi possível reproduzir. Abre Falar com o Travis.');
   speechSynthesis.speak(voice);
 }
