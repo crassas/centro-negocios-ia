@@ -122,6 +122,13 @@ try{
 }finally{Date.now=realNow;}
 {
  const request=()=>new Request('https://test/api/assist',{method:'POST',headers:{origin:'https://crassas.github.io'},body:JSON.stringify({question:'Olá',mode:'conversation',context:{}})});
+ let structuredCalls=0;
+ const structuredPayload=[{id:'case-0',a:42,c:0.8}];
+ const structured=await worker.fetch(request(),{AI:{async run(){structuredCalls++;return {response:structuredPayload}}}},{});
+ assert.equal(structured.status,200);
+ assert.deepEqual(JSON.parse((await structured.json()).answer),structuredPayload);
+ assert.equal(structuredCalls,1,'A structured answer must not trigger fallback inference');
+ console.log('OK structured AI answers remain valid through the HTTP endpoint');
  const models=[];
  const response=await worker.fetch(request(),{AI:{async run(model){models.push(model);if(models.length===1)throw Error('primary unavailable');return {response:'Estou aqui.'}}}},{});
  assert.equal(response.status,200);assert.equal((await response.json()).answer,'Estou aqui.');assert.equal(models[1],'@cf/meta/llama-3.2-3b-instruct');

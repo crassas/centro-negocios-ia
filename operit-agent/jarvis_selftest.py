@@ -2,7 +2,7 @@
 """Regression tests for routing, secret protection and local memory."""
 import importlib.util, json, tempfile, unittest, threading, http.client
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch,Mock
 spec=importlib.util.spec_from_file_location("jarvis",Path(__file__).with_name("jarvis_local.py"))
 j=importlib.util.module_from_spec(spec);spec.loader.exec_module(j)
 class Tests(unittest.TestCase):
@@ -10,10 +10,20 @@ class Tests(unittest.TestCase):
   self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.old=j.ROOT;self.old_store=j.TRAVIS_STORE;self.old_utef=j.TRAVIS_UTEF;self.old_seed=j.NEURAL_SEEDED;j.ROOT=self.root
   self.old_cog=j.TRAVIS_COG;self.old_quantum=j.TRAVIS_QUANTUM;self.old_genome=j.TRAVIS_GENOME
   j.TRAVIS_COG=j.travis_cognitive.CognitiveKernel(self.root/"cognitive.sqlite");j.TRAVIS_QUANTUM=j.travis_quantum.QuantumTravisBridge(receipt_path=self.root/"quantum-receipts.jsonl");j.TRAVIS_GENOME=j.travis_genome.BehaviorGenome(self.root)
+  if not j.TRAVIS_QUANTUM.root.is_dir():
+   # Unit fixture for CI hosts without the separately installed Quantum package.
+   # Production still fails closed; real integration is exercised on the device.
+   j.TRAVIS_QUANTUM=Mock()
+   j.TRAVIS_QUANTUM.prepare.return_value={"strategyRoute":{"primary":"test"},"phase":"VERIFY","tier":"T1"}
+   j.TRAVIS_QUANTUM.reasoning_context.return_value="Isolated test planning context."
+   j.TRAVIS_QUANTUM.ingest.side_effect=lambda plan,**kwargs:{"status":kwargs["status"]}
   j.TRAVIS_STORE=j.travis_core.RuntimeStore(self.root/"memory.sqlite");j.TRAVIS_UTEF=j.travis_core.UnifiedExecutionFramework(j.TRAVIS_STORE);j.NEURAL_SEEDED=False
  def tearDown(self):
   j.TRAVIS_COG=self.old_cog;j.TRAVIS_QUANTUM=self.old_quantum;j.TRAVIS_GENOME=self.old_genome
   j.ROOT=self.old;j.TRAVIS_STORE=self.old_store;j.TRAVIS_UTEF=self.old_utef;j.NEURAL_SEEDED=self.old_seed;self.tmp.cleanup()
+ def test_missing_quantum_still_fails_closed(self):
+  bridge=j.travis_quantum.QuantumTravisBridge(root=self.root/"missing-quantum")
+  with self.assertRaises(j.travis_quantum.QuantumUnavailable):bridge.prepare(task="test",tool="presence",action_type="READ")
  def test_reflexion_records_failure_and_reuses_it(self):
   with patch.object(j,"infer",side_effect=TimeoutError()):
    with self.assertRaises(TimeoutError):j.route("Explain an orbit")
