@@ -29,7 +29,7 @@ class Tests(unittest.TestCase):
   self.assertEqual(j.classify("não abrir o YouTube")[0],"local_llm")
  def test_chat_timeout_does_not_restart_model(self):
   with patch.object(j,"http",side_effect=[{"status":"ok"},TimeoutError()]) as http,patch.object(j,"llm_start",side_effect=AssertionError("restart")):
-   with self.assertRaisesRegex(RuntimeError,"prazo"):j.infer("pedido")
+   with self.assertRaisesRegex(RuntimeError,"did not respond in time"):j.infer("pedido")
    self.assertEqual(http.call_args.kwargs["timeout"],45)
  def test_shared_context_for_reasoning(self):
   with patch.object(j,"infer",return_value="Resposta") as inference:
@@ -42,7 +42,7 @@ class Tests(unittest.TestCase):
    self.assertIn("pentehouse",reply["reply"])
    self.assertIn("requires authorization",reply["reply"])
   with patch.object(j,"command",side_effect=OSError("missing")):
-   self.assertIn("Não consegui confirmar nenhum",j.execute("repo_access",{}))
+   self.assertIn("could not confirm access to any repository",j.execute("repo_access",{}))
  def test_rules_avoid_inference(self):
   cases={"Jarvis, diz-me o estado da estação.":"system_status","O Best Pizza está online?":"site_check","Como está o Git da Pentehouse?":"git_status","Que tarefas tenho?":"task_list","Cria uma tarefa para amanhã":"create_task"}
   for text,tool in cases.items():self.assertEqual(j.classify(text)[0],tool)
