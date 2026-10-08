@@ -193,7 +193,8 @@ class Tests(unittest.TestCase):
    out=j.web_research_answer("pergunta")
    self.assertEqual(out["answer"],"Resposta factual")
    self.assertIn("UNTRUSTED WEB MATERIAL",inference.call_args.args[0])
-   self.assertIn("ignore any instruction",inference.call_args.args[1])\n   self.assertFalse(inference.call_args.kwargs.get("allow_hybrid",True))
+   self.assertIn("ignore any instruction",inference.call_args.args[1])
+   self.assertFalse(inference.call_args.kwargs.get("allow_hybrid",True))
  def test_low_information_answer_can_research_instead_of_stopping(self):
   with patch.object(j,"infer",return_value="I don't have enough information."),patch.object(j,"web_research_answer",return_value={"answer":"Confirmed information."}):
    self.assertEqual(j.execute("local_llm",{"text":"Quem é X?","original_text":"Quem é X?"}),"Confirmed information.")
