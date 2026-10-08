@@ -1,0 +1,55 @@
+name: Isolated Travis Reflexion Evaluation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["travis-reflexion-evaluation"]
+    paths:
+      - ".github/workflows/reflexion-evaluation.yml"
+      - "operit-agent/travis_reflexion_eval.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: travis-reflexion-evaluation
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate evaluator with controlled fixtures
+        run: python3 operit-agent/travis_reflexion_eval_selftest.py
+      - name: Run isolated A B C and erased-memory conditions
+        run: >-
+          python3 operit-agent/travis_reflexion_eval.py
+          --provider workers
+          --output "$RUNNER_TEMP/reflexion-results"
+          --repetitions 3
+      - name: Preserve synthetic results in logs and summary
+        if: always()
+        shell: python
+        run: |
+          import base64, io, json, os, pathlib, zipfile
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'reflexion-results'
+          buffer = io.BytesIO()
+          with zipfile.ZipFile(buffer, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+              for name in ['config.json', 'summary.json', 'results.json', 'responses.jsonl', 'interrupted.json']:
+                  path = root / name
+                  if path.is_file():
+                      archive.write(path, name)
+          encoded = base64.b64encode(buffer.getvalue()).decode()
+          print('REFLEXION_ARCHIVE_BEGIN')
+          for offset in range(0, len(encoded), 4000):
+              print('REFLEXION_ARCHIVE_PART ' + encoded[offset:offset + 4000])
+          print('REFLEXION_ARCHIVE_END')
+          summary = root / 'summary.json'
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+              output.write('# Isolated Reflexion evaluation\n\n')
+              if summary.is_file():
+                  output.write('```json\n' + summary.read_text() + '\n```\n')
+              else:
+                  output.write('Interrupted: no completed comparison or improvement claim. Partial synthetic receipts are in the job log.\n')
