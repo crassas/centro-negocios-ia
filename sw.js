@@ -1,5 +1,5 @@
-const CACHE='centro-negocios-v53-english-first';
-const SHELL=['./','./index.html','./styles.css','./app.js?v=travis-panel-2','./agent-room.js?v=jarvis-1','./agent-room.css?v=status-fix-1','./product.css?v=world-8','./travis-hud.css?v=connections1','./travis-3d.mjs?v=english-first-1','./travis-atmosphere.mjs?v=connections1','./travis-face-rig.mjs?v=connections1','./travis-holographic-head.mjs','./travis-speech-face.mjs','./vendor/headaudio/headaudio.min.mjs','./vendor/headaudio/headworklet.min.mjs','./vendor/headaudio/model-en-mixed.bin','./travis-cockpit.mjs?v=connections1','./assets/travis/travis-core.glb?v=1','./assets/travis/travis-face-bust.glb?v=1','./manifest.webmanifest','./icon.svg','./data/sites.json'];
+const CACHE='centro-negocios-v54-english-ui-race-fix';
+const SHELL=['./','./index.html','./styles.css','./app.js?v=travis-panel-2','./agent-room.js?v=jarvis-1','./agent-room.css?v=status-fix-1','./product.css?v=world-8','./travis-hud.css?v=connections1','./travis-3d.mjs?v=english-ui-race-fix-1','./travis-atmosphere.mjs?v=connections1','./travis-face-rig.mjs?v=connections1','./travis-holographic-head.mjs','./travis-speech-face.mjs','./vendor/headaudio/headaudio.min.mjs','./vendor/headaudio/headworklet.min.mjs','./vendor/headaudio/model-en-mixed.bin','./travis-cockpit.mjs?v=connections1','./assets/travis/travis-core.glb?v=1','./assets/travis/travis-face-bust.glb?v=1','./manifest.webmanifest','./icon.svg','./data/sites.json'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));
