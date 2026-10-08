@@ -178,7 +178,7 @@
             <div class="office-plant plant-one">♣</div><div class="office-plant plant-two">♣</div><div id="room-stations"></div><div class="office-door"><span>ENTRADA</span></div>
           </div><div class="room-legend"><span><i data-state="working"></i>A trabalhar</span><span><i data-state="monitoring"></i>Vigilância</span><span><i data-state="waiting"></i>Na fila</span><span><i data-state="error"></i>Precisa de atenção</span><span><i data-state="unknown"></i>Sem ligação</span></div>
         </article><button type="button" id="room-detail-scrim" class="room-detail-scrim" aria-label="Fechar detalhe"></button><aside class="room-detail" id="room-detail"></aside></div>
-        <div class="room-bottom"><article class="room-conversation"><span class="room-eyebrow">FALA COM O TRAVIS</span><h2>O que fazemos a seguir?</h2><p id="room-reply" role="status" aria-live="polite">Diz o projecto e o objectivo. Respondo de forma curta.</p><form id="room-talk-form"><label class="sr-only" for="room-talk-input">Pedido ao Travis</label><input id="room-talk-input" required maxlength="2000" placeholder="Ex.: analisa a Pentehouse e propõe 3 melhorias"><button type="submit" id="room-talk-send" aria-label="Enviar pedido">↑</button></form><button class="text-link" data-panel-target="assistente" type="button">Ver resposta completa e propostas →</button> <div class="travis-voice-tools"><a class="travis-voice-open" href="http://127.0.0.1:8770/" target="_blank" rel="noopener">🎙 Falar com o Travis</a><button type="button" data-travis-listen disabled>Ouvir resposta</button><button type="button" data-travis-stop>Parar voz</button></div><small class="travis-voice-note">Falar abre a voz no teu telemóvel. Ouvir resposta usa a voz do navegador.</small></article>
+        <div class="room-bottom"><article class="room-conversation"><span class="room-eyebrow">FALA COM O TRAVIS</span><h2>O que fazemos a seguir?</h2><p id="room-reply" role="status" aria-live="polite">Diz o projecto e o objectivo. Respondo de forma curta.</p><form id="room-talk-form"><label class="sr-only" for="room-talk-input">Pedido ao Travis</label><input id="room-talk-input" required maxlength="2000" placeholder="Ex.: analisa a Pentehouse e propõe 3 melhorias"><button type="submit" id="room-talk-send" aria-label="Send request">↑</button></form><button class="text-link" data-panel-target="assistente" type="button">Ver resposta completa e propostas →</button> <div class="travis-voice-tools"><a class="travis-voice-open" href="http://127.0.0.1:8770/" target="_blank" rel="noopener">🎙 Falar com o Travis</a><button type="button" data-travis-listen disabled>Ouvir resposta</button><button type="button" data-travis-stop>Parar voz</button></div><small class="travis-voice-note">Falar abre a voz no teu telemóvel. Ouvir resposta usa a voz do navegador.</small></article>
         <article class="room-activity"><div><span class="room-eyebrow">ACTIVIDADE REAL</span><h2>Os últimos passos</h2></div><ul id="room-feed"></ul><button class="text-link" data-panel-target="ferramentas" type="button">Ver execuções →</button></article></div>
         <p class="room-footnote">A sala mostra fases registadas pelo executor real. A Laya é auxiliar e nunca bloqueia o fluxo principal.</p>
       </section>
@@ -636,14 +636,14 @@
     <div class="travis-wave" aria-hidden="true">
       <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
     </div>
-    <div id="travis-status-message" class="travis-status-message">Em repouso.</div>
-    <div id="travis-status-state" class="travis-status-state">EM ESPERA</div>
+    <div id="travis-status-message" class="travis-status-message">Standing by.</div>
+    <div id="travis-status-state" class="travis-status-state">STANDBY</div>
   </div>
 
   <div class="travis-operations">
-    <span id="travis-link-state">A VERIFICAR CENTRO</span>
-    <button id="travis-room-toggle" type="button" aria-expanded="false" aria-controls="travis-room">Sala de comando</button>
-    <button id="travis-pause" type="button">Pausar voz</button>
+    <span id="travis-link-state">CHECKING CENTRO</span>
+    <button id="travis-room-toggle" type="button" aria-expanded="false" aria-controls="travis-room">Command room</button>
+    <button id="travis-pause" type="button">Pause voice</button>
   </div>
   <aside id="travis-room" class="travis-room" aria-label="Sala de comando">
     <header><small>OPERAÇÕES / AO VIVO</small><h2>O teu centro.</h2><p id="travis-observed">À espera de ligação.</p></header>
@@ -669,7 +669,7 @@
     </section>
     <section><h3>Conversa</h3><ul id="travis-transcript" aria-live="polite"></ul></section>
   </aside>
-  <form id="travis-command" class="travis-command"><label class="sr-only" for="travis-command-text">Pedido ao Travis</label><input id="travis-command-text" placeholder="Fala comigo ou escreve um pedido…" maxlength="8000" autocomplete="off"><button type="submit" aria-label="Enviar pedido">↗</button></form>
+  <form id="travis-command" class="travis-command"><label class="sr-only" for="travis-command-text">Pedido ao Travis</label><input id="travis-command-text" placeholder="Talk to me or type a request…" maxlength="8000" autocomplete="off"><button type="submit" aria-label="Enviar pedido">↗</button></form>
   <div class="travis-version">TRAVIS · QUASI NORTE</div>
 </section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
