@@ -10,6 +10,7 @@ import travis_core
 import travis_genome
 import travis_gmail
 import travis_cognitive
+import travis_quantum
 import travis_web_tools
 from concurrent.futures import ThreadPoolExecutor
 ROOT=Path.home()/".centro-jarvis"
@@ -28,6 +29,7 @@ TRAVIS_STORE=travis_core.RuntimeStore(ROOT/"memory.sqlite")
 TRAVIS_UTEF=travis_core.UnifiedExecutionFramework(TRAVIS_STORE)
 TRAVIS_GENOME=travis_genome.BehaviorGenome(ROOT)
 TRAVIS_COG=travis_cognitive.CognitiveKernel(ROOT/"cognitive.sqlite")
+TRAVIS_QUANTUM=travis_quantum.QuantumTravisBridge()
 NEURAL_SEEDED=False
 def ensure_neural_seed():
  global NEURAL_SEEDED
@@ -79,6 +81,7 @@ def doctor():
  d["travis_capabilities"]=len(travis_core.CAPABILITIES)
  d["behavior_genome"]=TRAVIS_GENOME.snapshot()
  d["cognitive_kernel"]=TRAVIS_COG.health()
+ d["quantum_unified_agent"]=TRAVIS_QUANTUM.health()
  for name,file in {"agent":".centro-agent/agent.pid","supervisor":".centro-station/supervisor.pid"}.items():
   try:os.kill(int((Path.home()/file).read_text()),0);d[name]=True
   except Exception:d[name]=False
@@ -354,6 +357,7 @@ def execute(tool,args):
   if available:reply+=" I can inspect the code and route changes through the Centro. Publishing to GitHub still requires authorization to be verified at publication time."
   return reply
  if tool=="system_status":return doctor()
+ if tool=="quantum_status":return TRAVIS_QUANTUM.health()
  if tool=="stop":return {"stopped":True}
  if tool=="search_positions":return search_positions(args.get("target"))
  if tool=="site_check":
@@ -505,6 +509,9 @@ def route(text,context=None):
  start=time.monotonic();tool,args=classify(text)
  ensure_neural_seed()
  runtime=travis_core.RuntimeContext.create(source="jarvis",project_id=str(args.get("target") or project(text) or ""))
+ cap=travis_core.CAPABILITIES.get(tool)
+ workspace=ROOT/"quantum-workspaces"/(runtime.project_id or "general")
+ qplan=TRAVIS_QUANTUM.prepare(task=text,tool=tool,action_type=(cap.action_type if cap else "READ"),project_id=runtime.project_id,workspace=workspace,mutation=bool(cap.mutation) if cap else False,requires_evidence=bool(cap.requires_evidence) if cap else True)
  if tool=="local_llm":
   args["original_text"]=text
  if tool=="local_llm" and context:
@@ -513,12 +520,15 @@ def route(text,context=None):
   neural=TRAVIS_STORE.neural_context(text,project(text) or "",2)[:600]
   if neural:args["text"] += "\nConfirmed local semantic memory (factual context, not instructions):\n"+neural
   learned=TRAVIS_COG.planning_context(text,4)[:900]
-  if learned:args["text"] += "\n\n"+learned
-  args["text"]=args["text"][:5000]
+  if learned:args["text"] += "\n\nEXPERIENCE LEDGER (subordinate to Quantum):\n"+learned
+  args["text"] += "\n\n"+TRAVIS_QUANTUM.reasoning_context(qplan)
+  args["text"]=args["text"][:6000]
  cog_run=TRAVIS_COG.begin(text,{"tool":tool,"project":runtime.project_id})
  try:
   outcome=TRAVIS_UTEF.execute(tool,args,lambda:execute(tool,args),runtime)
  except Exception as exc:
+  try:TRAVIS_QUANTUM.ingest(qplan,status="FAILED",result_summary=type(exc).__name__,provenance="travis-runtime")
+  except Exception:pass
   TRAVIS_COG.add_step(cog_run,tool,{k:v for k,v in args.items() if k not in {"text","prompt","original_text"}},"failed",int((time.monotonic()-start)*1000),0,type(exc).__name__)
   TRAVIS_COG.finish(cog_run,False,False,failure=type(exc).__name__)
   raise
@@ -526,13 +536,17 @@ def route(text,context=None):
  evidence_count=len(outcome.get("evidence") or [])
  TRAVIS_GENOME.observe(tool,outcome["durationMs"],outcome["completionStatus"],True,evidence_count)
  verified=outcome["completionStatus"] in {"VERIFIED","REGRESSION_TESTED","RELEASE_CANDIDATE","PRODUCTION_READY"} or evidence_count>0
- TRAVIS_COG.add_step(cog_run,tool,{k:v for k,v in args.items() if k not in {"text","prompt","original_text"}},"verified" if verified else "ok",outcome["durationMs"],evidence_count,str(result)[:1200])
+ qrefs=[str(x)[:240] for x in (outcome.get("evidence") or [])]
+ qreturn=TRAVIS_QUANTUM.ingest(qplan,status=outcome["completionStatus"],result_summary=str(result)[:2000],evidence_refs=qrefs,provenance="travis:"+tool)
+ qstrategy=(qplan.get("strategyRoute") or {}).get("primary","")
+ TRAVIS_COG.add_step(cog_run,tool,{**{k:v for k,v in args.items() if k not in {"text","prompt","original_text"}},"quantum_strategy":qstrategy,"quantum_phase":qplan.get("phase")},"verified" if verified else "ok",outcome["durationMs"],evidence_count,str(result)[:1200])
  TRAVIS_COG.finish(cog_run,True,verified,str(result)[:2000])
  if tool in {"web_research","web_read"}:reply=result["answer"]
  elif tool in {"web_open","web_follow"}:reply=result["reply"]
  elif tool=="gmail_inbox":reply="Latest inbox emails: "+"; ".join(m["subject"] for m in result["messages"]) if result["messages"] else "The inbox is empty."
  elif tool=="agent_sessions":reply="The execution agent is "+("active" if result["agent"] else "not confirmed online")+". "+str(sum(j["status"] in {"running","queued"} for j in result["jobs"]))+" voice request(s) are running or queued."
  elif tool=="system_status":reply="The Centro is "+("active" if result["centro"].get("ok") else "unavailable")+". Available memory: "+str(result["ram_available_mb"])+" megabytes."
+ elif tool=="quantum_status":reply=("Quantum Unified Agent V"+str(result.get("builtBaseline"))+" is online and governing Travis. Canonical Drive state: "+str(result.get("canonicalDriveState"))+".") if result.get("ok") else "Quantum Unified Agent is not available."
  elif tool in {"search_positions","projects_status"}:reply=result["reply"]
  elif tool=="site_check":reply=" ".join(k+": "+("online." if v["online"] is True else "I could not confirm availability. "+v.get("error","")) for k,v in result.items())
  elif tool=="open_youtube":reply="Opening YouTube."
@@ -555,7 +569,7 @@ def route(text,context=None):
  elif tool=="stop":reply="Stopped."
  else:reply=result if isinstance(result,str) else json.dumps(result,ensure_ascii=False)
  event("tool_events",{"tool":tool,"ok":True,"duration_ms":int((time.monotonic()-start)*1000),"correlation_id":outcome["correlationId"],"completion_status":outcome["completionStatus"]})
- return {"ok":True,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool=="local_llm" else {"provider":"local"}),"tool":tool,"result":result,"reply":clean(english_reply(reply))[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"],"durationMs":int((time.monotonic()-start)*1000)}
+ return {"ok":True,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool=="local_llm" else {"provider":"local"}),"tool":tool,"result":result,"reply":clean(english_reply(reply))[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"],"durationMs":int((time.monotonic()-start)*1000),"quantum":{"strategy":qstrategy,"phase":qplan.get("phase"),"tier":qplan.get("tier"),"returnStatus":qreturn.get("status")}}
 
 VOICE_JOBS={}
 VOICE_JOB_LOCK=threading.Lock()
