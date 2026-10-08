@@ -6,7 +6,21 @@ on:
     branches: ["main"]
     paths:
       - "operit-agent/**"
+      - "travis-*.mjs"
+      - "travis-*.css"
+      - "scripts/**"
+      - "index.html"
+      - "sw.js"
       - "cloudflare-ai-worker/src/index.js"
+      - ".github/workflows/validate-core.yml"
+  pull_request:
+    paths:
+      - "operit-agent/**"
+      - "travis-*.mjs"
+      - "travis-*.css"
+      - "scripts/**"
+      - "index.html"
+      - "sw.js"
       - ".github/workflows/validate-core.yml"
 
 permissions:
@@ -26,6 +40,14 @@ jobs:
           while IFS= read -r -d '' file; do
             python3 -m py_compile "$file"
           done < <(find operit-agent -maxdepth 1 -type f -name '*.py' -print0)
+
+      - name: Travis persisted graph and particle brain tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=operit-agent python3 operit-agent/travis_brain_graph_selftest.py
+          node scripts/travis-particle-brain-selftest.mjs
+          node scripts/travis-hud-selftest.mjs
 
       - name: Travis core self-test
         shell: bash
