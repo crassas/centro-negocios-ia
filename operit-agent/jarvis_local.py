@@ -538,7 +538,7 @@ def route(text,context=None):
  elif tool=="stop":reply="Stopped."
  else:reply=result if isinstance(result,str) else json.dumps(result,ensure_ascii=False)
  event("tool_events",{"tool":tool,"ok":True,"duration_ms":int((time.monotonic()-start)*1000),"correlation_id":outcome["correlationId"],"completion_status":outcome["completionStatus"]})
- return {"ok":True,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool=="local_llm" else {"provider":"local"}),"tool":tool,"result":result,"reply":clean(english_reply(reply))[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"],"durationMs":int((time.monotonic()-start)*1000)}
+ return {"ok":True,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool=="local_llm" else {"provider":"local"}),"tool":tool,"result":result,"reply":clean(reply)[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"],"durationMs":int((time.monotonic()-start)*1000)}
 
 VOICE_JOBS={}
 VOICE_JOB_LOCK=threading.Lock()
@@ -579,7 +579,7 @@ def start_voice_job(text):
  thread=threading.Thread(target=work,daemon=True,name=task_id);thread.start()
  reply="I’ll analyse this with the specialist agent and report the result here."
  if tool=="repo_change":reply="I’ll handle that project with the coding agent, validate the result, and report the evidence here."
- return {"ok":True,"taskId":task_id,"tool":tool,"reply":english_reply(reply),"completionStatus":"pending"}
+ return {"ok":True,"taskId":task_id,"tool":tool,"reply":reply,"completionStatus":"pending"}
 def voice_job_status(task_id):
  with VOICE_JOB_LOCK:
   if task_id not in VOICE_JOBS:raise ValueError("Voice task not found.")
