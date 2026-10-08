@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Reusable bilingual whisper.cpp worker for Portuguese/English voice input."""
-import json,math,sys,wave
+"""Low-latency bilingual Whisper worker for Portuguese/English voice input."""
+import json,math,re,sys,wave
 from pathlib import Path
 import numpy as np
 from pywhispercpp.model import Model
@@ -19,6 +19,9 @@ model=Model(
  greedy={'best_of':1},
  initial_prompt=PROMPT,
 )
+current_language="pt"
+ENGLISH_HINTS={"the","and","open","tell","latest","version","search","please","what","where","when","how","can","you","me","is","are","with","show","find","github","youtube"}
+PORTUGUESE_HINTS={"abre","abrir","diz","diga","versao","versão","mais","recente","pesquisa","procura","por","favor","qual","como","onde","quando","esta","está","estou","podes","consegue","tens","tenho","quero","mostra","encontra"}
 
 def prepare_audio(path):
  with wave.open(str(path),"rb") as wav:
@@ -27,23 +30,34 @@ def prepare_audio(path):
   raw=wav.readframes(wav.getnframes())
  return np.frombuffer(raw,dtype=np.int16).astype(np.float32)/32768.0
 
-def transcribe(path):
+def next_language(text,used):
+ words={w.lower() for w in re.findall(r"[A-Za-zÀ-ÿ]+",text)}
+ en=len(words & ENGLISH_HINTS);pt=len(words & PORTUGUESE_HINTS)
+ if en>=2 and en>pt+1:return "en"
+ if pt>=2 and pt>en:return "pt"
+ return used
+
+def transcribe(path,language=None):
+ global current_language
  samples=prepare_audio(path)
- if len(samples)<1600:return {"text":"","language":"unknown"}
+ if len(samples)<1600:return {"text":"","language":current_language}
  duration=len(samples)/16000
- # Empty language lets whisper.cpp detect the spoken language during the same decode.
+ used=language if language in {"pt","en"} else current_language
  segments=model.transcribe(
   samples,
-  language="",
+  language=used,
   audio_ctx=min(1500,max(512,math.ceil((duration+1)*50))),
  )
  text=" ".join(segment.text.strip() for segment in segments).strip()
- return {"text":text,"language":"auto"}
+ current_language=next_language(text,used)
+ return {"text":text,"languageUsed":used,"nextLanguage":current_language}
 
 if sys.argv[2]=="--worker":
- print("TRAVIS_STT:"+json.dumps({"ready":True,"languages":["pt","en"],"mode":"auto"}),flush=True)
+ print("TRAVIS_STT:"+json.dumps({"ready":True,"languages":["pt","en"],"mode":"adaptive","language":current_language}),flush=True)
  for line in sys.stdin:
-  try:result=transcribe(json.loads(line)["path"])
+  try:
+   payload=json.loads(line)
+   result=transcribe(payload["path"],payload.get("language"))
   except Exception as exc:result={"error":str(exc)[:300]}
   print("TRAVIS_STT:"+json.dumps(result,ensure_ascii=False),flush=True)
 else:
