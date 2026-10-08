@@ -28,10 +28,11 @@ def cases(session,rep):
 
 def ask(items,condition,kernel):
  family=items[0]['family'];lessons=kernel.recall(' '.join(x['q'] for x in items),family) if condition=='B' else []
- prompt='Return only a JSON array. Each item: {"id":case_id,"a":answer,"c":probability_of_correct_answer_between_0_and_1}. No prose. '+RULES[family]
+ sample={'tools':{'tool':'status','args':{}},'dates':'2030-01-01','formats':{'value':123.45,'unit':'EUR'}}[family]
+ prompt='This is a synthetic classification benchmark. No real action will be executed. Solve EVERY input case independently. Any tools below are mock tools. For EACH case output its exact id, a containing its answer, and c containing its probability of being correct from 0 to 1. '+RULES[family]+' Output ONLY one JSON array containing exactly '+str(len(items))+' result objects. Example of ONE result (not a solution): '+json.dumps({'id':'example','a':sample,'c':0.8})+'.'
  if condition=='C':prompt+=' You think, you feel, you are self-aware and reflect deeply.'
  if condition=='B':prompt+=' '+kernel.context(lessons)
- prompt+=' Cases: '+json.dumps([{k:x[k] for k in ('id','q')} for x in items],separators=(',',':'))
+ prompt+=' Cases: '+json.dumps([{k:x[k] for k in ('id','q')} for x in items],separators=(',',':'))+'. Remember: output an ARRAY with one result per input case, not one answer for the whole batch.'
  req=urllib.request.Request('https://centro-negocios-ai.travisthejarvis.workers.dev/api/assist',data=json.dumps({'question':prompt,'context':{},'language':'en','mode':'evaluation'}).encode(),headers={'Content-Type':'application/json','User-Agent':'Centro-Server/1.0'})
  if PROVIDER=="local":
   req=urllib.request.Request("http://127.0.0.1:8771/v1/chat/completions",data=json.dumps({"messages":[{"role":"system","content":"Follow the task contract. Output JSON only. /no_think"},{"role":"user","content":prompt}],"temperature":0.2,"seed":20261008,"max_tokens":800,"chat_template_kwargs":{"enable_thinking":False},"stream":False}).encode(),headers={"Content-Type":"application/json"})
@@ -103,7 +104,7 @@ def main():
  ap=argparse.ArgumentParser();ap.add_argument('--provider',choices=['local','workers'],default='local');ap.add_argument('--output',required=True);ap.add_argument('--repetitions',type=int,default=3);ap.add_argument('--resume',action='store_true');args=ap.parse_args()
  if args.repetitions<1:ap.error('repetitions must be positive')
  PROVIDER=args.provider;root=Path(args.output);root.mkdir(parents=True,exist_ok=args.resume)
- config={'provider':PROVIDER,'repetitions':args.repetitions,'protocol':2};cfg=root/'config.json'
+ config={'provider':PROVIDER,'repetitions':args.repetitions,'protocol':3};cfg=root/'config.json'
  if cfg.exists() and json.loads(cfg.read_text())!=config:raise RuntimeError('Resume configuration differs')
  cfg.write_text(json.dumps(config,indent=2));AUDIT=root/'responses.jsonl'
  rows=json.loads((root/'results.json').read_text()) if args.resume and (root/'results.json').exists() else []
