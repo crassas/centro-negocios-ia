@@ -37,6 +37,25 @@ class Tests(unittest.TestCase):
   state=self.brain_post('/brain/state',{})['body']
   self.assertEqual(state['kind'],'functional-cognitive-architecture')
   self.assertEqual(state['consciousness'],'not_established')
+ def test_awareness_new_capabilities_and_language(self):
+  cases=[
+   ('Travis, conheces as tuas novas capacidades?','pt'),
+   ('Sabes que tens agora uma rede de memórias?','pt'),
+   ('Do you know about your new abilities?','en'),
+   ('Quais são os teus limites?','pt')
+  ]
+  for sentence,language in cases:
+   with self.subTest(sentence=sentence):
+    self.assertEqual(j.classify(sentence)[0],'capabilities_status')
+    self.assertEqual(j.travis_dialogue.detect_language(sentence,'en' if language=='pt' else 'pt'),language)
+  self.assertEqual(j.classify('Como vais melhorar o cérebro?')[0],'local_llm')
+  context={'language':'pt','session':'awareness-test-session-20261008'}
+  with patch.object(j,'infer',side_effect=AssertionError('Awareness must not call the model')):
+   response=j.route('Travis, conheces as tuas novas capacidades?',context)
+   self.assertEqual(response['tool'],'capabilities_status')
+   self.assertEqual(response['language'],'pt')
+   self.assertIn('Memória real:',response['reply'])
+
  def test_brain_routes_without_model(self):
   with patch.object(j,'infer',side_effect=AssertionError('Unnecessary model call')):
    self.assertEqual(j.route('estado do cérebro')['tool'],'brain_status')
