@@ -61,6 +61,7 @@ RUNTIME_FILES = {
     "centro_soak.py": HOME / "centro_soak.py",
     "travis_core.py": HOME / "travis_core.py",
     "travis_genome.py": HOME / "travis_genome.py",
+    "travis_cognitive.py": HOME / "travis_cognitive.py",
     "travis_gmail.py": HOME / "travis_gmail.py",
     "travis_web_tools.py": HOME / "travis_web_tools.py",
     "business_db.py": HOME / "business_db.py",
