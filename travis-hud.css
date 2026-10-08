@@ -566,3 +566,5 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
 .travis-file-label{display:block;color:#e3edf5}
 #travis-gmail-file{width:100%;color:#c6d9e5!important;background:#132432!important;padding:12px 6px}
 #room-gmail{white-space:nowrap}
+
+#travis-room-toggle,#travis-pause{display:none!important}
