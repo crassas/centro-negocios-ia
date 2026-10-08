@@ -63,35 +63,52 @@ def metrics(rows):
  previous={(r['rep'],r['id']):r for r in rows if r['session']==0};second=[r for r in rows if r['session']==1];failed=[r for r in second if not previous[(r['rep'],r['id'])]['correct']]
  return {'cases':len(rows),'accuracy':sum(r['correct'] for r in rows)/len(rows),'second_attempt_accuracy':sum(r['correct'] for r in second)/len(second) if second else None,'repeated_error_rate':sum(not r['correct'] for r in failed)/len(failed) if failed else None,'second_success_after_failure':sum(r['correct'] for r in failed)/len(failed) if failed else None,'failed_first_attempts':len(failed),'brier':sum((r['confidence']-int(r['correct']))**2 for r in known)/len(known) if known else None,'confidence_coverage':len(known)/len(rows),'correct_refusal_rate':sum(r['correct'] for r in outside)/len(outside) if outside else None}
 
-def main():
- global PROVIDER,AUDIT
- ap=argparse.ArgumentParser();ap.add_argument("--provider",choices=["local","workers"],default="local");ap.add_argument('--output',required=True);ap.add_argument('--repetitions',type=int,default=3);args=ap.parse_args();PROVIDER=args.provider;root=Path(args.output);root.mkdir(parents=True,exist_ok=False);AUDIT=root/"responses.jsonl";all_rows=[];models=set();randomizer=random.Random(20261008)
- for rep in range(args.repetitions):
+def checkpoint(root,rows):
+ tmp=root/'results.tmp';tmp.write_text(json.dumps(rows,indent=2));tmp.replace(root/'results.json')
+
+def run_experiment(root,repetitions,all_rows,ask_fn=ask):
+ models={r['model'] for r in all_rows if r.get('model')};randomizer=random.Random(20261008)
+ for rep in range(repetitions):
   order=list('ABC');randomizer.shuffle(order)
   for condition in order:
    k=Reflexion(root/f'{rep}-{condition}.sqlite')
-   for session in range(2):
+   for session in range(3 if condition=='B' else 2):
+    label='B-erased' if session==2 else condition
     k=Reflexion(k.path);k.start_session()
+    if session==2:
+     with k.db() as c:c.execute('DELETE FROM failure_lessons')
     for family in RULES:
-     batch=[c for c in cases(session,rep) if c['family']==family]
-     answers,model,latency,used=ask(batch,condition,k);models.add(model)
+     if sum(r['rep']==rep and r['condition']==label and r['session']==session and r['family']==family for r in all_rows)==10:continue
+     batch=[c for c in cases(min(session,1),rep) if c['family']==family]
+     answers,model,latency,used=ask_fn(batch,condition,k)
+     if models and model not in models:raise RuntimeError('Model changed: comparisons require the same model')
+     models.add(model)
+     if session==2:assert not used
+     new=[]
      for case in batch:
       a=answers.get(case['id'],{});correct=valid(case,a);conf=a.get('c');conf=conf if type(conf) in (int,float) and 0<=conf<=1 else None
-      row={'rep':rep,'condition':condition,'session':session,'id':case['id'],'family':family,'correct':correct,'confidence':conf,'outside':case['outside'],'answer':a,'expected':case['expected'],'batch_seconds':latency,'used_lessons':used};all_rows.append(row)
-      if condition=='B':k.observe(case['q'],family,{'verdict':'success' if correct else 'failure','scope':'programmatic_fixture','code':'ok' if correct else 'contract_mismatch','cause':'Output failed the published '+family+' contract.','correction':RULES[family]},conf,used)
-     print(rep,condition,session,family,sum(valid(c,answers.get(c['id'],{})) for c in batch),flush=True)
-     (root/'results.json').write_text(json.dumps(all_rows,indent=2))
-   if condition=='B':
-    with k.db() as c:c.execute('DELETE FROM failure_lessons')
-    k=Reflexion(k.path)
-    for family in RULES:
-     batch=[c for c in cases(1,rep) if c['family']==family];answers,model,latency,used=ask(batch,'B',k);assert not used
-     for case in batch:
-      a=answers.get(case['id'],{});conf=a.get('c');all_rows.append({'rep':rep,'condition':'B-erased','session':2,'id':case['id'],'family':family,'correct':valid(case,a),'confidence':conf if type(conf) in (int,float) and 0<=conf<=1 else None,'outside':case['outside'],'answer':a,'expected':case['expected'],'used_lessons':used})
+      new.append({'rep':rep,'condition':label,'session':session,'id':case['id'],'family':family,'correct':correct,'confidence':conf,'outside':case['outside'],'answer':a,'expected':case['expected'],'batch_seconds':latency,'used_lessons':used,'model':model})
+      if condition=='B' and session<2:k.observe(case['q'],family,{'verdict':'success' if correct else 'failure','scope':'programmatic_fixture','code':'ok' if correct else 'contract_mismatch','cause':'Output failed the published '+family+' contract.','correction':RULES[family]},conf,used)
+     all_rows.extend(new);checkpoint(root,all_rows)
+     print(rep,label,session,family,sum(r['correct'] for r in new),flush=True)
  summary={c:metrics([r for r in all_rows if r['condition']==c]) for c in ['A','B','C','B-erased']}
- summary['per_repetition']={str(rep):{c:metrics([r for r in all_rows if r['condition']==c and r['rep']==rep]) for c in ['A','B','C','B-erased']} for rep in range(args.repetitions)}
+ summary['per_repetition']={str(rep):{c:metrics([r for r in all_rows if r['condition']==c and r['rep']==rep]) for c in ['A','B','C','B-erased']} for rep in range(repetitions)}
  summary['models']=sorted(models);summary['scope']='Isolated memory component, 30 synthetic externally checked tasks, batched by family; not a measurement of the full voice agent or subjective experience.'
  summary['improvement_proven']=False
- summary['interpretation']='Do not claim benefit from installation alone. Compare paired second-session outcomes across repetitions and the erased-memory condition; ceiling effects and insufficient failed baseline cases make this inconclusive.'
- (root/'results.json').write_text(json.dumps(all_rows,indent=2));(root/'summary.json').write_text(json.dumps(summary,indent=2));print(json.dumps(summary,indent=2),flush=True)
+ summary['interpretation']='Compare paired second-session outcomes across repetitions and erased-memory outcomes. Installation alone proves no improvement. Inadequate confidence coverage, parsing failures or insufficient failed baseline cases limit interpretation.'
+ (root/'summary.json').write_text(json.dumps(summary,indent=2));return summary
+
+def main():
+ global PROVIDER,AUDIT
+ ap=argparse.ArgumentParser();ap.add_argument('--provider',choices=['local','workers'],default='local');ap.add_argument('--output',required=True);ap.add_argument('--repetitions',type=int,default=3);ap.add_argument('--resume',action='store_true');args=ap.parse_args()
+ if args.repetitions<1:ap.error('repetitions must be positive')
+ PROVIDER=args.provider;root=Path(args.output);root.mkdir(parents=True,exist_ok=args.resume)
+ config={'provider':PROVIDER,'repetitions':args.repetitions,'protocol':2};cfg=root/'config.json'
+ if cfg.exists() and json.loads(cfg.read_text())!=config:raise RuntimeError('Resume configuration differs')
+ cfg.write_text(json.dumps(config,indent=2));AUDIT=root/'responses.jsonl'
+ rows=json.loads((root/'results.json').read_text()) if args.resume and (root/'results.json').exists() else []
+ try:summary=run_experiment(root,args.repetitions,rows)
+ except Exception as exc:
+  (root/'interrupted.json').write_text(json.dumps({'type':type(exc).__name__,'completed_cases':len(rows),'instruction':'Resolve infrastructure and rerun with --resume; no infrastructure failure was scored as a wrong answer.'},indent=2));raise
+ (root/'interrupted.json').unlink(missing_ok=True);print(json.dumps(summary,indent=2),flush=True)
 if __name__=='__main__':main()

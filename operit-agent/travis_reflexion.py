@@ -10,6 +10,8 @@ def tokens(value):
 def verify(tool,result=None,error=None):
  """Scope is tool execution, never correctness of an untested model answer."""
  if error is not None:
+  if tool=="gmail_inbox" and str(error)=="Liga primeiro o Gmail na Sala de Comando.":
+   return {"verdict":"failure","scope":"gmail_access","code":"connection_required","cause":"Gmail has no persistent authorization.","correction":"Connect Gmail in the command room before requesting inbox messages."}
   kind=type(error).__name__
   return {'verdict':'failure','scope':'tool_execution','code':kind,'cause':'Tool raised '+kind,
    'correction':{'TimeoutError':'Check service health; retry a read once or split the request.','PermissionError':'Check the required authorization; do not bypass it.','ValueError':'Validate the input against the tool contract before retrying.','ConnectionError':'Check the service connection before retrying.'}.get(kind,'Inspect the tool failure and validate a proposed fix before retrying.')}

@@ -8,6 +8,9 @@ class Tests(unittest.TestCase):
   self.assertEqual(verify('local_llm',{'exitCode':0})['verdict'],'unknown')
   self.assertEqual(verify('command',{'exitCode':7})['verdict'],'failure')
   self.assertEqual(verify('gmail',{'requiresConnection':True})['verdict'],'failure')
+ def test_gmail_connection_failure_is_actionable(self):
+  v=verify("gmail_inbox",error=ValueError("Liga primeiro o Gmail na Sala de Comando."))
+  self.assertEqual(v["code"],"connection_required");self.assertIn("Connect Gmail",v["correction"])
  def test_restart_dedup_relevance_and_ablation(self):
   with tempfile.TemporaryDirectory() as d:
    p=Path(d)/'cognitive.sqlite';k=Reflexion(p)

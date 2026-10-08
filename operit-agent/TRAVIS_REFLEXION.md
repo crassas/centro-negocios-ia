@@ -27,7 +27,7 @@ Start the existing local inference server, then run:
 python3 operit-agent/travis_reflexion_eval.py --provider local --output /tmp/travis-reflexion-trial-1 --repetitions 3
 ```
 
-The output directory must be new. A uses the model and task contracts without lessons; B adds externally checked failure lessons; C adds a self-awareness prompt without lesson storage. Thirty synthetic cases cover tools, dates and JSON formats. Two independent sessions use matched task families with different values. Conditions are shuffled within each repetition. After B, only that experiment's lesson table is erased and the second-session cases are repeated. Production lessons are never erased.
+The output directory must be new for the first run. If interrupted, repeat the same command with `--resume`: completed batches are retained, raw responses are audited, and a model change blocks comparison. A uses the model and task contracts without lessons; B adds externally checked failure lessons; C adds a self-awareness prompt without lesson storage. Thirty synthetic cases cover tools, dates and JSON formats. Two independent sessions use matched task families with different values. Conditions are shuffled within each repetition. After B, only that experiment's lesson table is erased and the second-session cases are repeated. Production lessons are never erased.
 
 Outputs: raw model responses, per-case answers, model identity, confidence coverage, Brier score, second-session accuracy, recovery among first-session failures, repeated-failure rate, correct refusal rate and per-repetition results. A failed inference request interrupts the experiment; it is not counted as a wrong answer.
 
