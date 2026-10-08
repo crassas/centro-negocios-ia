@@ -54,6 +54,11 @@ def control_reply(args, language):
     return ('Posso partilhar ideias durante as pausas.' if pt else 'I can share ideas during quiet moments.') if value else ('Só intervenho quando me chamares ou quando um pedido terminar.' if pt else 'I’ll speak when you call me or when a requested task finishes.')
 
 def portuguese_reply(tool, result, fallback):
+    if tool == 'capabilities_status':
+        if not result.get('ok'):
+            return 'Não consegui verificar o meu registo de capacidades. Não vou inventar um estado.'
+        from travis_awareness import reply as awareness_reply
+        return awareness_reply(result,'pt')
     fixed = {'presence': 'Sou o Travis. Estou aqui. Diz-me o que precisas.', 'stop': 'Parei.',
              'open_youtube': 'YouTube, aqui mesmo. O que queres ver?', 'close_youtube': 'Vou fechar o YouTube.',
              'close_projection': 'Estou de volta.', 'pause_youtube': 'Vou pausar o vídeo.', 'resume_youtube': 'Vou retomar o vídeo.',

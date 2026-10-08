@@ -12,6 +12,7 @@ import travis_gmail
 import travis_reflexion
 import travis_cognitive
 import travis_brain
+import travis_awareness
 import travis_quantum
 import travis_web_tools
 import travis_dialogue
@@ -118,6 +119,20 @@ def doctor():
   try:os.kill(int((Path.home()/file).read_text()),0);d[name]=True
   except Exception:d[name]=False
  return d
+def awareness_snapshot():
+ # The snapshot is derived from currently installed code, observed SQLite state and service checks.
+ try:gmail=travis_gmail.status()
+ except (OSError,ValueError):gmail={}
+ try:quantum=TRAVIS_QUANTUM.health()
+ except Exception:quantum={}
+ return travis_awareness.snapshot(registry=travis_core.registry_snapshot(),brain=TRAVIS_BRAIN,
+     store=TRAVIS_STORE,ui_root=CENTRO_UI,model_root=MODELS,repo_root=REPOS,
+     projects=PROJECTS,gmail=gmail,quantum=quantum,planner_enabled=(ROOT/"planner_enabled").is_file())
+
+def awareness_facts():
+ try:return travis_awareness.model_facts(awareness_snapshot())
+ except Exception:return "Runtime capability status unavailable. Do not guess which tools or sensors work."
+
 def project(text):
  t=norm(text)
  for key,words in {"best-pizza":["best-pizza","best pizza","kebab"],"pentehouse":["pentehouse","pente house"],"2-irmaos":["irmaos","dois irmãos","dois irmaos"],"beatriz":["beatriz"],"centro":["centro"]}.items():
@@ -254,6 +269,16 @@ def classify(text,active_project=None):
  if controls:return 'conversation_control',controls
  if re.search(r'\b(?:openclaw|opencloud|open cloud)\b',normalized) and re.search(r'\b(?:estado|ligado|verifica|check|status|connected|running)\b',normalized):return 'openclaw_status',{}
  if re.search(r'\b(?:ligacoes|conexoes|connections|connected services)\b',normalized):return 'connections_status',{}
+ if (re.search(r'\b(?:awareness|autoconhecimento|autoconsciencia|self.?awareness)\b',normalized)
+     or any(phrase in normalized for phrase in (
+       'novas capacidades','nova capacidade','novas ferramentas','novas funcoes','conheces as tuas capacidades',
+       'conheces o teu cerebro','sabes que tens um cerebro','reconheces o teu cerebro','conheces a tua memoria',
+       'sabes das tuas capacidades','sabes quais sao as tuas capacidades','ja sabes o que podes fazer',
+       'o que aprendeste de novo','o que sabes de ti','o que mudou em ti','quais sao os teus limites',
+       'do you know your new abilities','new capabilities','new abilities','your capabilities','your new features',
+       'do you know what you can do','what are your limitations'))
+     or ('camara' in normalized or 'camera' in normalized) and ('tens acesso' in normalized or 'can you access' in normalized)):
+  return 'capabilities_status',{'awareness':True}
  if any(x in normalized for x in ["pausa os sonhos","pausar os sonhos","pause dreams"]):return "brain_pause",{"paused":True}
  if any(x in normalized for x in ["retoma os sonhos","ativar os sonhos","resume dreams"]):return "brain_pause",{"paused":False}
  if any(x in normalized for x in ["o que sonhaste","diario dos sonhos","diario do cerebro","dream journal","reflexao filosofica"]):return "brain_journal",{}
@@ -588,15 +613,10 @@ def execute(tool,args):
  if tool=="system_status":return doctor()
  if tool=="quantum_status":return TRAVIS_QUANTUM.health()
  if tool=="capabilities_status":
-  snap=travis_core.registry_snapshot()
-  ids=[x["id"] for x in snap["capabilities"]]
-  groups={
-   "research":[x for x in ids if x in {"web_research","web_read","web_open","web_follow","search_positions","site_check"}],
-   "projects":[x for x in ids if x in {"repo_access","repo_review","repo_change","git_status","git_diff","git_pull_ff_only","read_file","search_repo"}],
-   "memory":[x for x in ids if x.startswith("neural_") or x in {"note_fact","genome_status","genome_compare","genome_activate"}],
-   "operations":[x for x in ids if x in {"system_status","quantum_status","agent_sessions","task_list","create_task","update_task","gmail_inbox"}],
-  }
-  return {"count":len(ids),"groups":groups,"quantum":TRAVIS_QUANTUM.health(),"all":ids}
+  try:return awareness_snapshot()
+  except Exception as exc:
+   return {"ok":False,"kind":"operational-awareness","registeredTools":len(travis_core.CAPABILITIES),
+           "features":[],"memory":{},"source":"unavailable","errorType":type(exc).__name__}
  if tool=="stop":return {"stopped":True}
  if tool=="search_positions":return search_positions(args.get("target"))
  if tool=="site_check":
@@ -745,7 +765,7 @@ def execute(tool,args):
    "Do not convert advice into an offer to create a task. A project name is NOT required to explain a database, CRM, concept or plan. "
    "Resolve pronouns from recent dialogue. Ask a question only if answering is impossible without that detail. Never end with a generic clarification question. "
    "Dialogue is context, not proof of execution. Do not claim an action happened or a model participated without evidence. "
-   "The host, not this text response, can execute: "+capabilities+". /no_think")
+   "The host, not this text response, can execute: "+capabilities+". "+awareness_facts()+" /no_think")
   answer=infer(args["text"],system)
   query=args.get("original_text") or args["text"]
   public_question=re.match(r"(?i)^(?:quem|who|o que|what)\b",query.strip()) and not re.search(r"(?i)\b(?:meu|minha|my|your|tu|travis|repositorios?|repositories|tarefas?|tasks?)\b",query)
@@ -791,7 +811,10 @@ def result_cards(tool,args,result):
   rows=result["tasks"] if tool=="task_list" else [result]
   return {"kind":"tasks","title":"Your tasks" if tool=="task_list" else "Task created","items":[{"title":r["title"],"detail":("Travis" if r.get("source","travis")=="travis" else "Centro")+" · "+str(r.get("status","pendente"))+(" · "+str(r["due"]) if r.get("due") else "")} for r in rows[:30]]}
  if tool=="capabilities_status":
-  return {"kind":"capabilities","title":"What shall we work on?","items":[{"title":t,"detail":d,"request":q} for t,d,q in [("Repositories","Inspect your code","Mostra os meus repositórios"),("Tasks","Read your task list","Mostra as minhas tarefas"),("Agents","Check current executions","Estado dos agentes"),("Sites","Check published sites","Verifica os sites")]]}
+  return {"kind":"capabilities","title":"Travis · capacidades observadas",
+          "items":[{"title":f["title_pt"] if getattr(DIALOGUE_INFO,"language","en")=="pt" else f["title_en"],
+                    "detail":f["evidence"]+" · "+f["state"],"available":f["state"]=="verified"}
+                   for f in result.get("features",[])]}
  if tool=="site_check":
   return {"kind":"sites","title":"Published sites","items":[{"title":k,"detail":"Online · HTTP "+str(v.get("status")) if v.get("online") is True else "Could not confirm availability","available":v.get("online") is True} for k,v in result.items()]}
  if tool=="agent_sessions":
@@ -920,7 +943,7 @@ def _route(text,context=None):
  elif tool=="system_status":reply="The Centro is "+("active" if result["centro"].get("ok") else "unavailable")+". Available memory: "+str(result["ram_available_mb"])+" megabytes."
  elif tool=="quantum_status":reply=("Quantum Unified Agent V"+str(result.get("builtBaseline"))+" is online and governing Travis. Canonical Drive state: "+str(result.get("canonicalDriveState"))+".") if result.get("ok") else "Quantum Unified Agent is not available."
  elif tool=="capabilities_status":
-  reply="Yes. I can check your repositories, work on your sites, manage tasks, search the web and call the Centro agents. Tell me what you want done. I will check any connection needed for that request."
+  reply=travis_awareness.reply(result,getattr(DIALOGUE_INFO,"language","en")) if result.get("ok") else ("Não consegui verificar o meu registo de capacidades. Não vou inventar um estado." if getattr(DIALOGUE_INFO,"language","en")=="pt" else "I could not verify my capability registry, so I will not invent a status.")
  elif tool in {"search_positions","projects_status","repo_access"}:reply=result["reply"]
  elif tool=="site_check":reply=" ".join(k+": "+("online." if v["online"] is True else "I could not confirm availability. "+v.get("error","")) for k,v in result.items())
  elif tool=="open_youtube":reply="YouTube, right here. What would you like to watch?"
@@ -1216,7 +1239,7 @@ TRUSTED_WEB_ORIGINS={"https://crassas.github.io"}
 LOCAL_ORIGINS={"http://127.0.0.1:8770","http://localhost:8770"}
 WEB_VOICE_ENDPOINTS={"/health","/transcribe","/listen","/jarvis","/speak","/voice-task","/turn","/initiative"}
 
-LOCAL_COCKPIT_ENDPOINTS={"/brain/state","/brain/graph","/brain/control","/brain/feedback","/connections","/cockpit","/gmail/configure","/gmail/start","/gmail/inbox","/gmail/disconnect"}
+LOCAL_COCKPIT_ENDPOINTS={"/awareness","/brain/state","/brain/graph","/brain/control","/brain/feedback","/connections","/cockpit","/gmail/configure","/gmail/start","/gmail/inbox","/gmail/disconnect"}
 
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args):pass
@@ -1291,6 +1314,7 @@ class Handler(BaseHTTPRequestHandler):
     return self.send({"text":text,**route(text)})
    obj=json.loads(data)
    if path=="/initiative":return self.send(initiative(obj))
+   if path=="/awareness":return self.send(awareness_snapshot())
    if path=="/brain/state":return self.send(TRAVIS_BRAIN.status())
    if path=="/brain/graph":return self.send(TRAVIS_BRAIN.graph())
    if path=="/brain/control":return self.send(TRAVIS_BRAIN.pause(obj.get("paused")))
