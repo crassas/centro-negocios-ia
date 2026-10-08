@@ -1,4 +1,4 @@
-import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=presence-1';
+import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=presence-2';
 import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=2';
 import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
 import { createBacklight } from './travis-atmosphere.mjs?v=connections1';
@@ -1524,7 +1524,7 @@ if (!hud || !launcher || !canvas) {
     scene.traverse(object=>{
       if(!object.visible || !(object.isMesh || object.isLine || object.isPoints) || bloomLayer.test(object.layers)) return;
       bloomRestore.set(object,{material:object.material,visible:object.visible});
-      if(object.isMesh && object.material?.depthWrite && !object.material?.transparent) object.material=bloomOccluder;
+      if(object.isMesh && object.material?.depthWrite && !object.material?.transparent) object.material=object.material.userData?.bloomOccluder||bloomOccluder;
       else object.visible=false;
     });
     camera.layers.set(0);
@@ -1639,7 +1639,7 @@ if (!hud || !launcher || !canvas) {
     hud.dataset.mouthLevel=speechLevel.toFixed(2);
     if (faceRoot) {
       const faceMix=Math.max(.001,formBlend.face);
-      faceRoot.visible=faceMix>.012;
+      faceRoot.visible=faceMix>.012 && projection.amount<.999;
       const portrait=innerWidth/innerHeight<.72;
       const faceBase=(portrait?1.65:1.70);
       faceRoot.scale.setScalar(faceBase*faceMix);

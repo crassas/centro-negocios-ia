@@ -1,6 +1,6 @@
 // Front workspace driven by actual host tool results. Text is always inert.
 import {hologramPresentation as projection} from './travis-presence.mjs?v=2';
-import {mountYouTube,closeYouTube,controlYouTube,youtubeState} from './travis-youtube.mjs?v=1';
+import {mountYouTube,closeYouTube,controlYouTube,youtubeState} from './travis-youtube.mjs?v=2';
 const hud=document.getElementById('travis-hud');
 const deck=document.getElementById('travis-action-deck');
 const heading=document.getElementById('travis-action-heading');
@@ -14,6 +14,10 @@ const menu={kind:'capabilities',title:'Your workspace',items:[
   {title:'Sites',detail:'Check availability',request:'Verifica os sites'}
 ]};
 function render(data){
+  // Keep the real search choices available if a selected video cannot be embedded.
+  if(data.kind==='youtube'&&data.videoId&&current?.kind==='youtube'){
+    data={...data,query:current.query||data.query,items:data.items?.length?data.items:current.items};
+  }
   closeYouTube();
   current=data;
   heading.textContent=String(data.title||'Your workspace');

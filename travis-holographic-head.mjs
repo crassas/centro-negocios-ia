@@ -1,6 +1,6 @@
 // A projected light field on the animated anatomical mesh; no skin shading.
 export function createHolographicHeadMaterial(THREE,shell=false) {
-  return new THREE.ShaderMaterial({
+  const material=new THREE.ShaderMaterial({
     uniforms:{uTime:{value:0},uBuild:{value:0},uDissolve:{value:0},uState:{value:0},uOpacity:{value:shell?.32:1},uGlitch:{value:0}},
     vertexShader:`
       varying vec3 vP;varying vec3 vN;varying vec3 vV;
@@ -48,6 +48,14 @@ export function createHolographicHeadMaterial(THREE,shell=false) {
     transparent:shell,blending:shell?THREE.AdditiveBlending:THREE.NormalBlending,
     depthWrite:!shell,depthTest:true,side:THREE.FrontSide,toneMapped:false
   });
+  if(!shell){
+    // Bloom must respect the same assembly and dissolve mask as the visible head.
+    const occluder=material.clone();
+    occluder.uniforms=material.uniforms;
+    occluder.fragmentShader=material.fragmentShader.replace('vec4(colour/max(neck,.001),1.0)','vec4(0.0,0.0,0.0,1.0)');
+    material.userData.bloomOccluder=occluder;
+  }
+  return material;
 }
 
 export function createAssemblyParticles(THREE,geometry) {

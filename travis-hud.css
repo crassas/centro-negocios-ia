@@ -609,7 +609,7 @@ button.travis-action-card{cursor:pointer}
 .travis-action-card[data-available="false"] span{color:#e0c6ae}
 .travis-hud.cards-open .travis-title{opacity:var(--travis-presence,1)!important}
 .travis-youtube-search{display:flex;gap:10px;border-bottom:1px solid #8dd8e980;padding:8px 0 12px;margin-bottom:8px}
-.travis-youtube-search input{width:100%;min-width:0;border:0!important;background:transparent!important;color:#e4faff!important;font:16px/1.5 system-ui;outline-offset:4px}
+#travis-hud .travis-youtube-search input{width:100%;min-width:0;border:0!important;background:transparent!important;color:#e4faff!important;font:16px/1.5 system-ui;outline-offset:4px;box-shadow:none!important;appearance:none}
 .travis-youtube-search input::placeholder{color:#a7cbd8}
 .travis-youtube-search button{border:0!important;background:transparent!important;color:#b8f1fc!important;font-size:24px;min-width:44px;cursor:pointer}
 .travis-youtube-status{font-size:12px;line-height:1.6;color:#accfd9;text-shadow:0 1px 4px #001018;margin:0 0 15px}

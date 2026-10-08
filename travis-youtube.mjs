@@ -18,7 +18,7 @@ function api(){
 export function closeYouTube(){
   const wasOpen=active;generation++;active=playing=ready=false;
   try{player?.destroy();}catch{}
-  player=null;status=null;return wasOpen;
+  player=null;status=null;lastError='';return wasOpen;
 }
 export function youtubeState(){return {open:active,playing,error:lastError,ready};}
 export function controlYouTube(action){
@@ -49,7 +49,11 @@ export function mountYouTube(data,container){
         onReady:event=>{if(session!==generation)return;ready=true;event.target.setVolume(45);status.textContent='Diz “fecha o YouTube” para regressar.';screen.dataset.ready='true';},
         onStateChange:event=>{if(session!==generation)return;playing=event.data===1;screen.dataset.playing=String(playing);},
         onAutoplayBlocked:()=>{if(session===generation)status.textContent='Toca em reproduzir no vídeo. O Travis continua ligado.';},
-        onError:event=>{if(session!==generation)return;lastError=String(event.data);playing=false;status.textContent='Este vídeo não ficou disponível aqui. Escolhe outro resultado.';screen.dataset.error=lastError;}
+        onError:event=>{
+          if(session!==generation)return;lastError=String(event.data);playing=false;
+          status.textContent=[101,150].includes(event.data)?'O YouTube bloqueou a reprodução deste vídeo aqui. Podes escolher outro resultado abaixo.':event.data===153?'O YouTube não conseguiu validar este leitor. A pesquisa e a voz continuam ligadas.':'Este vídeo não ficou disponível aqui. Podes escolher outro resultado abaixo.';
+          screen.dataset.error=lastError;
+        }
       }});
   }).catch(error=>{if(session===generation&&status){lastError=error.message;status.textContent=error.message;}});
 }
