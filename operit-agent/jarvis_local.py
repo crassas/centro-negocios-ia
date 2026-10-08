@@ -1180,7 +1180,7 @@ TRUSTED_WEB_ORIGINS={"https://crassas.github.io"}
 LOCAL_ORIGINS={"http://127.0.0.1:8770","http://localhost:8770"}
 WEB_VOICE_ENDPOINTS={"/health","/transcribe","/listen","/jarvis","/speak","/voice-task","/turn","/initiative"}
 
-LOCAL_COCKPIT_ENDPOINTS={"/brain/state","/brain/control","/connections","/cockpit","/gmail/configure","/gmail/start","/gmail/inbox","/gmail/disconnect"}
+LOCAL_COCKPIT_ENDPOINTS={"/brain/state","/brain/graph","/brain/control","/connections","/cockpit","/gmail/configure","/gmail/start","/gmail/inbox","/gmail/disconnect"}
 
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args):pass
@@ -1256,6 +1256,7 @@ class Handler(BaseHTTPRequestHandler):
    obj=json.loads(data)
    if path=="/initiative":return self.send(initiative(obj))
    if path=="/brain/state":return self.send(TRAVIS_BRAIN.status())
+   if path=="/brain/graph":return self.send(TRAVIS_BRAIN.graph())
    if path=="/brain/control":return self.send(TRAVIS_BRAIN.pause(obj.get("paused")))
    if path=="/connections":return self.send(connections_snapshot())
    if path=="/cockpit":return self.send(cockpit_snapshot())
