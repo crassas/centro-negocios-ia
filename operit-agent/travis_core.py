@@ -104,7 +104,7 @@ def classify_local_intent(text,project_id=""):
  if project_id and any(w in t for w in action_terms):return "repo_change",{"target":project_id,"prompt":text}
  if project_id and any(w in t for w in review_terms):return "repo_review",{"target":project_id,"prompt":text}
  if project_id and re.search(r"\b(?:seleciona|selecciona|escolhe|mostra|abre|select|choose|show|open)\b",t):return "projects_status",p
- if re.search(r"\b(?:repositorios?|repos?|repositories|repository|github)\b",t) and re.search(r"\b(?:acesso|ligado|ligacao|quais|lista|mostra|ver|ve|consegues|podes|show|list|see|access|can|which|what)\b",t):return "repo_access",{}
+ if re.search(r"\b(?:repositorios?|repos?|repositories|repository|github)\b",t) and re.search(r"\b(?:acesso|ligado|ligacao|quais|lista|mostra|meus|minhas|my|ver|ve|consegues|podes|show|list|see|access|can|which|what)\b",t):return "repo_access",{}
  if re.search(r"\b(?:projetos|projectos|projects)\b",t) and re.search(r"\b(?:mostra|ver|ve|lista|quais|show|list|which|my)\b",t):return "projects_status",p
  if re.search(r"\b(posicao|posicoes|ranking|rankings|classificacao no google)\b",t):return "search_positions",p
  if "git" in t:return ("git_diff" if "diff" in t else "git_status"),p

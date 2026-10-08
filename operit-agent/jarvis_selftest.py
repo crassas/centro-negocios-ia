@@ -84,7 +84,7 @@ class Tests(unittest.TestCase):
   with patch.object(j,"command",side_effect=OSError("missing")):
    self.assertIn("could not confirm access to any repository",j.execute("repo_access",{})["reply"])
  def test_natural_requests_use_real_tools_and_front_cards(self):
-  for text,tool in [("Consegues ver os meus repositórios?","repo_access"),("Mostra as minhas tarefas","task_list"),("Can you see my repositories?","repo_access"),("Show my pending tasks","task_list"),("Que consegues fazer por mim?","capabilities_status")]:
+  for text,tool in [("Os meus repositórios","repo_access"),("Consegues ver os meus repositórios?","repo_access"),("Mostra as minhas tarefas","task_list"),("Can you see my repositories?","repo_access"),("Show my pending tasks","task_list"),("Que consegues fazer por mim?","capabilities_status")]:
    self.assertEqual(j.classify(text)[0],tool,text)
   for text in ["Não cries uma tarefa falsa","Do not create a task now","Como criar uma tarefa?"]:
    self.assertEqual(j.classify(text)[0],"local_llm",text)
