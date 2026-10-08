@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Low-latency bilingual Whisper worker for Portuguese/English voice input."""
-import json,math,re,sys,wave
+"""Low-latency multilingual Whisper worker optimized for Portuguese/English input."""
+import json,math,sys,wave
 from pathlib import Path
 import numpy as np
 from pywhispercpp.model import Model
@@ -19,9 +19,6 @@ model=Model(
  greedy={'best_of':1},
  initial_prompt=PROMPT,
 )
-current_language="pt"
-ENGLISH_HINTS={"the","and","open","tell","latest","version","search","please","what","where","when","how","can","you","me","is","are","with","show","find","github","youtube"}
-PORTUGUESE_HINTS={"abre","abrir","diz","diga","versao","versão","mais","recente","pesquisa","procura","por","favor","qual","como","onde","quando","esta","está","estou","podes","consegue","tens","tenho","quero","mostra","encontra"}
 
 def prepare_audio(path):
  with wave.open(str(path),"rb") as wav:
@@ -30,30 +27,23 @@ def prepare_audio(path):
   raw=wav.readframes(wav.getnframes())
  return np.frombuffer(raw,dtype=np.int16).astype(np.float32)/32768.0
 
-def next_language(text,used):
- words={w.lower() for w in re.findall(r"[A-Za-zÀ-ÿ]+",text)}
- en=len(words & ENGLISH_HINTS);pt=len(words & PORTUGUESE_HINTS)
- if en>=2 and en>pt+1:return "en"
- if pt>=2 and pt>en:return "pt"
- return used
-
 def transcribe(path,language=None):
- global current_language
  samples=prepare_audio(path)
- if len(samples)<1600:return {"text":"","language":current_language}
+ if len(samples)<1600:return {"text":"","languageUsed":"pt"}
  duration=len(samples)/16000
- used=language if language in {"pt","en"} else current_language
+ # PT-biased multilingual decoding is the best latency/quality trade-off on this device.
+ # The multilingual model still preserves English commands well, while Portuguese remains reliable.
+ used=language if language in {"pt","en"} else "pt"
  segments=model.transcribe(
   samples,
   language=used,
   audio_ctx=min(1500,max(512,math.ceil((duration+1)*50))),
  )
  text=" ".join(segment.text.strip() for segment in segments).strip()
- current_language=next_language(text,used)
- return {"text":text,"languageUsed":used,"nextLanguage":current_language}
+ return {"text":text,"languageUsed":used}
 
 if sys.argv[2]=="--worker":
- print("TRAVIS_STT:"+json.dumps({"ready":True,"languages":["pt","en"],"mode":"adaptive","language":current_language}),flush=True)
+ print("TRAVIS_STT:"+json.dumps({"ready":True,"languages":["pt","en"],"mode":"pt-biased-multilingual","defaultLanguage":"pt"}),flush=True)
  for line in sys.stdin:
   try:
    payload=json.loads(line)
