@@ -480,7 +480,7 @@ def execute(tool,args):
   return clean(result.get("stdout",""))
  if tool=="local_llm":
   answer=infer(args["text"])
-  if re.search(r"(?i)\b(?:não (?:tenho|sei|consigo)|nao (?:tenho|sei|consigo)|sem (?:informação|informacao|dados)|informação (?:não|nao) disponível|não disponho|i do not have|i don't have|i do not know|i don't know|no information available|not enough information|insufficient information)\b",answer):
+  if re.search(r"(?i)\b(?:não (?:tenho|sei|consigo)|nao (?:tenho|sei|consigo)|sem (?:informação|informacao|dados)|informação (?:não|nao) disponível|não disponho|i do not have|i don't have|i do not know|i don't know|no information available|not enough information|insufficient information|not confirmed|cannot confirm|can't confirm|unable to confirm)\b",answer):
    try:return web_research_answer(args.get("original_text") or args["text"])["answer"]
    except Exception as exc:event("executions",{"web_fallback_error":type(exc).__name__})
   return answer
