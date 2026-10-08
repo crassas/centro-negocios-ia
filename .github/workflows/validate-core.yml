@@ -49,6 +49,14 @@ jobs:
           node scripts/travis-particle-brain-selftest.mjs
           node scripts/travis-hud-selftest.mjs
 
+      - name: Travis operational awareness regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/travis-awareness-home"
+          mkdir -p "$HOME"
+          PYTHONPATH=operit-agent python3 operit-agent/travis_awareness_selftest.py
+
       - name: Travis core self-test
         shell: bash
         run: |
