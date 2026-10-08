@@ -510,7 +510,7 @@ def route(text,context=None):
  ensure_neural_seed()
  runtime=travis_core.RuntimeContext.create(source="jarvis",project_id=str(args.get("target") or project(text) or ""))
  cap=travis_core.CAPABILITIES.get(tool)
- workspace=(REPOS/PROJECTS[runtime.project_id]) if runtime.project_id in PROJECTS else (ROOT/"quantum-workspace")
+ workspace=ROOT/"quantum-workspaces"/(runtime.project_id or "general")
  qplan=TRAVIS_QUANTUM.prepare(task=text,tool=tool,action_type=(cap.action_type if cap else "READ"),project_id=runtime.project_id,workspace=workspace,mutation=bool(cap.mutation) if cap else False,requires_evidence=bool(cap.requires_evidence) if cap else True)
  if tool=="local_llm":
   args["original_text"]=text
