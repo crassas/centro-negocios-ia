@@ -1875,7 +1875,7 @@ if (!hud || !launcher || !canvas) {
   };
 
   init3D().then(()=>{
-    if (IS_LOCAL_TRAVIS_UI && new URLSearchParams(location.search).get('travis')==='1') {
+    if (IS_LOCAL_TRAVIS_UI && new URLSearchParams(location.search).get('view')!=='business') {
       history.replaceState(null,'',location.pathname);
       setTimeout(openHud,120);
     }
