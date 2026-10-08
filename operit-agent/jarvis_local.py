@@ -533,11 +533,21 @@ def route(text,context=None):
   TRAVIS_COG.finish(cog_run,False,False,failure=type(exc).__name__)
   raise
  result=outcome["result"]
- evidence_count=len(outcome.get("evidence") or [])
+ qrefs=[str(x)[:240] for x in (outcome.get("evidence") or [])]
+ if isinstance(result,dict):
+  for src in result.get("sources") or []:
+   if isinstance(src,dict) and src.get("url"):qrefs.append(str(src["url"])[:240])
+  if tool=="web_read" and result.get("url"):qrefs.append(str(result["url"])[:240])
+  if tool=="search_positions" and result.get("source"):qrefs.append(str(result.get("siteUrl") or result["source"])[:240])
+  if tool=="repo_change":
+   m=re.search(r"Commit: ([0-9a-f]{40})",str(result))
+   if m:qrefs.append("git:"+m.group(1))
+ qrefs=list(dict.fromkeys(x for x in qrefs if x))[:12]
+ evidence_count=len(qrefs)
  TRAVIS_GENOME.observe(tool,outcome["durationMs"],outcome["completionStatus"],True,evidence_count)
  verified=outcome["completionStatus"] in {"VERIFIED","REGRESSION_TESTED","RELEASE_CANDIDATE","PRODUCTION_READY"} or evidence_count>0
- qrefs=[str(x)[:240] for x in (outcome.get("evidence") or [])]
- qreturn=TRAVIS_QUANTUM.ingest(qplan,status=outcome["completionStatus"],result_summary=str(result)[:2000],evidence_refs=qrefs,provenance="travis:"+tool)
+ qstatus="VERIFIED" if verified and outcome["completionStatus"]=="IMPLEMENTED_NOT_VERIFIED" else outcome["completionStatus"]
+ qreturn=TRAVIS_QUANTUM.ingest(qplan,status=qstatus,result_summary=str(result)[:2000],evidence_refs=qrefs,provenance="travis:"+tool)
  qstrategy=(qplan.get("strategyRoute") or {}).get("primary","")
  TRAVIS_COG.add_step(cog_run,tool,{**{k:v for k,v in args.items() if k not in {"text","prompt","original_text"}},"quantum_strategy":qstrategy,"quantum_phase":qplan.get("phase")},"verified" if verified else "ok",outcome["durationMs"],evidence_count,str(result)[:1200])
  TRAVIS_COG.finish(cog_run,True,verified,str(result)[:2000])
