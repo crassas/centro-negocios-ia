@@ -11,7 +11,7 @@ class Tests(unittest.TestCase):
    self.assertEqual(snap["genes"]["hallucination_tolerance"],0.0)
    policy=genome.inference_policy()
    self.assertLessEqual(policy["max_tokens"],180);self.assertGreaterEqual(policy["max_tokens"],48)
-   self.assertIn("não inventes",policy["systemSuffix"])
+   self.assertIn("do not invent data",policy["systemSuffix"])
 
  def test_activation_is_persistent_and_reversible(self):
   with tempfile.TemporaryDirectory() as d:

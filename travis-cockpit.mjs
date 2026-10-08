@@ -2,12 +2,12 @@ const hud=document.querySelector('#travis-hud');
 const $=id=>document.getElementById(id);
 let gmailRequested=new URLSearchParams(location.search).get('connect')==='gmail';
 let timer=0,active=false,paused=false,controller=null;
-const statusNames={queued:'Na fila',running:'Em execução',completed:'Concluído',failed:'Falhou'};
+const statusNames={queued:'Queued',running:'Running',completed:'Completed',failed:'Failed'};
 async function api(path,body={}) {
   const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify(body),signal:AbortSignal.timeout(20000),cache:'no-store'});
   const data=await response.json();
-  if(!response.ok)throw new Error(data.error||'Ligação indisponível.');
+  if(!response.ok)throw new Error(data.error||'Connection unavailable.');
   return data;
 }
 function item(primary,secondary,kind='') {
@@ -22,31 +22,31 @@ async function refresh() {
   try {
     const response=await fetch('/cockpit',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}',
       signal:AbortSignal.any([controller.signal,AbortSignal.timeout(9000)]),cache:'no-store'});
-    if(!response.ok)throw new Error('Centro indisponível');
+    if(!response.ok)throw new Error('Centro unavailable');
     const data=await response.json();if(!active)return;
-    $('travis-link-state').textContent=data.centro?'CENTRO LIGADO':'CENTRO SEM RESPOSTA';
+    $('travis-link-state').textContent=data.centro?'CENTRO ONLINE':'CENTRO UNAVAILABLE';
     $('travis-link-state').dataset.online=String(data.centro);
-    $('travis-agent-state').textContent=data.agent?'Agente ativo':'Agente sem ligação';
-    $('travis-memory-state').textContent=data.memory.ok?`${data.memory.events||0} eventos registados`:'Memória por confirmar';
+    $('travis-agent-state').textContent=data.agent?'Agent active':'Agent offline';
+    $('travis-memory-state').textContent=data.memory.ok?`${data.memory.events||0} events recorded`:'Memory pending confirmation';
     const jobs=data.jobs.slice().reverse();
-    $('travis-jobs').replaceChildren(...jobs.map(j=>item(j.tool||'Pedido',statusNames[j.status]||j.status,j.status)));
-    if(!jobs.length)$('travis-jobs').append(item('Sem pedidos de voz','Os próximos pedidos aparecem aqui.'));
+    $('travis-jobs').replaceChildren(...jobs.map(j=>item(j.tool||'Request',statusNames[j.status]||j.status,j.status)));
+    if(!jobs.length)$('travis-jobs').append(item('No voice tasks','New requests will appear here.'));
     $('travis-history').replaceChildren(...data.history.slice().reverse().slice(0,5).map(r=>
-      item(`${r.action} · ${r.target||'Centro'}`,Number(r.exitCode)===0?'Execução concluída':r.error||'Execução falhou',Number(r.exitCode)===0?'completed':'failed')));
-    if(!data.history.length)$('travis-history').append(item('Sem histórico disponível','Ainda não há execuções confirmadas.'));
+      item(`${r.action} · ${r.target||'Centro'}`,Number(r.exitCode)===0?'Execution completed':r.error||'Execution failed',Number(r.exitCode)===0?'completed':'failed')));
+    if(!data.history.length)$('travis-history').append(item('No history available','There are no confirmed executions yet.'));
     $('travis-gmail-disconnect').hidden=!data.gmail.authorized;
-    $('travis-gmail-connect').textContent=data.gmail.authorized?'Abrir caixa de entrada':data.gmail.configured?'Autorizar conta Google':'Preparar ligação Gmail';
-    $('travis-observed').textContent='Verificado às '+new Date(data.observedAt*1000).toLocaleTimeString('pt-PT');
+    $('travis-gmail-connect').textContent=data.gmail.authorized?'Open inbox':data.gmail.configured?'Authorize Google account':'Set up Gmail connection';
+    $('travis-observed').textContent='Verified at '+new Date(data.observedAt*1000).toLocaleTimeString('en-GB');
   } catch(error) {
     if(!active)return;
-    $('travis-link-state').textContent='LIGAÇÃO INTERROMPIDA';$('travis-link-state').dataset.online='false';
-    $('travis-agent-state').textContent='Estado por confirmar';
-    $('travis-observed').textContent='Dados anteriores — atualização indisponível.';
+    $('travis-link-state').textContent='CONNECTION INTERRUPTED';$('travis-link-state').dataset.online='false';
+    $('travis-agent-state').textContent='Status pending confirmation';
+    $('travis-observed').textContent='Previous data — update unavailable.';
   } finally {controller=null;if(active)timer=setTimeout(refresh,6000);}
 }
 function transcript(role,text) {
   if(!text)return;
-  $('travis-transcript').append(item(role==='user'?'Tu':'Travis',String(text)));
+  $('travis-transcript').append(item(role==='user'?'You':'Travis',String(text)));
   while($('travis-transcript').children.length>12)$('travis-transcript').firstElementChild.remove();
   $('travis-transcript').scrollTop=$('travis-transcript').scrollHeight;
 }
@@ -58,11 +58,11 @@ $('travis-room-toggle')?.addEventListener('click',()=>{
 });
 $('travis-pause')?.addEventListener('click',()=>{
   paused=!paused;window.TravisVisual?.[paused?'pause':'resume']();
-  $('travis-pause').textContent=paused?'Retomar voz':'Pausar voz';
+  $('travis-pause').textContent=paused?'Resume voice':'Pause voice';
 });
 $('travis-command')?.addEventListener('submit',event=>{
   event.preventDefault();const input=$('travis-command-text');const text=input.value.trim();
-  if(text){window.TravisVisual?.ask(text);input.value='';paused=false;$('travis-pause').textContent='Pausar voz';}
+  if(text){window.TravisVisual?.ask(text);input.value='';paused=false;$('travis-pause').textContent='Pause voice';}
 });
 $('travis-open-agents')?.addEventListener('click',()=>{
   window.TravisVisual?.close();document.querySelector('[data-panel-target="agentes"]')?.click();
@@ -70,7 +70,7 @@ $('travis-open-agents')?.addEventListener('click',()=>{
 });
 function openGmail(){
   hud.classList.add('room-open');$('travis-room-toggle').setAttribute('aria-expanded','true');
-  window.TravisVisual?.pause();paused=true;$('travis-pause').textContent='Retomar voz';
+  window.TravisVisual?.pause();paused=true;$('travis-pause').textContent='Resume voice';
   $('travis-gmail-section').scrollIntoView({block:'start'});$('travis-gmail-section').focus({preventScroll:true});
   $('travis-gmail-connect').click();
 }
@@ -124,7 +124,7 @@ async function refreshConnections(){
     const data=await api('/connections');
     $('travis-connections').replaceChildren(...data.connections.map(c=>{
       const row=item(c.name,c.detail,c.state==='connected'?'completed':c.state==='attention'?'failed':'');
-      if(c.action==='gmail'){const button=document.createElement('button');button.type='button';button.textContent='Abrir ligação Gmail';button.addEventListener('click',openGmail);row.append(button);}
+      if(c.action==='gmail'){const button=document.createElement('button');button.type='button';button.textContent='Open Gmail connection';button.addEventListener('click',openGmail);row.append(button);}
       return row;
     }));
     const sites=data.business.sites||[];
@@ -132,7 +132,7 @@ async function refreshConnections(){
       const site=sites.find(s=>String(s.repo||'').includes(p.project==='centro'?'centro-negocios':p.project==='beatriz'?'beatriz':p.project==='2-irmaos'?'2-irmaos':p.project==='best-pizza'?'best-pizza':'pente'));
       return item(p.name,(p.available?'Código acessível':'Código indisponível')+(site?' · '+site.status:'')+(p.changedFiles?' · '+p.changedFiles+' alterações locais':''),p.available?'completed':'failed');
     }));
-    $('travis-connections-note').textContent='Verificado às '+new Date(data.observedAt*1000).toLocaleTimeString('pt-PT')+'. Autorizações guardadas não confirmam uma sessão ativa.';
+    $('travis-connections-note').textContent='Verified at '+new Date(data.observedAt*1000).toLocaleTimeString('en-GB')+'. Autorizações guardadas não confirmam uma sessão ativa.';
   }catch(error){$('travis-connections-note').textContent='Verificação indisponível. Os estados anteriores podem estar desatualizados.';}
   finally{connectionsBusy=false;$('travis-connections-refresh').disabled=false;}
 }

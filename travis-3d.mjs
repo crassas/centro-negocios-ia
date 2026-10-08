@@ -116,6 +116,8 @@ if (!hud || !launcher || !canvas) {
   let voiceVadTimer=0;
   let voiceRecordTimer=0;
   let voiceRestartTimer=0;
+  let introVoiceTimer=0;
+  let voiceStarting=false;
   let voiceRequestController=null;
   let voiceSource=null;
   let voicePlaybackRaf=0;
@@ -576,7 +578,7 @@ if (!hud || !launcher || !canvas) {
 
   async function localHealth(signal) {
     const response=await localFetch('/health',{method:'GET',signal});
-    if (!response.ok) throw new Error('Travis local indisponível.');
+    if (!response.ok) throw new Error('Local Travis is unavailable.');
     return response.json();
   }
 
@@ -916,6 +918,8 @@ if (!hud || !launcher || !canvas) {
   }
 
   async function startVoiceConversation({greet=true}={}) {
+    if (voiceStarting) return;
+    voiceStarting=true;
     stopVoiceConversation();
     const session=voiceSession;
     voiceBusy=true;
@@ -940,7 +944,7 @@ if (!hud || !launcher || !canvas) {
             type:'application/json',
             signal:controller.signal
           });
-          if(!speech.ok)throw new Error('Saudação indisponível.');
+          if(!speech.ok)throw new Error('Greeting unavailable.');
           const wav=await speech.arrayBuffer();
           if (!opened || session!==voiceSession) return;
           // Finish the visible assembly before the welcome speech starts.
@@ -966,6 +970,7 @@ if (!hud || !launcher || !canvas) {
       setState('ready','I could not connect to local Travis.');
     } finally {
       if (voiceRequestController===controller) voiceRequestController=null;
+      voiceStarting=false;
     }
   }
 
@@ -1776,13 +1781,14 @@ if (!hud || !launcher || !canvas) {
     haptic([10,35,10]);
     startTime=performance.now();
 
-    setTimeout(()=>{
-      if (opened && state==='booting') setState('ready');
-    },ready?1550:2100);
-    startVoiceConversation();
+    clearTimeout(introVoiceTimer);
+    introVoiceTimer=setTimeout(()=>{
+      if (opened && state==='booting') startVoiceConversation();
+    },1150);
   }
 
   function closeHud() {
+    clearTimeout(introVoiceTimer);introVoiceTimer=0;
     stopVoiceConversation();
     faceRig?.update(0);
     window.dispatchEvent(new Event('travis:close'));
@@ -1876,7 +1882,7 @@ if (!hud || !launcher || !canvas) {
   window.TravisPanel={
     open:launchHud,
     completeTask(id,text) {
-      if (opened) setState('ready',text?'Tarefa concluída.':'Pronto.');
+      if (opened) setState('ready',text?'Task completed.':'Ready.');
     }
   };
 
