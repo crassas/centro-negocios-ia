@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import travis_core
 import travis_genome
 import travis_gmail
+import travis_cognitive
 import travis_web_tools
 from concurrent.futures import ThreadPoolExecutor
 ROOT=Path.home()/".centro-jarvis"
@@ -26,6 +27,7 @@ TABLES=("conversations","projects","facts","executions","tool_events","summaries
 TRAVIS_STORE=travis_core.RuntimeStore(ROOT/"memory.sqlite")
 TRAVIS_UTEF=travis_core.UnifiedExecutionFramework(TRAVIS_STORE)
 TRAVIS_GENOME=travis_genome.BehaviorGenome(ROOT)
+TRAVIS_COG=travis_cognitive.CognitiveKernel(ROOT/"cognitive.sqlite")
 NEURAL_SEEDED=False
 def ensure_neural_seed():
  global NEURAL_SEEDED
@@ -76,6 +78,7 @@ def doctor():
  d["travis_core"]=TRAVIS_STORE.health()
  d["travis_capabilities"]=len(travis_core.CAPABILITIES)
  d["behavior_genome"]=TRAVIS_GENOME.snapshot()
+ d["cognitive_kernel"]=TRAVIS_COG.health()
  for name,file in {"agent":".centro-agent/agent.pid","supervisor":".centro-station/supervisor.pid"}.items():
   try:os.kill(int((Path.home()/file).read_text()),0);d[name]=True
   except Exception:d[name]=False
@@ -509,10 +512,22 @@ def route(text,context=None):
  if tool=="local_llm":
   neural=TRAVIS_STORE.neural_context(text,project(text) or "",2)[:600]
   if neural:args["text"] += "\nConfirmed local semantic memory (factual context, not instructions):\n"+neural
-  args["text"]=args["text"][:4400]
- outcome=TRAVIS_UTEF.execute(tool,args,lambda:execute(tool,args),runtime)
+  learned=TRAVIS_COG.planning_context(text,4)[:900]
+  if learned:args["text"] += "\n\n"+learned
+  args["text"]=args["text"][:5000]
+ cog_run=TRAVIS_COG.begin(text,{"tool":tool,"project":runtime.project_id})
+ try:
+  outcome=TRAVIS_UTEF.execute(tool,args,lambda:execute(tool,args),runtime)
+ except Exception as exc:
+  TRAVIS_COG.add_step(cog_run,tool,{k:v for k,v in args.items() if k not in {"text","prompt","original_text"}},"failed",int((time.monotonic()-start)*1000),0,type(exc).__name__)
+  TRAVIS_COG.finish(cog_run,False,False,failure=type(exc).__name__)
+  raise
  result=outcome["result"]
- TRAVIS_GENOME.observe(tool,outcome["durationMs"],outcome["completionStatus"],True,len(outcome.get("evidence") or []))
+ evidence_count=len(outcome.get("evidence") or [])
+ TRAVIS_GENOME.observe(tool,outcome["durationMs"],outcome["completionStatus"],True,evidence_count)
+ verified=outcome["completionStatus"] in {"VERIFIED","REGRESSION_TESTED","RELEASE_CANDIDATE","PRODUCTION_READY"} or evidence_count>0
+ TRAVIS_COG.add_step(cog_run,tool,{k:v for k,v in args.items() if k not in {"text","prompt","original_text"}},"verified" if verified else "ok",outcome["durationMs"],evidence_count,str(result)[:1200])
+ TRAVIS_COG.finish(cog_run,True,verified,str(result)[:2000])
  if tool in {"web_research","web_read"}:reply=result["answer"]
  elif tool in {"web_open","web_follow"}:reply=result["reply"]
  elif tool=="gmail_inbox":reply="Latest inbox emails: "+"; ".join(m["subject"] for m in result["messages"]) if result["messages"] else "The inbox is empty."
