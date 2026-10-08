@@ -384,6 +384,33 @@ class BrainRuntime:
             'engine': 'python-fallback' if requested_rust else 'python'
         }
 
+
+    def events(self, limit=80):
+        """Bounded, public-safe cognitive transitions; never return private details."""
+        limit = max(1, min(int(limit), 240))
+        requested_rust = bool(os.environ.get("TRAVIS_RUST_BIN", "").strip())
+        if requested_rust:
+            from travis_rust_bridge import events_snapshot
+            native = events_snapshot(self.path, limit=limit)
+            if native is not None:
+                return native
+        with contextlib.closing(sqlite3.connect(self.path.resolve().as_uri() + "?mode=ro", uri=True, timeout=1)) as c:
+            rows = c.execute(
+                "SELECT id,created,region,phase FROM brain_events "
+                "WHERE region IN ('attention','memory','executive','action',"
+                "'monitor','regulation','reflection') ORDER BY id DESC LIMIT ?",
+                (limit,)
+            ).fetchall()
+        return {
+            'ok': True, 'source': 'brain-sqlite',
+            'kind': 'observed-cognitive-events',
+            'engine': 'python-fallback' if requested_rust else 'python',
+            'observedAt': self.clock(),
+            'events': [{'id': row[0], 'created': row[1], 'region': row[2],
+                        'phase': clean(row[3] or '', 60)} for row in rows],
+            'disclaimer': 'Observed application events, not a neural activity recording'
+        }
+
     def status(self):
         now = self.clock()
         with self.db() as c:

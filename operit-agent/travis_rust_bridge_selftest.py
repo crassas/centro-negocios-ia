@@ -69,5 +69,19 @@ class RustBridgeTests(unittest.TestCase):
             brain.stop()
 
 
+
+    def test_event_bridge_rejects_private_payload(self):
+        from travis_rust_bridge import events_snapshot
+        valid = {"ok": True, "source": "brain-sqlite", "engine": "rust",
+                 "kind": "observed-cognitive-events",
+                 "events": [{"id": 1, "created": 100.0, "region": "memory", "phase": "retrieving"}]}
+        with patch("travis_rust_bridge.subprocess.run", return_value=SimpleNamespace(
+                returncode=0, stdout=json.dumps(valid))):
+            self.assertEqual(events_snapshot("brain.sqlite")["events"][0]["region"], "memory")
+        leaked = {**valid, "events": [{**valid["events"][0], "detail": "PRIVATE"}]}
+        with patch("travis_rust_bridge.subprocess.run", return_value=SimpleNamespace(
+                returncode=0, stdout=json.dumps(leaked))):
+            self.assertIsNone(events_snapshot("brain.sqlite"))
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

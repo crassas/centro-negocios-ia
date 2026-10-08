@@ -49,3 +49,49 @@ def graph_snapshot(db_path, limit=120):
                 or link.get("provenance") != "persisted-synapse"):
             return None
     return data
+
+
+def events_snapshot(db_path, limit=80):
+    """Small, read-only event window from Rust; never export the private detail."""
+    binary = os.environ.get("TRAVIS_RUST_BIN", "").strip()
+    if not binary or not Path(binary).is_file() or not os.access(binary, os.X_OK):
+        return None
+    limit = max(1, min(int(limit), 240))
+    try:
+        proc = subprocess.run(
+            [binary, "events", "--db", str(db_path), "--limit", str(limit)],
+            capture_output=True, text=True, timeout=1.5, check=False,
+        )
+        if proc.returncode != 0 or len(proc.stdout) > 110_000:
+            return None
+        data = json.loads(proc.stdout)
+    except (OSError, ValueError, UnicodeError, subprocess.TimeoutExpired):
+        return None
+    if not isinstance(data, dict):
+        return None
+    if (data.get("ok") is not True or data.get("source") != "brain-sqlite"
+            or data.get("engine") != "rust"
+            or data.get("kind") != "observed-cognitive-events"):
+        return None
+    events = data.get("events")
+    if not isinstance(events, list) or len(events) > limit:
+        return None
+    valid_regions = {"attention", "memory", "executive", "action", "monitor",
+                     "regulation", "reflection"}
+    seen = set()
+    for event in events:
+        if not isinstance(event, dict) or "detail" in event:
+            return None
+        event_id = event.get("id")
+        if type(event_id) is not int or event_id < 0 or event_id in seen:
+            return None
+        seen.add(event_id)
+        if event.get("region") not in valid_regions:
+            return None
+        if not isinstance(event.get("phase"), str) or len(event["phase"]) > 60:
+            return None
+        observed = event.get("created")
+        if (observed is not None and
+                (not isinstance(observed, (int, float)) or isinstance(observed, bool))):
+            return None
+    return data

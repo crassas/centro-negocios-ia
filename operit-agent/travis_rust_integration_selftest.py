@@ -65,6 +65,10 @@ class NativeContractTests(unittest.TestCase):
         events = self.native("events", "--db", self.brain.path, "--limit", 80)
         self.assertEqual(events["events"][0]["region"], "attention")
         self.assertNotIn("SENTINELA_PRIVADA_EVENTO", str(events))
+        with patch.dict(os.environ, {"TRAVIS_RUST_BIN": str(self.binary)}):
+            self.assertEqual(self.brain.events()["engine"], "rust")
+        with patch.dict(os.environ, {"TRAVIS_RUST_BIN": ""}):
+            self.assertEqual(self.brain.events()["engine"], "python")
         status = self.native(
             "status", "--memory-db", self.store.db_path,
             "--brain-db", self.brain.path,

@@ -1243,7 +1243,7 @@ TRUSTED_WEB_ORIGINS={"https://crassas.github.io"}
 LOCAL_ORIGINS={"http://127.0.0.1:8770","http://localhost:8770"}
 WEB_VOICE_ENDPOINTS={"/health","/transcribe","/listen","/jarvis","/speak","/voice-task","/turn","/initiative"}
 
-LOCAL_COCKPIT_ENDPOINTS={"/awareness","/brain/state","/brain/graph","/brain/control","/brain/feedback","/connections","/cockpit","/gmail/configure","/gmail/start","/gmail/inbox","/gmail/disconnect"}
+LOCAL_COCKPIT_ENDPOINTS={"/awareness","/brain/state","/brain/graph","/brain/events","/brain/control","/brain/feedback","/connections","/cockpit","/gmail/configure","/gmail/start","/gmail/inbox","/gmail/disconnect"}
 
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args):pass
@@ -1321,6 +1321,7 @@ class Handler(BaseHTTPRequestHandler):
    if path=="/awareness":return self.send(awareness_snapshot())
    if path=="/brain/state":return self.send(TRAVIS_BRAIN.status())
    if path=="/brain/graph":return self.send(TRAVIS_BRAIN.graph())
+   if path=="/brain/events":return self.send(TRAVIS_BRAIN.events(limit=40))
    if path=="/brain/control":return self.send(TRAVIS_BRAIN.pause(obj.get("paused")))
    if path=="/brain/feedback":return self.send(memory_feedback({'session':obj.get('session')},obj.get('accepted'),obj.get('runId')))
    if path=="/connections":return self.send(connections_snapshot())
