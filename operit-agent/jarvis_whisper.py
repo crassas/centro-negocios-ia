@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Low-latency multilingual Whisper worker optimized for Portuguese/English input."""
-import json,sys,wave
+import json,os,sys,wave
 from pathlib import Path
 import numpy as np
 from pywhispercpp.model import Model
@@ -8,10 +8,11 @@ from pywhispercpp.model import Model
 PROMPT="Português de Portugal and British English. Travis, YouTube, Google, search, open, close, pause, resume, pesquisar, procurar, selecionar, primeiro, segundo, vídeo, repositories, repositórios, tarefas, projects, Beatriz, GitHub."
 model_path=Path(sys.argv[1])
 precise_model=model_path.with_name('ggml-small-q5_1.bin')
-if precise_model.is_file():model_path=precise_model
+precise=os.environ.get('TRAVIS_STT_ACCURACY')=='precise'
+if precise_model.is_file() and precise:model_path=precise_model
 model=Model(
  str(model_path),
- params_sampling_strategy=1,
+ params_sampling_strategy=1 if precise else 0,
  n_threads=4,
  print_realtime=False,
  print_progress=False,

@@ -24,8 +24,8 @@ def control(text):
 
 def detect_language(text, fallback='en'):
     tokens = set(re.findall(r'[a-z]+', normalized(text)))
-    pt = len(tokens & set('ola quero preciso podes procura pesquisa abre seleciona primeiro segundo fecha pausa retoma obrigado explica como porque porque portugues fala um uma bicicletas meu minha tens temos para sobre hoje mundo'.split()))
-    en = len(tokens & set('hello hi want need can could please search find open select first second close pause resume thanks explain how why english speak the a an my your have what who about today world'.split()))
+    pt = len(tokens & set('ola quero preciso podes procura pesquisa abre seleciona primeiro segundo fecha pausa retoma obrigado explica como porque portugues fala um uma bicicletas meu minha tens temos para sobre hoje mundo verifica ligado ligacoes acorda fica espera desliga microfone volta sem interrupcoes estou estas esta aqui isso isto nao que por com de dos das ao'.split()))
+    en = len(tokens & set('hello hi want need can could please search find open select first second close pause resume thanks explain how why english speak the a an my your have what who about today world you are is with this that check connected wake sleep microphone listening stop match language'.split()))
     return 'pt' if pt > en else 'en' if en > pt else fallback
 
 def language_instruction(language):
@@ -47,7 +47,7 @@ def control_reply(args, language):
     pt = language == 'pt'
     setting, value = args['setting'], args['value']
     if setting == 'language':
-        return {'pt': 'Claro. Falamos em português de Portugal.', 'en': 'Of course. Let’s speak English.', 'auto': 'Vou acompanhar o idioma em que falares.'}[value]
+        return {'pt': 'Claro. Falamos em português de Portugal.', 'en': 'Of course. Let’s speak English.', 'auto': 'Vou acompanhar o idioma em que falares.' if pt else 'I’ll follow the language you use.'}[value]
     if setting == 'standby':
         return ('Fico em espera. Diz Travis para me chamares.' if pt else 'Standing by. Say Travis when you need me.') if value else ('Estou aqui.' if pt else 'I’m here.')
     if setting == 'microphone': return 'Microfone desligado.' if pt else 'Microphone off.'
