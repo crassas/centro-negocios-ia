@@ -7,6 +7,7 @@ import sqlite3
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from travis_core import RuntimeStore
 from travis_brain import BrainRuntime
@@ -69,7 +70,7 @@ class NativeContractTests(unittest.TestCase):
         self.assertEqual(status["features"][0]["evidence"]["nodes"], 2)
         self.assertEqual(status["features"][0]["evidence"]["links"], 1)
         self.assertEqual(status["consciousness"], "not_established")
-        with unittest.mock.patch.dict(os.environ, {"TRAVIS_RUST_BIN": str(self.binary)}):
+        with patch.dict(os.environ, {"TRAVIS_RUST_BIN": str(self.binary)}):
             self.assertEqual(self.brain.graph()["engine"], "rust")
 
     def test_does_not_create_missing_database(self):
