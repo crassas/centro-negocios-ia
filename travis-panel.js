@@ -8,8 +8,8 @@
  function stop(){version++;controller?.abort();controller=null;release();busy=false;pendingTask='';clearTimeout(queueTimer);$('travis-send').disabled=false;setStatus('Conversa parada. Podes voltar a falar.')}
  function speak(text,force=false){
   if(!panel.open||(!force&&!readAloud.checked)||!window.speechSynthesis){setStatus('Resposta recebida.');return}
-  const id=version;const voice=new SpeechSynthesisUtterance(text);voice.lang='pt-PT';voice.rate=1;
-  voice.voice=speechSynthesis.getVoices().find(v=>v.lang.toLowerCase()==='pt-pt')||null;
+  const id=version;const voice=new SpeechSynthesisUtterance(text);voice.lang='en-GB';voice.rate=1;
+  voice.voice=speechSynthesis.getVoices().find(v=>v.lang.toLowerCase()==='en-gb')||speechSynthesis.getVoices().find(v=>v.lang.toLowerCase().startsWith('en-'))||null;
   voice.onstart=()=>{if(id===version)setStatus('O Travis está a falar.')};
   voice.onend=()=>{if(id!==version)return;setStatus('Estou aqui.');if(continuous.checked&&panel.open)startListening()};
   voice.onerror=()=>{if(id===version)setStatus('Resposta pronta. Podes carregar em Ouvir.')};
