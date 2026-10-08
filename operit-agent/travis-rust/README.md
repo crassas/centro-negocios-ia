@@ -40,3 +40,18 @@ python3 operit-agent/travis_rust_integration_selftest.py
 - Partículas 3D representam acontecimentos registados no software, não neurónios biológicos nem consciência subjectiva.
 - O comando `events` está preparado para a fase seguinte; ainda não foi ligado à interface de partículas.
 - Este branch não se publica automaticamente no telefone nem no site. Confirmar build, regressões e observação real antes de activar.
+
+## Activação permanente (sem dependência da shell de arranque)
+
+Depois de testes locais e backup, instalar o binário sem sobrescrever o código em execução:
+
+```sh
+install -d -m 700 ~/.centro-jarvis/bin
+install -m 700 operit-agent/travis-rust/target/release/travis-core ~/.centro-jarvis/bin/travis-core
+# Activar apenas depois de copiar e validar os módulos Python no serviço Jarvis:
+install -m 600 /dev/null ~/.centro-jarvis/rust-core-enabled
+```
+
+Enquanto o marcador `~/.centro-jarvis/rust-core-enabled` existir, o motor Rust é escolhido na leitura de `/brain/graph` e `/brain/events`, com fallback Python se falhar. Para regressar imediatamente ao motor Python, sem parar o serviço: `rm ~/.centro-jarvis/rust-core-enabled`.
+
+`TRAVIS_RUST_BIN` continua a sobrepor-se à configuração persistente; a variável explicitamente vazia desactiva esta selecção. Os outros endpoints não são alterados. O motor não executa comandos externos.

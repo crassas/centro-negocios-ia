@@ -340,7 +340,8 @@ class BrainRuntime:
     def graph(self, limit=120):
         """Read-only snapshot of persisted memories and persisted relations."""
         limit = max(1, min(int(limit), 120))
-        requested_rust = bool(os.environ.get("TRAVIS_RUST_BIN", "").strip())
+        from travis_rust_bridge import configured_binary
+        requested_rust = bool(configured_binary())
         if requested_rust:
             from travis_rust_bridge import graph_snapshot
             native = graph_snapshot(self.store.db_path, limit=limit)
@@ -388,7 +389,8 @@ class BrainRuntime:
     def events(self, limit=80):
         """Bounded, public-safe cognitive transitions; never return private details."""
         limit = max(1, min(int(limit), 240))
-        requested_rust = bool(os.environ.get("TRAVIS_RUST_BIN", "").strip())
+        from travis_rust_bridge import configured_binary
+        requested_rust = bool(configured_binary())
         if requested_rust:
             from travis_rust_bridge import events_snapshot
             native = events_snapshot(self.path, limit=limit)

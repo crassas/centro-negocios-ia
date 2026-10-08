@@ -7,8 +7,19 @@ from pathlib import Path
 import subprocess
 
 
+
+def configured_binary():
+    """Explicit environment setting wins; a local marker enables the installed binary."""
+    if "TRAVIS_RUST_BIN" in os.environ:
+        return os.environ["TRAVIS_RUST_BIN"].strip()
+    state = Path.home() / ".centro-jarvis"
+    if (state / "rust-core-enabled").is_file():
+        return str(state / "bin" / "travis-core")
+    return ""
+
+
 def graph_snapshot(db_path, limit=120):
-    binary = os.environ.get("TRAVIS_RUST_BIN", "").strip()
+    binary = configured_binary()
     if not binary or not Path(binary).is_file() or not os.access(binary, os.X_OK):
         return None
     limit = max(1, min(int(limit), 120))
@@ -53,7 +64,7 @@ def graph_snapshot(db_path, limit=120):
 
 def events_snapshot(db_path, limit=80):
     """Small, read-only event window from Rust; never export the private detail."""
-    binary = os.environ.get("TRAVIS_RUST_BIN", "").strip()
+    binary = configured_binary()
     if not binary or not Path(binary).is_file() or not os.access(binary, os.X_OK):
         return None
     limit = max(1, min(int(limit), 240))
