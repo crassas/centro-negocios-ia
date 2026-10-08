@@ -1012,11 +1012,12 @@ def apply_repo_change_plan(worktree, plan):
 
     return applied
 
-def readonly_cloud_fallback(prompt, reason):
+def readonly_cloud_fallback(prompt, reason, language="pt"):
     """Already-installed Workers AI route; no Anthropic/Manus paid fallback."""
     try:
         status, data = http_json(CLOUD_BASE+"/api/assist", method="POST",
-                                payload={"question": prompt, "context": {}}, timeout=60)
+                                payload={"question": prompt[:4000], "context": {}, "language": language,
+                                         "mode": "conversation"}, timeout=60)
         answer = str(data.get("answer") or "").strip()
         model = str(data.get("model") or "")
         if status != 200 or not data.get("ok") or not answer or model == "fallback-local":
@@ -2414,6 +2415,7 @@ def execute_action(task):
 
     if action == "claude_query":
         prompt = str((task.get("args") or {}).get("prompt") or "").strip()
+        reply_language = "en" if (task.get("args") or {}).get("language") == "en" else "pt"
         if not prompt:
             return {"exitCode": 2, "stdout": "", "stderr": "Pedido para o Claude Code em falta.", "durationMs": 0}
         if len(prompt) > 5000:
@@ -2452,7 +2454,7 @@ def execute_action(task):
 
         auth_ok, auth_detail = ollama_auth_check(key)
         if not auth_ok:
-            return readonly_cloud_fallback(prompt, auth_detail)
+            return readonly_cloud_fallback(prompt, auth_detail, reply_language)
         env = os.environ.copy()
         env["ANTHROPIC_BASE_URL"] = "https://ollama.com"
         env["ANTHROPIC_AUTH_TOKEN"] = key
@@ -2471,7 +2473,7 @@ def execute_action(task):
             cwd=cwd, timeout=CLAUDE_TIMEOUT, env=env,
         )
         if result["exitCode"] != 0:
-            return readonly_cloud_fallback(prompt, "Claude/Ollama exit="+str(result["exitCode"]))
+            return readonly_cloud_fallback(prompt, "Claude/Ollama exit="+str(result["exitCode"]), reply_language)
         return result
 
     return {

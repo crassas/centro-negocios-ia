@@ -167,6 +167,13 @@ def main():
         assert server.ollama_auth_check('invalid-key')[0] is False
         server.http_json=lambda *a,**k:(200,{'ok':True,'model':'test-model','answer':'CENTRO_OK'})
         assert server.readonly_cloud_fallback('probe','denied')['exitCode']==0
+        def contextual_fallback(url, **kwargs):
+            payload=kwargs['payload']
+            assert payload['language']=='en' and payload['mode']=='conversation'
+            assert len(payload['question'])<=4000
+            return 200,{'ok':True,'model':'@cf/test-model','answer':'A spreadsheet is a practical starting point.'}
+        server.http_json=contextual_fallback
+        assert server.readonly_cloud_fallback('Compare the customer register. '*200,'denied','en')['exitCode']==0
         server.http_json=lambda *a,**k:(200,{'ok':True,'model':'fallback-local','answer':'unavailable'})
         assert server.readonly_cloud_fallback('probe','denied')['exitCode']!=0
         server.http_json=original_http

@@ -574,8 +574,9 @@ def execute(tool,args):
   try:
    token=(Path.home()/".centro-server/token").read_text().strip()
    expert_prompt=("You are Travis’s specialist agent. Analyse deeply, but reply in concise operational English. "
+                  "For conceptual comparisons or advice, explain the trade-offs and recommend a practical starting point from the supplied context. Do not demand an existing implementation to explain options. "
                   "Do not modify files or perform destructive actions. If the request implies execution, state the best next action. User request: "+prompt)
-   task={"id":"travis-expert-"+secrets.token_hex(8),"action":"claude_query","target":"local","args":{"prompt":expert_prompt}}
+   task={"id":"travis-expert-"+secrets.token_hex(8),"action":"claude_query","target":"local","args":{"prompt":expert_prompt,"language":"en"}}
    req=urllib.request.Request("http://127.0.0.1:8765/execute",data=json.dumps(task).encode(),headers={"Content-Type":"application/json","Authorization":"Bearer "+token})
    with urllib.request.urlopen(req,timeout=150) as response:data=json.load(response)
    result=data.get("result",{})
@@ -629,12 +630,12 @@ def execute(tool,args):
   return clean(result.get("stdout",""))
  if tool=="local_llm":
   capabilities=", ".join(k for k in ("repo_access","repo_review","repo_change","task_list","create_task","web_research","web_open","site_check","agent_sessions","gmail_inbox","note_fact") if k in travis_core.CAPABILITIES)
-  system=("You are Travis, the tool-enabled Centro assistant on the operator's phone. Reply in natural English. "
-   "Resolve 'that', 'it' and 'do the same' from recent dialogue. Stay with the current goal; isolated keywords must not change the topic. "
-   "Give a concrete answer or next step. Ask one short question only when an essential detail is missing. "
-   "History is context, not execution evidence. Never report unexecuted actions as complete. Registered tools require live connection checks. "
-   "Tools: "+capabilities+". Projects: "+", ".join(PROJECTS)+". "
-   "Use relevant memory and distinguish observations from guesses. Do not pretend unavailable models participated. /no_think")
+  system=("You are Travis. Reply naturally in English. This is the conversation and explanation channel; the host dispatches executable commands separately. "
+   "Answer the actual question with concrete content. For 'how would you', advice, explanations or comparisons, give the proposed structure, steps or example now. "
+   "Do not convert advice into an offer to create a task. A project name is NOT required to explain a database, CRM, concept or plan. "
+   "Resolve pronouns from recent dialogue. Ask a question only if answering is impossible without that detail. Never end with a generic clarification question. "
+   "Dialogue is context, not proof of execution. Do not claim an action happened or a model participated without evidence. "
+   "The host, not this text response, can execute: "+capabilities+". /no_think")
   answer=infer(args["text"],system)
   query=args.get("original_text") or args["text"]
   public_question=re.match(r"(?i)^(?:quem|who|o que|what)\b",query.strip()) and not re.search(r"(?i)\b(?:meu|minha|my|your|tu|travis|repositorios?|repositories|tarefas?|tasks?)\b",query)
