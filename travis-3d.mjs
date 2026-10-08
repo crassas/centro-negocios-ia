@@ -1,4 +1,5 @@
-import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs';
+import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=presence-1';
+import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=1';
 import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
 import { createBacklight } from './travis-atmosphere.mjs?v=connections1';
 import { createFaceRig } from './travis-face-rig.mjs?v=articulation-2';
@@ -27,6 +28,8 @@ if (!hud || !launcher || !canvas) {
   console.warn('Travis 3D: interface missing.');
 } else {
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const presenceMotion=createPresenceMotion({reducedMotion});
+  let presencePose={};
   const stateCopy = {
     idle: ['Standing by.', 'STANDBY'],
     booting: ['Materializing core.', 'BOOTING'],
@@ -94,10 +97,6 @@ if (!hud || !launcher || !canvas) {
   let hoverNode = null;
   let pointerDown = null;
   let audioContext = null;
-  let cameraTarget = new THREE.Vector2();
-  let cameraNow = new THREE.Vector2();
-  let tiltTarget = new THREE.Vector2();
-  let tiltNow = new THREE.Vector2();
   let resizeTimer = 0;
   let externalVoiceLevel = null;
   let speechLevel = 0;
@@ -1549,8 +1548,7 @@ if (!hud || !launcher || !canvas) {
     else intro=Math.max(0,intro-dt*2.4);
     const introEase=easeOutCubic(intro);
 
-    cameraNow.lerp(cameraTarget,.055);
-    tiltNow.lerp(tiltTarget,.05);
+    const projection=hologramPresentation.sample(now/1000);
 
     if (now>nextGlitchAt) {
       glitchPower=formBlend.face>.1?0:(state==='thinking'?.15:.06);
@@ -1561,6 +1559,7 @@ if (!hud || !launcher || !canvas) {
 
     const targetVoice=state==='speaking'?(externalVoiceLevel||0):0;
     speechLevel+=(targetVoice-speechLevel)*(1-Math.exp(-dt*(targetVoice>speechLevel?30:22)));
+    presencePose=presenceMotion.update(dt,state,speechLevel,projection.amount);
     hud.style.setProperty('--travis-speech',state==='speaking'?speechLevel.toFixed(3):'0');
 
     for (const key of ['core','face']) {
@@ -1573,13 +1572,13 @@ if (!hud || !launcher || !canvas) {
       const coreScale=Math.max(.001,formBlend.core);
       coreRoot.visible=coreScale>.012;
       coreRoot.scale.setScalar(baseScale*(1+speechExpand)*coreScale);
-      coreRoot.rotation.x=lerp(-.24,-.08,introEase)+tiltNow.y*.045;
-      coreRoot.rotation.y=tiltNow.x*.07;
+      coreRoot.rotation.x=lerp(-.24,-.08,introEase);
+      coreRoot.rotation.y=reducedMotion?0:Math.sin(t*.24)*.045;
       coreRoot.rotation.z=Math.sin(t*.12)*.01;
 
       const baseY=innerWidth/innerHeight<.72?.62:.35;
       coreRoot.position.y=baseY + (1-introEase)*-.55;
-      coreRoot.position.x=cameraNow.x*.09;
+      coreRoot.position.x=0;
 
       const speedBoost=state==='listening'?2.45:state==='thinking'?1.95:state==='speaking'?1.48:1;
       rotors.forEach((r,i)=>{
@@ -1629,23 +1628,23 @@ if (!hud || !launcher || !canvas) {
       const portrait=innerWidth/innerHeight<.72;
       const faceBase=(portrait?1.65:1.70);
       faceRoot.scale.setScalar(faceBase*faceMix);
-      faceRoot.position.set(cameraNow.x*.07,(portrait?.86:.52)+Math.sin(t*.72)*.024,0);
-      faceRoot.rotation.y=tiltNow.x*.20+cameraNow.x*.04+Math.sin(t*.37)*.10;
-      faceRoot.rotation.x=tiltNow.y*.08+Math.sin(t*.29)*.015+(state==='speaking'?speechLevel*.009:0);
-      faceRoot.rotation.z=Math.sin(t*.21)*.003;
+      faceRoot.position.set(0,(portrait?.86:.52)+presencePose.lift,0);
+      faceRoot.rotation.set(presencePose.pitch,presencePose.yaw,presencePose.roll);
 
       faceEyeGroups.forEach(eye=>{
-        eye.rotation.y=Math.sin(t*.31)*.018;
-        eye.rotation.x=Math.sin(t*.23)*.008;
+        eye.rotation.y=presencePose.eyeX;
+        eye.rotation.x=presencePose.eyeY;
       });
       if (realFaceBaseMaterial) {
         const build=reducedMotion?1:clamp(t/2.4,0,1);
         for(const mat of [realFaceBaseMaterial,avatarMaterial,...holographicEyeMaterials]){
           mat.uniforms.uTime.value=t;mat.uniforms.uBuild.value=build;
+          mat.uniforms.uDissolve.value=projection.amount;
           mat.uniforms.uState.value=state==='speaking'?speechLevel:0;
         }
         assemblyParticles.material.uniforms.uBuild.value=build;
         assemblyParticles.material.uniforms.uTime.value=t;
+        assemblyParticles.material.uniforms.uDissolve.value=projection.amount;
         hud.dataset.materialization=build.toFixed(2);
       }
       if (avatarMaterial) {
@@ -1708,8 +1707,8 @@ if (!hud || !launcher || !canvas) {
 
     const portrait=innerWidth/innerHeight<.72;
     const cameraBaseZ=lerp(portrait?10.4:8.3,portrait?6.4:6.8,formBlend.face);
-    camera.position.x += ((cameraNow.x*(portrait?.18:.28))-camera.position.x)*.06;
-    camera.position.y += ((portrait?.48:.26)+cameraNow.y*.04-camera.position.y)*.06;
+    camera.position.x += (0-camera.position.x)*.06;
+    camera.position.y += ((portrait?.48:.26)-camera.position.y)*.06;
     camera.position.z += (cameraBaseZ-camera.position.z)*Math.min(1,dt*10);
     camera.lookAt(0,portrait?.48:.26,0);
 
@@ -1730,10 +1729,6 @@ if (!hud || !launcher || !canvas) {
 
   function onPointerMove(event) {
     if (!opened || !ready) return;
-    const nx=(event.clientX/innerWidth-.5)*2;
-    const ny=(event.clientY/innerHeight-.5)*2;
-    cameraTarget.set(clamp(nx,-1,1),clamp(-ny,-1,1));
-
     rayFromEvent(event);
     const hit=raycaster.intersectObjects(interactiveObjects(),true)[0];
     const next=hit?.object?.userData?.node || null;
@@ -1766,13 +1761,12 @@ if (!hud || !launcher || !canvas) {
     if (hit.object.userData?.core) toggleCommands();
   }
 
-  function toggleCommands(force) {
+  function toggleCommands(force,{automatic=false}={}) {
     if (!ready) return;
     commandsOpen=typeof force==='boolean'?force:!commandsOpen;
     hud.classList.toggle('commands-open',commandsOpen);
-    window.dispatchEvent(new CustomEvent('travis:commands',{detail:{open:commandsOpen}}));
-    haptic(commandsOpen?18:10);
-    pulseTone(commandsOpen);
+    window.dispatchEvent(new CustomEvent('travis:commands',{detail:{open:commandsOpen,automatic}}));
+    if(!automatic){haptic(commandsOpen?18:10);pulseTone(commandsOpen);}
   }
 
   function openHud() {
@@ -1813,14 +1807,6 @@ if (!hud || !launcher || !canvas) {
     launcher.setAttribute('aria-expanded','false');
     document.body.classList.remove('travis-hud-open');
     setState('idle');
-    cameraTarget.set(0,0);
-    tiltTarget.set(0,0);
-  }
-
-  function onOrientation(event) {
-    if (!opened || event.gamma==null || event.beta==null) return;
-    tiltTarget.x=clamp(event.gamma/35,-1,1);
-    tiltTarget.y=clamp((event.beta-45)/50,-1,1);
   }
 
   function launchHud() {
@@ -1837,12 +1823,12 @@ if (!hud || !launcher || !canvas) {
   canvas.addEventListener('pointerdown',onPointerDown,{passive:true});
   canvas.addEventListener('pointerup',onPointerUp,{passive:true});
   canvas.addEventListener('pointercancel',()=>{pointerDown=null},{passive:true});
-  addEventListener('deviceorientation',onOrientation,{passive:true});
   addEventListener('resize',()=>{
     clearTimeout(resizeTimer);
     resizeTimer=setTimeout(resize,80);
   },{passive:true});
   document.addEventListener('keydown',(event)=>{
+    if(event.key==='Escape'&&commandsOpen){toggleCommands(false);return;}
     if (event.key==='Escape' && opened) closeHud();
   });
 
@@ -1861,6 +1847,7 @@ if (!hud || !launcher || !canvas) {
     diagnostics() {
       return {ready,opened,state,renderedFrames,contextLost:renderer?.getContext().isContextLost(),form:activeForm,faceAsset:hud.dataset.faceAsset,
         baseBloom:realFaceHead?.layers.isEnabled(BLOOM_LAYER),lipSync:speechFace?.diagnostics()||{engine:hud.dataset.lipSync},
+        presence:{...presencePose},projection:hologramPresentation.sample(performance.now()/1000),
         meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,
         recording:voiceRecorder?.state,pendingTasks:[...pendingVoiceTasks.keys()],lastTaskResult:lastVoiceTaskResult,voiceMetrics:voiceMetrics.map(m=>({...m}))};
     },

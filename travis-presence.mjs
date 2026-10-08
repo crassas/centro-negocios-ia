@@ -1,0 +1,72 @@
+// Local animation direction. Conversation state drives gestures, never device sensors.
+const clamp=x=>Math.max(0,Math.min(1,x));
+const ease=x=>{x=clamp(x);return x*x*(3-2*x);};
+export function createPresenceMotion({random=Math.random,reducedMotion=false}={}){
+  let time=0,nextLook=0,previous='',yaw=0,pitch=0,roll=0,eyeX=0,eyeY=0;
+  let lookX=0,lookY=0,nodAt=-10;
+  return {update(dt,state='ready',voice=0,projection=0){
+    dt=Math.max(0,Math.min(.1,dt));time+=dt;
+    if(reducedMotion)return {yaw:0,pitch:0,roll:0,eyeX:0,eyeY:0,lift:0};
+    if(state!==previous){
+      nextLook=time;
+      if(state==='listening')nodAt=time;
+      previous=state;
+    }
+    if(time>=nextLook){
+      const attentive=state==='listening'||state==='speaking';
+      const aside=state==='thinking'||(!attentive&&random()>.45);
+      lookX=aside?(random()<.5?-1:1)*(.16+random()*.18):(random()-.5)*.09;
+      lookY=state==='thinking'?-.045:(random()-.5)*.04;
+      nextLook=time+(attentive?2.2:3.0)+random()*3.2;
+    }
+    const attending=1-clamp(projection);
+    const targetYaw=lookX*attending-.20*projection;
+    const nodAge=time-nodAt;
+    const nod=nodAge<1.15?Math.sin(nodAge/1.15*Math.PI)*.045:0;
+    const emphasis=state==='speaking'?Math.sin(time*2.6)*clamp(voice)*.035:0;
+    const follow=1-Math.exp(-dt*2.4),saccade=1-Math.exp(-dt*12);
+    yaw+=(targetYaw-yaw)*follow;
+    pitch+=(lookY+nod+emphasis+.04*projection-pitch)*follow;
+    roll+=(-lookX*.07+Math.sin(time*.43)*.008-roll)*follow;
+    eyeX+=((targetYaw-yaw)*.30-eyeX)*saccade;
+    eyeY+=((lookY-pitch)*.24-eyeY)*saccade;
+    return {yaw,pitch,roll,eyeX,eyeY,lift:Math.sin(time*.85)*.014};
+  }};
+}
+
+// Reversible, wall-clock transitions: a slow frame cannot strand half a face.
+export function createHologramPresentation({reducedMotion=false}={}){
+  let phase='face',from=0,to=0,started=0,deadline=0,automatic=false,busy=false,pinned=false;
+  const duration=reducedMotion?.001:.9;
+  function sample(now){
+    let amount=from+(to-from)*ease((now-started)/duration);
+    if((phase==='dissolving'||phase==='returning')&&now-started>=duration){
+      phase=to===1?'projecting':'face';amount=to;
+    }
+    if(phase==='projecting'&&automatic&&!busy&&!pinned&&now>=deadline){
+      from=1;to=0;started=now;phase='returning';amount=1;
+    }
+    return {phase,amount,pinned,visible:phase!=='face',panel: ease((amount-.48)/.52)};
+  }
+  function transition(target,now){
+    const value=sample(now).amount;
+    from=value;to=target;started=now;
+    phase=target===1?'dissolving':'returning';
+  }
+  return {
+    sample,
+    present(now,{auto=true,readingSeconds=10}={}){
+      automatic=auto;pinned=false;deadline=now+duration+Math.max(8,Math.min(30,readingSeconds));
+      const current=sample(now);
+      if(current.phase!=='projecting'&&current.phase!=='dissolving')transition(1,now);
+    },
+    close(now){automatic=false;pinned=false;if(phase!=='face'&&phase!=='returning')transition(0,now);},
+    speaking(value,now){busy=Boolean(value);if(!busy)deadline=Math.max(deadline,now+2.4);},
+    interact(now){deadline=Math.max(deadline,now+8);},
+    pin(value,now){pinned=Boolean(value);deadline=Math.max(deadline,now+8);return pinned;},
+    reset(){phase='face';from=to=started=deadline=0;automatic=busy=pinned=false;}
+  };
+}
+export const hologramPresentation=createHologramPresentation({
+  reducedMotion:typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches
+});

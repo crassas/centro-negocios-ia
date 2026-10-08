@@ -588,12 +588,15 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
 @media(prefers-reduced-motion:reduce){.travis-title-signal{transform:none;opacity:.3}}
 
 /* Tool results stay in screen space: no clipping, perspective or face occlusion. */
-.travis-action-deck{position:absolute;z-index:20;left:50%;top:clamp(90px,17vh,170px);bottom:calc(165px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(650px,calc(100% - 32px));padding:20px;box-sizing:border-box;background:linear-gradient(150deg,#07151bf5,#040b10f5);border:1px solid #57798570;border-radius:12px;box-shadow:0 24px 70px #0009;overflow:auto;overscroll-behavior:contain;touch-action:pan-y;color:#dcebf0}
+.travis-action-deck{position:absolute;z-index:20;left:50%;top:clamp(90px,17vh,170px);bottom:calc(165px + env(safe-area-inset-bottom));transform:translate(-50%,var(--projection-shift,0px));opacity:var(--projection-opacity,0);width:min(650px,calc(100% - 32px));padding:20px;box-sizing:border-box;background:linear-gradient(150deg,#07151be8,#040b10e0);border:1px solid #77b3c080;border-radius:12px;box-shadow:0 24px 70px #0009,0 0 40px #61c7da12,inset 0 1px #c3f3ff22;overflow:auto;overscroll-behavior:contain;touch-action:pan-y;color:#dcebf0}
 .travis-action-deck[hidden]{display:none!important}
 .travis-action-deck>header{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px}
 .travis-action-deck small{font-size:9px;letter-spacing:.18em;color:#88a6b3}
 .travis-action-deck h2{margin:7px 0 0;font-size:22px;font-weight:450;letter-spacing:-.02em}
+.travis-projection-controls{display:flex;align-items:center;gap:8px;flex:none}
 .travis-action-deck>header button{color:#c3d7de;background:#10242d;border:1px solid #526c77;border-radius:50%;width:40px;height:40px;flex:none;font-size:22px;cursor:pointer}
+.travis-action-deck #travis-action-pin{width:auto;padding:0 12px;border-radius:20px;font-size:11px;letter-spacing:.04em}
+.travis-action-deck #travis-action-pin[aria-pressed="true"]{background:#bddfe7;color:#07151b;border-color:#bddfe7}
 .travis-action-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .travis-action-card{display:flex;flex-direction:column;gap:9px;text-align:left;min-width:0;min-height:94px;margin:0;padding:16px;background:#0c1c25!important;border:1px solid #314c5a;border-radius:7px;color:#deedf3!important;font:inherit;white-space:normal;overflow-wrap:anywhere}
 button.travis-action-card{cursor:pointer;min-height:106px}
@@ -603,6 +606,6 @@ button.travis-action-card{cursor:pointer;min-height:106px}
 .travis-action-card:focus-visible{outline:2px solid #b6e0e8;outline-offset:2px}
 .travis-action-card[data-available="false"]{border-color:#785d51}
 .travis-action-items[data-kind="tasks"],.travis-action-items[data-kind="result"]{grid-template-columns:1fr}
-.travis-hud.cards-open .travis-title{visibility:hidden}
+.travis-hud.cards-open .travis-title{opacity:var(--travis-presence,1)!important}
 @media(max-width:360px){.travis-action-deck{padding:14px;width:calc(100% - 24px)}.travis-action-card{padding:12px}.travis-action-card strong{font-size:14px}}
 @media(max-height:600px){.travis-action-deck{top:64px;bottom:150px}.travis-action-deck>header{margin-bottom:12px}}

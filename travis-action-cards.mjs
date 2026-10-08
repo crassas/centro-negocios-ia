@@ -1,9 +1,12 @@
 // Front workspace driven by actual host tool results. Text is always inert.
+import {hologramPresentation as projection} from './travis-presence.mjs?v=1';
 const hud=document.getElementById('travis-hud');
 const deck=document.getElementById('travis-action-deck');
 const heading=document.getElementById('travis-action-heading');
 const items=document.getElementById('travis-action-items');
-let current=null,selected=null;
+let current=null,selected=null,frame=0,wasVisible=false;
+const clock=()=>performance.now()/1000;
+const pin=document.getElementById('travis-action-pin');
 const menu={kind:'capabilities',title:'Your workspace',items:[
   {title:'Repositories',detail:'Inspect your projects',request:'Mostra os meus repositórios'},
   {title:'Tasks',detail:'Read your real task list',request:'Mostra as minhas tarefas'},
@@ -35,14 +38,49 @@ function render(data){
   }));
   deck.scrollTop=0;
 }
-function visibility(open){deck.hidden=!open;hud.classList.toggle('cards-open',open);}
+function paint(){
+  frame=0;
+  const view=projection.sample(clock());
+  deck.hidden=!view.visible;
+  deck.inert=view.panel<.65;
+  deck.style.setProperty('--projection-opacity',view.panel.toFixed(3));
+  deck.style.setProperty('--projection-shift',`${((1-view.panel)*18).toFixed(1)}px`);
+  hud.style.setProperty('--travis-presence',(1-view.amount).toFixed(3));
+  hud.dataset.projection=view.phase;
+  hud.classList.toggle('cards-open',view.visible);
+  pin?.setAttribute('aria-pressed',String(view.pinned));
+  if(wasVisible&&!view.visible){
+    if(deck.contains(document.activeElement))document.getElementById('travis-hud-close')?.focus({preventScroll:true});
+    window.TravisVisual?.commands(false,{automatic:true});
+  }
+  wasVisible=view.visible;
+  if(view.visible)frame=requestAnimationFrame(paint);
+}
+function refresh(){if(!frame)frame=requestAnimationFrame(paint);}
+function show(automatic=false){
+  const text=items.textContent||'';
+  projection.present(clock(),{auto:automatic,readingSeconds:Math.max(10,text.length/28)});
+  refresh();
+}
 if(deck){
   document.getElementById('travis-action-close').addEventListener('click',()=>window.TravisVisual?.commands(false));
-  window.addEventListener('travis:commands',e=>{if(e.detail.open&&!current)render(menu);visibility(e.detail.open);});
+  pin?.addEventListener('click',()=>{
+    const pinned=projection.pin(pin.getAttribute('aria-pressed')!=='true',clock());
+    pin.setAttribute('aria-pressed',String(pinned));refresh();
+  });
+  for(const event of ['pointerdown','wheel','keydown','focusin'])deck.addEventListener(event,()=>projection.interact(clock()),{passive:true});
+  window.addEventListener('travis:state',e=>projection.speaking(e.detail.state==='speaking',clock()));
+  window.addEventListener('travis:commands',e=>{
+    if(e.detail.open){if(!current)render(menu);show(Boolean(e.detail.automatic));}
+    else{projection.close(clock());refresh();}
+  });
   window.addEventListener('travis:result',e=>{
     const data=e.detail?.ui;if(!data)return;
     if(data.project)selected=data.project;
-    render(data);window.TravisVisual?.commands(true);visibility(true);
+    render(data);window.TravisVisual?.commands(true,{automatic:true});
+    show(true);
   });
-  window.addEventListener('travis:close',()=>{visibility(false);current=null;});
+  window.addEventListener('travis:close',()=>{
+    cancelAnimationFrame(frame);frame=0;projection.reset();wasVisible=false;current=null;paint();
+  });
 }
