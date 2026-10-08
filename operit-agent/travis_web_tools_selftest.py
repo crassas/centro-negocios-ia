@@ -15,6 +15,9 @@ class Tests(unittest.TestCase):
   self.assertEqual(w.classify("pesquisa inteligência artificial"),("web_research",{"query":"inteligência artificial"}))
   self.assertEqual(w.classify("lê https://example.com")[0],"web_read")
   self.assertEqual(w.classify("qual é a notícia mais recente sobre IA?")[0],"web_research")
+  self.assertEqual(w.classify("find the latest Puppeteer version")[0],"web_research")
+  self.assertEqual(w.classify("search online for current AI news")[0],"web_research")
+  self.assertEqual(w.classify("read https://example.com")[0],"web_read")
 
  def test_private_targets_rejected_without_dns(self):
   for url in ["http://localhost/x","http://127.0.0.1/x","http://10.0.0.1/x","http://192.168.1.1/x"]:

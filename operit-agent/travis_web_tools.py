@@ -208,11 +208,11 @@ def classify(text):
   if key in SITES:return "web_open",{"url":SITES[key]}
   if re.fullmatch(r"(?:https?://)?[a-z0-9.-]+\.[a-z]{2,}(?:/[^\s]*)?",target,re.I):return "web_open",{"url":target}
   if key in {"primeiro resultado","o primeiro resultado","primeiro"}:return "web_follow",{"link":"primeiro"}
- m=re.fullmatch(r"(?:lê|le|ler|consulta|resume|resumir)(?:-me)?\s+(?:esta |a )?(?:página|pagina|site)?\s*(https?://\S+)",t,flags=re.I)
+ m=re.fullmatch(r"(?:lê|le|ler|consulta|resume|resumir|read|summarize|summarise|inspect)(?:-me)?\s+(?:esta |a |this |the )?(?:página|pagina|page|site)?\s*(https?://\S+)",t,flags=re.I)
  if m:return "web_read",{"url":m.group(1).rstrip(".,;!?")}
- m=re.fullmatch(r"(?:pesquisa|pesquisar|procura|procurar|busca|buscar|investiga|investigar)(?:\s+(?:no google|na internet|na web|sobre|por))?\s+(.+)",t,flags=re.I)
+ m=re.fullmatch(r"(?:pesquisa|pesquisar|procura|procurar|busca|buscar|investiga|investigar|search|find|research|look up)(?:\s+(?:no google|na internet|na web|sobre|por|online|on the web|about|for))?\s+(.+)",t,flags=re.I)
  if m:return "web_research",{"query":m.group(1).strip()[:300]}
- if re.search(r"\b(?:hoje|agora|actual|atual|actualmente|atualmente|mais recente|últim[oa]s?|recent[ea]s?|notícias|noticias)\b",t,re.I):return "web_research",{"query":t[:300]}
+ if re.search(r"\b(?:hoje|agora|actual|atual|actualmente|atualmente|mais recente|últim[oa]s?|recent[ea]s?|notícias|noticias|today|now|current|currently|latest|newest|recent|news)\b",t,re.I):return "web_research",{"query":t[:300]}
  return None
 
 def execute(tool,args):
