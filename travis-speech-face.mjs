@@ -15,7 +15,8 @@ export async function createSpeechFace(context) {
   node.onvalue=(key,value)=>{weights[key.replace('viseme_','')]=value;};
   return {
     node,weights,
-    update(dt){node.update(dt*1000);},
+    // Faster coarticulation, still driven only by the acoustic visemes.
+    update(dt){node.update(dt*1000*1.5);},
     reset(){node.visemeActive=-1;node.visemeAlphas.fill(0);for(const k of Object.keys(weights))weights[k]=0;},
     diagnostics(){return {engine:'audio-visemes',frames,shapes:[...seen]};}
   };

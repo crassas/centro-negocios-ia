@@ -1,7 +1,7 @@
 import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs';
-import { createSpeechFace } from './travis-speech-face.mjs';
+import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
 import { createBacklight } from './travis-atmosphere.mjs?v=connections1';
-import { createFaceRig } from './travis-face-rig.mjs?v=connections1';
+import { createFaceRig } from './travis-face-rig.mjs?v=articulation-2';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -124,7 +124,7 @@ if (!hud || !launcher || !canvas) {
   let micSourceNode=null;
   let micAnalyser=null;
   let voiceSpeechEndedAt=0;
-  const WELCOME_GREETING='Welcome back, Mr. Richard.';
+  const WELCOME_GREETING='Welcome back, Mister Richards.';
   const voiceMetrics=[];
   const pendingVoiceTasks=new Map();
   let voiceTaskTimer=0;
@@ -1527,7 +1527,7 @@ if (!hud || !launcher || !canvas) {
 
   function animate(now) {
     requestAnimationFrame(animate);
-    if (!renderer || !bloomComposer || !finalComposer) return;
+    if (!ready || !renderer || !bloomComposer || !finalComposer) return;
     if (!opened || webglLost || renderer.getContext().isContextLost()) { lastFrame=now; return; }
     // Prioritise recognition/inference/TTS on the phone; DOM status remains live.
     // Keep rendering the hologram while reasoning; stopping the frame loop can blank the WebGL layer on Android.
@@ -1550,7 +1550,8 @@ if (!hud || !launcher || !canvas) {
     flashPower*=Math.exp(-dt*6.5);
 
     const targetVoice=state==='speaking'?(externalVoiceLevel||0):0;
-    speechLevel+=(targetVoice-speechLevel)*Math.min(1,dt*13);
+    speechLevel+=(targetVoice-speechLevel)*(1-Math.exp(-dt*(targetVoice>speechLevel?30:22)));
+    hud.style.setProperty('--travis-speech',state==='speaking'?speechLevel.toFixed(3):'0');
 
     for (const key of ['core','face']) {
       formBlend[key]+=(formTarget[key]-formBlend[key])*Math.min(1,dt*7.5);
@@ -1766,6 +1767,7 @@ if (!hud || !launcher || !canvas) {
   }
 
   function openHud() {
+    if(opened)return;
     opened=true;
     intro=0;
     commandsOpen=false;
@@ -1795,6 +1797,8 @@ if (!hud || !launcher || !canvas) {
     opened=false;
     commandsOpen=false;
     commandTarget=0;
+    document.documentElement.classList.remove('travis-entry');
+    window.travisDirectEntry=false;
     hud.classList.remove('commands-open','is-open');
     hud.setAttribute('aria-hidden','true');
     launcher.setAttribute('aria-expanded','false');
@@ -1886,11 +1890,10 @@ if (!hud || !launcher || !canvas) {
     }
   };
 
+  // The HUD is already visible from first paint; never wait for GLB downloads.
+  if(window.travisDirectEntry)openHud();
   init3D().then(()=>{
-    if (IS_LOCAL_TRAVIS_UI && new URLSearchParams(location.search).get('view')!=='business') {
-      history.replaceState(null,'',location.pathname);
-      setTimeout(openHud,120);
-    }
+    if(opened){intro=0;startTime=lastFrame=performance.now();}
   }).catch((error)=>{
     console.error('Travis 3D:',error);
     setLoading('Failed to load the 3D core');

@@ -157,6 +157,19 @@ class Tests(unittest.TestCase):
     self.assertIsNotNone(worker.process)
     with self.assertRaises(ValueError):j.speak("Hello",language="unknown")
   finally:worker.stop()
+ def test_spoken_honorific_does_not_introduce_a_sentence_break(self):
+  self.assertEqual(j.english_pronunciation("Welcome back, Mr. Richards. Ready?"),"Welcome back, Mister Richards. Ready?")
+  self.assertEqual(j.english_pronunciation("Ask Mr Richards and mr. Richard."),"Ask Mister Richards and Mister Richard.")
+  unchanged="https://Mr.Richards.test costs 3.14. R. Richards is here."
+  self.assertEqual(j.english_pronunciation(unchanged),unchanged)
+  model=self.root/"english.onnx";model.touch();worker=Mock();worker.model=model
+  def synthesize(request):
+   self.assertEqual(request["text"],"Welcome back, Mister Richards.")
+   Path(request["output_file"]).write_bytes(b"RIFFtest")
+   return request["output_file"]
+  worker.request.side_effect=synthesize
+  with patch.object(j,"TTS_EN_WORKER",worker):
+   self.assertEqual(j.speak("Welcome back, Mr. Richards."),b"RIFFtest")
  def test_portuguese_fallback_keeps_english_name_pleasant(self):
   self.assertIn("Míster Ríchard",j.portuguese_pronunciation_fallback("Bem-vindo, Mr. Richard."))
  def test_transcription_endpoint_returns_before_reasoning(self):

@@ -568,3 +568,21 @@ body.travis-hud-open{overflow:hidden;background:#02060a}
 #room-gmail{white-space:nowrap}
 
 .travis-hud .travis-operations,.travis-hud .travis-form-selector{display:none!important}
+
+/* Stable wordmark: a narrow measured light trace follows speech, never swaps words. */
+.travis-hud .travis-title h1{
+  font-family:system-ui,sans-serif;font-weight:350;letter-spacing:.25em;
+  padding-left:.25em;line-height:1.1;animation:none;
+  -webkit-text-stroke:.35px rgba(196,243,250,.45);
+  background:linear-gradient(175deg,#edfafd 10%,#9ed3df 47%,#426e80 51%,#bddfe7 76%,#6ca7ba);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  text-shadow:none;filter:drop-shadow(0 0 9px #69c5d325)!important;opacity:1;
+}
+.travis-hud .travis-title h1::before,.travis-hud .travis-title h1::after{content:none}
+.travis-title-signal{
+  display:block;width:58px;height:1px;margin:15px auto 0;
+  background:#c1eff4;opacity:calc(.22 + var(--travis-speech,0)*.55);
+  transform:scaleX(calc(1 + var(--travis-speech,0)*.45));
+  box-shadow:0 0 10px #67dcea80;
+}
+@media(prefers-reduced-motion:reduce){.travis-title-signal{transform:none;opacity:.3}}

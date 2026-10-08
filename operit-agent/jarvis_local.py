@@ -696,7 +696,7 @@ STT_WORKER=VoiceWorker("stt")
 TTS_WORKER=VoiceWorker("tts",MODELS/"tts/pt_PT-tugao-medium.onnx")
 TTS_EN_WORKER=VoiceWorker("tts",MODELS/"tts/en_GB-northern_english_male-medium.onnx")
 DEFAULT_ENGLISH_TERMS=(
- "Mr. Richard","Mr Richard","Richard","Travis","GitHub","Google","YouTube","WhatsApp","Cloudflare Pages",
+ "Mr. Richards","Mr Richards","Mister Richards","Richards","Mister Richard","Mr. Richard","Mr Richard","Richard","Travis","GitHub","Google","YouTube","WhatsApp","Cloudflare Pages",
  "Cloudflare Workers","Cloudflare","JavaScript","WordPress","Gmail","Search Console","Workers AI","OpenAI",
  "ChatGPT","Claude","Grok","Gemini","Python","Node.js","Node","Linux","Ubuntu","Android","Telegram",
  "Remote Desktop Commander","Piper","Whisper","Llama","Ollama","WorkManager","SEO","AI","API","URL","HTML","CSS","Git"
@@ -726,8 +726,12 @@ def speech_segments(text):
   if merged and merged[-1][0]==lang:merged[-1]=(lang,merged[-1][1]+part)
   else:merged.append((lang,part))
  return merged or [("pt",text)]
+def english_pronunciation(text):
+ # Expand spoken honorifics before Piper sees the sentence punctuation.
+ # Word boundaries and the following name avoid touching URLs or initials.
+ return re.sub(r"(?<![\w@/])Mr\.?(?=\s+[A-Za-zÀ-ÿ])","Mister",clean(text),flags=re.I)
 def portuguese_pronunciation_fallback(text):
- replacements={"Mr. Richard":"Míster Ríchard","Mr Richard":"Míster Ríchard","Richard":"Ríchard","GitHub":"Guít Râb","YouTube":"Iú Tiúb","WhatsApp":"Uótsap","Cloudflare":"Cláud Flér","JavaScript":"Djáva Script","WordPress":"Uârd Press","Gmail":"Djí meil"}
+ replacements={"Mr. Richards":"Míster Ríchards","Mr Richards":"Míster Ríchards","Mister Richards":"Míster Ríchards","Richards":"Ríchards","Mister Richard":"Míster Ríchard","Mr. Richard":"Míster Ríchard","Mr Richard":"Míster Ríchard","Richard":"Ríchard","GitHub":"Guít Râb","YouTube":"Iú Tiúb","WhatsApp":"Uótsap","Cloudflare":"Cláud Flér","JavaScript":"Djáva Script","WordPress":"Uârd Press","Gmail":"Djí meil"}
  out=text
  for source,target in replacements.items():out=re.sub(r"\b"+re.escape(source)+r"\b",target,out,flags=re.I)
  return out
@@ -776,7 +780,7 @@ def speak(text,language="en"):
   start=time.monotonic()
   with tempfile.TemporaryDirectory(prefix="jarvis-tts-en-") as tmp:
    out=Path(tmp)/"speech.wav"
-   reported=TTS_EN_WORKER.request({"text":clean(text),"output_file":str(out)})
+   reported=TTS_EN_WORKER.request({"text":english_pronunciation(text),"output_file":str(out)})
    if reported!=str(out):raise RuntimeError("Piper returned an unexpected file")
    audio=out.read_bytes()
   event("executions",{"stage":"tts","language":"en","latency_ms":int((time.monotonic()-start)*1000)})
@@ -802,7 +806,7 @@ def speak(text,language="en"):
    for index,(lang,part) in enumerate(segments):
     if not part.strip():continue
     out_part=tmp/f"part-{index:02d}.wav";worker=TTS_EN_WORKER if lang=="en" else TTS_WORKER
-    reported=worker.request({"text":part,"output_file":str(out_part)})
+    reported=worker.request({"text":english_pronunciation(part) if lang=="en" else part,"output_file":str(out_part)})
     if reported!=str(out_part):raise RuntimeError("Piper devolveu um ficheiro inesperado")
     parts.append(out_part)
    if not parts:raise RuntimeError("A segmentação da voz ficou vazia")

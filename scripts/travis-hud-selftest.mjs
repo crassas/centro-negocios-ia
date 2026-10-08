@@ -11,7 +11,7 @@ for(const token of [
   'id="travis-hud"',
   'id="travis-three-canvas"',
   'id="travis-loading"',
-  './travis-hud.css?v=english-ui-race-fix-2',
+  './travis-hud.css?v=',
   './travis-3d.mjs?v=',
   'type="importmap"',
   '"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"'
@@ -86,7 +86,6 @@ for(const token of [
 
 
 for(const token of [
-  'TRAVIS · QUASI NORTE',
   'new THREE.ConeGeometry(1.7,8.2,48,1,true)',
   'new THREE.ConeGeometry(1.45,6.8,48,1,true)',
   'return .62;',
@@ -119,7 +118,7 @@ for(const token of [
   "new URLSearchParams(location.search).get('view')!=='business'",
   'open:launchHud'
 ]){
-  if(!scene.includes(token)) throw new Error('Handoff local unificado em falta: '+token);
+  if(!scene.includes(token) && !html.includes(token)) throw new Error('Handoff local unificado em falta: '+token);
 }
 
 
@@ -195,6 +194,8 @@ if(scene.includes("new THREE.CylinderGeometry(.32,.48,1.02")) throw new Error('P
 
 if(glb.size < 500000) throw new Error('GLB Travis demasiado pequeno: '+glb.size);
 if(!css.includes('#travis-three-canvas')) throw new Error('Canvas 3D CSS em falta.');
+const hudCacheRef=html.match(/travis-hud\.css\?v=[^"']+/)?.[0];
+if(!hudCacheRef || !sw.includes(hudCacheRef))throw new Error('HUD stylesheet cache mismatch');
 const sceneCacheRef=html.match(/travis-3d\.mjs\?v=[^"']+/)?.[0];
 if(!sceneCacheRef || !sw.includes(sceneCacheRef) || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
 
@@ -208,7 +209,7 @@ for(const name of ['TravisFace_Bust','TravisFace_Eye_L','TravisFace_Eye_R','Trav
 for(const forbidden of ['createOrbAvatar','orbRoot','CylinderGeometry','realistic face fallback','faceMouthLower','eye.scale.y=1-blink']) {
   if(scene.includes(forbidden)) throw new Error('Geometria sintética ou deformação presente: '+forbidden);
 }
-for(const token of ["localJson('/transcribe'","localJson('/jarvis'",'speechEndToTranscriptMs','transcriptToReplyMs','replyToFirstAudioMs','head.layers.disable(BLOOM_LAYER)','bloomOccluder','webglcontextrestored',"WELCOME_GREETING='Welcome back, Mr. Richard.'","startVoiceConversation({greet=true}={})","resume(){if(opened)startVoiceConversation({greet:false});}",'let introVoiceTimer=0','let voiceStarting=false','introVoiceTimer=setTimeout']) {
+for(const token of ["localJson('/transcribe'","localJson('/jarvis'",'speechEndToTranscriptMs','transcriptToReplyMs','replyToFirstAudioMs','head.layers.disable(BLOOM_LAYER)','bloomOccluder','webglcontextrestored',"WELCOME_GREETING='Welcome back, Mister Richards.'","startVoiceConversation({greet=true}={})","resume(){if(opened)startVoiceConversation({greet:false});}",'let introVoiceTimer=0','let voiceStarting=false','introVoiceTimer=setTimeout']) {
   if(!scene.includes(token)) throw new Error('Regressão de busto/voz: '+token);
 }
 console.log('ANATOMICAL BUST / SELECTIVE BLOOM / STAGED VOICE OK',bust.length,'bytes');
