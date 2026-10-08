@@ -358,6 +358,16 @@ def execute(tool,args):
   return reply
  if tool=="system_status":return doctor()
  if tool=="quantum_status":return TRAVIS_QUANTUM.health()
+ if tool=="capabilities_status":
+  snap=travis_core.registry_snapshot()
+  ids=[x["id"] for x in snap["capabilities"]]
+  groups={
+   "research":[x for x in ids if x in {"web_research","web_read","web_open","web_follow","search_positions","site_check"}],
+   "projects":[x for x in ids if x in {"repo_access","repo_review","repo_change","git_status","git_diff","git_pull_ff_only","read_file","search_repo"}],
+   "memory":[x for x in ids if x.startswith("neural_") or x in {"note_fact","genome_status","genome_compare","genome_activate"}],
+   "operations":[x for x in ids if x in {"system_status","quantum_status","agent_sessions","task_list","create_task","update_task","gmail_inbox"}],
+  }
+  return {"count":len(ids),"groups":groups,"quantum":TRAVIS_QUANTUM.health(),"all":ids}
  if tool=="stop":return {"stopped":True}
  if tool=="search_positions":return search_positions(args.get("target"))
  if tool=="site_check":
@@ -557,6 +567,8 @@ def route(text,context=None):
  elif tool=="agent_sessions":reply="The execution agent is "+("active" if result["agent"] else "not confirmed online")+". "+str(sum(j["status"] in {"running","queued"} for j in result["jobs"]))+" voice request(s) are running or queued."
  elif tool=="system_status":reply="The Centro is "+("active" if result["centro"].get("ok") else "unavailable")+". Available memory: "+str(result["ram_available_mb"])+" megabytes."
  elif tool=="quantum_status":reply=("Quantum Unified Agent V"+str(result.get("builtBaseline"))+" is online and governing Travis. Canonical Drive state: "+str(result.get("canonicalDriveState"))+".") if result.get("ok") else "Quantum Unified Agent is not available."
+ elif tool=="capabilities_status":
+  reply=("I currently have "+str(result["count"])+" registered capabilities. I can research and read the web, inspect and change authorised repositories through the Centro, check sites and Search Console data, work with Gmail, tasks, memory, agents, Git and Quantum. Some actions depend on the relevant connection or current authorisation.")
  elif tool in {"search_positions","projects_status"}:reply=result["reply"]
  elif tool=="site_check":reply=" ".join(k+": "+("online." if v["online"] is True else "I could not confirm availability. "+v.get("error","")) for k,v in result.items())
  elif tool=="open_youtube":reply="Opening YouTube."
