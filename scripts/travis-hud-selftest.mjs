@@ -116,7 +116,7 @@ for(const token of [
 for(const token of [
   'IS_LOCAL_TRAVIS_UI',
   "location.assign('http://127.0.0.1:8770/?travis=1')",
-  "new URLSearchParams(location.search).get('travis')==='1'",
+  "new URLSearchParams(location.search).get('view')!=='business'",
   'open:launchHud'
 ]){
   if(!scene.includes(token)) throw new Error('Handoff local unificado em falta: '+token);
