@@ -1876,7 +1876,7 @@ if (!hud || !launcher || !canvas) {
   window.TravisPanel={
     open:launchHud,
     completeTask(id,text) {
-      if (opened) setState('ready',text?'Tarefa concluída.':'Pronto.');
+      if (opened) setState('ready',text?'Task completed.':'Ready.');
     }
   };
 
