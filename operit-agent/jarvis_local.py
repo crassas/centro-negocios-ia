@@ -426,8 +426,8 @@ def execute(tool,args):
   if not prompt:raise ValueError("Pedido expert vazio")
   try:
    token=(Path.home()/".centro-server/token").read_text().strip()
-   expert_prompt=("És o agente especialista do Travis. Analisa com profundidade, mas responde de forma operacional e curta em português de Portugal. "
-                  "Não alteres ficheiros nem executes acções destrutivas. Se o pedido implicar execução, indica a melhor próxima acção. Pedido: "+prompt)
+   expert_prompt=("You are Travis’s specialist agent. Analyse deeply, but reply in concise operational English. "
+                  "Do not modify files or perform destructive actions. If the request implies execution, state the best next action. User request: "+prompt)
    task={"id":"travis-expert-"+secrets.token_hex(8),"action":"claude_query","target":"local","args":{"prompt":expert_prompt}}
    req=urllib.request.Request("http://127.0.0.1:8765/execute",data=json.dumps(task).encode(),headers={"Content-Type":"application/json","Authorization":"Bearer "+token})
    with urllib.request.urlopen(req,timeout=150) as response:data=json.load(response)
@@ -442,9 +442,9 @@ def execute(tool,args):
   target=PROJECTS[args["target"]]
   token=(Path.home()/".centro-server/token").read_text().strip()
   prompt=clean(args.get("prompt") or "")
-  review_prompt=("Analisa este projecto como agente técnico do Centro. Não alteres ficheiros. "
-                 "Inspecciona o repositório real, identifica problemas concretos, trabalho por fazer e a próxima acção mais útil. "
-                 "Responde em português de Portugal, curto, com provas específicas do repositório. Pedido do operador: "+prompt)
+  review_prompt=("Analyse this project as the Centro technical agent. Do not modify files. "
+                 "Inspect the real repository, identify concrete problems, unfinished work, and the most useful next action. "
+                 "Reply in concise English with repository-specific evidence. Operator request: "+prompt)
   task={"id":"jarvis-review-"+secrets.token_hex(8),"action":"claude_query","target":target,"args":{"prompt":review_prompt}}
   req=urllib.request.Request("http://127.0.0.1:8765/execute",data=json.dumps(task).encode(),headers={"Content-Type":"application/json","Authorization":"Bearer "+token})
   try:
@@ -457,9 +457,9 @@ def execute(tool,args):
   status=command(["git","status","--short","--branch"],root,10).strip() or "working tree limpo"
   recent=command(["git","log","-1","--pretty=%h %s"],root,10).strip()
   files=command(["git","ls-files"],root,10).splitlines()
-  return ("Agente de análise avançada indisponível; fiz verificação local segura. "
-          f"Git: {status}. Último commit: {recent}. Ficheiros versionados: {len(files)}. "
-          "Posso analisar um ponto específico ou executar uma alteração se me disseres o que queres corrigir.")
+  return ("The advanced analysis agent is unavailable, so I performed a safe local check. "
+          f"Git: {status}. Latest commit: {recent}. Versioned files: {len(files)}. "
+          "I can analyse a specific point or execute a change if you tell me what you want corrected.")
  if tool=="repo_change":
   if args.get("target") not in PROJECTS:raise ValueError("Indica o projecto a corrigir")
   if not (ROOT/"planner_enabled").exists():raise RuntimeError("Planeador local ainda em validação; alteração não executada")
@@ -498,28 +498,28 @@ def route(text,context=None):
  TRAVIS_GENOME.observe(tool,outcome["durationMs"],outcome["completionStatus"],True,len(outcome.get("evidence") or []))
  if tool in {"web_research","web_read"}:reply=result["answer"]
  elif tool in {"web_open","web_follow"}:reply=result["reply"]
- elif tool=="gmail_inbox":reply="Últimos emails da caixa de entrada: "+"; ".join(m["subject"] for m in result["messages"]) if result["messages"] else "A caixa de entrada está vazia."
- elif tool=="agent_sessions":reply="O agente está "+("ativo" if result["agent"] else "sem ligação confirmada")+". "+str(sum(j["status"] in {"running","queued"} for j in result["jobs"]))+" pedidos de voz em curso. Podes ver as execuções na Sala de Comando."
- elif tool=="system_status":reply="O Centro está "+("activo" if result["centro"].get("ok") else "indisponível")+". Memória disponível: "+str(result["ram_available_mb"])+" megabytes."
+ elif tool=="gmail_inbox":reply="Latest inbox emails: "+"; ".join(m["subject"] for m in result["messages"]) if result["messages"] else "The inbox is empty."
+ elif tool=="agent_sessions":reply="The execution agent is "+("active" if result["agent"] else "not confirmed online")+". "+str(sum(j["status"] in {"running","queued"} for j in result["jobs"]))+" voice request(s) are running or queued."
+ elif tool=="system_status":reply="The Centro is "+("active" if result["centro"].get("ok") else "unavailable")+". Available memory: "+str(result["ram_available_mb"])+" megabytes."
  elif tool in {"search_positions","projects_status"}:reply=result["reply"]
- elif tool=="site_check":reply=" ".join(k+": "+("online." if v["online"] is True else "não consegui confirmar a disponibilidade. "+v.get("error","")) for k,v in result.items())
- elif tool=="create_task":reply="Tarefa criada: "+result["title"]
- elif tool=="task_list":reply="Tens "+str(len(result))+" tarefas pendentes. "+". ".join(x["title"] for x in result[:5])
- elif tool=="neural_status":reply="Cérebro local: "+str(result["neurons"])+" neurónios e "+str(result["synapses"])+" sinapses."
- elif tool=="neural_recall":reply=("Encontrei "+str(len(result))+" neurónios relevantes. "+". ".join(x["title"] for x in result[:5])) if result else "Não encontrei memória confirmada relevante."
- elif tool=="neural_consolidate":reply="Ciclo neural concluído: "+str(result["neurons"])+" neurónios, "+str(result["synapses"])+" sinapses, "+str(result["decayed"])+" ligações ajustadas."
- elif tool=="genome_status":reply="Genoma activo: "+result["activeProfile"]+". Amostras medidas: "+str(result["metrics"].get("samples",0))+"."
+ elif tool=="site_check":reply=" ".join(k+": "+("online." if v["online"] is True else "I could not confirm availability. "+v.get("error","")) for k,v in result.items())
+ elif tool=="create_task":reply="Task created: "+result["title"]
+ elif tool=="task_list":reply="You have "+str(len(result))+" pending task(s). "+". ".join(x["title"] for x in result[:5])
+ elif tool=="neural_status":reply="Local brain: "+str(result["neurons"])+" neurons and "+str(result["synapses"])+" synapses."
+ elif tool=="neural_recall":reply=("I found "+str(len(result))+" relevant memory nodes. "+". ".join(x["title"] for x in result[:5])) if result else "I found no relevant confirmed memory."
+ elif tool=="neural_consolidate":reply="Neural consolidation complete: "+str(result["neurons"])+" neurons, "+str(result["synapses"])+" synapses, "+str(result["decayed"])+" adjusted connections."
+ elif tool=="genome_status":reply="Active behavioural genome: "+result["activeProfile"]+". Measured samples: "+str(result["metrics"].get("samples",0))+"."
  elif tool=="genome_compare":
   eligible=[p for p in result["profiles"] if p.get("eligible")]
-  reply=("Perfil com melhor pontuação medida: "+result["winner"]+"." if result.get("winner") else "Ainda não há amostras suficientes para escolher um vencedor.")+" Perfis elegíveis: "+str(len(eligible))+"."
- elif tool=="genome_activate":reply="Perfil comportamental activo: "+result["activeProfile"]+". Geração "+str(result["generation"])+"."
+  reply=("Best measured profile: "+result["winner"]+"." if result.get("winner") else "There are not enough samples to choose a winner yet.")+" Eligible profiles: "+str(len(eligible))+"."
+ elif tool=="genome_activate":reply="Active behavioural profile: "+result["activeProfile"]+". Generation "+str(result["generation"])+"."
  elif tool=="repo_change":
   commit=re.search(r"Commit: ([0-9a-f]{40})",str(result))
   if commit:
    published=re.search(r"Publicado em: ([^\n]+)",str(result))
-   reply="Alteração validada no projecto "+str(args.get("target"))+". Commit "+commit.group(1)[:8]+". "+("Publicado em "+published.group(1)+"." if published else "O commit está preservado numa branch local; não foi publicado.")
+   reply="Change validated in project "+str(args.get("target"))+". Commit "+commit.group(1)[:8]+". "+("Published at "+published.group(1)+"." if published else "The commit is preserved on a local branch and was not published.")
   else:reply=str(result)
- elif tool=="stop":reply="Parei."
+ elif tool=="stop":reply="Stopped."
  else:reply=result if isinstance(result,str) else json.dumps(result,ensure_ascii=False)
  event("tool_events",{"tool":tool,"ok":True,"duration_ms":int((time.monotonic()-start)*1000),"correlation_id":outcome["correlationId"],"completion_status":outcome["completionStatus"]})
  return {"ok":True,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool=="local_llm" else {"provider":"local"}),"tool":tool,"result":result,"reply":clean(reply)[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"],"durationMs":int((time.monotonic()-start)*1000)}
@@ -538,7 +538,7 @@ def restore_voice_jobs():
   with VOICE_JOB_LOCK:
    for key,value in list(data.items())[-22:]:
     if not re.fullmatch(r"travis-job-[0-9a-f]{16}",key) or not isinstance(value,dict):continue
-    if value.get("status") in {"queued","running"}:value.update(status="failed",error="O Travis reiniciou antes de confirmar o resultado. O Centro pode ainda ter a tarefa; não vou repetir a execução sem verificar.")
+    if value.get("status") in {"queued","running"}:value.update(status="failed",error="Travis restarted before confirming the result. The Centro may still hold the task, so it will not be repeated without verification.")
     VOICE_JOBS[key]=value
    save_voice_jobs_locked()
  except (OSError,ValueError):pass
@@ -547,7 +547,7 @@ def start_voice_job(text):
  tool,args=classify(text)
  with VOICE_JOB_LOCK:
   if sum(j["status"] in {"queued","running"} for j in VOICE_JOBS.values())>=2:
-   raise RuntimeError("Já estou a tratar de dois pedidos; tenta quando um terminar.")
+   raise RuntimeError("I’m already handling two requests. Try again when one finishes.")
   task_id="travis-job-"+secrets.token_hex(8)
   VOICE_JOBS[task_id]={"taskId":task_id,"status":"queued","tool":tool,"createdAt":time.time()}
   completed=[k for k,j in VOICE_JOBS.items() if j["status"] in {"completed","failed"}]
@@ -561,12 +561,12 @@ def start_voice_job(text):
   except Exception as exc:
    with VOICE_JOB_LOCK:VOICE_JOBS[task_id].update(status="failed",error=clean(str(exc))[:500]);save_voice_jobs_locked()
  thread=threading.Thread(target=work,daemon=True,name=task_id);thread.start()
- reply="Vou analisar o pedido com o agente especialista e aviso-te aqui quando terminar."
- if tool=="repo_change":reply="Vou tratar desse projecto com o agente de código, validar o resultado e dar-te as provas aqui."
+ reply="I’ll analyse this with the specialist agent and report the result here."
+ if tool=="repo_change":reply="I’ll handle that project with the coding agent, validate the result, and report the evidence here."
  return {"ok":True,"taskId":task_id,"tool":tool,"reply":reply,"completionStatus":"pending"}
 def voice_job_status(task_id):
  with VOICE_JOB_LOCK:
-  if task_id not in VOICE_JOBS:raise ValueError("Tarefa de voz não encontrada.")
+  if task_id not in VOICE_JOBS:raise ValueError("Voice task not found.")
   return dict(VOICE_JOBS[task_id])
 
 class VoiceWorker:
