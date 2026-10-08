@@ -1519,12 +1519,12 @@ if (!hud || !launcher || !canvas) {
     if (!renderer || !bloomComposer || !finalComposer) return;
     if (!opened || webglLost || renderer.getContext().isContextLost()) { lastFrame=now; return; }
     // Prioritise recognition/inference/TTS on the phone; DOM status remains live.
-    if(state==='thinking'){lastFrame=now;return;}
+    if(state==='thinking' && intro>=1){lastFrame=now;return;}
     const dt=Math.min(.05,(now-lastFrame)/1000);
     lastFrame=now;
 
     const t=(now-startTime)/1000;
-    if (opened) intro=clamp(t/1.05,0,1);
+    if (opened) intro=clamp(t/1.35,0,1);
     else intro=Math.max(0,intro-dt*2.4);
     const introEase=easeOutCubic(intro);
 
