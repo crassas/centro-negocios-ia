@@ -44,6 +44,12 @@ jobs:
           PYTHONPATH=operit-agent python3 operit-agent/jarvis_selftest.py
           node scripts/travis-voice-selftest.mjs
 
+      - name: Reflexion memory and evaluator self-tests
+        run: |
+          python3 operit-agent/travis_reflexion_selftest.py
+          python3 operit-agent/travis_cognitive_selftest.py
+          python3 operit-agent/travis_reflexion_eval_selftest.py
+
       - name: Executor policy self-test
         shell: bash
         run: |
