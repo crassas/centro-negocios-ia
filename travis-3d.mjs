@@ -4,6 +4,7 @@ import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
 import { createBacklight } from './travis-atmosphere.mjs?v=connections1';
 import { createFaceRig } from './travis-face-rig.mjs?v=articulation-2';
 import * as THREE from 'three';
+import { createNeuralField } from './travis-neural-field.mjs?v=1';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -51,6 +52,7 @@ if (!hud || !launcher || !canvas) {
   let coreRoot;
   let faceRoot;
   let assemblyParticles=null;
+  let neuralField=null;
   const holographicEyeMaterials=[];
   let faceHit;
   let faceEyeGroups=[];
@@ -1485,10 +1487,14 @@ if (!hud || !launcher || !canvas) {
         });
       });
     });
+    model.visible=false; // The neural field is the core; retain the legacy asset only for compatibility.
     coreRoot.add(model);
     scene.add(coreRoot);
     createCoreHit();
     await createAdaptiveForms();
+    neuralField=createNeuralField(THREE,{reducedMotion,compact:innerWidth<700});
+    scene.add(neuralField.root);
+    hud.dataset.neuralField="state-map";
     createCommands();
 
     sizeForViewport();
@@ -1618,6 +1624,8 @@ if (!hud || !launcher || !canvas) {
       if (emblem) emblem.position.z=Math.sin(t*1.7)*.015+flashPower*.025;
     }
 
+    const neuralBackdrop=scene.getObjectByName('TravisCinematicBacklight');
+    if(neuralBackdrop)neuralBackdrop.visible=formBlend.face>.5;
     cinematicBacklight?.update(reducedMotion?0:t,state==='speaking'?speechLevel:0);
     if(state==='speaking')speechFace?.update(dt);
     faceRig?.update(state==='speaking'?speechLevel:0,state==='speaking'?speechFace?.weights:null);
@@ -1654,6 +1662,10 @@ if (!hud || !launcher || !canvas) {
         avatarMaterial.uniforms.uOpacity.value=.32+(state==='speaking'?speechLevel*.02:state==='listening'?.012:0);
       }
     }
+
+    neuralField?.update({time:t,dt,state,voice:speechLevel,core:formBlend.core,face:formBlend.face,
+      faceRoot,intro:introEase,projection:projection.amount,portrait:innerWidth/innerHeight<.72,
+      pixelRatio:renderer.getPixelRatio()});
 
     if (hologramMaterial) {
       hologramMaterial.uniforms.uTime.value=t;
@@ -1696,7 +1708,7 @@ if (!hud || !launcher || !canvas) {
       gridFloor.material.opacity=.06+(state==='thinking'?.035:0);
     }
     if (floorHalo) {
-      floorHalo.visible=formBlend.face<.02;
+      floorHalo.visible=false;
       floorHalo.material.opacity=.055+.025*Math.sin(t*1.1)+(state==='listening'?.025:0);
       floorHalo.rotation.z=t*.035;
     }
@@ -1847,6 +1859,7 @@ if (!hud || !launcher || !canvas) {
     diagnostics() {
       return {ready,opened,state,renderedFrames,contextLost:renderer?.getContext().isContextLost(),form:activeForm,faceAsset:hud.dataset.faceAsset,
         baseBloom:realFaceHead?.layers.isEnabled(BLOOM_LAYER),lipSync:speechFace?.diagnostics()||{engine:hud.dataset.lipSync},
+        neural:neuralField?.diagnostics(),
         presence:{...presencePose},projection:hologramPresentation.sample(performance.now()/1000),
         meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,
         recording:voiceRecorder?.state,pendingTasks:[...pendingVoiceTasks.keys()],lastTaskResult:lastVoiceTaskResult,voiceMetrics:voiceMetrics.map(m=>({...m}))};

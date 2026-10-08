@@ -609,3 +609,24 @@ button.travis-action-card{cursor:pointer;min-height:106px}
 .travis-hud.cards-open .travis-title{opacity:var(--travis-presence,1)!important}
 @media(max-width:360px){.travis-action-deck{padding:14px;width:calc(100% - 24px)}.travis-action-card{padding:12px}.travis-action-card strong{font-size:14px}}
 @media(max-height:600px){.travis-action-deck{top:64px;bottom:150px}.travis-action-deck>header{margin-bottom:12px}}
+
+/* Reference network: a small, accessible way to reveal the interior. */
+.travis-hud[data-neural-field] .travis-form-selector{
+  display:flex!important;top:auto;bottom:calc(174px + env(safe-area-inset-bottom,0px));
+  width:190px;background:rgba(3,12,18,.76);border:1px solid rgba(132,193,209,.22);
+  border-radius:24px;overflow:hidden;z-index:12;
+}
+.travis-hud[data-neural-field] .travis-form-selector button{
+  height:40px;font-size:9px;letter-spacing:.17em;
+}
+.travis-hud[data-neural-field] .travis-form-selector button:focus-visible{
+  outline:2px solid #a8dce6;outline-offset:-4px;
+}
+.travis-hud[data-neural-field].room-open .travis-form-selector,
+.travis-hud[data-neural-field].is-projecting .travis-form-selector{visibility:hidden}
+@media(max-height:650px){
+ .travis-hud[data-neural-field] .travis-form-selector{bottom:142px;width:160px}
+ .travis-hud[data-neural-field] .travis-form-selector button{height:32px}
+}
+
+.travis-hud[data-neural-field][data-form="core"] .travis-title{opacity:0!important;pointer-events:none}
