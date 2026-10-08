@@ -5,6 +5,7 @@ on:
       - "operit-agent/travis-rust/**"
       - "operit-agent/travis_rust_bridge.py"
       - "operit-agent/travis_rust_bridge_selftest.py"
+      - "operit-agent/travis_rust_integration_selftest.py"
       - "operit-agent/travis_brain.py"
       - ".github/workflows/travis-rust.yml"
   workflow_dispatch:

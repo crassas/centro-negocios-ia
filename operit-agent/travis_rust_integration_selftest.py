@@ -51,7 +51,9 @@ class NativeContractTests(unittest.TestCase):
         self.assertEqual({x["id"] for x in native["nodes"]}, {self.a, self.b})
         self.assertEqual(len(native["links"]), 1)
         self.assertNotIn("SENTINELA_PRIVADA_MEMORIA", str(native))
-        python_engine = self.brain.graph()
+        with patch.dict(os.environ, {"TRAVIS_RUST_BIN": ""}):
+            python_engine = self.brain.graph()
+        self.assertEqual(python_engine["engine"], "python")
         self.assertEqual({x["id"] for x in python_engine["nodes"]},
                          {x["id"] for x in native["nodes"]})
         # Same data, no extra worker, no new memories created by the binary.
