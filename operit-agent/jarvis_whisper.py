@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from pywhispercpp.model import Model
 
-PROMPT="Português de Portugal. Travis, YouTube, bicicletas, pesquisar, procurar, selecionar, seleciona, primeiro, segundo, vídeo, repositórios, tarefas, projetos, Beatriz, GitHub."
+PROMPT="Português de Portugal and English. Travis, YouTube, GitHub, bicicletas, bicycles, Beatriz."
 model_path=Path(sys.argv[1])
 precise_model=model_path.with_name('ggml-small-q5_1.bin')
 if precise_model.is_file():model_path=precise_model
@@ -36,7 +36,7 @@ def transcribe(path,language=None):
  if len(samples)<1600:return {"text":"","languageUsed":"pt"}
  # Preserve Whisper's full acoustic context: shortened windows corrupted compound
  # commands and project names even when the original audio was intelligible.
- used=language if language in {"pt","en"} else "pt"
+ used=language if language in {"pt","en"} else "auto"
  segments=model.transcribe(
   samples,
   language=used,
@@ -46,7 +46,7 @@ def transcribe(path,language=None):
  return {"text":text,"languageUsed":used,"model":model_path.name}
 
 if sys.argv[2]=="--worker":
- print("TRAVIS_STT:"+json.dumps({"ready":True,"languages":["pt","en"],"mode":"pt-biased-multilingual","defaultLanguage":"pt"}),flush=True)
+ print("TRAVIS_STT:"+json.dumps({"ready":True,"languages":["pt","en"],"mode":"automatic-pt-en","defaultLanguage":"auto"}),flush=True)
  for line in sys.stdin:
   try:
    payload=json.loads(line)

@@ -4,7 +4,7 @@ let source=await fs.readFile(new URL('./src/index.js',import.meta.url),'utf8');
 source=source.replace('import { DurableObject } from "cloudflare:workers";','class DurableObject { constructor(ctx,env){this.ctx=ctx;this.env=env;} }');
 source+='\nexport {parseOperitInstruction,automaticRepoChange,assistSystem};';
 const {TaskQueue,default:worker,parseOperitInstruction,automaticRepoChange,assistSystem}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
-assert.match(assistSystem('en','conversation'),/always answer in natural English/);
+assert.match(assistSystem('en','conversation'),/Answer in natural British English/);
 assert.match(assistSystem('en','translation'),/Return only the translation/);
 assert.match(assistSystem('pt'),/português de Portugal/);
 assert.equal(parseOperitInstruction('/claude @2irmaos Faz o SEO da página').action,'repo_change');

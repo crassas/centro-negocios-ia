@@ -1,0 +1,74 @@
+"""Bilingual conversation policy and bounded, declarative visual directions."""
+import re
+import unicodedata
+
+def normalized(text):
+    return ''.join(c for c in unicodedata.normalize('NFD', str(text).lower()) if not unicodedata.combining(c))
+
+def control(text):
+    t = normalized(text).strip(' .!?')
+    t = re.sub(r'^(?:(?:hey|ola|amigo|travis|jarvis|please|por favor)[ ,:]+)+', '', t)
+    choices = [
+        (r'(?:fala|responde|conversa|speak|answer|talk)(?: comigo| to me)? (?:em |in )?(?:ingles|english)', 'language', 'en'),
+        (r'(?:fala|responde|conversa|speak|answer|talk)(?: comigo| to me)? (?:em |in )?(?:portugues(?: de portugal)?|portuguese)', 'language', 'pt'),
+        (r'(?:idioma automatico|alterna os idiomas|automatic language|match my language)', 'language', 'auto'),
+        (r'(?:fica em espera|entra em espera|descansa|go to sleep|stand by|standby)', 'standby', True),
+        (r'(?:acorda|volta|wake up|come back)', 'standby', False),
+        (r'(?:desliga o microfone|para de ouvir|turn off (?:the )?microphone|stop listening)', 'microphone', False),
+        (r'(?:toma a iniciativa|podes tomar a iniciativa|ativa a iniciativa|be proactive|take initiative)', 'proactive', True),
+        (r'(?:nao tomes a iniciativa|desativa a iniciativa|sem interrupcoes|stop being proactive|quiet mode)', 'proactive', False),
+    ]
+    for pattern, setting, value in choices:
+        if re.fullmatch(pattern, t): return {'setting': setting, 'value': value}
+    return None
+
+def detect_language(text, fallback='en'):
+    tokens = set(re.findall(r'[a-z]+', normalized(text)))
+    pt = len(tokens & set('ola quero preciso podes procura pesquisa abre seleciona primeiro segundo fecha pausa retoma obrigado explica como porque porque portugues fala um uma bicicletas meu minha tens temos para sobre hoje mundo'.split()))
+    en = len(tokens & set('hello hi want need can could please search find open select first second close pause resume thanks explain how why english speak the a an my your have what who about today world'.split()))
+    return 'pt' if pt > en else 'en' if en > pt else fallback
+
+def language_instruction(language):
+    return ('Reply in European Portuguese (Portugal), naturally and without Brazilian phrasing.'
+            if language == 'pt' else 'Reply in natural British English.')
+
+def illustration(text):
+    t = normalized(text)
+    if not re.search(r'\b(?:explica|mostra|imagina|visualiza|exemplo|explain|show|imagine|visualize|example)\b', t): return None
+    kinds = [('orbit', r'\b(?:sistema solar|solar system|orbita|orbit|planetas?|planets?)\b'),
+             ('atom', r'\b(?:atomo|atom|eletrao|electron|molecula|molecule)\b'),
+             ('network', r'\b(?:rede|network|neuron|neuronios|cerebro|brain|database|base de dados|crm|internet)\b'),
+             ('wave', r'\b(?:som|sound|onda|wave|frequencia|frequency|voz|voice)\b')]
+    for kind, pattern in kinds:
+        if re.search(pattern, t): return {'kind': 'illustration', 'scene': kind, 'title': text[:100], 'schematic': True, 'autoReturn': True, 'items': []}
+    return None
+
+def control_reply(args, language):
+    pt = language == 'pt'
+    setting, value = args['setting'], args['value']
+    if setting == 'language':
+        return {'pt': 'Claro. Falamos em português de Portugal.', 'en': 'Of course. Let’s speak English.', 'auto': 'Vou acompanhar o idioma em que falares.'}[value]
+    if setting == 'standby':
+        return ('Fico em espera. Diz Travis para me chamares.' if pt else 'Standing by. Say Travis when you need me.') if value else ('Estou aqui.' if pt else 'I’m here.')
+    if setting == 'microphone': return 'Microfone desligado.' if pt else 'Microphone off.'
+    return ('Posso partilhar ideias durante as pausas.' if pt else 'I can share ideas during quiet moments.') if value else ('Só intervenho quando me chamares ou quando um pedido terminar.' if pt else 'I’ll speak when you call me or when a requested task finishes.')
+
+def portuguese_reply(tool, result, fallback):
+    fixed = {'presence': 'Sou o Travis. Estou aqui. Diz-me o que precisas.', 'stop': 'Parei.',
+             'open_youtube': 'YouTube, aqui mesmo. O que queres ver?', 'close_youtube': 'Vou fechar o YouTube.',
+             'close_projection': 'Estou de volta.', 'pause_youtube': 'Vou pausar o vídeo.', 'resume_youtube': 'Vou retomar o vídeo.',
+             'capabilities_status': 'Posso conversar, pesquisar a web, ler páginas, procurar e reproduzir vídeos, consultar a memória e trabalhar nos teus projetos. As ligações às contas dependem da respetiva autorização.'}
+    if tool in fixed: return fixed[tool]
+    if tool in {'play_youtube', 'select_youtube', 'search_youtube'}:
+        if result.get('videoId'): return 'Vou abrir o vídeo aqui.'
+        if result.get('videos'): return 'Aqui estão os vídeos. Podes escolher o primeiro, o segundo ou outro resultado.'
+        return 'Não tenho um vídeo confirmado para abrir. Diz-me o que queres procurar.'
+    if tool == 'create_task': return 'Tarefa criada: ' + result['title']
+    if tool == 'task_list':
+        rows = result['tasks']; return ('Tens ' + str(len(rows)) + ' tarefas pendentes. ' + '. '.join(r['title'] for r in rows[:3])) if rows else 'Não tens tarefas pendentes no Travis.'
+    if tool == 'note_fact': return 'Guardei essa informação na memória.'
+    if tool == 'system_status': return 'O Centro está ' + ('ativo.' if result['centro'].get('ok') else 'indisponível.')
+    if tool == 'brain_pause': return 'A reflexão automática está ' + ('pausada.' if result['paused'] else 'ativa.')
+    if tool == 'openclaw_status':
+        return 'O gateway do OpenClaw respondeu à verificação.' if result['connected'] else 'O OpenClaw está instalado, mas o gateway não respondeu à verificação.' if result['installed'] else 'O OpenClaw não está instalado.'
+    return fallback

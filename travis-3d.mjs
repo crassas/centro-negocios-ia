@@ -1,3 +1,5 @@
+import { createConceptProjection } from './travis-concept-projection.mjs?v=conversation-2';
+import { createVoiceInput } from './travis-voice-input.mjs?v=conversation-2';
 import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=voice-flow-3';
 import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=3';
 import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
@@ -52,7 +54,8 @@ if (!hud || !launcher || !canvas) {
   let coreRoot;
   let faceRoot;
   let assemblyParticles=null;
-  let neuralField=null;
+  let neuralField=null,conceptProjection=null,pendingConcept=null;
+  window.addEventListener('travis:illustration',event=>{pendingConcept=event.detail?.scene||null;if(pendingConcept)conceptProjection?.show(pendingConcept,performance.now()/1000);else conceptProjection?.hide();});
   const holographicEyeMaterials=[];
   let faceHit;
   let faceEyeGroups=[];
@@ -110,6 +113,49 @@ if (!hud || !launcher || !canvas) {
   const IS_LOCAL_TRAVIS_UI=['127.0.0.1','localhost'].includes(location.hostname) && location.port==='8770';
   const LOCAL_TRAVIS_BASE=IS_LOCAL_TRAVIS_UI?location.origin:'http://127.0.0.1:8770';
   let voiceSession=0;
+  let voiceInput=null,voiceInputFailed=false,voicePaused=false,standby=false,initiativeTimer=0;
+  let replyLanguage='en',inputLanguage='auto',proactive=true,lastInteraction=performance.now();
+  function interruptReply(){
+    voiceSession++;voiceRequestController?.abort();voiceRequestController=null;
+    clearTimeout(voiceFinishTimer);voiceFinishTimer=0;
+    if(voiceSource){try{voiceSource.onended=null;voiceSource.stop();voiceSource.disconnect();}catch{}voiceSource=null;}
+    if(voicePlaybackRaf)cancelAnimationFrame(voicePlaybackRaf);voicePlaybackRaf=0;
+    try{voiceOutputDelay?.disconnect();}catch{}voiceOutputDelay=null;speechFace?.reset();
+    voiceBusy=false;externalVoiceLevel=0;
+  }
+  async function ensureVoiceInput(){
+    if(voicePaused||!opened||voiceInputFailed)return false;
+    if(!voiceInput)voiceInput=createVoiceInput({
+      onStart(){if(!opened||voicePaused)return;lastInteraction=performance.now();window.dispatchEvent(new CustomEvent('travis:user-start'));interruptReply();setState('listening',standby?'Say Travis to wake me.':'I’m listening.');},
+      onSpeech(blob,endedAt){if(!opened||voicePaused)return;voiceSpeechEndedAt=endedAt;handleVoiceBlob(blob,'audio/wav',voiceSession);},
+      onLevel(level){if(state!=='speaking')externalVoiceLevel=level;},
+      checkTurn:blob=>localJson('/turn',{body:blob,type:'audio/wav',signal:AbortSignal.timeout(1500)}),
+      onError(error){console.warn('Neural voice input unavailable:',error.message);},
+    });
+    try{await voiceInput.start();return Boolean(voiceInput.diagnostics().active);}
+    catch{voiceInputFailed=true;hud.dataset.voiceInput='silence-fallback';return false;}
+  }
+  function scheduleInitiative(){
+    clearTimeout(initiativeTimer);
+    if(!opened||voicePaused)return;
+    initiativeTimer=setTimeout(async()=>{
+      const epoch=voiceSession;
+      try{
+        const idleSeconds=(performance.now()-lastInteraction)/1000;
+        if(proactive&&!standby&&!voiceBusy&&!voiceInput?.diagnostics().speaking&&!document.hidden&&idleSeconds>90&&!window.TravisProjection?.media().playing){
+          const data=await localJson('/initiative',{body:{session:dialogueSession,idleSeconds}});
+          if(data.event&&epoch===voiceSession&&!voiceBusy&&!voicePaused&&opened&&!voiceInput?.diagnostics().speaking){
+            const session=voiceSession;voiceBusy=true;presentToolResult(data.event);
+            const response=await localFetch('/speak',{body:{text:data.event.reply,language:data.event.language}});
+            if(!response.ok)throw new Error('Initiative voice unavailable');
+            await playVoiceArrayBuffer(await response.arrayBuffer(),session,data.event.reply);
+          }else if(!voiceBusy&&idleSeconds>120)setState('idle','Standing by.');
+        }
+      }catch(error){console.warn('Travis initiative:',error.message);if(epoch===voiceSession&&!voiceSource){voiceBusy=false;scheduleListening(voiceSession,500);}}
+      finally{scheduleInitiative();}
+    },30000);
+  }
+
   // Keep the conversation across reloads in this tab without mixing separate tabs.
   const dialogueSession=(()=>{
     try {
@@ -557,6 +603,7 @@ if (!hud || !launcher || !canvas) {
   }
 
   function localFetch(path,{body=null,type='application/json',method='POST',signal=null}={}) {
+    const endpoint=path.split('?')[0],timeout=endpoint==='/jarvis'?120000:endpoint==='/transcribe'?80000:30000;
     const headers={};
     if (body!=null && type) headers['Content-Type']=type;
     const init={
@@ -565,7 +612,7 @@ if (!hud || !launcher || !canvas) {
       cache:'no-store',
       credentials:'omit',
       headers,
-      signal:signal?AbortSignal.any([signal,AbortSignal.timeout(path==='/jarvis'?120000:path==='/transcribe'?80000:30000)]):AbortSignal.timeout(path==='/jarvis'?120000:path==='/transcribe'?80000:30000)
+      signal:signal?AbortSignal.any([signal,AbortSignal.timeout(timeout)]):AbortSignal.timeout(timeout)
     };
     if (!IS_LOCAL_TRAVIS_UI) init.targetAddressSpace='local';
     if (body!=null) init.body=type==='application/json'?JSON.stringify(body):body;
@@ -621,6 +668,7 @@ if (!hud || !launcher || !canvas) {
   }
 
   function stopVoiceConversation() {
+    voiceInput?.stop();clearTimeout(initiativeTimer);
     voiceSession++;
     clearTimeout(voiceFinishTimer);
     speechFace?.reset();
@@ -643,7 +691,7 @@ if (!hud || !launcher || !canvas) {
 
   function scheduleListening(session,delay=260) {
     clearTimeout(voiceRestartTimer);
-    if (!opened || session!==voiceSession) return;
+    if (!opened || voicePaused || session!==voiceSession) return;
     voiceRestartTimer=setTimeout(()=>{
       if (opened && session===voiceSession && !voiceBusy) startListening(session);
     },delay);
@@ -709,13 +757,16 @@ if (!hud || !launcher || !canvas) {
       externalVoiceLevel=0;
       if (opened && session===voiceSession) {
         voiceBusy=false;
-        setState('ready','I’m here.');
-        scheduleListening(session,180);
+        lastInteraction=performance.now();
+        window.dispatchEvent(new CustomEvent('travis:speech-end'));
+        setState(standby||voicePaused?'idle':'ready',standby?'Standing by. Say Travis.':voicePaused?'Microphone off.':'I’m here.');
+        if(!voicePaused)scheduleListening(session,180);
       }
     },speechFace?85:0);};
 
     meter();
     source.start();
+    if(!voicePaused)void ensureVoiceInput();
     if(metrics) {
       metrics.replyToFirstAudioMs=Math.round(performance.now()-metrics.replyAt);
       metrics.speechEndToFirstAudioMs=Math.round(performance.now()-metrics.speechEndedAt);
@@ -727,7 +778,7 @@ if (!hud || !launcher || !canvas) {
 
   function presentToolResult(answer) {
     const receipt=window.TravisProjection?.action(answer?.result);
-    if(receipt?.reply)answer.reply=receipt.reply;
+    if(receipt?.reply&&receipt.ok===false){answer.reply=receipt.reply;replyLanguage='en';}
     if(!answer?.ui)return;
     if(answer.ui.project)activeProject=answer.ui.project;
     window.dispatchEvent(new CustomEvent('travis:result',{detail:answer}));
@@ -746,17 +797,17 @@ if (!hud || !launcher || !canvas) {
         if(!opened || session!==voiceSession) return;
         const task=await localJson('/voice-task',{body:{taskId}});
         if(!opened || session!==voiceSession) return;
-        if(!['completed','failed'].includes(task.status) || voiceBusy) continue;
+        if(!['completed','failed'].includes(task.status) || voiceBusy || voiceInput?.diagnostics().speaking || voicePaused || standby) continue;
         voiceBusy=true;releaseVoiceMic({stopRecorder:true});
         const reply=task.status==='completed'
           ? String(task.answer?.reply||'The agent finished without a response.')
           : 'I could not complete the task: '+String(task.error||'Executor failure.');
-        lastVoiceTaskResult=task;
+        lastVoiceTaskResult=task;replyLanguage=task.answer?.language||replyLanguage;
         presentToolResult(task.answer || {ui:{kind:"agents",title:"Request failed",items:[{title:task.tool||"Agent",detail:task.error||"Execution failed"}]}});
         console.info('Travis agent result',task);
         setState('thinking','The agent finished. Preparing voice…');
         try {
-          const speech=await localFetch('/speak',{body:{text:reply.slice(0,1800),language:'en'}});
+          const speech=await localFetch('/speak',{body:{text:reply.slice(0,1800),language:replyLanguage}});
           if(!speech.ok) throw new Error('Completion voice is unavailable.');
           const wav=await speech.arrayBuffer();
           await playVoiceArrayBuffer(wav,session,reply);
@@ -781,7 +832,7 @@ if (!hud || !launcher || !canvas) {
     try {
       setState('thinking','Understanding…');
       const metrics={speechEndedAt:voiceSpeechEndedAt||performance.now()};
-      const transcript=typeof blob==='string'?{text:blob}:await localJson('/transcribe',{
+      const transcript=typeof blob==='string'?{text:blob}:await localJson('/transcribe?language='+inputLanguage,{
         body:blob,
         type:mime||'application/octet-stream',
         signal:controller.signal
@@ -793,10 +844,22 @@ if (!hud || !launcher || !canvas) {
       let text=String(transcript.text||'').trim();
       window.dispatchEvent(new CustomEvent('travis:transcript',{detail:{role:'user',text}}));
       if (!text) throw new Error('I could not understand the speech.');
+      if(standby&&!/\b(?:travis|jarvis|acorda|wake up)\b/i.test(text)){voiceBusy=false;setState('idle','Standing by. Say Travis.');scheduleListening(session,100);return;}
+      const wokeFromStandby=standby;
+      if(standby){standby=false;text=text.replace(/^(?:hey |olá? )?(?:travis|jarvis)[ ,.!:]*/i,'')||'wake up';}
+      lastInteraction=performance.now();
       text=window.TravisProjection?.select(text)||text;
       setState('thinking','Handling your request…');
-      const answer=await localJson('/jarvis',{body:{text,session:dialogueSession,project:activeProject},signal:controller.signal});
+      const answer=await localJson('/jarvis',{body:{text,session:dialogueSession,project:activeProject,language:inputLanguage,wake:wokeFromStandby},signal:controller.signal});
       if (!opened || session!==voiceSession) return;
+      replyLanguage=answer.language==='pt'?'pt':'en';
+      inputLanguage=answer.preferences?.language||'auto';
+      proactive=answer.preferences?.proactive!==false;
+      if(answer.result?.action==='conversation_control'){
+        const {setting,value}=answer.result;
+        if(setting==='standby')standby=value;
+        if(setting==='microphone'&&value===false){voicePaused=true;voiceInput?.stop();clearTimeout(initiativeTimer);}
+      }
       presentToolResult(answer);
       metrics.replyAt=performance.now();
       metrics.transcriptToReplyMs=Math.round(metrics.replyAt-metrics.transcriptAt);
@@ -810,7 +873,7 @@ if (!hud || !launcher || !canvas) {
       setState('thinking','Preparing voice…');
 
       const speech=await localFetch('/speak',{
-        body:{text:reply,language:'en'},
+        body:{text:reply,language:replyLanguage},
         type:'application/json',
         signal:controller.signal
       });
@@ -842,7 +905,9 @@ if (!hud || !launcher || !canvas) {
   }
 
   async function startListening(session=voiceSession) {
-    if (!opened || session!==voiceSession || voiceBusy || voiceRecorder?.state==='recording') return;
+    if (!opened || voicePaused || session!==voiceSession || voiceRecorder?.state==='recording') return;
+    if(await ensureVoiceInput()){hud.dataset.voiceInput='silero-smart-turn';if(!voiceBusy)setState(standby?'idle':'listening',standby?'Standing by. Say Travis.':'I’m listening.');return;}
+    if(voiceBusy||!opened||session!==voiceSession)return;
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       setState('ready','This browser does not provide microphone access.');
       return;
@@ -958,7 +1023,7 @@ if (!hud || !launcher || !canvas) {
       if(voiceBusy||externalVoiceLevel>.04){mediaNoticeTimer=setTimeout(tell,900);return;}
       voiceBusy=true;releaseVoiceMic({stopRecorder:true,keepStream:true});
       try{
-        const speech=await localFetch('/speak',{body:{text,language:'en'}});
+        const speech=await localFetch('/speak',{body:{text,language:replyLanguage}});
         if(!speech.ok)throw new Error('Voice unavailable');
         await playVoiceArrayBuffer(await speech.arrayBuffer(),session,text);
       }catch{
@@ -976,7 +1041,7 @@ if (!hud || !launcher || !canvas) {
       setState('ready','Toca uma vez para ativar a voz. Depois é só falar.');return;
     }
     if(button)button.hidden=true;
-    voiceStarting=true;
+    voiceStarting=true;voicePaused=false;
     stopVoiceConversation();
     const session=voiceSession;
     voiceBusy=true;
@@ -992,7 +1057,7 @@ if (!hud || !launcher || !canvas) {
         loadingLabel.textContent='TRAVIS LOCAL · VOICE ONLINE';
         loadingLabel.classList.add('is-done');
       }
-      scheduleVoiceTaskPoll();
+      scheduleVoiceTaskPoll();scheduleInitiative();
       if (greet) {
         setState('thinking','Starting voice system…');
         try {
@@ -1481,6 +1546,8 @@ if (!hud || !launcher || !canvas) {
     renderer.toneMappingExposure=.98;
 
     scene=new THREE.Scene();
+    conceptProjection=createConceptProjection(THREE,{reducedMotion});scene.add(conceptProjection.root);
+    if(pendingConcept)conceptProjection.show(pendingConcept,performance.now()/1000);
     scene.background=new THREE.Color(0x02070b);
     scene.fog=new THREE.FogExp2(0x02070b,.045);
 
@@ -1602,6 +1669,7 @@ if (!hud || !launcher || !canvas) {
     const introEase=easeOutCubic(intro);
 
     const projection=hologramPresentation.sample(now/1000);
+    conceptProjection?.update(now/1000,projection,speechLevel);
 
     if (now>nextGlitchAt) {
       glitchPower=formBlend.face>.1?0:(state==='thinking'?.15:.06);
@@ -1903,9 +1971,9 @@ if (!hud || !launcher || !canvas) {
     close:closeHud,
     commands:toggleCommands,
     selectProject(project){if(["centro","pentehouse","best-pizza","2-irmaos","beatriz"].includes(project))activeProject=project;},
-    ask(text){if(!opened)return;stopVoiceConversation();handleVoiceBlob(String(text),'',voiceSession);},
-    pause(){stopVoiceConversation();faceRig?.update(0);setState('ready','Conversation paused.');},
-    resume(){if(opened)startVoiceConversation({greet:false});},
+    ask(text){if(!opened)return;voicePaused=false;stopVoiceConversation();scheduleInitiative();handleVoiceBlob(String(text),'',voiceSession);},
+    pause(){voicePaused=true;stopVoiceConversation();faceRig?.update(0);setState('ready','Conversation paused.');},
+    resume(){voicePaused=false;if(opened)startVoiceConversation({greet:false});},
     setState,
     diagnostics() {
       return {ready,opened,state,renderedFrames,contextLost:renderer?.getContext().isContextLost(),form:activeForm,faceAsset:hud.dataset.faceAsset,
@@ -1913,7 +1981,7 @@ if (!hud || !launcher || !canvas) {
         neural:neuralField?.diagnostics(),
         presence:{...presencePose},projection:hologramPresentation.sample(performance.now()/1000),
         media:window.TravisProjection?.media(),
-        meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,
+        meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,voiceInput:voiceInput?.diagnostics(),replyLanguage,inputLanguage,standby,proactive,voicePaused,
         recording:voiceRecorder?.state,pendingTasks:[...pendingVoiceTasks.keys()],lastTaskResult:lastVoiceTaskResult,voiceMetrics:voiceMetrics.map(m=>({...m}))};
     },
     form(mode='auto') {

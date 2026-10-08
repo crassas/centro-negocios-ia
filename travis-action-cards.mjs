@@ -5,7 +5,7 @@ const hud=document.getElementById('travis-hud');
 const deck=document.getElementById('travis-action-deck');
 const heading=document.getElementById('travis-action-heading');
 const items=document.getElementById('travis-action-items');
-let current=null,selected=null,frame=0,wasVisible=false;
+let current=null,selected=null,frame=0,wasVisible=false,returnTimer=0;
 const clock=()=>performance.now()/1000;
 const menu={kind:'capabilities',title:'Your workspace',items:[
   {title:'Repositories',detail:'Inspect your projects',request:'Mostra os meus repositórios'},
@@ -19,11 +19,16 @@ function render(data){
     data={...data,query:current.query||data.query,items:data.items?.length?data.items:current.items};
   }
   closeYouTube();
-  current=data;
+  current=data;clearTimeout(returnTimer);
+  hud.dataset.projectionKind=String(data.kind||'result');
+  window.dispatchEvent(new CustomEvent('travis:illustration',{detail:{scene:data.kind==='illustration'?data.scene:null}}));
+  if(!matchMedia('(prefers-reduced-motion: reduce)').matches)deck.animate?.([{opacity:0,filter:'blur(9px)',transform:'translate(-50%, 16px) scale(.97)'},{opacity:1,filter:'blur(0px)',transform:'translate(-50%, 0) scale(1)'}],{duration:750,easing:'cubic-bezier(.16,1,.3,1)'});
   heading.textContent=String(data.title||'Your workspace');
   items.dataset.kind=String(data.kind||'result');
   const rows=Array.isArray(data.items)?data.items.slice(0,30):[];
   items.replaceChildren();
+  if(data.summary){const paragraph=document.createElement('p');paragraph.className='travis-projection-summary';paragraph.textContent=String(data.summary);items.append(paragraph);}
+  if(data.kind==='illustration'){const label=document.createElement('p');label.className='travis-projection-caption';label.textContent='SCHEMATIC · CONCEPTUAL VIEW';items.append(label);return;}
   if(data.kind==='youtube')mountYouTube(data,items);
   const entries=rows.length?rows:data.kind==='youtube'?[]:[{title:data.kind==='tasks'?'No pending tasks':'No results',detail:data.kind==='tasks'?'Tell me what you want to add.':'The tool returned no entries.'}];
   items.append(...entries.map((row,index)=>{
@@ -35,9 +40,11 @@ function render(data){
     card.setAttribute('aria-current',String(Boolean(row.project&&row.project===selected)||Boolean(row.videoId&&row.videoId===data.videoId)));
     if(typeof row.available==='boolean')card.dataset.available=String(row.available);
     const number=document.createElement('span');number.className='travis-holo-number';number.textContent=String(index+1).padStart(2,'0');number.setAttribute('aria-hidden','true');
+    if(/^[A-Za-z0-9_-]{11}$/.test(String(row.videoId||''))){const image=document.createElement('img');image.src='https://i.ytimg.com/vi/'+row.videoId+'/mqdefault.jpg';image.alt='';image.loading='lazy';image.className='travis-video-preview';card.append(image);}
     const title=document.createElement('strong'),detail=document.createElement('span');
     title.textContent=String(row.title||'Result');detail.textContent=String(row.detail||'');
-    card.append(number,title,detail);
+    card.append(number,title,detail);card.style.setProperty('--entry',String(Math.min(index,7)));
+    if(row.url&&!actionable){try{const url=new URL(row.url);if(['https:','http:'].includes(url.protocol)){const link=document.createElement('a');link.href=url.href;link.target='_blank';link.rel='noopener noreferrer';link.textContent='↗';link.setAttribute('aria-label','Open source');link.addEventListener('click',e=>e.stopPropagation());detail.append(' ',link);}}catch{}}
     if(actionable)card.addEventListener('click',()=>{
       if(row.project){selected=row.project;window.TravisVisual?.selectProject(selected);}
       for(const sibling of items.children)sibling.setAttribute('aria-current',String(sibling===card));
@@ -73,7 +80,7 @@ if(deck){
   document.getElementById('travis-action-close').addEventListener('click',()=>window.TravisVisual?.commands(false));
   window.addEventListener('travis:commands',e=>{
     if(e.detail.open){if(!current)render(menu);show(Boolean(e.detail.automatic));}
-    else{closeYouTube();projection.close(clock());refresh();}
+    else{clearTimeout(returnTimer);closeYouTube();projection.close(clock());refresh();}
   });
   window.addEventListener('travis:result',e=>{
     const data=e.detail?.ui;if(!data)return;
@@ -81,14 +88,16 @@ if(deck){
     render(data);window.TravisVisual?.commands(true,{automatic:true});
     show(true);
   });
-  window.addEventListener('travis:close',()=>{
+  window.addEventListener('travis:speech-end',()=>{if(current?.autoReturn){clearTimeout(returnTimer);returnTimer=setTimeout(()=>window.TravisVisual?.commands(false),1800);}});
+  window.addEventListener('travis:user-start',()=>clearTimeout(returnTimer));
+  window.addEventListener('travis:close',()=>{clearTimeout(returnTimer);
     closeYouTube();cancelAnimationFrame(frame);frame=0;projection.reset();wasVisible=false;current=null;paint();
   });
   window.TravisProjection=Object.freeze({
     media:youtubeState,
     action(result){
       if(result?.action==='close_projection'){
-        closeYouTube();window.TravisVisual?.commands(false);return {reply:'Back with you.'};
+        closeYouTube();window.TravisVisual?.commands(false);return {ok:true};
       }
       const receipt=controlYouTube(result?.action);
       if(result?.action==='close_youtube'&&receipt){

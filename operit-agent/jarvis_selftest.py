@@ -141,7 +141,8 @@ class Tests(unittest.TestCase):
   with patch.object(j.travis_web_tools,"youtube_search",side_effect=RuntimeError("Consent page")),patch.object(j,"infer",side_effect=AssertionError("No model")):
    answer=j.route("Procura um vídeo sobre bicicletas e abre o primeiro",ctx)
    self.assertNotIn("videoId",answer["result"])
-   self.assertIn("did not return",answer["reply"])
+   self.assertIn("Não tenho um vídeo confirmado",answer["reply"])
+   self.assertEqual(answer["language"],"pt")
    self.assertEqual(j.route("o primeiro",ctx)["result"]["action"],"youtube_selection_missing")
  def test_media_phrases_do_not_execute_negation_or_explanations(self):
   for text in ["não procures um vídeo de bicicletas","como procurar um vídeo e abrir o primeiro?","não abras o primeiro","don't select the first video"]:

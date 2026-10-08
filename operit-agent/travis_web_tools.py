@@ -202,12 +202,13 @@ def follow(link_text):
 
 def classify(text):
  raw=str(text or "").strip();t=re.sub(r"^(?:travis|jarvis)[,:;.!?\s]*","",raw,flags=re.I).strip()
+ t=re.sub(r"^(?:(?:podes|consegues|poderias|can you|could you|please|por favor)\s+)+", "", t, flags=re.I)
  m=re.fullmatch(r"(?:(?:podes|consegues|poderias|can you|could you|please)\s+)?(?:abre|abrir|open|go to|visit|vai (?:a|ao|à)|visita|mostra)(?:-me)?\s+(?:o |a |os |as |the )?(.+?)(?:\s+(?:por favor|please))?[.!?]*",t,flags=re.I)
  if m:
   target=m.group(1).strip();key="".join(c for c in unicodedata.normalize("NFD",target.lower()) if unicodedata.category(c)!="Mn")
   if key in SITES:return "web_open",{"url":SITES[key]}
   if re.fullmatch(r"(?:https?://)?[a-z0-9.-]+\.[a-z]{2,}(?:/[^\s]*)?",target,re.I):return "web_open",{"url":target}
-  if key in {"primeiro resultado","o primeiro resultado","primeiro"}:return "web_follow",{"link":"primeiro"}
+  if key in {"primeiro resultado","o primeiro resultado","primeiro","first result","first"}:return "web_follow",{"link":"primeiro"}
  m=re.fullmatch(r"(?:lê|le|ler|consulta|resume|resumir|read|summarize|summarise|inspect)(?:-me)?\s+(?:esta |a |this |the )?(?:página|pagina|page|site)?\s*(https?://\S+)",t,flags=re.I)
  if m:return "web_read",{"url":m.group(1).rstrip(".,;!?")}
  m=re.fullmatch(r"(?:pesquisa|pesquisar|procura|procurar|busca|buscar|investiga|investigar|search|find|research|look up)(?:\s+(?:no google|na internet|na web|sobre|por|online|on the web|about|for))?\s+(.+)",t,flags=re.I)
