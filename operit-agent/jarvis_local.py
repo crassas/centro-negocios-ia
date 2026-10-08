@@ -357,6 +357,7 @@ def execute(tool,args):
   if available:reply+=" I can inspect the code and route changes through the Centro. Publishing to GitHub still requires authorization to be verified at publication time."
   return reply
  if tool=="system_status":return doctor()
+ if tool=="quantum_status":return TRAVIS_QUANTUM.health()
  if tool=="stop":return {"stopped":True}
  if tool=="search_positions":return search_positions(args.get("target"))
  if tool=="site_check":
@@ -545,6 +546,7 @@ def route(text,context=None):
  elif tool=="gmail_inbox":reply="Latest inbox emails: "+"; ".join(m["subject"] for m in result["messages"]) if result["messages"] else "The inbox is empty."
  elif tool=="agent_sessions":reply="The execution agent is "+("active" if result["agent"] else "not confirmed online")+". "+str(sum(j["status"] in {"running","queued"} for j in result["jobs"]))+" voice request(s) are running or queued."
  elif tool=="system_status":reply="The Centro is "+("active" if result["centro"].get("ok") else "unavailable")+". Available memory: "+str(result["ram_available_mb"])+" megabytes."
+ elif tool=="quantum_status":reply=("Quantum Unified Agent V"+str(result.get("builtBaseline"))+" is online and governing Travis. Canonical Drive state: "+str(result.get("canonicalDriveState"))+".") if result.get("ok") else "Quantum Unified Agent is not available."
  elif tool in {"search_positions","projects_status"}:reply=result["reply"]
  elif tool=="site_check":reply=" ".join(k+": "+("online." if v["online"] is True else "I could not confirm availability. "+v.get("error","")) for k,v in result.items())
  elif tool=="open_youtube":reply="Opening YouTube."
