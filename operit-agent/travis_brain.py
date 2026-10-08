@@ -340,6 +340,12 @@ class BrainRuntime:
     def graph(self, limit=120):
         """Read-only snapshot of persisted memories and persisted relations."""
         limit = max(1, min(int(limit), 120))
+        requested_rust = bool(os.environ.get("TRAVIS_RUST_BIN", "").strip())
+        if requested_rust:
+            from travis_rust_bridge import graph_snapshot
+            native = graph_snapshot(self.store.db_path, limit=limit)
+            if native is not None:
+                return native
         with contextlib.closing(self.store.connect()) as c:
             c.row_factory = sqlite3.Row
             rows = c.execute(
@@ -374,7 +380,8 @@ class BrainRuntime:
             'ok': True, 'source': 'local-sqlite', 'kind': 'persisted-memory-graph',
             'nodes': nodes, 'links': links, 'observedAt': self.clock(),
             'truncated': len(nodes) == limit,
-            'disclaimer': 'Stored graph, not a biological brain or a model reasoning trace'
+            'disclaimer': 'Stored graph, not a biological brain or a model reasoning trace',
+            'engine': 'python-fallback' if requested_rust else 'python'
         }
 
     def status(self):
