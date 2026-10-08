@@ -151,11 +151,14 @@ class Tests(unittest.TestCase):
    self.assertEqual(j.english_reply("O projecto está pronto."),"The project is ready.")
    self.assertEqual(cloud.call_args.args[2],"translation")
    self.assertIn("Translate",cloud.call_args.args[1])
- def test_portuguese_input_gets_english_direct_reply(self):
+ def test_portuguese_input_respects_detected_or_selected_language(self):
   with patch.object(j,"infer",side_effect=AssertionError("LLM called")):
    reply=j.route("Travis, estás aí?")
    self.assertEqual(reply["tool"],"presence")
-   self.assertIn("I’m Travis",reply["reply"])
+   self.assertIn("Sou o Travis",reply["reply"])
+   english=j.route("Travis, estás aí?",{"language":"en"})
+   self.assertEqual(english["tool"],"presence")
+   self.assertIn("I’m Travis",english["reply"])
  def test_youtube_is_a_direct_action(self):
   with patch.object(j,"infer",side_effect=AssertionError("LLM called")):
    for text in ["consegues abrir o YouTube", "Travis, abre o YouTube", "podes abrir YouTube?"]:
