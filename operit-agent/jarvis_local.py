@@ -224,33 +224,33 @@ def gsc_request(path,payload=None,token=None):
  req=urllib.request.Request(GSC_BASE+path,data=json.dumps(payload).encode() if payload is not None else None,headers={"Content-Type":"application/json","Authorization":"Bearer "+token,"Origin":CENTRO_ORIGIN,"User-Agent":"Centro-Travis/1.0"})
  with urllib.request.urlopen(req,timeout=10) as response:return json.load(response)
 def connect_gsc(token):
- if not isinstance(token,str) or not 20<=len(token)<=512 or re.search(r"\s",token):raise ValueError("Autorização inválida")
+ if not isinstance(token,str) or not 20<=len(token)<=512 or re.search(r"\s",token):raise ValueError("Invalid authorization")
  status=gsc_request("/api/gsc/status",token=token)
- if not status.get("configured"):raise ValueError("A conta de serviço do Search Console ainda não está configurada no Centro de Negócios.")
- if not status.get("authorized"):raise ValueError("Autoriza primeiro o Search Console no Centro de Negócios.")
+ if not status.get("configured"):raise ValueError("The Search Console service account is not configured yet.")
+ if not status.get("authorized"):raise ValueError("Authorize Search Console first.")
  ROOT.mkdir(parents=True,exist_ok=True);path=ROOT/"gsc.token";tmp=ROOT/("gsc-"+secrets.token_hex(8)+".tmp")
  try:
   with tmp.open("x") as f:os.chmod(tmp,0o600);f.write(token)
   tmp.replace(path)
  finally:tmp.unlink(missing_ok=True)
- return {"ok":True,"reply":"Dados de pesquisa do Centro ligados ao Travis."}
+ return {"ok":True,"reply":"Search data is now connected to Travis."}
 def search_positions(target):
- if target not in SITES:return {"available":False,"exitCode":78,"reply":"Indica o projecto: Pentehouse, Best Pizza ou Dois Irmãos."}
- if not (ROOT/"gsc.token").is_file():return {"available":False,"exitCode":78,"requiresConnection":True,"reply":"Ainda não tenho acesso às posições do Search Console nesta página. Carrega em Ligar dados do Centro. A disponibilidade do site não confirma a posição no Google."}
+ if target not in SITES:return {"available":False,"exitCode":78,"reply":"Specify the project: Pentehouse, Best Pizza, or Dois Irmãos."}
+ if not (ROOT/"gsc.token").is_file():return {"available":False,"exitCode":78,"requiresConnection":True,"reply":"Search Console data is not connected yet. Connect the Centro search data first; site availability does not prove a Google ranking."}
  try:
   sites=gsc_request("/api/gsc/sites").get("sites",[])
   domain=SITES[target].split("//",1)[1].strip("/")
   allowed={"sc-domain:"+domain,"https://"+domain+"/","http://"+domain+"/"}
   site=next((r["siteUrl"] for r in sites if r.get("siteUrl") in allowed),None)
-  if not site:return {"available":False,"exitCode":78,"reply":"A propriedade "+domain+" não está disponível na ligação do Search Console do Centro."}
+  if not site:return {"available":False,"exitCode":78,"reply":"The "+domain+" property is not available through the Centro Search Console connection."}
   end=datetime.datetime.now(ZoneInfo("Europe/Lisbon")).date()-datetime.timedelta(days=2);start=end-datetime.timedelta(days=27)
   data=gsc_request("/api/gsc/query",{"siteUrl":site,"startDate":str(start),"endDate":str(end),"rowLimit":500})
   rows=[r for r in data.get("rows",[]) if isinstance(r,dict) and r.get("query") and isinstance(r.get("position"),(int,float))]
   rows.sort(key=lambda r:r.get("impressions",0),reverse=True)
-  reply="Search Console, de "+str(start)+" a "+str(end)+". Posições médias por pesquisa; não são posições em tempo real. "
-  reply+=("; ".join(str(r["query"])+": "+str(round(r["position"],1)).replace(".",",") for r in rows[:5])) if rows else "Não há consultas com posição registada neste período."
+  reply="Search Console from "+str(start)+" to "+str(end)+". These are average query positions, not real-time rankings. "
+  reply+=("; ".join(str(r["query"])+": "+str(round(r["position"],1)) for r in rows[:5])) if rows else "There are no recorded queries with position data for this period."
   return {"available":True,"source":"Google Search Console","siteUrl":site,"startDate":str(start),"endDate":str(end),"rows":rows[:20],"reply":reply}
- except Exception:return {"available":False,"exitCode":78,"requiresConnection":True,"reply":"Não consegui consultar o Search Console do Centro. Verifica a autorização em Ligar dados do Centro. Não tenho posições confirmadas para te indicar."}
+ except Exception:return {"available":False,"exitCode":78,"requiresConnection":True,"reply":"I could not query the Centro Search Console connection. Check its authorization; I do not have a confirmed ranking to report."}
 def cockpit_snapshot():
  def fetch_part(path):
   try:
@@ -317,14 +317,14 @@ def projects_status(target=None):
    business={"available":True,"sites":sites,"tasks":tasks}
  except (OSError,sqlite3.Error):
   pass
- parts=["Estado local verificado agora:"]
+ parts=["Local state verified now:"]
  for row in rows:
-  parts.append(row["name"]+": "+(("sem alterações por guardar." if not row["changedFiles"] else str(row["changedFiles"])+" ficheiro(s) com alterações locais.") if row["available"] else "repositório indisponível."))
+  parts.append(row["name"]+": "+(("no uncommitted tracked changes." if not row["changedFiles"] else str(row["changedFiles"])+" tracked file(s) with local changes.") if row["available"] else "repository unavailable."))
  if business["available"]:
-  parts.append("Registo do negócio: "+("; ".join(r["name"]+" — "+r["status"] for r in sites) or "sem sites associados")+".")
-  parts.append("Tarefas registadas: "+(", ".join(str(n)+" "+state.lower() for state,n in tasks.items()) or "nenhuma")+".")
- else:parts.append("Não consegui consultar o registo do negócio.")
- parts.append("A disponibilidade dos sites publicados não foi testada nesta consulta.")
+  parts.append("Business register: "+("; ".join(r["name"]+" — "+r["status"] for r in sites) or "no associated sites")+".")
+  parts.append("Registered tasks: "+(", ".join(str(n)+" "+state.lower() for state,n in tasks.items()) or "none")+".")
+ else:parts.append("I could not query the business register.")
+ parts.append("Published-site availability was not tested in this query.")
  return {"projects":rows,"business":business,"reply":" ".join(parts)}
 def execute(tool,args):
  if tool=="web_research":return web_research_answer(args["query"])
