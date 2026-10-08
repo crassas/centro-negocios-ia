@@ -242,6 +242,46 @@ class BrainRuntime:
         if selected: self.mark('memory', 'recalled', str(len(selected))+' experiências recuperadas')
         return '\n'.join(clean(json.dumps({'source': r['id'], 'request':r['task'], 'outcome':r['summary'], 'verified':bool(r['verified'])}, ensure_ascii=False), 480) for r in selected)
 
+    def graph(self, limit=120):
+        """Read-only snapshot of persisted memories and persisted relations."""
+        limit = max(1, min(int(limit), 120))
+        with contextlib.closing(self.store.connect()) as c:
+            c.row_factory = sqlite3.Row
+            rows = c.execute(
+                'SELECT id,title,kind,project_id,importance,confidence,updated,source_type '
+                'FROM travis_neurons WHERE active=1 '
+                'ORDER BY importance DESC,updated DESC LIMIT ?', (limit,)
+            ).fetchall()
+            nodes = [{
+                'id': r['id'], 'title': clean(r['title'], 90),
+                'kind': r['kind'], 'projectId': r['project_id'] or '',
+                'importance': round(float(r['importance'] or 0), 3),
+                'confidence': round(float(r['confidence'] or 0), 3),
+                'updated': r['updated'], 'sourceType': r['source_type']
+            } for r in rows]
+            ids = [n['id'] for n in nodes]
+            links = []
+            if ids:
+                marks = ','.join('?' for _ in ids)
+                query = ('SELECT source_id,target_id,relation_type,weight,confidence,updated '
+                         'FROM travis_synapses WHERE active=1 '
+                         f'AND source_id IN ({marks}) AND target_id IN ({marks}) '
+                         'ORDER BY updated DESC LIMIT 320')
+                for r in c.execute(query, (*ids, *ids)):
+                    links.append({
+                        'source': r['source_id'], 'target': r['target_id'],
+                        'relation': r['relation_type'],
+                        'weight': round(float(r['weight'] or 0), 3),
+                        'confidence': round(float(r['confidence'] or 0), 3),
+                        'updated': r['updated'], 'provenance': 'persisted-synapse'
+                    })
+        return {
+            'ok': True, 'source': 'local-sqlite', 'kind': 'persisted-memory-graph',
+            'nodes': nodes, 'links': links, 'observedAt': self.clock(),
+            'truncated': len(nodes) == limit,
+            'disclaimer': 'Stored graph, not a biological brain or a model reasoning trace'
+        }
+
     def status(self):
         now = self.clock()
         with self.db() as c:

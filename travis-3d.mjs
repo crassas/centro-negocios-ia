@@ -7,7 +7,7 @@ import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
 import { createBacklight } from './travis-atmosphere.mjs?v=connections1';
 import { createFaceRig } from './travis-face-rig.mjs?v=articulation-2';
 import * as THREE from 'three';
-import { createNeuralField } from './travis-brain-view.mjs?v=3';
+import { createNeuralField } from './travis-brain-view.mjs?v=4';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -1878,6 +1878,9 @@ if (!hud || !launcher || !canvas) {
     if (moved>18 || elapsed>700) return;
 
     rayFromEvent(event);
+    // Inspect a real persisted memory before falling back to the legacy core hit.
+    const memory=neuralField?.pick(raycaster);
+    if(memory){neuralField.select(memory.id);haptic(10);return;}
     const hit=raycaster.intersectObjects(interactiveObjects(),true)[0];
     if (!hit) return;
     const panel=hit.object.userData?.panel;
