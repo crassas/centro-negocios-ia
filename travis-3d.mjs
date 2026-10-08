@@ -943,6 +943,12 @@ if (!hud || !launcher || !canvas) {
           if(!speech.ok)throw new Error('Saudação indisponível.');
           const wav=await speech.arrayBuffer();
           if (!opened || session!==voiceSession) return;
+          // Finish the visible assembly before the welcome speech starts.
+          const assemblyDeadline=performance.now()+6000;
+          while(opened && session===voiceSession && Number(hud.dataset.materialization||0)<1 && performance.now()<assemblyDeadline){
+            await new Promise(resolve=>setTimeout(resolve,50));
+          }
+          if(!opened || session!==voiceSession || controller.signal.aborted)return;
           await playVoiceArrayBuffer(wav,session,WELCOME_GREETING);
           return;
         } catch(error) {
@@ -1519,7 +1525,7 @@ if (!hud || !launcher || !canvas) {
     if (!renderer || !bloomComposer || !finalComposer) return;
     if (!opened || webglLost || renderer.getContext().isContextLost()) { lastFrame=now; return; }
     // Prioritise recognition/inference/TTS on the phone; DOM status remains live.
-    if(state==='thinking' && intro>=1){lastFrame=now;return;}
+    if(state==='thinking' && intro>=1 && Number(hud.dataset.materialization||0)>=1){lastFrame=now;return;}
     const dt=Math.min(.05,(now-lastFrame)/1000);
     lastFrame=now;
 

@@ -1,4 +1,4 @@
-const CACHE='centro-negocios-v54-travis-launch';
+const CACHE='centro-negocios-v55-intro-language';
 const SHELL=['./','./index.html','./styles.css','./app.js?v=travis-panel-2','./agent-room.js?v=jarvis-1','./agent-room.css?v=status-fix-1','./product.css?v=world-8','./travis-hud.css?v=english-clean-2','./travis-3d.mjs?v=english-first-1','./travis-atmosphere.mjs?v=connections1','./travis-face-rig.mjs?v=connections1','./travis-holographic-head.mjs','./travis-speech-face.mjs','./vendor/headaudio/headaudio.min.mjs','./vendor/headaudio/headworklet.min.mjs','./vendor/headaudio/model-en-mixed.bin','./travis-cockpit.mjs?v=connections1','./assets/travis/travis-core.glb?v=1','./assets/travis/travis-face-bust.glb?v=1','./manifest.webmanifest','./icon.svg','./data/sites.json'];
 
 self.addEventListener('install',event=>{

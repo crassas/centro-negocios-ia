@@ -15,6 +15,16 @@ class Tests(unittest.TestCase):
   with patch.object(j,"infer",side_effect=AssertionError("LLM called")):
    for text in ["estás aí", "Travis, estás aí?", "Travis: olá", "Jarvis, estás aí?", "Olá"]:
     self.assertEqual(j.route(text)["tool"],"presence")
+ def test_english_brand_name_does_not_trigger_translation(self):
+  with patch.object(j,"infer",side_effect=AssertionError("Unnecessary translation")):
+   value="The Centro is active. I can check your projects."
+   self.assertEqual(j.english_reply(value),value)
+ def test_translation_mode_is_forwarded(self):
+  (self.root/"conversation-mode").write_text("hybrid")
+  with patch.object(j,"conversation_cloud",return_value="The project is ready.") as cloud:
+   self.assertEqual(j.english_reply("O projecto está pronto."),"The project is ready.")
+   self.assertEqual(cloud.call_args.args[2],"translation")
+   self.assertIn("Translate",cloud.call_args.args[1])
  def test_portuguese_input_gets_english_direct_reply(self):
   with patch.object(j,"infer",side_effect=AssertionError("LLM called")):
    reply=j.route("Travis, estás aí?")
@@ -32,7 +42,7 @@ class Tests(unittest.TestCase):
    with self.assertRaisesRegex(RuntimeError,"did not respond in time"):j.infer("pedido")
    self.assertEqual(http.call_args.kwargs["timeout"],45)
  def test_shared_context_for_reasoning(self):
-  with patch.object(j,"infer",return_value="Resposta") as inference:
+  with patch.object(j,"infer",return_value="Confirmed response.") as inference:
    j.route("Analisa o meu negócio",{"projects":[{"name":"Pentehouse"}]})
    self.assertIn("Pentehouse",inference.call_args.args[0])
  def test_repository_access_is_verified_without_inference(self):
@@ -53,7 +63,7 @@ class Tests(unittest.TestCase):
   saved=j.route("Travis, lembra-te que a Beatriz entrega em até 72 horas")
   self.assertEqual(saved["tool"],"note_fact");self.assertTrue(saved["result"]["neuronId"].startswith("neuron-"))
   status=j.route("Estado dos neurónios");self.assertGreaterEqual(status["result"]["neurons"],6)
-  with patch.object(j,"infer",return_value="Resposta") as inference:
+  with patch.object(j,"infer",return_value="Confirmed response.") as inference:
    j.route("Qual é o prazo de entrega da Beatriz?")
    prompt=inference.call_args.args[0]
    self.assertIn("Confirmed local semantic memory",prompt);self.assertIn("72 horas",prompt)
