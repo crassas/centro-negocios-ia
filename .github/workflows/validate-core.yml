@@ -70,6 +70,7 @@ jobs:
         run: |
           python3 operit-agent/travis_reflexion_selftest.py
           python3 operit-agent/travis_cognitive_selftest.py
+          python3 operit-agent/travis_brain_selftest.py
           python3 operit-agent/travis_reflexion_eval_selftest.py
 
       - name: Executor policy self-test

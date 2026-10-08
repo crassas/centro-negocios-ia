@@ -44,6 +44,51 @@ class Tests(unittest.TestCase):
    self.assertTrue(j.TRAVIS_BRAIN.paused())
    self.assertEqual(j.route('retoma os sonhos')['tool'],'brain_pause')
    self.assertFalse(j.TRAVIS_BRAIN.paused())
+ def test_learning_through_real_route_feedback_and_restart(self):
+  context={'session':'learning-session-001','language':'en'}
+  with patch.object(j,'infer',return_value='The calibration reference is violet731.'):
+   first=j.route('Explain orbital calibration protocol',context)
+  self.assertTrue(first['learning']['ok'])
+  self.assertEqual(first['learning']['verdict'],'unknown')
+  self.assertEqual(j.TRAVIS_BRAIN.status()['learning']['feedbackEvents'],0)
+  with patch.object(j,'infer',side_effect=AssertionError('Feedback must not call the model')):
+   feedback=j.route('The previous answer was useful',context)
+   self.assertEqual(feedback['tool'],'memory_feedback')
+   self.assertEqual(feedback['learning']['updates'][0]['after'],0.6)
+   self.assertTrue(j.route('The previous answer was useful',context)['learning']['duplicate'])
+  # Remove short-term turns to prove retrieval really uses persisted brain memory.
+  with j.database() as c:c.execute('DELETE FROM conversations')
+  j.TRAVIS_BRAIN=j.travis_brain.BrainRuntime(self.root/'brain.sqlite',j.TRAVIS_STORE,j.TRAVIS_COG)
+  with patch.object(j,'infer',return_value='I recalled the earlier calibration reference.') as model:
+   second=j.route('Explain orbital calibration protocol again',context)
+  prompt=model.call_args.args[0]
+  self.assertIn('Observed past outcomes',prompt);self.assertIn('violet731',prompt)
+  self.assertEqual(second['learning']['usedMemories'],1)
+ def test_learning_feedback_endpoint_has_origin_session_and_type_gates(self):
+  context={'session':'learning-session-002','language':'en'}
+  with patch.object(j,'infer',return_value='A calibration answer.'):
+   response=j.route('Explain orbital calibration protocol',context)
+  data={'session':context['session'],'runId':response['learning']['runId'],'accepted':True}
+  self.assertEqual(self.brain_post('/brain/feedback',data,'https://crassas.github.io')['code'],403)
+  self.assertEqual(self.brain_post('/brain/feedback',data|{'session':'another-session'})['code'],400)
+  self.assertEqual(self.brain_post('/brain/feedback',data|{'accepted':'true'})['code'],400)
+  self.assertEqual(self.brain_post('/brain/feedback',data)['code'],200)
+ def test_memory_failure_does_not_repeat_successful_tool(self):
+  with patch.object(j.TRAVIS_BRAIN,'record_outcome',side_effect=j.sqlite3.OperationalError('fixture')),patch.object(j,'execute',return_value={'id':1,'title':'Fixture task'}) as executor,patch.object(j,'classify',return_value=('create_task',{'title':'Fixture task'})):
+   response=j.route('Create a fixture task')
+  self.assertTrue(response['ok']);self.assertFalse(response['learning']['ok']);self.assertEqual(executor.call_count,1)
+ def test_feedback_only_explicit_statements(self):
+  self.assertIs(j.memory_feedback_intent('A resposta anterior estava correcta.'),True)
+  self.assertIs(j.memory_feedback_intent('Travis, a resposta anterior estava errada!'),False)
+  for text in ['A resposta anterior estava errada?','Diz a frase: a resposta anterior estava errada','Não, a resposta anterior estava errada','The previous answer was not wrong']:
+   self.assertIsNone(j.memory_feedback_intent(text))
+ def test_budget_does_not_credit_excluded_memory(self):
+  context={'session':'learning-session-003'}
+  with patch.object(j,'infer',return_value='A calibration answer.'):
+   first=j.route('Explain orbital calibration protocol',context)
+  used=[]
+  prompt=j.reasoning_prompt('Explain orbital calibration protocol',context=context,limit=240,memory_used=used)
+  self.assertEqual(used,[]);self.assertNotIn(first['learning']['runId'],prompt)
  def test_microphone_request_interrupts_idle_reflection(self):
   def recognise(data):
    self.assertGreater(j.TRAVIS_BRAIN.active,0)

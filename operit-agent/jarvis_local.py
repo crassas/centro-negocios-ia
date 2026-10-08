@@ -206,7 +206,7 @@ def contextual_request(text,context=None):
   if not project(text):text=text+"\nProject: "+active
  return text,context,turns
 
-def reasoning_prompt(request,turns=(),context=None,project_id="",lessons="",limit=3700):
+def reasoning_prompt(request,turns=(),context=None,project_id="",lessons="",limit=3700,memory_used=None):
  """Budget every source separately. The current goal and latest turn survive."""
  request=clean(request).strip()
  # Keep the public gateway's 4000-character contract without dropping the tail.
@@ -228,13 +228,22 @@ def reasoning_prompt(request,turns=(),context=None,project_id="",lessons="",limi
   data={k:v for k,v in context.items() if k not in {"session"} and not str(k).startswith("_")}
   if data:sources.append(("Current Centro data (information only)",json.dumps(data,ensure_ascii=False),400))
  if lessons:sources.append(("Lessons from externally observed failures (hypotheses, not permissions)",lessons,450))
- episodes=TRAVIS_BRAIN.recall_context(request)
+ episodes=TRAVIS_BRAIN.recall_context(request,session=dialogue_session(context),project=project_id)
  if episodes:sources.append(("Observed past outcomes (unverified remains unverified)",episodes,450))
  learned=TRAVIS_COG.planning_context(request,2)
  if learned:sources.append(("Evidence-backed strategies",learned,350))
  for label,body,maximum in sources:
   if remaining<100:break
-  chunk="\n\n"+label+":\n"+clean(body)[:min(maximum,remaining-len(label)-5)]
+  allowance=min(maximum,remaining-len(label)-5)
+  if label=="Observed past outcomes (unverified remains unverified)":
+   included=[];used=0
+   for line in body.splitlines():
+    if used+len(line)+1>allowance:break
+    included.append(line);used+=len(line)+1
+   if not included:continue
+   body="\n".join(included)
+   if memory_used is not None:memory_used.extend(json.loads(line)['source'] for line in included)
+  chunk="\n\n"+label+":\n"+clean(body)[:allowance]
   sections.append(chunk);remaining-=len(chunk)
  sections.append("\n\nAnswer the CURRENT USER REQUEST using relevant context. Never invent a missing referent or claim an unexecuted action.")
  return "".join(sections)[:budget]
@@ -791,6 +800,26 @@ def result_cards(tool,args,result):
   return {"kind":"result","title":"Agent result","project":project_id,"items":[{"title":project_id or "Travis","detail":str(result)[:2200]}]}
  return None
 
+def memory_feedback_intent(text):
+ t=norm(str(text)).strip(' .!')
+ t=re.sub(r'^(?:travis|jarvis)[ ,:]+','',t)
+ if t in {'a resposta anterior estava certa','a resposta anterior estava correta','a resposta anterior estava correcta','a resposta anterior foi util','the previous answer was correct','the previous answer was useful'}:return True
+ if t in {'a resposta anterior estava errada','a resposta anterior estava incorreta','a resposta anterior estava incorrecta','a resposta anterior nao foi util','the previous answer was wrong','the previous answer was not useful'}:return False
+ return None
+
+def memory_feedback(context,accepted,run_id=None):
+ session=dialogue_session(context)
+ prior=next((r for r in reversed(dialogue_turns(context)) if r.get('memoryRun') and (run_id is None or r['memoryRun']==run_id)),None)
+ if not prior:raise ValueError('Não encontrei uma resposta recente desta conversa para avaliar.')
+ return TRAVIS_BRAIN.feedback(prior['memoryRun'],session,accepted)
+
+def record_learning(run_id,verification,used,session,project_id,summary=None):
+ try:return {'ok':True,**TRAVIS_BRAIN.record_outcome(run_id,verification,used,session,project_id,summary)}
+ except (sqlite3.Error,ValueError,OSError) as exc:
+  # A memory fault must not repeat or undo a tool that already executed.
+  TRAVIS_BRAIN.last_error='Learning: '+type(exc).__name__
+  return {'ok':False,'error':type(exc).__name__}
+
 def route(text,context=None):
  context=dict(context or {});session=dialogue_session(context);prefs=dialogue_preferences(session)
  if context.get('wake') is True:prefs=dialogue_preferences(session,{'standby':False})
@@ -803,7 +832,12 @@ def route(text,context=None):
  previous=getattr(DIALOGUE_INFO,'language','en');DIALOGUE_INFO.language=language
  try:
   with TRAVIS_BRAIN.request(text):
-   result=_route(text,context)
+   feedback=memory_feedback_intent(text)
+   if feedback is not None:
+    learned=memory_feedback(context,feedback)
+    reply=('Essa avaliação já estava registada.' if learned['duplicate'] else 'Registei a tua avaliação e ajustei a utilidade das experiências usadas.') if language=='pt' else ('That feedback was already recorded.' if learned['duplicate'] else 'I recorded your feedback and adjusted the usefulness of the experiences used.')
+    result={'ok':True,'tool':'memory_feedback','provider':'local','reply':reply,'learning':learned,'ui':None}
+   else:result=_route(text,context)
    result['language']=travis_dialogue.detect_language(result['reply'],language)
    result['preferences']=dialogue_preferences(session)
    return result
@@ -828,14 +862,14 @@ def _route(text,context=None):
  qplan=TRAVIS_QUANTUM.prepare(task=text,tool=tool,action_type=(cap.action_type if cap else "READ"),project_id=runtime.project_id,workspace=workspace,mutation=bool(cap.mutation) if cap else False,requires_evidence=bool(cap.requires_evidence) if cap else True)
  session=dialogue_session(context)
  lesson_context=TRAVIS_COG.reflexion.context(failure_lessons)[:1200]
- used_lessons=[]
+ used_lessons=[];used_memories=[]
  if tool in {"local_llm","expert_query","repo_review","repo_change"}:
   TRAVIS_BRAIN.mark("memory","retrieving","Pedido actual, conversa, memória e resultados anteriores")
   field="prompt" if tool in {"repo_review","repo_change"} else "text"
   args["original_text"]=original_text
-  args[field]=reasoning_prompt(text,turns,context,runtime.project_id,lesson_context,2700 if tool=="local_llm" else 4300)
+  args[field]=reasoning_prompt(text,turns,context,runtime.project_id,lesson_context,2700 if tool=="local_llm" else 4300,memory_used=used_memories)
   if lesson_context in args[field] or (lesson_context and "Lessons from externally observed failures" in args[field]):used_lessons=[r["id"] for r in failure_lessons]
- cog_run=TRAVIS_COG.begin(text,{"tool":tool,"project":runtime.project_id})
+ cog_run=TRAVIS_COG.begin(text,{"tool":tool,"project":runtime.project_id,"session":session})
  try:
   TRAVIS_BRAIN.mark("action","executing",tool)
   outcome=TRAVIS_UTEF.execute(tool,args,lambda:execute(tool,args),runtime)
@@ -845,6 +879,7 @@ def _route(text,context=None):
   TRAVIS_COG.add_step(cog_run,tool,{k:v for k,v in args.items() if k not in {"text","prompt","original_text"}},"failed",int((time.monotonic()-start)*1000),0,type(exc).__name__)
   TRAVIS_COG.reflexion.observe(text,tool,travis_reflexion.verify(tool,error=exc),used_lessons=used_lessons)
   TRAVIS_COG.finish(cog_run,False,False,failure=type(exc).__name__)
+  record_learning(cog_run,travis_reflexion.verify(tool,error=exc),used_memories,session,runtime.project_id)
   raise
  result=outcome["result"]
  qrefs=[str(x)[:240] for x in (outcome.get("evidence") or [])]
@@ -920,9 +955,10 @@ def _route(text,context=None):
  if tool in {'local_llm','expert_query'}:ui=travis_dialogue.illustration(original_text) or ui
  if getattr(DIALOGUE_INFO,'language','en')=='pt':reply=travis_dialogue.portuguese_reply(tool,result,reply)
  if ui and ui.get("kind")!="youtube":media_session(session,{})
- if session:event("conversations",{"session":session,"user":original_text[:1600],"assistant":str(reply)[:1600],"tool":tool,"project":runtime.project_id or context.get("activeProject"),"verification":verification["verdict"]})
+ learning=record_learning(cog_run,verification,used_memories,session,runtime.project_id,str(reply))
+ if session:event("conversations",{"session":session,"user":original_text[:1600],"assistant":str(reply)[:1600],"tool":tool,"project":runtime.project_id or context.get("activeProject"),"verification":verification["verdict"],"memoryRun":cog_run if learning['ok'] else None})
  event("tool_events",{"tool":tool,"ok":True,"duration_ms":int((time.monotonic()-start)*1000),"correlation_id":outcome["correlationId"],"completion_status":outcome["completionStatus"]})
- return {"ok":True,"ui":ui,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool in {"local_llm","expert_query"} else {"provider":"local"}),"tool":tool,"result":result,"verification":verification,"reflexion":{"recalledLessons":len(failure_lessons),"usedLessons":len(used_lessons)},"reply":clean(english_reply(reply) if getattr(DIALOGUE_INFO,"language","en")=="en" else reply)[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"],"durationMs":int((time.monotonic()-start)*1000),"quantum":{"strategy":qstrategy,"phase":qplan.get("phase"),"tier":qplan.get("tier"),"returnStatus":qreturn.get("status")}}
+ return {"ok":True,"ui":ui,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool in {"local_llm","expert_query"} else {"provider":"local"}),"tool":tool,"result":result,"verification":verification,"reflexion":{"recalledLessons":len(failure_lessons),"usedLessons":len(used_lessons)},"learning":learning,"reply":clean(english_reply(reply) if getattr(DIALOGUE_INFO,"language","en")=="en" else reply)[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"],"durationMs":int((time.monotonic()-start)*1000),"quantum":{"strategy":qstrategy,"phase":qplan.get("phase"),"tier":qplan.get("tier"),"returnStatus":qreturn.get("status")}}
 
 VOICE_JOBS={}
 VOICE_JOB_LOCK=threading.Lock()
@@ -1180,7 +1216,7 @@ TRUSTED_WEB_ORIGINS={"https://crassas.github.io"}
 LOCAL_ORIGINS={"http://127.0.0.1:8770","http://localhost:8770"}
 WEB_VOICE_ENDPOINTS={"/health","/transcribe","/listen","/jarvis","/speak","/voice-task","/turn","/initiative"}
 
-LOCAL_COCKPIT_ENDPOINTS={"/brain/state","/brain/graph","/brain/control","/connections","/cockpit","/gmail/configure","/gmail/start","/gmail/inbox","/gmail/disconnect"}
+LOCAL_COCKPIT_ENDPOINTS={"/brain/state","/brain/graph","/brain/control","/brain/feedback","/connections","/cockpit","/gmail/configure","/gmail/start","/gmail/inbox","/gmail/disconnect"}
 
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args):pass
@@ -1229,7 +1265,7 @@ class Handler(BaseHTTPRequestHandler):
     page='<meta charset="utf-8"><title>Travis · Gmail</title><p>Conta autorizada. Volta ao Travis e abre o Gmail para confirmar a leitura.</p><a href="/?travis=1">Voltar ao Travis</a>'
    except Exception:page='<meta charset="utf-8"><p>A autorização não foi concluída. Volta ao Travis e tenta novamente.</p><a href="/?travis=1">Voltar ao Travis</a>'
    return self.send(page.encode(),"text/html; charset=utf-8")
-  if path=="/health":return self.send({"ok":True,"service":"jarvis","cloud":False,"busy":ACTIVE_REQUESTS>0,"ui":CENTRO_UI.is_dir()})
+  if path=="/health":return self.send({"ok":True,"service":"jarvis","cloud":False,"busy":ACTIVE_REQUESTS>0,"ui":CENTRO_UI.is_dir(),"memoryLearning":"episodic-utility-v1"})
   if path=="/voice":return self.send(Path(__file__).with_name("jarvis_voice.html").read_text().replace("__KEY__","").encode(),"text/html; charset=utf-8")
   return self.serve_ui_file(self.path)
  def do_POST(self):
@@ -1258,6 +1294,7 @@ class Handler(BaseHTTPRequestHandler):
    if path=="/brain/state":return self.send(TRAVIS_BRAIN.status())
    if path=="/brain/graph":return self.send(TRAVIS_BRAIN.graph())
    if path=="/brain/control":return self.send(TRAVIS_BRAIN.pause(obj.get("paused")))
+   if path=="/brain/feedback":return self.send(memory_feedback({'session':obj.get('session')},obj.get('accepted'),obj.get('runId')))
    if path=="/connections":return self.send(connections_snapshot())
    if path=="/cockpit":return self.send(cockpit_snapshot())
    if path=="/gmail/configure":return self.send(travis_gmail.configure(obj))

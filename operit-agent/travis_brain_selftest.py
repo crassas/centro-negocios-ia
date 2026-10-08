@@ -63,5 +63,53 @@ class BrainTests(unittest.TestCase):
   self.brain.cycle();self.assertNotEqual(first,self.brain.status()['journal'][0]['title'])
  def test_control_type_validation(self):
   with self.assertRaises(ValueError):self.brain.pause('false')
+ def episode(self,text='orbital calibration alpha',session='session-one',project='',verdict='unknown',used=()):
+  rid=self.cog.begin(text,{'tool':'local_llm','session':session,'project':project})
+  self.cog.finish(rid,verdict=='success',verdict=='success','observation',verification=verdict)
+  self.brain.record_outcome(rid,{'verdict':verdict},used,session,project)
+  return rid
+ def test_learned_utility_changes_ranking_and_survives_restart(self):
+  a=self.episode();b=self.episode('orbital calibration beta')
+  self.brain.feedback(a,'session-one',False);self.brain.feedback(b,'session-one',True)
+  rows=[json.loads(r) for r in self.brain.recall_context('orbital calibration',session='session-one').splitlines()]
+  self.assertEqual(rows[0]['source'],b);self.assertEqual(rows[0]['utility'],0.6)
+  second=BrainRuntime(self.brain.path,self.store,self.cog,clock=lambda:self.now[0])
+  self.assertEqual(json.loads(second.recall_context('orbital calibration',1,session='session-one'))['source'],b)
+ def test_unknown_is_stored_without_positive_reward(self):
+  self.episode()
+  self.assertEqual(self.brain.status()['learning']['feedbackEvents'],0)
+  self.assertFalse(json.loads(self.brain.recall_context('orbital calibration',1,session='session-one'))['verified'])
+ def test_duplicate_feedback_does_not_reinforce_twice(self):
+  rid=self.episode();self.brain.feedback(rid,'session-one',False)
+  self.assertTrue(self.brain.feedback(rid,'session-one',False)['duplicate'])
+  with self.assertRaises(ValueError):self.brain.feedback(rid,'session-one',True)
+  with self.brain.db() as c:self.assertEqual(c.execute('SELECT samples FROM brain_memory_utility WHERE id=?',(rid,)).fetchone()[0],1)
+ def test_foreign_session_and_project_are_not_recalled_or_rewarded(self):
+  rid=self.episode(project='pentehouse')
+  self.assertEqual(self.brain.recall_context('orbital calibration',session='other',project='pentehouse'),'')
+  self.assertEqual(self.brain.recall_context('orbital calibration',session='session-one',project='beatriz'),'')
+  with self.assertRaises(ValueError):self.brain.feedback(rid,'other',True)
+  second=self.episode(session='other',verdict='success',used=[rid])
+  with self.brain.db() as c:self.assertEqual(c.execute('SELECT used_ids FROM brain_learning_usage WHERE run_id=?',(second,)).fetchone()[0],'[]')
+ def test_verifier_feedback_credits_only_actual_sources(self):
+  used=self.episode();unused=self.episode('orbital calibration beta')
+  self.episode('orbital calibration repeated',verdict='failure',used=[used])
+  with self.brain.db() as c:
+   self.assertAlmostEqual(c.execute('SELECT q FROM brain_memory_utility WHERE id=?',(used,)).fetchone()[0],0.4)
+   self.assertIsNone(c.execute('SELECT q FROM brain_memory_utility WHERE id=?',(unused,)).fetchone())
+ def test_migration_backup_contains_previous_episodes(self):
+  import sqlite3
+  rid=self.episode()
+  second=BrainRuntime(self.brain.path,self.store,self.cog,clock=lambda:self.now[0])
+  backup=self.brain.path.with_suffix('.pre-learning-v1.sqlite')
+  self.assertTrue(backup.exists())
+  c=sqlite3.connect(backup)
+  try:self.assertIsNotNone(c.execute('SELECT id FROM brain_episodes WHERE id=?',(rid,)).fetchone())
+  finally:c.close()
+ def test_consolidation_preserves_learned_utility(self):
+  rid=self.episode();self.brain.feedback(rid,'session-one',False)
+  self.idle();self.brain.cycle()
+  row=json.loads(self.brain.recall_context('orbital calibration',1,session='session-one'))
+  self.assertEqual(row['utility'],0.4)
 
 if __name__=='__main__':unittest.main(verbosity=2)

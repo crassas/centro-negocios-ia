@@ -4,7 +4,7 @@ Anatomical labels are design analogies. This is not a biological brain simulatio
 or a consciousness detector. Dream records never become verified facts or tools.
 """
 from __future__ import annotations
-import contextlib, datetime, fcntl, json, os, re, shutil, sqlite3, threading, time, unicodedata
+import contextlib, datetime, fcntl, json, math, os, re, shutil, sqlite3, threading, time, unicodedata
 from pathlib import Path
 
 REGIONS = {
@@ -35,7 +35,9 @@ class BrainRuntime:
         self.lock = threading.RLock(); self.stop_event = threading.Event(); self.wake_event = threading.Event()
         self.active = 0; self.last_user = clock(); self.activity = {}; self.thread = None
         self.phase = 'awake'; self.reason = 'À espera de repouso'; self.last_error = ''
+        self.heartbeat = None
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._backup_before_learning_migration()
         with self.db() as c:
             c.executescript('''
             CREATE TABLE IF NOT EXISTS brain_settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
@@ -45,10 +47,29 @@ class BrainRuntime:
             CREATE TABLE IF NOT EXISTS brain_cycles(id TEXT PRIMARY KEY,started REAL,finished REAL,status TEXT,trigger TEXT,episodes INTEGER,associations INTEGER,error TEXT);
             CREATE TABLE IF NOT EXISTS brain_journal(id INTEGER PRIMARY KEY,cycle_id TEXT,created REAL,kind TEXT,title TEXT,body TEXT,source_ids TEXT,epistemic TEXT);
             CREATE INDEX IF NOT EXISTS brain_journal_time ON brain_journal(created DESC);
+            CREATE TABLE IF NOT EXISTS brain_episode_scopes(id TEXT PRIMARY KEY,session TEXT NOT NULL,project TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS brain_memory_utility(id TEXT PRIMARY KEY,q REAL NOT NULL,samples INTEGER NOT NULL,updated REAL NOT NULL);
+            CREATE TABLE IF NOT EXISTS brain_learning_usage(run_id TEXT PRIMARY KEY,session TEXT NOT NULL,project TEXT NOT NULL,used_ids TEXT NOT NULL,created REAL NOT NULL);
+            CREATE TABLE IF NOT EXISTS brain_learning_feedback(run_id TEXT NOT NULL,issuer TEXT NOT NULL,reward REAL NOT NULL,evidence TEXT NOT NULL,created REAL NOT NULL,PRIMARY KEY(run_id,issuer));
             INSERT OR IGNORE INTO brain_settings VALUES('paused','false');
             ''')
             c.execute("UPDATE brain_cycles SET status='interrupted',finished=?,error='Runtime restarted during cycle' WHERE status='running'", (clock(),))
         os.chmod(self.path, 0o600)
+
+    def _backup_before_learning_migration(self):
+        """Consistent one-time WAL backup before the additive schema change."""
+        if not self.path.is_file() or not self.path.stat().st_size: return
+        backup = self.path.with_suffix('.pre-learning-v1.sqlite')
+        with self.path.with_suffix('.migration.lock').open('a') as lockfile:
+            fcntl.flock(lockfile, fcntl.LOCK_EX)
+            if backup.exists(): return
+            temporary = backup.with_suffix('.tmp')
+            try:
+                with contextlib.closing(sqlite3.connect(self.path, timeout=5)) as source:
+                    with contextlib.closing(sqlite3.connect(temporary)) as destination:
+                        source.backup(destination)
+                os.chmod(temporary, 0o600); os.replace(temporary, backup)
+            finally: temporary.unlink(missing_ok=True)
 
     @contextlib.contextmanager
     def db(self):
@@ -136,10 +157,12 @@ class BrainRuntime:
                     associations.append((source, target, ' '.join(overlap[:12]), min(1, len(overlap)/8), self.clock()))
         with self.db() as c:
             for r in runs:
-                try: tool = json.loads(r['metadata']).get('tool', '')
-                except (ValueError, TypeError): tool = ''
+                try: metadata = json.loads(r['metadata']); tool = metadata.get('tool', '')
+                except (ValueError, TypeError): metadata = {}; tool = ''
                 c.execute('INSERT OR REPLACE INTO brain_episodes VALUES(?,?,?,?,?,?,?)',
                     (r['id'], r['updated'], clean(r['task'], 600), clean(r['result_summary'] or r['failure'], 900), r['status'], r['verified'], clean(tool, 80)))
+                c.execute('INSERT OR IGNORE INTO brain_episode_scopes VALUES(?,?,?)',
+                          (r['id'], str(metadata.get('session') or '')[:80], str(metadata.get('project') or '')[:80]))
             c.execute('DELETE FROM brain_associations')
             c.executemany('INSERT INTO brain_associations VALUES(?,?,?,?,?)', associations)
         return len(associations)
@@ -233,14 +256,86 @@ class BrainRuntime:
                 with self.db() as c: c.execute("UPDATE brain_cycles SET finished=?,status='failed',error=? WHERE id=?", (self.clock(), self.last_error, cycle))
                 return {'ran': False, 'error': self.last_error}
 
-    def recall_context(self, query, limit=2):
+    def recall_context(self, query, limit=2, session='', project=''):
         wanted = terms(query)
         if not wanted: return ''
-        with self.db() as c: rows = [dict(r) for r in c.execute('SELECT * FROM brain_episodes ORDER BY updated DESC LIMIT 160')]
-        ranked = sorted(((len(wanted & terms(r['task'])),r) for r in rows), key=lambda x:x[0], reverse=True)
-        selected = [r for score,r in ranked if score >= 2][:limit]
+        with self.db() as c:
+            rows = [dict(r) for r in c.execute('''SELECT e.*,COALESCE(u.q,0.5) AS utility
+              FROM brain_episodes e LEFT JOIN brain_memory_utility u ON e.id=u.id
+              LEFT JOIN brain_episode_scopes s ON e.id=s.id
+              WHERE COALESCE(s.session,'')=? AND COALESCE(s.project,'')=?
+              ORDER BY e.updated DESC LIMIT 400''', (session, project))]
+        ranked = []
+        for row in rows:
+            have = terms(row['task']); overlap = len(wanted & have)
+            if overlap < 2: continue
+            relevance = overlap / math.sqrt(len(wanted)*len(have))
+            freshness = math.exp(-max(0,self.clock()-row['updated'])/(30*86400))
+            ranked.append((0.60*relevance+0.35*row['utility']+0.05*freshness, row))
+        selected = [r for score,r in sorted(ranked,key=lambda x:x[0],reverse=True)][:max(1,min(5,int(limit)))]
         if selected: self.mark('memory', 'recalled', str(len(selected))+' experiências recuperadas')
-        return '\n'.join(clean(json.dumps({'source': r['id'], 'request':r['task'], 'outcome':r['summary'], 'verified':bool(r['verified'])}, ensure_ascii=False), 480) for r in selected)
+        # Keep each JSON record complete: the prompt builder counts only included rows.
+        return '\n'.join(json.dumps({'source': r['id'], 'request':clean(r['task'],90),
+            'outcome':clean(r['summary'],140), 'verified':bool(r['verified']),
+            'utility':round(r['utility'],4)},ensure_ascii=False) for r in selected)
+
+    def _reward(self, c, run_id, reward, issuer, evidence):
+        old = c.execute('SELECT reward,evidence FROM brain_learning_feedback WHERE run_id=? AND issuer=?', (run_id,issuer)).fetchone()
+        if old:
+            if old['reward'] != reward: raise ValueError('Este resultado já recebeu uma avaliação diferente.')
+            return {'duplicate':True,'updates':[]}
+        use = c.execute('SELECT * FROM brain_learning_usage WHERE run_id=?', (run_id,)).fetchone()
+        if use is None: raise ValueError('Experiência desconhecida.')
+        changes = []
+        # The current episode becomes reusable too; source credit is approximate.
+        for mid in dict.fromkeys([run_id]+json.loads(use['used_ids'])):
+            row = c.execute('SELECT q,samples FROM brain_memory_utility WHERE id=?', (mid,)).fetchone()
+            before, samples = (row['q'],row['samples']) if row else (0.5,0)
+            after = before+0.2*(reward-before)
+            c.execute('INSERT INTO brain_memory_utility VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET q=excluded.q,samples=excluded.samples,updated=excluded.updated',
+                      (mid,after,samples+1,self.clock()))
+            changes.append({'source':mid,'before':round(before,6),'after':round(after,6)})
+        c.execute('INSERT INTO brain_learning_feedback VALUES(?,?,?,?,?)', (run_id,issuer,reward,clean(evidence,500),self.clock()))
+        return {'duplicate':False,'updates':changes}
+
+    def record_outcome(self, run_id, verification, used_ids=(), session='', project='', summary=None):
+        """Host verifier only. Unknown prose stays unknown and receives no reward."""
+        run = self.cognitive.run(run_id)
+        if not run or run['status']=='running': raise ValueError('Experiência ainda não concluída.')
+        verdict = verification.get('verdict')
+        if verdict not in {'success','failure','unknown'}: raise ValueError('Verificação inválida.')
+        try: tool = json.loads(run['metadata']).get('tool','')
+        except (ValueError,TypeError): tool = ''
+        with self.db() as c:
+            c.execute('BEGIN IMMEDIATE')
+            existing = c.execute('SELECT * FROM brain_learning_usage WHERE run_id=?',(run_id,)).fetchone()
+            if existing:
+                if existing['session']!=session or existing['project']!=project: raise ValueError('Âmbito incompatível.')
+                return {'runId':run_id,'duplicate':True,'verdict':verdict,'usedMemories':len(json.loads(existing['used_ids']))}
+            valid = []
+            for mid in list(dict.fromkeys(used_ids))[:5]:
+                found = c.execute('SELECT 1 FROM brain_episodes e LEFT JOIN brain_episode_scopes s ON e.id=s.id WHERE e.id=? AND COALESCE(s.session,\'\')=? AND COALESCE(s.project,\'\')=?', (mid,session,project)).fetchone()
+                if found: valid.append(mid)
+            c.execute('INSERT OR REPLACE INTO brain_episodes VALUES(?,?,?,?,?,?,?)',
+                      (run_id,run['updated'],clean(run['task'],600),clean(summary if summary is not None else (run['result_summary'] or run['failure']),900),run['status'],int(run['verified']),clean(tool,80)))
+            c.execute('INSERT OR REPLACE INTO brain_episode_scopes VALUES(?,?,?)',(run_id,session,project))
+            c.execute('INSERT INTO brain_learning_usage VALUES(?,?,?,?,?)',(run_id,session,project,json.dumps(valid),self.clock()))
+            learning = {'updates':[],'duplicate':False}
+            if verdict in {'success','failure'}:
+                learning = self._reward(c,run_id,1.0 if verdict=='success' else 0.0,'verifier',
+                                        json.dumps(verification,ensure_ascii=False))
+        return {'runId':run_id,'verdict':verdict,'usedMemories':len(valid),**learning}
+
+    def feedback(self, run_id, session, accepted):
+        if type(accepted) is not bool: raise ValueError('A avaliação deve ser um booleano.')
+        if not isinstance(session,str) or not session: raise ValueError('É necessária uma sessão de conversa.')
+        with self.db() as c:
+            c.execute('BEGIN IMMEDIATE')
+            row = c.execute('SELECT session FROM brain_learning_usage WHERE run_id=?',(run_id,)).fetchone()
+            if row is None or row['session']!=session: raise ValueError('A experiência não pertence a esta conversa.')
+            result = self._reward(c,run_id,float(accepted),'user','Explicit user feedback for this conversation')
+        self.mark('monitor','learning','Avaliação do utilizador registada; utilidade das experiências actualizada')
+        return {'runId':run_id,'accepted':accepted,**result}
 
     def graph(self, limit=120):
         """Read-only snapshot of persisted memories and persisted relations."""
@@ -288,6 +383,11 @@ class BrainRuntime:
             counts = {'episodes': c.execute('SELECT COUNT(*) FROM brain_episodes').fetchone()[0], 'associations': c.execute('SELECT COUNT(*) FROM brain_associations').fetchone()[0],
                       'cycles': c.execute("SELECT COUNT(*) FROM brain_cycles WHERE status='completed'").fetchone()[0]}
             latest = c.execute('SELECT * FROM brain_cycles ORDER BY started DESC LIMIT 1').fetchone()
+            learning = {'algorithm':'episodic-utility-v1','alpha':0.2,
+                        'observedRuns':c.execute('SELECT COUNT(*) FROM brain_learning_usage').fetchone()[0],
+                        'feedbackEvents':c.execute('SELECT COUNT(*) FROM brain_learning_feedback').fetchone()[0],
+                        'weightedMemories':c.execute('SELECT COUNT(*) FROM brain_memory_utility').fetchone()[0],
+                        'modelWeightsUpdated':False}
             journal = []
             for row in c.execute('SELECT * FROM brain_journal ORDER BY id DESC LIMIT 8'):
                 item = dict(row); item['body'] = json.loads(item['body']); item['source_ids'] = json.loads(item['source_ids']); journal.append(item)
@@ -297,6 +397,7 @@ class BrainRuntime:
             active = self.active; last_user = self.last_user
         return {'ok': True, 'version': 1, 'kind': 'functional-cognitive-architecture', 'anatomy': 'inspired-functional-analogy',
                 'phase': self.phase, 'reason': self.reason, 'modules': modules, 'counts': counts, 'journal': journal,
+                'learning':learning,'heartbeatAt':self.heartbeat,
                 'paused': self.paused(), 'automatic': bool(self.thread and self.thread.is_alive()), 'activeRequests': active,
                 'idleSeconds': max(0, int(now-last_user)), 'idleThreshold': self.idle_seconds, 'cycleInterval': self.interval_seconds,
                 'dailyLimit': self.daily_limit, 'lastCycle': dict(latest) if latest else None, 'lastError': self.last_error,
@@ -307,7 +408,7 @@ class BrainRuntime:
         self.stop_event.clear()
         def loop():
             while not self.stop_event.wait(tick_seconds):
-                try: self.cycle()
+                try: self.heartbeat=self.clock(); self.cycle()
                 except Exception as exc: self.last_error = type(exc).__name__
         self.thread = threading.Thread(target=loop, name='travis-autonomous-reflection', daemon=True); self.thread.start()
 
