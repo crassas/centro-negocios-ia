@@ -6,6 +6,7 @@ Learning means preserving evidence-backed strategies and reusing them on later t
 """
 from __future__ import annotations
 import json,re,secrets,sqlite3,time
+from travis_reflexion import Reflexion
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -28,6 +29,7 @@ class CognitiveKernel:
  def __init__(self,path:Path):
   self.path=Path(path)
   self._init()
+  self.reflexion=Reflexion(self.path)
 
  def connect(self):
   self.path.parent.mkdir(parents=True,exist_ok=True)
@@ -96,22 +98,23 @@ class CognitiveKernel:
      max(0,int(duration_ms)),max(0,int(evidence)),str(observation or "")[:6000]))
    con.execute("UPDATE runs SET updated=? WHERE id=?",(time.time(),run_id))
 
- def finish(self,run_id,success,verified,result_summary="",failure=""):
+ def finish(self,run_id,success,verified,result_summary="",failure="",verification=None):
   now=time.time()
   with self.db() as con:
    row=con.execute("SELECT task_key FROM runs WHERE id=?",(run_id,)).fetchone()
    if not row:raise ValueError("Run not found")
    steps=list(con.execute("SELECT tool,status,evidence,duration_ms FROM steps WHERE run_id=? ORDER BY seq",(run_id,)))
-   success=bool(success);verified=bool(verified)
+   unknown=verification=="unknown"
+   success=bool(success) and not unknown;verified=bool(verified)
    tool_ok=sum(1 for x in steps if str(x["status"]).lower() in {"ok","verified","completed","success"})
    evidence=sum(int(x["evidence"] or 0) for x in steps)
    latency=sum(int(x["duration_ms"] or 0) for x in steps)
    score=(55 if success else 0)+(25 if verified else 0)+min(15,evidence*3)+min(5,tool_ok)-min(10,latency/20000)
    con.execute("""UPDATE runs SET updated=?,status=?,success=?,verified=?,score=?,result_summary=?,failure=?
-                  WHERE id=?""",(now,"completed" if success else "failed",int(success),int(verified),round(score,2),
+                  WHERE id=?""",(now,"unverified" if unknown else "completed" if success else "failed",int(success),int(verified),round(score,2),
                   str(result_summary)[:6000],str(failure)[:2000],run_id))
-  if success:self.learn(run_id)
-  else:self._penalize_related(run_id)
+  if success and verified:self.learn(run_id)
+  elif not success and not unknown:self._penalize_related(run_id)
   return self.run(run_id)
 
  def learn(self,run_id):
@@ -158,7 +161,7 @@ class CognitiveKernel:
  def recall(self,task,limit=5):
   wanted=set(_tokens(task))
   if not wanted:return []
-  with self.db() as con:rows=list(con.execute("SELECT * FROM lessons ORDER BY score DESC,updated DESC LIMIT 300"))
+  with self.db() as con:rows=list(con.execute("SELECT * FROM lessons WHERE verified=1 ORDER BY score DESC,updated DESC LIMIT 300"))
   ranked=[]
   for row in rows:
    have=set(str(row["keywords"]).split())|set(str(row["task_key"]).split())

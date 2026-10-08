@@ -20,7 +20,7 @@ class Tests(unittest.TestCase):
    k=c.CognitiveKernel(Path(d)/"cognitive.sqlite")
    good=k.begin("check example site")
    k.add_step(good,"web_read",{"url":"https://example.com"},"ok",100,0,"ok")
-   k.finish(good,True,False,"done")
+   k.finish(good,True,True,"done")
    before=k.recall("check example site",1)[0]["score"]
    bad=k.begin("check example site")
    k.add_step(bad,"web_read",{},"failed",50,0,"Timeout")

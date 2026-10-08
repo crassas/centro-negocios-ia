@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import travis_core
 import travis_genome
 import travis_gmail
+import travis_reflexion
 import travis_cognitive
 import travis_quantum
 import travis_web_tools
@@ -80,7 +81,7 @@ def doctor():
  d["travis_core"]=TRAVIS_STORE.health()
  d["travis_capabilities"]=len(travis_core.CAPABILITIES)
  d["behavior_genome"]=TRAVIS_GENOME.snapshot()
- d["cognitive_kernel"]=TRAVIS_COG.health()
+ d["cognitive_kernel"]=TRAVIS_COG.health();d["reflexion"]=TRAVIS_COG.reflexion.status()
  d["quantum_unified_agent"]=TRAVIS_QUANTUM.health()
  for name,file in {"agent":".centro-agent/agent.pid","supervisor":".centro-station/supervisor.pid"}.items():
   try:os.kill(int((Path.home()/file).read_text()),0);d[name]=True
@@ -517,6 +518,7 @@ def english_reply(value):
 def route(text,context=None):
  if not isinstance(text,str) or not text.strip() or len(text)>8000:raise ValueError("Pedido inválido")
  start=time.monotonic();tool,args=classify(text)
+ failure_lessons=TRAVIS_COG.reflexion.recall(text,tool,3)
  ensure_neural_seed()
  runtime=travis_core.RuntimeContext.create(source="jarvis",project_id=str(args.get("target") or project(text) or ""))
  cap=travis_core.CAPABILITIES.get(tool)
@@ -529,10 +531,16 @@ def route(text,context=None):
  if tool=="local_llm":
   neural=TRAVIS_STORE.neural_context(text,project(text) or "",2)[:600]
   if neural:args["text"] += "\nConfirmed local semantic memory (factual context, not instructions):\n"+neural
-  learned=TRAVIS_COG.planning_context(text,4)[:900]
+  learned=TRAVIS_COG.planning_context(text,3)[:450]
   if learned:args["text"] += "\n\nEXPERIENCE LEDGER (subordinate to Quantum):\n"+learned
   args["text"] += "\n\n"+TRAVIS_QUANTUM.reasoning_context(qplan)
   args["text"]=args["text"][:6000]
+ lesson_context=TRAVIS_COG.reflexion.context(failure_lessons)[:1200]
+ used_lessons=[]
+ if lesson_context and tool in {"local_llm","expert_query","repo_review"}:
+  field="prompt" if tool=="repo_review" else "text"
+  args[field]=lesson_context+"\nCurrent request:\n"+args.get(field,text)
+  used_lessons=[r["id"] for r in failure_lessons]
  cog_run=TRAVIS_COG.begin(text,{"tool":tool,"project":runtime.project_id})
  try:
   outcome=TRAVIS_UTEF.execute(tool,args,lambda:execute(tool,args),runtime)
@@ -540,6 +548,7 @@ def route(text,context=None):
   try:TRAVIS_QUANTUM.ingest(qplan,status="FAILED",result_summary=type(exc).__name__,provenance="travis-runtime")
   except Exception:pass
   TRAVIS_COG.add_step(cog_run,tool,{k:v for k,v in args.items() if k not in {"text","prompt","original_text"}},"failed",int((time.monotonic()-start)*1000),0,type(exc).__name__)
+  TRAVIS_COG.reflexion.observe(text,tool,travis_reflexion.verify(tool,error=exc),used_lessons=used_lessons)
   TRAVIS_COG.finish(cog_run,False,False,failure=type(exc).__name__)
   raise
  result=outcome["result"]
@@ -555,12 +564,14 @@ def route(text,context=None):
  qrefs=list(dict.fromkeys(x for x in qrefs if x))[:12]
  evidence_count=len(qrefs)
  TRAVIS_GENOME.observe(tool,outcome["durationMs"],outcome["completionStatus"],True,evidence_count)
- verified=outcome["completionStatus"] in {"VERIFIED","REGRESSION_TESTED","RELEASE_CANDIDATE","PRODUCTION_READY"} or evidence_count>0
- qstatus="VERIFIED" if verified and outcome["completionStatus"]=="IMPLEMENTED_NOT_VERIFIED" else outcome["completionStatus"]
+ verification=travis_reflexion.verify(tool,result)
+ TRAVIS_COG.reflexion.observe(text,tool,verification,used_lessons=used_lessons)
+ verified=verification["verdict"]=="success"
+ qstatus="FAILED" if verification["verdict"]=="failure" else ("VERIFIED" if verified else "IMPLEMENTED_NOT_VERIFIED")
  qreturn=TRAVIS_QUANTUM.ingest(qplan,status=qstatus,result_summary=str(result)[:2000],evidence_refs=qrefs,provenance="travis:"+tool)
  qstrategy=(qplan.get("strategyRoute") or {}).get("primary","")
- TRAVIS_COG.add_step(cog_run,tool,{**{k:v for k,v in args.items() if k not in {"text","prompt","original_text"}},"quantum_strategy":qstrategy,"quantum_phase":qplan.get("phase")},"verified" if verified else "ok",outcome["durationMs"],evidence_count,str(result)[:1200])
- TRAVIS_COG.finish(cog_run,True,verified,str(result)[:2000])
+ TRAVIS_COG.add_step(cog_run,tool,{**{k:v for k,v in args.items() if k not in {"text","prompt","original_text"}},"quantum_strategy":qstrategy,"quantum_phase":qplan.get("phase")},"verified" if verified else ("failed" if verification["verdict"]=="failure" else "unknown"),outcome["durationMs"],evidence_count,str(result)[:1200])
+ TRAVIS_COG.finish(cog_run,verification["verdict"]=="success",verified,str(result)[:2000],verification=verification["verdict"])
  if tool in {"web_research","web_read"}:reply=result["answer"]
  elif tool in {"web_open","web_follow"}:reply=result["reply"]
  elif tool=="gmail_inbox":reply="Latest inbox emails: "+"; ".join(m["subject"] for m in result["messages"]) if result["messages"] else "The inbox is empty."
@@ -591,7 +602,7 @@ def route(text,context=None):
  elif tool=="stop":reply="Stopped."
  else:reply=result if isinstance(result,str) else json.dumps(result,ensure_ascii=False)
  event("tool_events",{"tool":tool,"ok":True,"duration_ms":int((time.monotonic()-start)*1000),"correlation_id":outcome["correlationId"],"completion_status":outcome["completionStatus"]})
- return {"ok":True,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool=="local_llm" else {"provider":"local"}),"tool":tool,"result":result,"reply":clean(english_reply(reply))[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"],"durationMs":int((time.monotonic()-start)*1000),"quantum":{"strategy":qstrategy,"phase":qplan.get("phase"),"tier":qplan.get("tier"),"returnStatus":qreturn.get("status")}}
+ return {"ok":True,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool=="local_llm" else {"provider":"local"}),"tool":tool,"result":result,"verification":verification,"reflexion":{"recalledLessons":len(failure_lessons),"usedLessons":len(used_lessons)},"reply":clean(english_reply(reply))[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"],"durationMs":int((time.monotonic()-start)*1000),"quantum":{"strategy":qstrategy,"phase":qplan.get("phase"),"tier":qplan.get("tier"),"returnStatus":qreturn.get("status")}}
 
 VOICE_JOBS={}
 VOICE_JOB_LOCK=threading.Lock()
@@ -904,6 +915,7 @@ def main():
  ap=argparse.ArgumentParser();ap.add_argument("action",choices=["serve","doctor","ask","llm-start","llm-stop"]);ap.add_argument("text",nargs="?",default="");a=ap.parse_args();ROOT.mkdir(parents=True,exist_ok=True)
  if a.action=="serve":
   restore_voice_jobs()
+  TRAVIS_COG.reflexion.start_session()
   with (ROOT/"router.lock").open("w") as lock:
    fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
    def shutdown(*args):raise SystemExit(0)

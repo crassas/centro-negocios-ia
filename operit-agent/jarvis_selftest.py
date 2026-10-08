@@ -8,9 +8,29 @@ j=importlib.util.module_from_spec(spec);spec.loader.exec_module(j)
 class Tests(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.old=j.ROOT;self.old_store=j.TRAVIS_STORE;self.old_utef=j.TRAVIS_UTEF;self.old_seed=j.NEURAL_SEEDED;j.ROOT=self.root
+  self.old_cog=j.TRAVIS_COG;self.old_quantum=j.TRAVIS_QUANTUM;self.old_genome=j.TRAVIS_GENOME
+  j.TRAVIS_COG=j.travis_cognitive.CognitiveKernel(self.root/"cognitive.sqlite");j.TRAVIS_QUANTUM=j.travis_quantum.QuantumTravisBridge(receipt_path=self.root/"quantum-receipts.jsonl");j.TRAVIS_GENOME=j.travis_genome.BehaviorGenome(self.root)
   j.TRAVIS_STORE=j.travis_core.RuntimeStore(self.root/"memory.sqlite");j.TRAVIS_UTEF=j.travis_core.UnifiedExecutionFramework(j.TRAVIS_STORE);j.NEURAL_SEEDED=False
  def tearDown(self):
+  j.TRAVIS_COG=self.old_cog;j.TRAVIS_QUANTUM=self.old_quantum;j.TRAVIS_GENOME=self.old_genome
   j.ROOT=self.old;j.TRAVIS_STORE=self.old_store;j.TRAVIS_UTEF=self.old_utef;j.NEURAL_SEEDED=self.old_seed;self.tmp.cleanup()
+ def test_reflexion_records_failure_and_reuses_it(self):
+  with patch.object(j,"infer",side_effect=TimeoutError()):
+   with self.assertRaises(TimeoutError):j.route("Explain an orbit")
+  j.TRAVIS_COG=j.travis_cognitive.CognitiveKernel(self.root/"cognitive.sqlite")
+  with patch.object(j,"infer",return_value="An orbit is a curved path.") as model:
+   response=j.route("Explain an orbit again")
+   self.assertIn("Lessons from externally observed failures",model.call_args.args[0])
+   self.assertEqual(response["verification"]["verdict"],"unknown")
+  with j.TRAVIS_COG.reflexion.db() as c:
+   rows=c.execute("SELECT verdict,used_lessons FROM reflection_observations ORDER BY id").fetchall()
+   self.assertEqual([r["verdict"] for r in rows],["failure","unknown"])
+   self.assertNotEqual(rows[-1]["used_lessons"],"[]")
+ def test_reflexion_sources_are_not_success(self):
+  with patch.object(j,"classify",return_value=("web_research",{"query":"test"})),patch.object(j,"execute",return_value={"answer":"A claim.","sources":[{"url":"https://example.org"}]}):
+   response=j.route("Look up a claim")
+  self.assertEqual(response["verification"]["verdict"],"unknown")
+  self.assertEqual(j.TRAVIS_COG.health()["successfulRuns"],0)
  def test_presence_without_llm(self):
   with patch.object(j,"infer",side_effect=AssertionError("LLM called")):
    for text in ["estás aí", "Travis, estás aí?", "Travis: olá", "Jarvis, estás aí?", "Olá"]:
