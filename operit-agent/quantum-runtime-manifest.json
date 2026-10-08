@@ -1,0 +1,20 @@
+{
+  "schema": "quantum-travis-runtime/v1",
+  "name": "QUANTUM UNIFIED AGENT",
+  "builtRuntimeBaseline": "10.73",
+  "canonicalDriveState": "10.83 PARTIAL",
+  "runtimePath": "~/quantum-runtime/v10.73/quantum-unified-agent-v10.73",
+  "packageFile": "quantum-unified-agent-v10.73.zip",
+  "packageSha256": "0d409255d9526ce647f625860559ef795b6ccb49d122092a82914393ebed0cc0",
+  "packageSizeBytes": 1318861,
+  "requiredFiles": [
+    "VALIDATION-V10.73.json",
+    "quantum/routing/strategist_router.py",
+    "quantum/cognition/execution_prompt_compiler.py",
+    "quantum/governance/quantum_wall.py",
+    "quantum/learning/wisdom_loop.py"
+  ],
+  "law": "ONE QUANTUM UNIFIED AGENT -> ONE AUTHORITATIVE STATE -> MANY SPECIALISTS",
+  "integration": "Quantum governs routing/planning/authority/evidence; Travis hosts voice/UI/tools; Travis CognitiveKernel is a subordinate experience ledger.",
+  "sourceAuthority": "Google Drive canonical 00 — READ FIRST — QUANTUM UNIFIED AGENT"
+}
