@@ -116,6 +116,8 @@ if (!hud || !launcher || !canvas) {
   let voiceVadTimer=0;
   let voiceRecordTimer=0;
   let voiceRestartTimer=0;
+  let introVoiceTimer=0;
+  let voiceStarting=false;
   let voiceRequestController=null;
   let voiceSource=null;
   let voicePlaybackRaf=0;
@@ -916,6 +918,8 @@ if (!hud || !launcher || !canvas) {
   }
 
   async function startVoiceConversation({greet=true}={}) {
+    if (voiceStarting) return;
+    voiceStarting=true;
     stopVoiceConversation();
     const session=voiceSession;
     voiceBusy=true;
@@ -926,7 +930,7 @@ if (!hud || !launcher || !canvas) {
       setState('booting','Connecting to local Travis…');
       const health=await localHealth(controller.signal);
       if (!opened || session!==voiceSession) return;
-      if (!health?.ok) throw new Error('Travis local indisponível.');
+      if (!health?.ok) throw new Error('Local Travis is unavailable.');
       if (loadingLabel) {
         loadingLabel.textContent='TRAVIS LOCAL · VOICE ONLINE';
         loadingLabel.classList.add('is-done');
@@ -940,7 +944,7 @@ if (!hud || !launcher || !canvas) {
             type:'application/json',
             signal:controller.signal
           });
-          if(!speech.ok)throw new Error('Saudação indisponível.');
+          if(!speech.ok)throw new Error('Greeting unavailable.');
           const wav=await speech.arrayBuffer();
           if (!opened || session!==voiceSession) return;
           await playVoiceArrayBuffer(wav,session,WELCOME_GREETING);
@@ -960,6 +964,7 @@ if (!hud || !launcher || !canvas) {
       setState('ready','I could not connect to local Travis.');
     } finally {
       if (voiceRequestController===controller) voiceRequestController=null;
+      voiceStarting=false;
     }
   }
 
@@ -1770,13 +1775,14 @@ if (!hud || !launcher || !canvas) {
     haptic([10,35,10]);
     startTime=performance.now();
 
-    setTimeout(()=>{
-      if (opened && state==='booting') setState('ready');
-    },ready?1550:2100);
-    startVoiceConversation();
+    clearTimeout(introVoiceTimer);
+    introVoiceTimer=setTimeout(()=>{
+      if (opened && state==='booting') startVoiceConversation();
+    },1150);
   }
 
   function closeHud() {
+    clearTimeout(introVoiceTimer);introVoiceTimer=0;
     stopVoiceConversation();
     faceRig?.update(0);
     window.dispatchEvent(new Event('travis:close'));
