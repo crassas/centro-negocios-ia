@@ -97,6 +97,10 @@ def classify_local_intent(text,project_id=""):
  if not query:query=re.fullmatch(polite+r"(?:pesquisa|procura|search|find)\s+(.+?)\s+(?:no|on)\s+youtube"+ending,t)
  if query:return "search_youtube",{"query":query.group(1).strip()[:240]}
  if t in {"para","cancela","silencio","jarvis para","travis para"}:return "stop",{}
+ # A negated command or a how-to question is not an instruction to mutate a repo.
+ mutation=r"(?:corrig\w*|corr\w*|melhor\w*|alter\w*|atuali\w*|actuali\w*|implement\w*|aplic\w*|public\w*|apaga\w*|elimina\w*|fix|update|improve|change|delete|deploy)"
+ if re.search(r"\b(?:nao|do not|don't|never)\b.{0,35}\b"+mutation+r"\b",t):return "local_llm",{"text":text}
+ if re.match(r"^(?:como\b|how\b|explica\b|explain\b)",t) and re.search(r"\b"+mutation+r"\b",t):return "local_llm",{"text":text}
  if re.search(r"\b(?:nao|do not|don't|never)\b.{0,25}\b(?:cria|criar|adiciona|create|add)\b",t):return "local_llm",{"text":text}
  task_create=re.match(r"^(?:(?:por favor|please)[, ]+)?(?:(?:podes|consegues|poderias|can you|could you)\s+)?(?:cria|criar|adiciona|adicionar|create|add)\s+(?:(?:uma|a|one|new|nova)\s+)*(?:tarefa|task)\b[ :,-]*(.*)",t)
  if task_create and task_create.group(1).strip():return "create_task",{"title":re.sub(r"^(?:para|to)\s+","",text[-len(task_create.group(1)):],flags=re.I)}

@@ -4,7 +4,7 @@ import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
 import { createBacklight } from './travis-atmosphere.mjs?v=connections1';
 import { createFaceRig } from './travis-face-rig.mjs?v=articulation-2';
 import * as THREE from 'three';
-import { createNeuralField } from './travis-neural-field.mjs?v=1';
+import { createNeuralField } from './travis-brain-view.mjs?v=2';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -64,10 +64,10 @@ if (!hud || !launcher || !canvas) {
   let realFaceBaseMaterial=null;
   let realFaceReady=false;
   let avatarMaterial;
-  let formPolicy='auto';
-  let activeForm='face';
-  const formBlend={core:0,face:1};
-  const formTarget={core:0,face:1};
+  let formPolicy='core';
+  let activeForm='core';
+  const formBlend={core:1,face:0};
+  const formTarget={core:1,face:0};
   let energyMesh;
   let glassMesh;
   let emblem;
@@ -110,7 +110,14 @@ if (!hud || !launcher || !canvas) {
   const IS_LOCAL_TRAVIS_UI=['127.0.0.1','localhost'].includes(location.hostname) && location.port==='8770';
   const LOCAL_TRAVIS_BASE=IS_LOCAL_TRAVIS_UI?location.origin:'http://127.0.0.1:8770';
   let voiceSession=0;
-  const dialogueSession=crypto.randomUUID();
+  // Keep the conversation across reloads in this tab without mixing separate tabs.
+  const dialogueSession=(()=>{
+    try {
+      const saved=sessionStorage.getItem('travis-dialogue-session');
+      const id=/^[a-zA-Z0-9-]{8,80}$/.test(saved||'')?saved:crypto.randomUUID();
+      sessionStorage.setItem('travis-dialogue-session',id);return id;
+    } catch {return crypto.randomUUID();}
+  })();
   let activeProject=null;
   let voiceBusy=false;
   let voiceStream=null;
@@ -317,8 +324,7 @@ if (!hud || !launcher || !canvas) {
   }
 
   function modeForState(next=state) {
-    if (next==='listening' || next==='thinking' || next==='speaking') return 'face';
-    return 'face';
+    return 'core';
   }
 
   function syncFormButtons() {
@@ -1501,7 +1507,7 @@ if (!hud || !launcher || !canvas) {
     await createAdaptiveForms();
     neuralField=createNeuralField(THREE,{reducedMotion,compact:innerWidth<700});
     scene.add(neuralField.root);
-    hud.dataset.neuralField="state-map";
+    hud.dataset.neuralField="functional-brain";
     createCommands();
 
     sizeForViewport();

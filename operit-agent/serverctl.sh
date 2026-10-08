@@ -17,15 +17,23 @@ is_running() {
   kill -0 "$PID" 2>/dev/null
 }
 
-start_server() {
-  if is_running; then
-    echo "Centro Server já está activo. PID $(cat "$PID_FILE")"
-    return 0
-  fi
+adopt_server() {
+  EXISTING_PID="$(python3 "$SERVER" --probe-pid 2>/dev/null)" || return 1
+  case "$EXISTING_PID" in ''|*[!0-9]*) return 1 ;; esac
+  printf '%s\n' "$EXISTING_PID" > "$PID_FILE"
+  echo "Centro Server já está activo. PID $EXISTING_PID · ligação confirmada"
+}
 
+start_server() {
   if [ ! -f "$SERVER" ]; then
     echo "Falta $SERVER"
     exit 1
+  fi
+
+  if adopt_server; then return 0; fi
+  if is_running; then
+    echo "Centro Server já está activo. PID $(cat "$PID_FILE")"
+    return 0
   fi
 
   nohup python3 "$SERVER" >>"$LOG_FILE" 2>&1 </dev/null &
@@ -38,6 +46,8 @@ start_server() {
     echo "Local: http://127.0.0.1:8765"
     echo "Log: $LOG_FILE"
   else
+    # Another launcher can win the port while this process starts.
+    if adopt_server; then return 0; fi
     echo "O servidor terminou ao arrancar."
     tail -n 30 "$LOG_FILE" 2>/dev/null || true
     rm -f "$PID_FILE"

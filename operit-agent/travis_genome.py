@@ -115,7 +115,7 @@ class BehaviorGenome:
  def inference_policy(self,json_mode=False):
   name,genes=self.active_profile()
   temperature=round(max(0.04,min(0.12,0.12-(genes["confidence_threshold"]-0.80)*0.20)),3)
-  max_tokens=320 if json_mode else max(48,min(180,int(round(48+128*genes["verbosity"]))))
+  max_tokens=320 if json_mode else max(160,min(384,int(round(128+512*genes["verbosity"]))))
   suffix=(
    "Profile "+name+": use verifiable facts and do not invent data. "
    "Answer ordinary conversation and general knowledge directly. For private or current facts use observed context; if a fact is missing, name that fact and the next useful check. "

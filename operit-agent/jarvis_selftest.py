@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Regression tests for routing, secret protection and local memory."""
-import importlib.util, json, tempfile, unittest, threading, http.client
+import importlib.util, json, tempfile, unittest, threading, http.client, io
 from pathlib import Path
 from unittest.mock import patch,Mock
 spec=importlib.util.spec_from_file_location("jarvis",Path(__file__).with_name("jarvis_local.py"))
@@ -8,7 +8,7 @@ j=importlib.util.module_from_spec(spec);spec.loader.exec_module(j)
 class Tests(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.old=j.ROOT;self.old_store=j.TRAVIS_STORE;self.old_utef=j.TRAVIS_UTEF;self.old_seed=j.NEURAL_SEEDED;j.ROOT=self.root
-  self.old_cog=j.TRAVIS_COG;self.old_quantum=j.TRAVIS_QUANTUM;self.old_genome=j.TRAVIS_GENOME
+  self.old_brain=j.TRAVIS_BRAIN;self.old_cog=j.TRAVIS_COG;self.old_quantum=j.TRAVIS_QUANTUM;self.old_genome=j.TRAVIS_GENOME
   j.TRAVIS_COG=j.travis_cognitive.CognitiveKernel(self.root/"cognitive.sqlite");j.TRAVIS_QUANTUM=j.travis_quantum.QuantumTravisBridge(receipt_path=self.root/"quantum-receipts.jsonl");j.TRAVIS_GENOME=j.travis_genome.BehaviorGenome(self.root)
   if not j.TRAVIS_QUANTUM.root.is_dir():
    # Unit fixture for CI hosts without the separately installed Quantum package.
@@ -18,9 +18,32 @@ class Tests(unittest.TestCase):
    j.TRAVIS_QUANTUM.reasoning_context.return_value="Isolated test planning context."
    j.TRAVIS_QUANTUM.ingest.side_effect=lambda plan,**kwargs:{"status":kwargs["status"]}
   j.TRAVIS_STORE=j.travis_core.RuntimeStore(self.root/"memory.sqlite");j.TRAVIS_UTEF=j.travis_core.UnifiedExecutionFramework(j.TRAVIS_STORE);j.NEURAL_SEEDED=False
+  j.TRAVIS_BRAIN=j.travis_brain.BrainRuntime(self.root/"brain.sqlite",j.TRAVIS_STORE,j.TRAVIS_COG)
  def tearDown(self):
+  j.TRAVIS_BRAIN.stop();j.TRAVIS_BRAIN=self.old_brain
   j.TRAVIS_COG=self.old_cog;j.TRAVIS_QUANTUM=self.old_quantum;j.TRAVIS_GENOME=self.old_genome
   j.ROOT=self.old;j.TRAVIS_STORE=self.old_store;j.TRAVIS_UTEF=self.old_utef;j.NEURAL_SEEDED=self.old_seed;self.tmp.cleanup()
+ def brain_post(self,path,data,origin='http://127.0.0.1:8770'):
+  body=json.dumps(data).encode();handler=object.__new__(j.Handler)
+  handler.path=path;handler.headers={'Host':'127.0.0.1:8770','Origin':origin,'Content-Length':str(len(body))}
+  handler.rfile=io.BytesIO(body);answer={}
+  handler.send=lambda obj,ctype='application/json',code=200:answer.update(body=obj,code=code)
+  handler.do_POST();return answer
+ def test_brain_control_is_local_and_requires_boolean(self):
+  self.assertEqual(self.brain_post('/brain/control',{'paused':True},'https://crassas.github.io')['code'],403)
+  self.assertFalse(j.TRAVIS_BRAIN.paused())
+  self.assertEqual(self.brain_post('/brain/control',{'paused':'false'})['code'],400)
+  self.assertTrue(self.brain_post('/brain/control',{'paused':True})['body']['paused'])
+  state=self.brain_post('/brain/state',{})['body']
+  self.assertEqual(state['kind'],'functional-cognitive-architecture')
+  self.assertEqual(state['consciousness'],'not_established')
+ def test_brain_routes_without_model(self):
+  with patch.object(j,'infer',side_effect=AssertionError('Unnecessary model call')):
+   self.assertEqual(j.route('estado do cérebro')['tool'],'brain_status')
+   self.assertEqual(j.route('pausa os sonhos')['tool'],'brain_pause')
+   self.assertTrue(j.TRAVIS_BRAIN.paused())
+   self.assertEqual(j.route('retoma os sonhos')['tool'],'brain_pause')
+   self.assertFalse(j.TRAVIS_BRAIN.paused())
  def test_missing_quantum_still_fails_closed(self):
   bridge=j.travis_quantum.QuantumTravisBridge(root=self.root/"missing-quantum")
   with self.assertRaises(j.travis_quantum.QuantumUnavailable):bridge.prepare(task="test",tool="presence",action_type="READ")
@@ -120,6 +143,61 @@ class Tests(unittest.TestCase):
    self.assertNotIn("QUANTUM UNIFIED AGENT GOVERNING CONTEXT",model.call_args.args[0])
    j.route("Dá-me um exemplo",{"session":"session-other-001"})
    self.assertNotIn("base de dados",model.call_args.args[0])
+ def test_followup_resolves_project_before_tool_dispatch(self):
+  context={"session":"convergence-project-001"}
+  j.event("conversations",{"session":context["session"],"user":"A Beatriz precisa de um cabeçalho com contacto claro.","assistant":"I can inspect its header.","project":"beatriz","tool":"local_llm"})
+  with patch.object(j,"execute",return_value="I inspected the header.") as execute:
+   answer=j.route("Analisa esse projeto",context)
+  self.assertEqual(answer["tool"],"repo_review")
+  self.assertEqual(execute.call_args.args[1]["target"],"beatriz")
+  self.assertIn("contacto claro",execute.call_args.args[1]["prompt"])
+  self.assertIn("CURRENT USER REQUEST",execute.call_args.args[1]["prompt"])
+ def test_project_selection_keeps_the_original_requested_change(self):
+  session="convergence-pending-001"
+  with patch.object(j,"execute",return_value={"projects":[]}):
+   first=self.brain_post('/jarvis',{'text':'Melhora o cabeçalho','session':session})
+  self.assertEqual(first['body']['tool'],'select_project')
+  resolved,context,turns=j.contextual_request('Pentehouse',{'session':session})
+  tool,args=j.classify(resolved,context.get('activeProject'))
+  self.assertEqual(tool,'repo_change');self.assertEqual(args['target'],'pentehouse')
+  self.assertIn('Melhora o cabeçalho',args['prompt'])
+ def test_contextual_controls_and_repeated_read_use_real_tools(self):
+  context={'session':'convergence-media-001'}
+  with patch.object(j,'infer',side_effect=AssertionError('No model needed')):
+   j.route('Abre o YouTube',context)
+   answer=j.route('fecha isso',context)
+  self.assertEqual(answer['tool'],'close_youtube')
+  j.event('conversations',{'session':context['session'],'user':'Verifica o site Pentehouse','tool':'site_check','project':'pentehouse'})
+  resolved,_,_=j.contextual_request('E a Beatriz?',context)
+  self.assertEqual(j.classify(resolved),('site_check',{'target':'beatriz'}))
+ def test_no_cross_session_eviction_or_thirty_minute_amnesia(self):
+  session='convergence-history-001'
+  j.event('conversations',{'session':session,'user':'referência oliveira-83','assistant':'Recorded in this conversation.'})
+  with j.database() as c:c.execute('UPDATE conversations SET created=created-3600')
+  for i in range(30):j.event('conversations',{'session':'unrelated-session-001','user':'other '+str(i)})
+  turns=j.dialogue_turns({'session':session})
+  self.assertEqual(len(turns),1);self.assertIn('oliveira-83',turns[0]['user'])
+ def test_context_does_not_turn_negations_and_explanations_into_writes(self):
+  for request in ['Não atualizes esse projeto','Como melhorar esse projeto?','Explica como corrigir esse código']:
+   text,context,_=j.contextual_request(request,{'activeProject':'beatriz'})
+   self.assertEqual(j.classify(text,context.get('activeProject'))[0],'local_llm',request)
+  text,_,_=j.contextual_request('Analisa a formação de uma estrela',{'activeProject':'beatriz'})
+  self.assertNotIn('Project:',text)
+ def test_cloud_receives_late_context_without_forced_45_word_limit(self):
+  response=Mock();response.__enter__=Mock(return_value=response);response.__exit__=Mock(return_value=False)
+  response.read.return_value=json.dumps({'ok':True,'model':'@cf/test','answer':'Context preserved.'}).encode()
+  with patch.object(j.urllib.request,'urlopen',return_value=response) as call:
+   j.conversation_cloud('Current question\n'+'source '*340+'\nReference: oliveira-83','Follow the current goal.')
+  body=json.loads(call.call_args.args[0].data)
+  self.assertIn('oliveira-83',body['question']);self.assertLessEqual(len(body['question']),4000)
+  self.assertNotIn('45 words',body['question'])
+ def test_expert_gets_recent_conversation_and_memory(self):
+  session={'session':'convergence-expert-001'}
+  j.event('conversations',{'session':session['session'],'user':'O meu limite para o CRM é dez clientes.','assistant':'We can start with ten customers.'})
+  with patch.object(j,'execute',return_value='Start with a customer table and next-action field.') as execute:
+   answer=j.route('Compara as opções para isso',session)
+  self.assertEqual(answer['tool'],'expert_query')
+  self.assertIn('dez clientes',execute.call_args.args[1]['text'])
  def test_business_tasks_are_read_without_creating_a_database(self):
   import sqlite3
   home=self.root/"business-home";db=home/".centro-server/negocio.db";db.parent.mkdir(parents=True)

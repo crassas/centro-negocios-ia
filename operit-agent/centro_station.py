@@ -62,6 +62,7 @@ RUNTIME_FILES = {
     "travis_core.py": HOME / "travis_core.py",
     "travis_genome.py": HOME / "travis_genome.py",
     "travis_cognitive.py": HOME / "travis_cognitive.py",
+    "travis_brain.py": HOME / "travis_brain.py",
     "travis_reflexion.py": HOME / "travis_reflexion.py",
     "travis_quantum.py": HOME / "travis_quantum.py",
     "travis_gmail.py": HOME / "travis_gmail.py",
@@ -603,7 +604,7 @@ def main():
                 candidate_sha = ""
             changed, update_errors = sync_runtime(candidate_sha)
             if changed:
-                if any(name in changed for name in ("jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh")):
+                if any(name in changed for name in ("jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh", "travis_brain.py")):
                     pending_jarvis_restart = True
                 if any(name in changed for name in ("centro_server.py", "business_db.py", "travis_core.py")):
                     pending_server_restart = True

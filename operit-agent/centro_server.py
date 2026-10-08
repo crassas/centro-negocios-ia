@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import json
+import errno
+import sys
 import hashlib
 import threading
 import os
@@ -2674,11 +2676,48 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(404, {"ok": False, "error": "Rota não encontrada."})
 
 
+def existing_server_pid():
+    """Identify the authenticated live server without touching its task state."""
+    try:
+        request = urllib.request.Request(
+            f"http://{HOST}:{PORT}/status", headers={"Authorization": "Bearer " + TOKEN})
+        with urllib.request.urlopen(request, timeout=2) as response:
+            data = json.load(response)
+        server = data.get("server", {})
+        if data.get("ok") is not True or server.get("private") is not True:
+            return None
+        if server.get("host") != HOST or server.get("port") != PORT:
+            return None
+        pid = int(server["pid"])
+        if pid <= 1:
+            return None
+        command = (Path("/proc") / str(pid) / "cmdline").read_bytes().split(b"\0")
+        own_path = Path(__file__).resolve()
+        if not any(Path(os.fsdecode(arg)).resolve() == own_path for arg in command if arg):
+            return None
+        os.kill(pid, 0)
+        return pid
+    except Exception:
+        return None
+
+
 def main():
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    # Um crash anterior pode deixar um lock órfão. O processo novo começa limpo.
+    try:
+        httpd = ThreadingHTTPServer((HOST, PORT), Handler)
+    except OSError as exc:
+        if exc.errno != errno.EADDRINUSE:
+            raise
+        pid = existing_server_pid()
+        if pid:
+            print(f"Centro Server já está activo. PID {pid}. Esta instância termina sem o interromper.", flush=True)
+            return 0
+        print(f"A porta {HOST}:{PORT} está ocupada, mas não foi possível confirmar o Centro Server. Nenhum processo foi parado.", file=sys.stderr, flush=True)
+        return 1
+    # Only the process which owns the port may clear an orphaned task marker.
     clear_busy()
-    httpd = ThreadingHTTPServer((HOST, PORT), Handler)
+    pid_file = STATE_DIR / "server.pid"
+    pid_file.write_text(str(os.getpid()))
 
     def stop_server(signum, frame):
         print("A parar Centro Server...", flush=True)
@@ -2694,8 +2733,18 @@ def main():
         pass
     finally:
         httpd.server_close()
+        try:
+            if pid_file.read_text().strip() == str(os.getpid()):
+                pid_file.unlink()
+        except OSError:
+            pass
         print("Centro Server parado.", flush=True)
 
 
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:] == ["--probe-pid"]:
+        pid = existing_server_pid()
+        if pid:
+            print(pid)
+        raise SystemExit(0 if pid else 1)
+    raise SystemExit(main())

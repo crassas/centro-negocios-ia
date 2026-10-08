@@ -10,7 +10,7 @@ class Tests(unittest.TestCase):
    self.assertEqual(snap["activeProfile"],"evidence-fast-v1")
    self.assertEqual(snap["genes"]["hallucination_tolerance"],0.0)
    policy=genome.inference_policy()
-   self.assertLessEqual(policy["max_tokens"],180);self.assertGreaterEqual(policy["max_tokens"],48)
+   self.assertLessEqual(policy["max_tokens"],384);self.assertGreaterEqual(policy["max_tokens"],160)
    self.assertIn("do not invent data",policy["systemSuffix"])
 
  def test_activation_is_persistent_and_reversible(self):
