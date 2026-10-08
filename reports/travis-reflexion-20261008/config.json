@@ -1,0 +1,5 @@
+{
+  "provider": "workers",
+  "repetitions": 3,
+  "protocol": 3
+}

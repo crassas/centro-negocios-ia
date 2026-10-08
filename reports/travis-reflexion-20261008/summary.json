@@ -1,0 +1,192 @@
+{
+  "A": {
+    "cases": 180,
+    "accuracy": 0.8444444444444444,
+    "second_attempt_accuracy": 0.8111111111111111,
+    "repeated_error_rate": 0.9090909090909091,
+    "second_success_after_failure": 0.09090909090909091,
+    "failed_first_attempts": 11,
+    "brier": 0.15555555555555556,
+    "confidence_coverage": 1.0,
+    "correct_refusal_rate": 1.0
+  },
+  "B": {
+    "cases": 180,
+    "accuracy": 0.8722222222222222,
+    "second_attempt_accuracy": 0.8222222222222222,
+    "repeated_error_rate": 1.0,
+    "second_success_after_failure": 0.0,
+    "failed_first_attempts": 7,
+    "brier": 0.12777777777777777,
+    "confidence_coverage": 1.0,
+    "correct_refusal_rate": 1.0
+  },
+  "C": {
+    "cases": 180,
+    "accuracy": 0.7888888888888889,
+    "second_attempt_accuracy": 0.8111111111111111,
+    "repeated_error_rate": 0.8095238095238095,
+    "second_success_after_failure": 0.19047619047619047,
+    "failed_first_attempts": 21,
+    "brier": 0.2111111111111111,
+    "confidence_coverage": 1.0,
+    "correct_refusal_rate": 1.0
+  },
+  "B-erased": {
+    "cases": 90,
+    "accuracy": 0.8555555555555555,
+    "second_attempt_accuracy": null,
+    "repeated_error_rate": null,
+    "second_success_after_failure": null,
+    "failed_first_attempts": 0,
+    "brier": 0.14444444444444443,
+    "confidence_coverage": 1.0,
+    "correct_refusal_rate": 1.0
+  },
+  "per_repetition": {
+    "0": {
+      "A": {
+        "cases": 60,
+        "accuracy": 0.9,
+        "second_attempt_accuracy": 0.8,
+        "repeated_error_rate": null,
+        "second_success_after_failure": null,
+        "failed_first_attempts": 0,
+        "brier": 0.1,
+        "confidence_coverage": 1.0,
+        "correct_refusal_rate": 1.0
+      },
+      "B": {
+        "cases": 60,
+        "accuracy": 0.9166666666666666,
+        "second_attempt_accuracy": 0.8333333333333334,
+        "repeated_error_rate": null,
+        "second_success_after_failure": null,
+        "failed_first_attempts": 0,
+        "brier": 0.08333333333333333,
+        "confidence_coverage": 1.0,
+        "correct_refusal_rate": 1.0
+      },
+      "C": {
+        "cases": 60,
+        "accuracy": 0.8,
+        "second_attempt_accuracy": 0.8333333333333334,
+        "repeated_error_rate": 0.7142857142857143,
+        "second_success_after_failure": 0.2857142857142857,
+        "failed_first_attempts": 7,
+        "brier": 0.2,
+        "confidence_coverage": 1.0,
+        "correct_refusal_rate": 1.0
+      },
+      "B-erased": {
+        "cases": 30,
+        "accuracy": 0.8333333333333334,
+        "second_attempt_accuracy": null,
+        "repeated_error_rate": null,
+        "second_success_after_failure": null,
+        "failed_first_attempts": 0,
+        "brier": 0.16666666666666666,
+        "confidence_coverage": 1.0,
+        "correct_refusal_rate": 1.0
+      }
+    },
+    "1": {
+      "A": {
+        "cases": 60,
+        "accuracy": 0.8166666666666667,
+        "second_attempt_accuracy": 0.8,
+        "repeated_error_rate": 1.0,
+        "second_success_after_failure": 0.0,
+        "failed_first_attempts": 5,
+        "brier": 0.18333333333333332,
+        "confidence_coverage": 1.0,
+        "correct_refusal_rate": 1.0
+      },
+      "B": {
+        "cases": 60,
+        "accuracy": 0.9,
+        "second_attempt_accuracy": 0.8333333333333334,
+        "repeated_error_rate": 1.0,
+        "second_success_after_failure": 0.0,
+        "failed_first_attempts": 1,
+        "brier": 0.1,
+        "confidence_coverage": 1.0,
+        "correct_refusal_rate": 1.0
+      },
+      "C": {
+        "cases": 60,
+        "accuracy": 0.7833333333333333,
+        "second_attempt_accuracy": 0.8,
+        "repeated_error_rate": 0.8571428571428571,
+        "second_success_after_failure": 0.14285714285714285,
+        "failed_first_attempts": 7,
+        "brier": 0.21666666666666667,
+        "confidence_coverage": 1.0,
+        "correct_refusal_rate": 1.0
+      },
+      "B-erased": {
+        "cases": 30,
+        "accuracy": 0.9333333333333333,
+        "second_attempt_accuracy": null,
+        "repeated_error_rate": null,
+        "second_success_after_failure": null,
+        "failed_first_attempts": 0,
+        "brier": 0.06666666666666667,
+        "confidence_coverage": 1.0,
+        "correct_refusal_rate": 1.0
+      }
+    },
+    "2": {
+      "A": {
+        "cases": 60,
+        "accuracy": 0.8166666666666667,
+        "second_attempt_accuracy": 0.8333333333333334,
+        "repeated_error_rate": 0.8333333333333334,
+        "second_success_after_failure": 0.16666666666666666,
+        "failed_first_attempts": 6,
+        "brier": 0.18333333333333332,
+        "confidence_coverage": 1.0,
+        "correct_refusal_rate": 1.0
+      },
+      "B": {
+        "cases": 60,
+        "accuracy": 0.8,
+        "second_attempt_accuracy": 0.8,
+        "repeated_error_rate": 1.0,
+        "second_success_after_failure": 0.0,
+        "failed_first_attempts": 6,
+        "brier": 0.2,
+        "confidence_coverage": 1.0,
+        "correct_refusal_rate": 1.0
+      },
+      "C": {
+        "cases": 60,
+        "accuracy": 0.7833333333333333,
+        "second_attempt_accuracy": 0.8,
+        "repeated_error_rate": 0.8571428571428571,
+        "second_success_after_failure": 0.14285714285714285,
+        "failed_first_attempts": 7,
+        "brier": 0.21666666666666667,
+        "confidence_coverage": 1.0,
+        "correct_refusal_rate": 1.0
+      },
+      "B-erased": {
+        "cases": 30,
+        "accuracy": 0.8,
+        "second_attempt_accuracy": null,
+        "repeated_error_rate": null,
+        "second_success_after_failure": null,
+        "failed_first_attempts": 0,
+        "brier": 0.2,
+        "confidence_coverage": 1.0,
+        "correct_refusal_rate": 1.0
+      }
+    }
+  },
+  "models": [
+    "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+  ],
+  "scope": "Isolated memory component, 30 synthetic externally checked tasks, batched by family; not a measurement of the full voice agent or subjective experience.",
+  "improvement_proven": false,
+  "interpretation": "Compare paired second-session outcomes across repetitions and erased-memory outcomes. Installation alone proves no improvement. Inadequate confidence coverage, parsing failures or insufficient failed baseline cases limit interpretation."
+}
