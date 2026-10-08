@@ -194,9 +194,9 @@ def follow(link_text):
  state=_last();candidates=state.get("results") or [];needle=str(link_text).lower().strip()
  if re.fullmatch(r"(?:primeiro|1|1º)",needle):
   if not candidates:raise ValueError("Não há resultados anteriores")
-  return {"action":"open_url","url":safe_url(candidates[0]["url"]),"reply":"Vou abrir o primeiro resultado."}
+  return {"action":"open_url","url":safe_url(candidates[0]["url"]),"reply":"I’ll open the first result."}
  for row in candidates:
-  if needle and needle in str(row.get("title","")).lower():return {"action":"open_url","url":safe_url(row["url"]),"reply":"Vou abrir "+row["title"]+"."}
+  if needle and needle in str(row.get("title","")).lower():return {"action":"open_url","url":safe_url(row["url"]),"reply":"I’ll open "+row["title"]+"."}
  raise ValueError("Não encontrei esse resultado na pesquisa anterior")
 
 def classify(text):
@@ -216,7 +216,7 @@ def classify(text):
 
 def execute(tool,args):
  if tool=="web_open":
-  url=safe_url(args["url"]);_remember({"kind":"open","url":url});return {"action":"open_url","url":url,"reply":"Vou abrir o endereço pedido."}
+  url=safe_url(args["url"]);_remember({"kind":"open","url":url});return {"action":"open_url","url":url,"reply":"I’ll open the requested address."}
  if tool=="web_research":return research(args["query"])
  if tool=="web_read":return read(args["url"])
  if tool=="web_follow":return follow(args["link"])
