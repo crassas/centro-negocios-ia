@@ -24,16 +24,16 @@ const dateEl = $('#travis-clock-date');
 const formButtons=[...document.querySelectorAll('[data-travis-form]')];
 
 if (!hud || !launcher || !canvas) {
-  console.warn('Travis 3D: interface em falta.');
+  console.warn('Travis 3D: interface missing.');
 } else {
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const stateCopy = {
-    idle: ['Em repouso.', 'EM ESPERA'],
-    booting: ['A materializar núcleo.', 'A INICIAR'],
-    ready: ['Estou aqui.', 'PRONTO'],
-    listening: ['A ouvir.', 'A OUVIR'],
-    thinking: ['A processar.', 'A PENSAR'],
-    speaking: ['A responder.', 'A FALAR']
+    idle: ['Standing by.', 'STANDBY'],
+    booting: ['Materializing core.', 'BOOTING'],
+    ready: ['I’m here.', 'READY'],
+    listening: ['Listening.', 'LISTENING'],
+    thinking: ['Processing.', 'THINKING'],
+    speaking: ['Responding.', 'SPEAKING']
   };
 
   let renderer;
@@ -674,7 +674,7 @@ if (!hud || !launcher || !canvas) {
     voiceSource=source;
 
     window.dispatchEvent(new CustomEvent('travis:transcript',{detail:{role:'assistant',text:reply}}));
-    setState('speaking',String(reply||'A responder.').slice(0,96));
+    setState('speaking',String(reply||'Responding.').slice(0,96));
     flashPower=.08;
 
     const meter=()=>{
@@ -699,7 +699,7 @@ if (!hud || !launcher || !canvas) {
       externalVoiceLevel=0;
       if (opened && session===voiceSession) {
         voiceBusy=false;
-        setState('ready','Estou aqui.');
+        setState('ready','I’m here.');
         scheduleListening(session,180);
       }
     },speechFace?85:0);};
@@ -731,14 +731,14 @@ if (!hud || !launcher || !canvas) {
         if(!['completed','failed'].includes(task.status) || voiceBusy) continue;
         voiceBusy=true;releaseVoiceMic({stopRecorder:true});
         const reply=task.status==='completed'
-          ? String(task.answer?.reply||'O agente terminou sem resposta.')
-          : 'Não consegui concluir a tarefa: '+String(task.error||'Falha do executor.');
+          ? String(task.answer?.reply||'The agent finished without a response.')
+          : 'I could not complete the task: '+String(task.error||'Executor failure.');
         lastVoiceTaskResult=task;
         console.info('Travis agent result',task);
-        setState('thinking','O agente terminou. A preparar a voz…');
+        setState('thinking','The agent finished. Preparing voice…');
         try {
           const speech=await localFetch('/speak',{body:{text:reply.slice(0,1800),language:'en'}});
-          if(!speech.ok) throw new Error('Voz da conclusão indisponível.');
+          if(!speech.ok) throw new Error('Completion voice is unavailable.');
           const wav=await speech.arrayBuffer();
           await playVoiceArrayBuffer(wav,session,reply);
           if(opened && session===voiceSession) {pendingVoiceTasks.delete(taskId);persistVoiceTasks();}
@@ -760,7 +760,7 @@ if (!hud || !launcher || !canvas) {
     voiceRequestController=controller;
 
     try {
-      setState('thinking','A perceber…');
+      setState('thinking','Understanding…');
       const metrics={speechEndedAt:voiceSpeechEndedAt||performance.now()};
       const transcript=typeof blob==='string'?{text:blob}:await localJson('/transcribe',{
         body:blob,
@@ -773,8 +773,8 @@ if (!hud || !launcher || !canvas) {
       metrics.speechEndToTranscriptMs=Math.round(metrics.transcriptAt-metrics.speechEndedAt);
       const text=String(transcript.text||'').trim();
       window.dispatchEvent(new CustomEvent('travis:transcript',{detail:{role:'user',text}}));
-      if (!text) throw new Error('Não consegui perceber a voz.');
-      setState('thinking','A tratar do pedido…');
+      if (!text) throw new Error('I could not understand the speech.');
+      setState('thinking','Handling your request…');
       const answer=await localJson('/jarvis',{body:{text},signal:controller.signal});
       if (!opened || session!==voiceSession) return;
       metrics.replyAt=performance.now();
@@ -785,15 +785,15 @@ if (!hud || !launcher || !canvas) {
         scheduleVoiceTaskPoll();
       }
       const reply=String(answer.reply||'').trim();
-      if (!reply) throw new Error('O Travis devolveu uma resposta vazia.');
-      setState('thinking','A preparar a voz…');
+      if (!reply) throw new Error('Travis returned an empty response.');
+      setState('thinking','Preparing voice…');
 
       const speech=await localFetch('/speak',{
         body:{text:reply,language:'en'},
         type:'application/json',
         signal:controller.signal
       });
-      if (!speech.ok) throw new Error('A voz local não respondeu.');
+      if (!speech.ok) throw new Error('The local voice engine did not respond.');
       const wav=await speech.arrayBuffer();
       if (!opened || session!==voiceSession) return;
 
@@ -819,12 +819,12 @@ if (!hud || !launcher || !canvas) {
   async function startListening(session=voiceSession) {
     if (!opened || session!==voiceSession || voiceBusy || voiceRecorder?.state==='recording') return;
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-      setState('ready','Este navegador não disponibiliza o microfone.');
+      setState('ready','This browser does not provide microphone access.');
       return;
     }
 
     try {
-      setState('listening','Estou a ouvir.');
+      setState('listening','I’m listening.');
       const stream=await navigator.mediaDevices.getUserMedia({
         audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}
       });
@@ -854,7 +854,7 @@ if (!hud || !launcher || !canvas) {
         releaseVoiceMic();
         if (valid) handleVoiceBlob(blob,mime,session);
         else if (opened && session===voiceSession) {
-          setState('ready','Não ouvi voz.');
+          setState('ready','I did not hear any speech.');
           scheduleListening(session,300);
         }
       };
@@ -909,8 +909,8 @@ if (!hud || !launcher || !canvas) {
       voiceBusy=false;
       setState('ready',
         error?.name==='NotAllowedError'
-          ? 'Permite o microfone para falares comigo.'
-          : 'Microfone: '+(error?.message||'indisponível.')
+          ? 'Allow microphone access so you can speak to me.'
+          : 'Microphone: '+(error?.message||'unavailable.')
       );
     }
   }
@@ -923,17 +923,17 @@ if (!hud || !launcher || !canvas) {
     voiceRequestController=controller;
     try {
       void prepareSpeechFace(audio());
-      setState('booting','A ligar ao Travis local…');
+      setState('booting','Connecting to local Travis…');
       const health=await localHealth(controller.signal);
       if (!opened || session!==voiceSession) return;
       if (!health?.ok) throw new Error('Travis local indisponível.');
       if (loadingLabel) {
-        loadingLabel.textContent='TRAVIS LOCAL · VOZ LIGADA';
+        loadingLabel.textContent='TRAVIS LOCAL · VOICE ONLINE';
         loadingLabel.classList.add('is-done');
       }
       scheduleVoiceTaskPoll();
       if (greet) {
-        setState('thinking','A iniciar sistema de voz…');
+        setState('thinking','Starting voice system…');
         try {
           const speech=await localFetch('/speak',{
             body:{text:WELCOME_GREETING,language:'en',mode:'welcome'},
@@ -951,13 +951,13 @@ if (!hud || !launcher || !canvas) {
         }
       }
       voiceBusy=false;
-      setState('ready','Estou aqui.');
+      setState('ready','I’m here.');
       await startListening(session);
     } catch (error) {
       if (controller.signal.aborted || session!==voiceSession) return;
       voiceBusy=false;
       console.warn('Travis local:',error);
-      setState('ready','Não consegui ligar ao Travis local.');
+      setState('ready','I could not connect to local Travis.');
     } finally {
       if (voiceRequestController===controller) voiceRequestController=null;
     }
@@ -1749,7 +1749,7 @@ if (!hud || !launcher || !canvas) {
     if (!ready) return;
     commandsOpen=typeof force==='boolean'?force:!commandsOpen;
     hud.classList.toggle('commands-open',commandsOpen);
-    setState('ready',commandsOpen?'Escolhe um módulo.':'Estou aqui.');
+    setState('ready',commandsOpen?'Choose a module.':'I’m here.');
     haptic(commandsOpen?18:10);
     pulseTone(commandsOpen);
   }
@@ -1829,7 +1829,7 @@ if (!hud || !launcher || !canvas) {
     close:closeHud,
     commands:toggleCommands,
     ask(text){if(!opened)return;stopVoiceConversation();handleVoiceBlob(String(text),'',voiceSession);},
-    pause(){stopVoiceConversation();faceRig?.update(0);setState('ready','Conversa em pausa.');},
+    pause(){stopVoiceConversation();faceRig?.update(0);setState('ready','Conversation paused.');},
     resume(){if(opened)startVoiceConversation({greet:false});},
     setState,
     diagnostics() {
@@ -1842,19 +1842,19 @@ if (!hud || !launcher || !canvas) {
       setForm(mode,{manual:mode!=='auto'});
       return activeForm;
     },
-    ready(message='Estou aqui.') {
+    ready(message='I’m here.') {
       if (!opened) openHud();
       setState('ready',message);
     },
-    listen(message='A ouvir.') {
+    listen(message='Listening.') {
       if (!opened) openHud();
       setState('listening',message);
     },
-    think(message='A processar.') {
+    think(message='Processing.') {
       if (!opened) openHud();
       setState('thinking',message);
     },
-    speak(message='A responder.') {
+    speak(message='Responding.') {
       if (!opened) openHud();
       setState('speaking',message);
     },
@@ -1881,8 +1881,8 @@ if (!hud || !launcher || !canvas) {
     }
   }).catch((error)=>{
     console.error('Travis 3D:',error);
-    setLoading('Falha ao carregar o núcleo 3D');
-    setState('ready','Interface 3D indisponível.');
+    setLoading('Failed to load the 3D core');
+    setState('ready','3D interface unavailable.');
   });
 
   requestAnimationFrame(animate);
