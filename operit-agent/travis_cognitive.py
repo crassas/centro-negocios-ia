@@ -6,6 +6,7 @@ Learning means preserving evidence-backed strategies and reusing them on later t
 """
 from __future__ import annotations
 import json,re,secrets,sqlite3,time
+from contextlib import contextmanager
 from pathlib import Path
 
 WORD_RE=re.compile(r"[A-Za-zÀ-ÿ0-9_.+-]{3,}")
@@ -35,8 +36,14 @@ class CognitiveKernel:
   con.execute("PRAGMA journal_mode=WAL")
   return con
 
+ @contextmanager
+ def db(self):
+  con=self.connect()
+  try:yield con
+  finally:con.close()
+
  def _init(self):
-  with self.connect() as con:
+  with self.db() as con:
    con.executescript("""
    CREATE TABLE IF NOT EXISTS runs(
     id TEXT PRIMARY KEY, created REAL NOT NULL, updated REAL NOT NULL,
@@ -70,13 +77,13 @@ class CognitiveKernel:
 
  def begin(self,task,metadata=None):
   rid="cog-"+secrets.token_hex(8);now=time.time();key=self.task_key(task)
-  with self.connect() as con:
+  with self.db() as con:
    con.execute("INSERT INTO runs(id,created,updated,task,task_key,status,metadata) VALUES(?,?,?,?,?,'running',?)",
     (rid,now,now,str(task)[:6000],key,_safe_json(metadata or {},4000)))
   return rid
 
  def add_step(self,run_id,tool,args,status,duration_ms=0,evidence=0,observation=""):
-  with self.connect() as con:
+  with self.db() as con:
    seq=con.execute("SELECT COALESCE(MAX(seq),0)+1 FROM steps WHERE run_id=?",(run_id,)).fetchone()[0]
    con.execute("""INSERT INTO steps(run_id,created,seq,tool,args,status,duration_ms,evidence,observation)
                   VALUES(?,?,?,?,?,?,?,?,?)""",
@@ -86,7 +93,7 @@ class CognitiveKernel:
 
  def finish(self,run_id,success,verified,result_summary="",failure=""):
   now=time.time()
-  with self.connect() as con:
+  with self.db() as con:
    row=con.execute("SELECT task_key FROM runs WHERE id=?",(run_id,)).fetchone()
    if not row:raise ValueError("Run not found")
    steps=list(con.execute("SELECT tool,status,evidence,duration_ms FROM steps WHERE run_id=? ORDER BY seq",(run_id,)))
@@ -103,7 +110,7 @@ class CognitiveKernel:
   return self.run(run_id)
 
  def learn(self,run_id):
-  with self.connect() as con:
+  with self.db() as con:
    run=con.execute("SELECT * FROM runs WHERE id=?",(run_id,)).fetchone()
    steps=list(con.execute("SELECT * FROM steps WHERE run_id=? ORDER BY seq",(run_id,)))
    if not run or not steps:return None
@@ -130,7 +137,7 @@ class CognitiveKernel:
    return cur.lastrowid
 
  def _penalize_related(self,run_id):
-  with self.connect() as con:
+  with self.db() as con:
    run=con.execute("SELECT task_key FROM runs WHERE id=?",(run_id,)).fetchone()
    if not run:return
    rows=list(con.execute("SELECT * FROM lessons WHERE task_key=?",(run["task_key"],)))
@@ -146,7 +153,7 @@ class CognitiveKernel:
  def recall(self,task,limit=5):
   wanted=set(_tokens(task))
   if not wanted:return []
-  with self.connect() as con:rows=list(con.execute("SELECT * FROM lessons ORDER BY score DESC,updated DESC LIMIT 300"))
+  with self.db() as con:rows=list(con.execute("SELECT * FROM lessons ORDER BY score DESC,updated DESC LIMIT 300"))
   ranked=[]
   for row in rows:
    have=set(str(row["keywords"]).split())|set(str(row["task_key"]).split())
@@ -169,7 +176,7 @@ class CognitiveKernel:
   return "\n".join(lines)
 
  def run(self,run_id):
-  with self.connect() as con:
+  with self.db() as con:
    run=con.execute("SELECT * FROM runs WHERE id=?",(run_id,)).fetchone()
    if not run:return None
    steps=[dict(x) for x in con.execute("SELECT * FROM steps WHERE run_id=? ORDER BY seq",(run_id,))]
@@ -178,7 +185,7 @@ class CognitiveKernel:
   return data
 
  def consolidate(self,max_lessons=200):
-  with self.connect() as con:
+  with self.db() as con:
    before=con.execute("SELECT COUNT(*) FROM lessons").fetchone()[0]
    con.execute("DELETE FROM lessons WHERE failures>=3 AND successes=0")
    rows=list(con.execute("SELECT id FROM lessons ORDER BY score DESC,updated DESC"))
@@ -188,7 +195,7 @@ class CognitiveKernel:
   return {"before":before,"after":after,"removed":before-after}
 
  def health(self):
-  with self.connect() as con:
+  with self.db() as con:
    integrity=con.execute("PRAGMA integrity_check").fetchone()[0]
    runs=con.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
    lessons=con.execute("SELECT COUNT(*) FROM lessons").fetchone()[0]
