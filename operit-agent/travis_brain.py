@@ -340,6 +340,13 @@ class BrainRuntime:
     def graph(self, limit=120):
         """Read-only snapshot of persisted memories and persisted relations."""
         limit = max(1, min(int(limit), 120))
+        from travis_rust_bridge import configured_binary
+        requested_rust = bool(configured_binary())
+        if requested_rust:
+            from travis_rust_bridge import graph_snapshot
+            native = graph_snapshot(self.store.db_path, limit=limit)
+            if native is not None:
+                return native
         with contextlib.closing(self.store.connect()) as c:
             c.row_factory = sqlite3.Row
             rows = c.execute(
@@ -374,7 +381,36 @@ class BrainRuntime:
             'ok': True, 'source': 'local-sqlite', 'kind': 'persisted-memory-graph',
             'nodes': nodes, 'links': links, 'observedAt': self.clock(),
             'truncated': len(nodes) == limit,
-            'disclaimer': 'Stored graph, not a biological brain or a model reasoning trace'
+            'disclaimer': 'Stored graph, not a biological brain or a model reasoning trace',
+            'engine': 'python-fallback' if requested_rust else 'python'
+        }
+
+
+    def events(self, limit=80):
+        """Bounded, public-safe cognitive transitions; never return private details."""
+        limit = max(1, min(int(limit), 240))
+        from travis_rust_bridge import configured_binary
+        requested_rust = bool(configured_binary())
+        if requested_rust:
+            from travis_rust_bridge import events_snapshot
+            native = events_snapshot(self.path, limit=limit)
+            if native is not None:
+                return native
+        with contextlib.closing(sqlite3.connect(self.path.resolve().as_uri() + "?mode=ro", uri=True, timeout=1)) as c:
+            rows = c.execute(
+                "SELECT id,created,region,phase FROM brain_events "
+                "WHERE region IN ('attention','memory','executive','action',"
+                "'monitor','regulation','reflection') ORDER BY id DESC LIMIT ?",
+                (limit,)
+            ).fetchall()
+        return {
+            'ok': True, 'source': 'brain-sqlite',
+            'kind': 'observed-cognitive-events',
+            'engine': 'python-fallback' if requested_rust else 'python',
+            'observedAt': self.clock(),
+            'events': [{'id': row[0], 'created': row[1], 'region': row[2],
+                        'phase': clean(row[3] or '', 60)} for row in rows],
+            'disclaimer': 'Observed application events, not a neural activity recording'
         }
 
     def status(self):
