@@ -37,13 +37,14 @@ export function createPresenceMotion({random=Math.random,reducedMotion=false}={}
 // Reversible, wall-clock transitions: a slow frame cannot strand half a face.
 export function createHologramPresentation({reducedMotion=false}={}){
   let phase='face',from=0,to=0,started=0;
-  const duration=reducedMotion?.001:.9;
+  const duration=reducedMotion?.001:1.15;
   function sample(now){
-    let amount=from+(to-from)*ease((now-started)/duration);
+    const t=clamp((now-started)/duration);
+    let amount=from+(to-from)*(t*t*t*(t*(t*6-15)+10));
     if((phase==='dissolving'||phase==='returning')&&now-started>=duration){
       phase=to===1?'projecting':'face';amount=to;
     }
-    return {phase,amount,visible:phase!=='face',panel: ease((amount-.48)/.52)};
+    return {phase,amount,visible:phase!=='face',panel:ease((amount-.32)/.68)};
   }
   function transition(target,now){
     const value=sample(now).amount;

@@ -1,6 +1,6 @@
 // Front workspace driven by actual host tool results. Text is always inert.
-import {hologramPresentation as projection} from './travis-presence.mjs?v=2';
-import {mountYouTube,closeYouTube,controlYouTube,youtubeState} from './travis-youtube.mjs?v=2';
+import {hologramPresentation as projection} from './travis-presence.mjs?v=3';
+import {mountYouTube,closeYouTube,controlYouTube,youtubeState} from './travis-youtube.mjs?v=3';
 const hud=document.getElementById('travis-hud');
 const deck=document.getElementById('travis-action-deck');
 const heading=document.getElementById('travis-action-heading');
@@ -32,7 +32,7 @@ function render(data){
     card.className='travis-action-card';
     if(actionable)card.type='button';
     if(row.project)card.dataset.project=String(row.project);
-    card.setAttribute('aria-current',String(Boolean(row.project&&row.project===selected)));
+    card.setAttribute('aria-current',String(Boolean(row.project&&row.project===selected)||Boolean(row.videoId&&row.videoId===data.videoId)));
     if(typeof row.available==='boolean')card.dataset.available=String(row.available);
     const number=document.createElement('span');number.className='travis-holo-number';number.textContent=String(index+1).padStart(2,'0');number.setAttribute('aria-hidden','true');
     const title=document.createElement('strong'),detail=document.createElement('span');
@@ -98,6 +98,8 @@ if(deck){
     },
     select(text){
       const t=String(text).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+      // Media selection is resolved from the server's session-scoped search results.
+      if(current?.kind==='youtube')return null;
       const match=t.match(/^(?:travis[, ]+)?(?:abre|seleciona|selecciona|escolhe|quero|open|select|choose)\s+(?:o |a |the )?(primeiro|primeira|first|segundo|segunda|second|terceiro|terceira|third|quarto|quarta|fourth|quinto|quinta|fifth|[1-9])(?:\s+(?:video|resultado|projeto))?[.!?]*$/);
       if(!match||deck.hidden)return null;
       const words=['primeiro primeira first','segundo segunda second','terceiro terceira third','quarto quarta fourth','quinto quinta fifth'];

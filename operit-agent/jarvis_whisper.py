@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
 """Low-latency multilingual Whisper worker optimized for Portuguese/English input."""
-import json,math,sys,wave
+import json,sys,wave
 from pathlib import Path
 import numpy as np
 from pywhispercpp.model import Model
 
-PROMPT="Travis, repositórios, tarefas, projetos, Beatriz, GitHub."
+PROMPT="Português de Portugal. Travis, YouTube, bicicletas, pesquisar, procurar, selecionar, seleciona, primeiro, segundo, vídeo, repositórios, tarefas, projetos, Beatriz, GitHub."
+model_path=Path(sys.argv[1])
+precise_model=model_path.with_name('ggml-small-q5_1.bin')
+if precise_model.is_file():model_path=precise_model
 model=Model(
- sys.argv[1],
+ str(model_path),
+ params_sampling_strategy=1,
  n_threads=4,
  print_realtime=False,
  print_progress=False,
  no_context=True,
  single_segment=True,
- greedy={'best_of':1},
+ beam_search={'beam_size':3,'patience':-1.0},
  initial_prompt=PROMPT,
 )
 
@@ -27,17 +31,16 @@ def prepare_audio(path):
 def transcribe(path,language=None):
  samples=prepare_audio(path)
  if len(samples)<1600:return {"text":"","languageUsed":"pt"}
- duration=len(samples)/16000
- # Keep Portuguese explicit and preserve enough acoustic context for project names.
- # The old 512-frame floor corrupted repositories in the recorded regression sample.
+ # Preserve Whisper's full acoustic context: shortened windows corrupted compound
+ # commands and project names even when the original audio was intelligible.
  used=language if language in {"pt","en"} else "pt"
  segments=model.transcribe(
   samples,
   language=used,
-  audio_ctx=min(1500,max(768,math.ceil((duration+1)*50))),
+  audio_ctx=1500,
  )
  text=" ".join(segment.text.strip() for segment in segments).strip()
- return {"text":text,"languageUsed":used}
+ return {"text":text,"languageUsed":used,"model":model_path.name}
 
 if sys.argv[2]=="--worker":
  print("TRAVIS_STT:"+json.dumps({"ready":True,"languages":["pt","en"],"mode":"pt-biased-multilingual","defaultLanguage":"pt"}),flush=True)

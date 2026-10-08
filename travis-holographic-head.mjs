@@ -17,17 +17,19 @@ export function createHolographicHeadMaterial(THREE,shell=false) {
         float front=1.18-uBuild*1.10;
         if(vP.y<front)discard;
         // Break into stable light cells, with no solid horizontal cut through the face.
-        vec3 cell=floor(vP*165.0);
+        vec3 cell=floor(vP*235.0);
         float noise=fract(sin(dot(cell,vec3(12.9898,78.233,37.719)))*43758.5453);
+        // A curved travelling front with fine light grains, stable in object space.
+        float field=clamp((vP.y-.17)/.93,0.0,1.0)*.54+noise*.30+(.5+.5*sin(vP.x*9.0+vP.z*7.0))*.16;
         float dissolveEdge=0.0;
         if(uDissolve>0.0){
-          if(uDissolve>=.999||noise<uDissolve)discard;
-          dissolveEdge=(1.0-smoothstep(0.0,.075,noise-uDissolve))*sin(uDissolve*3.14159);
+          if(uDissolve>=.999||field<uDissolve)discard;
+          dissolveEdge=(1.0-smoothstep(0.0,.09,field-uDissolve))*sin(uDissolve*3.14159);
         }
         vec3 n=normalize(vN);float facing=max(0.0,dot(n,normalize(vV)));
         float edge=pow(1.0-facing,2.4);
-        float contour=pow(.5+.5*sin(vP.y*390.0),18.0);
-        float fine=.5+.5*sin(vP.y*950.0);
+        float contour=pow(.5+.5*sin(vP.y*390.0),18.0)*(1.0-smoothstep(.7,2.2,fwidth(vP.y*390.0)));
+        float fine=(.5+.5*sin(vP.y*950.0))*(1.0-smoothstep(.7,2.2,fwidth(vP.y*950.0)));
         float sweep=exp(-pow(abs(vP.y-(.17+mod(uTime*.12,1.0)))/.012,2.0));
         float assembly=exp(-pow(abs(vP.y-front)/.026,2.0))*(1.0-step(.999,uBuild));
         float side=max(0.0,dot(n,normalize(vec3(-.75,.35,.55))));
@@ -35,8 +37,9 @@ export function createHolographicHeadMaterial(THREE,shell=false) {
         vec3 colour=vec3(.19,.72,.78)*(edge*.5+contour*.05+sweep*.1)+vec3(.66,.94,1.0)*(assembly+dissolveEdge*.7);
         gl_FragColor=vec4(colour,uOpacity*neck*(edge*.7+assembly*.9+contour*.06+dissolveEdge*.35));
         `:`
-        vec3 dark=vec3(.006,.027,.038);
-        vec3 colour=dark+vec3(.055,.29,.33)*side*.6;
+        float key=max(0.0,dot(n,normalize(vec3(-.35,.6,1.0))));
+        vec3 dark=vec3(.009,.038,.052);
+        vec3 colour=dark+vec3(.055,.29,.33)*side*.64+vec3(.04,.13,.16)*key;
         colour+=vec3(.19,.61,.67)*(edge*.46+contour*.095+fine*.018+sweep*.13);
         colour+=vec3(.63,.91,.98)*assembly*.72;
         colour+=vec3(.44,.83,.92)*dissolveEdge*.65;
@@ -68,13 +71,18 @@ export function createAssemblyParticles(THREE,geometry) {
       float front=1.18-uBuild*1.10;float band=exp(-pow(abs(position.y-front)/.16,2.0));
       vec3 p=position;p.x+=(1.0-uBuild)*sin(position.y*71.0+position.z*23.0)*.18;
       p.z+=(1.0-uBuild)*.2;vAlpha=band*(1.0-smoothstep(.86,1.0,uBuild));
-      float scatter=sin(uDissolve*3.14159);
       float seed=fract(sin(dot(position,vec3(31.7,83.1,17.3)))*43758.5453);
-      float angle=uDissolve*4.5+seed*6.28318;
-      p.x+=cos(angle)*scatter*(.12+seed*.42);
-      p.z+=sin(angle)*scatter*.34;
-      p.y+=scatter*(seed-.25)*.5;
-      vAlpha=max(vAlpha,scatter*.65);
+      vec3 cell=floor(position*235.0);
+      float grain=fract(sin(dot(cell,vec3(12.9898,78.233,37.719)))*43758.5453);
+      float field=clamp((position.y-.17)/.93,0.0,1.0)*.54+grain*.30+(.5+.5*sin(position.x*9.0+position.z*7.0))*.16;
+      float age=max(0.0,uDissolve-field);
+      float scatter=smoothstep(0.0,.45,age);
+      float angle=age*4.5+seed*6.28318;
+      p.x+=cos(angle)*scatter*(.2+seed*.5);
+      p.z+=sin(angle)*scatter*.45;
+      p.y+=scatter*(.18+seed*.45);
+      float spark=smoothstep(0.0,.025,age)*(1.0-smoothstep(.08,.4,age))*(1.0-smoothstep(.88,1.0,uDissolve));
+      vAlpha=max(vAlpha,spark*.75);
       vec4 mv=modelViewMatrix*vec4(p,1.0);gl_Position=projectionMatrix*mv;gl_PointSize=clamp(7.0/-mv.z,1.0,3.0);}`,
     fragmentShader:`varying float vAlpha;void main(){float d=length(gl_PointCoord-.5);if(d>.5)discard;gl_FragColor=vec4(.48,.9,1.0,vAlpha*(1.0-d*2.0));}`,
     transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false

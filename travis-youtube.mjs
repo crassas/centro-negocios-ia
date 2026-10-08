@@ -1,6 +1,7 @@
 // Official YouTube player stays in Travis' document; the microphone session survives.
 let player=null,active=false,playing=false,ready=false,generation=0,apiPromise=null;
-let lastError='',status=null;
+let lastError='',status=null,pendingControl='',speaking=false,currentVideoId='';
+function announce(text){window.dispatchEvent(new CustomEvent('travis:media-notice',{detail:{text}}));}
 const validId=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{11}$/.test(value);
 function api(){
   if(window.YT?.Player)return Promise.resolve(window.YT);
@@ -18,13 +19,16 @@ function api(){
 export function closeYouTube(){
   const wasOpen=active;generation++;active=playing=ready=false;
   try{player?.destroy();}catch{}
-  player=null;status=null;lastError='';return wasOpen;
+  player=null;status=null;lastError='';pendingControl='';currentVideoId='';return wasOpen;
 }
-export function youtubeState(){return {open:active,playing,error:lastError,ready};}
+export function youtubeState(){return {open:active,playing,error:lastError,ready,videoId:currentVideoId};}
 export function controlYouTube(action){
   if(action==='close_youtube'){return {handled:true,reply:closeYouTube()?'YouTube closed. I’m here.':'YouTube is already closed.'};}
   if(!['pause_youtube','resume_youtube'].includes(action))return null;
-  if(!ready||!player?.getPlayerState)return {handled:true,reply:'Choose a YouTube video and let it load first.'};
+  if(!ready||!player?.getPlayerState){
+    if(active&&currentVideoId){pendingControl=action;return {handled:true,reply:action==='pause_youtube'?'I’ll keep the video paused as it loads.':'I’ll play it as soon as it loads.'};}
+    return {handled:true,reply:'Tell me what video to look for first.'};
+  }
   if(action==='pause_youtube'){player.pauseVideo();return {handled:true,reply:'Pausing the video.'};}
   player.playVideo();return {handled:true,reply:'Resuming the video.'};
 }
@@ -36,27 +40,40 @@ export function mountYouTube(data,container){
   form.addEventListener('submit',event=>{event.preventDefault();const q=input.value.trim();if(q)window.TravisVisual?.ask('Pesquisa no YouTube '+q);});
   container.append(form);
   status=document.createElement('p');status.className='travis-youtube-status';status.setAttribute('role','status');
-  status.textContent=validId(data.videoId)?'A ligar ao YouTube…':'Diz o que queres ver. Continuo aqui.';
+  status.textContent=validId(data.videoId)?'A abrir o vídeo…':data.items?.length?'Diz “o primeiro”, “o segundo” ou pede outra pesquisa.':'Diz, por exemplo, “procura um vídeo sobre bicicletas e abre o primeiro”.';
   container.append(status);
   if(!validId(data.videoId))return;
+  currentVideoId=data.videoId;
   const screen=document.createElement('div');screen.className='travis-youtube-screen';
-  const slot=document.createElement('div');screen.append(slot);container.append(screen);
+  // Delegate autoplay before navigation, and preserve the actual app referrer.
+  const slot=document.createElement('iframe');
+  slot.title=String(data.videoTitle||'Vídeo do YouTube');
+  slot.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';slot.allowFullscreen=true;
+  slot.referrerPolicy='strict-origin-when-cross-origin';
+  slot.src='https://www.youtube-nocookie.com/embed/'+data.videoId+'?'+new URLSearchParams({enablejsapi:'1',playsinline:'1',autoplay:'1',origin:location.origin,rel:'0'});
+  screen.append(slot);container.append(screen);
   api().then(YT=>{
     if(session!==generation||!slot.isConnected)return;
-    player=new YT.Player(slot,{host:'https://www.youtube-nocookie.com',videoId:data.videoId,
-      width:'100%',height:'100%',playerVars:{playsinline:1,autoplay:1,origin:location.origin,rel:0},
+    player=new YT.Player(slot,{
       events:{
-        onReady:event=>{if(session!==generation)return;ready=true;event.target.setVolume(45);status.textContent='Diz “fecha o YouTube” para regressar.';screen.dataset.ready='true';},
-        onStateChange:event=>{if(session!==generation)return;playing=event.data===1;screen.dataset.playing=String(playing);},
-        onAutoplayBlocked:()=>{if(session===generation)status.textContent='Toca em reproduzir no vídeo. O Travis continua ligado.';},
+        onReady:event=>{
+          if(session!==generation)return;ready=true;event.target.setVolume(speaking?8:38);
+          status.textContent='Podes dizer “pausa”, “continua”, “o seguinte” ou “fecha isso”.';screen.dataset.ready='true';
+          if(pendingControl==='pause_youtube')event.target.pauseVideo();else event.target.playVideo();
+          pendingControl='';
+        },
+        onStateChange:event=>{if(session!==generation)return;playing=event.data===1;screen.dataset.playing=String(playing);if(playing)lastError='';},
+        onAutoplayBlocked:()=>{if(session===generation){lastError='autoplay';status.textContent='O navegador pede um toque em reproduzir para autorizar o vídeo. Depois podes continuar por voz.';announce('The browser needs one tap on play to allow this video. You can then continue by voice.');}},
         onError:event=>{
           if(session!==generation)return;lastError=String(event.data);playing=false;
           status.textContent=[101,150].includes(event.data)?'O YouTube bloqueou a reprodução deste vídeo aqui. Podes escolher outro resultado abaixo.':event.data===153?'O YouTube não conseguiu validar este leitor. A pesquisa e a voz continuam ligadas.':'Este vídeo não ficou disponível aqui. Podes escolher outro resultado abaixo.';
           screen.dataset.error=lastError;
+          announce('This video could not play here. Say open the next one, or ask for another search.');
         }
       }});
-  }).catch(error=>{if(session===generation&&status){lastError=error.message;status.textContent=error.message;}});
+  }).catch(error=>{if(session===generation&&status){lastError=error.message;status.textContent=error.message;announce('YouTube could not connect. You can still speak to me and try another search.');}});
 }
 window.addEventListener('travis:state',event=>{
-  try{if(active&&player?.setVolume)player.setVolume(event.detail.state==='speaking'?12:45);}catch{}
+  speaking=event.detail.state==='speaking';
+  try{if(active&&player?.setVolume)player.setVolume(speaking?8:38);}catch{}
 });

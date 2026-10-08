@@ -60,7 +60,7 @@ def _bootstrap():
 _bootstrap()
 register_capability("gmail_inbox","jarvis","API_CALL")
 register_capability("agent_sessions","jarvis","READ")
-for _tool in ("close_youtube","close_projection","play_youtube","pause_youtube","resume_youtube"):register_capability(_tool,"jarvis","READ")
+for _tool in ("close_youtube","close_projection","play_youtube","select_youtube","pause_youtube","resume_youtube"):register_capability(_tool,"jarvis","READ")
 register_capability("search_youtube","jarvis","API_CALL")
 for _tool in ("web_open","web_read","web_follow"):register_capability(_tool,"jarvis","READ",False,True,"none")
 register_capability("web_research","jarvis","API_CALL",False,True,"local_llm_fallback")
@@ -76,6 +76,41 @@ def validate_centro_task(task,allowed_actions:Iterable[str],allowed_targets:Iter
  args=task.get("args") or {}
  if not isinstance(args,dict):raise ValueError("args deve ser um objecto")
  if len(json.dumps(args,ensure_ascii=False))>56000:raise ValueError("Parâmetros excedem o limite")
+
+def youtube_intent(text):
+ """Parse explicit media requests and ordered search/selection without model guesses."""
+ t=_norm(text).strip(" .!?,")
+ t=re.sub(r"^(?:(?:travis|jarvis|amigo|olha|entao)[ ,:;-]+)+","",t)
+ t=re.sub(r"^(?:por favor|please)[, ]+","",t)
+ t=re.sub(r"^(?:podes|consegues|podias|poderias|can you|could you)\s+","",t)
+ t=re.sub(r"[, ]+(?:por favor|please)$","",t).strip()
+ ordinal=r"(?:primeir[oa]|first|segund[oa]|second|terceir[oa]|third|quart[oa]|fourth|quint[oa]|fifth|sext[oa]|sixth|setim[oa]|seventh|oitav[oa]|eighth|[1-9])"
+ verb=r"(?:abre|abra|abrir|seleciona|selecione|selecionar|selecciona|seleccione|escolhe|escolher|reproduz|reproduzir|(?:poe|mete)(?: a dar| a tocar| a reproduzir)?|open|select|choose|play)"
+ choice=verb+r"\s+(?:o |a |the )?(?:video |resultado )?("+ordinal+r")(?:\s+(?:video|resultado|video result))?"
+ def index(word):
+  if word.isdigit():return int(word)-1
+  return next(i for i,words in enumerate(("primeiro primeira first","segundo segunda second","terceiro terceira third","quarto quarta fourth","quinto quinta fifth","sexto sexta sixth","setimo setima seventh","oitavo oitava eighth")) if word in words.split())
+ selection=re.fullmatch(r"(?:"+choice+r"|(?:o |a |the )?("+ordinal+r")(?:\s+(?:video|resultado))?)",t)
+ if selection:return "select_youtube",{"index":index(selection.group(1) or selection.group(2))}
+ if re.fullmatch(r"(?:"+verb+r"\s+)?(?:o |the )?(?:proximo|seguinte|next)(?: video| resultado)?",t):return "select_youtube",{"direction":1}
+ if re.fullmatch(r"(?:"+verb+r"\s+)?(?:o |the )?(?:anterior|previous)(?: video| resultado)?",t):return "select_youtube",{"direction":-1}
+ selected=None
+ tail=re.search(r"\s*(?:,?\s+e\s+(?:depois\s+)?|,?\s+and\s+|,\s*|\s+depois\s+)"+choice+r"$",t)
+ if tail:selected=index(tail.group(1));t=t[:tail.start()].strip()
+ search=r"(?:pesquisa|pesquise|pesquisar|procura|procure|procurar|encontra|encontrar|search|find|look for)"
+ query=None
+ m=re.fullmatch(search+r"(?:\s+(?:no|on))?\s+youtube\s+(.+)",t)
+ if not m:m=re.fullmatch(search+r"\s+(.+?)\s+(?:no|on)\s+youtube",t)
+ if m:query=m.group(1)
+ else:
+  m=re.fullmatch(r"("+search+r"|quero ver|quero assistir|mostra|mostra-me|poe|mete|play|show me|i want to watch)\s+(?:um |uns |os |o |a |some |a |the )?videos?\s+(?:(?:no|on) youtube\s+)?(?:(?:sobre|de|acerca de|about|on|of)\s+)?(.+)",t)
+  if m:
+   query=m.group(2)
+   if selected is None and m.group(1) in {"quero ver","quero assistir","poe","mete","play","i want to watch"}:selected=0
+ if query:
+  query=re.sub(r"^(?:(?:um |os |o |some |a |the )?videos?\s+)?(?:sobre |de |about |for )?","",query).strip()
+  if query:return "search_youtube",{"query":query[:240],**({"index":selected} if selected is not None else {})}
+ return None
 
 def classify_local_intent(text,project_id=""):
  raw=_norm(text)
@@ -93,6 +128,8 @@ def classify_local_intent(text,project_id=""):
  if re.fullmatch(polite+r"(?:(?:fecha|fechar|close)\s+(?:o |a |the )?(?:holograma|projecao|projection)|(?:volta|regressa)\s+(?:ao |a )?travis)"+ending,t):return "close_projection",{}
  video=re.fullmatch(r"(?:travis[, ]+)?(?:reproduz|play)\s+(?:video|vídeo)\s+([A-Za-z0-9_-]{11})[.!?]*",str(text).strip(),re.I)
  if video:return "play_youtube",{"videoId":video.group(1)}
+ media=youtube_intent(text)
+ if media:return media
  query=re.fullmatch(polite+r"(?:pesquisa|procura|search|find)(?:\s+(?:no|on))?\s+youtube\s+(.+)",t)
  if not query:query=re.fullmatch(polite+r"(?:pesquisa|procura|search|find)\s+(.+?)\s+(?:no|on)\s+youtube"+ending,t)
  if query:return "search_youtube",{"query":query.group(1).strip()[:240]}

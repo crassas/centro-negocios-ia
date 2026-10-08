@@ -5,7 +5,7 @@ const p=createHologramPresentation();
 p.present(0,{readingSeconds:8});
 assert.equal(p.sample(0).amount,0);
 assert(p.sample(.45).amount>0&&p.sample(.45).amount<1);
-assert.equal(p.sample(1).phase,'projecting');
+assert.equal(p.sample(2).phase,'projecting');
 assert.equal(p.sample(60).phase,'projecting','Projection remains open after the explanation');
 assert.equal(p.sample(3600).phase,'projecting','No hidden auto-dismiss timeout');
 p.close(3600);

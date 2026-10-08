@@ -11,11 +11,16 @@ export function createNeuralField(THREE,{reducedMotion=false,compact=false}={}){
     [.22,-.14,.24,0xe0a894],[0,.48,.14,0xe2c887],[0,-.37,.16,0x9dcfad],[0,.55,-.55,0x9bade6]
   ];
   const activity=new Float32Array(7);
-  const uniforms={uTime:{value:0},uOpacity:{value:0},uActivity:{value:activity}};
+  const uniforms={uTime:{value:0},uOpacity:{value:0},uDissolve:{value:0},uActivity:{value:activity}};
   const cortexMaterial=new THREE.ShaderMaterial({uniforms,
     vertexShader:`varying vec3 vP,vN,vV;void main(){vP=position;vec4 mv=modelViewMatrix*vec4(position,1.0);vN=normalize(normalMatrix*normal);vV=normalize(-mv.xyz);gl_Position=projectionMatrix*mv;}`,
-    fragmentShader:`uniform float uOpacity;varying vec3 vP,vN,vV;
-      void main(){float facing=abs(dot(normalize(vN),normalize(vV)));float edge=pow(1.0-facing,2.0);
+    fragmentShader:`uniform float uOpacity,uDissolve;varying vec3 vP,vN,vV;
+      void main(){
+        vec3 cell=floor(vP*160.0);
+        float grain=fract(sin(dot(cell,vec3(12.9898,78.233,37.719)))*43758.5453);
+        float field=clamp((vP.y+1.2)/2.1,0.0,1.0)*.7+grain*.3;
+        if(uDissolve>=.999||(uDissolve>0.0&&field<uDissolve))discard;
+        float facing=abs(dot(normalize(vN),normalize(vV)));float edge=pow(1.0-facing,2.0);
         float ridge=.5+.5*sin(vP.y*37.0+sin(vP.z*14.0)*2.1+sin(vP.x*17.0));
         vec3 c=mix(vec3(.025,.075,.092),vec3(.21,.43,.47),facing*.42+edge*.5+ridge*.12);
         gl_FragColor=vec4(c,uOpacity*(.21+edge*.44+ridge*.075));}`,
@@ -83,9 +88,10 @@ export function createNeuralField(THREE,{reducedMotion=false,compact=false}={}){
   let snapshot=null,currentTime=0,currentCore=0;
   const panel=createBrainPanel(data=>{snapshot=data;});
   return {root,
-    update({time=0,dt=.016,core=0,intro=1,portrait=false}={}){
-      currentCore=core;currentTime=Math.max(0,time);root.visible=core>.008;
-      uniforms.uOpacity.value=core*intro;uniforms.uTime.value=reducedMotion?0:currentTime;
+    update({time=0,dt=.016,core=0,intro=1,portrait=false,projection=0}={}){
+      currentCore=core;currentTime=Math.max(0,time);root.visible=core>.008&&projection<.999;
+      uniforms.uDissolve.value=projection;
+      uniforms.uOpacity.value=core*intro*(1-projection);uniforms.uTime.value=reducedMotion?0:currentTime;
       root.position.set(0,portrait?.80:.57,0);root.scale.setScalar((portrait?1.42:1.65)*Math.max(.001,core));
       anatomy.rotation.set(.14,.45+(reducedMotion?0:Math.sin(time*.08)*.11),-.035);
       const fresh=snapshot && Date.now()/1000-snapshot.observedAt<12;
@@ -93,7 +99,7 @@ export function createNeuralField(THREE,{reducedMotion=false,compact=false}={}){
         const target=module?.active?Math.max(.18,1-(Date.now()/1000-module.at)/18):0;
         activity[i]+=(target-activity[i])*Math.min(1,dt*5);
       });
-      panel.setVisible(core>.5);
+      panel.setVisible(core>.5&&projection<.08);
     },
     diagnostics(){return {kind:'functional-brain-view',backendConnected:!!snapshot,backendPhase:snapshot?.phase,
       geometry:'stylised-cerebral-hemispheres',expanded:currentCore>.5,visible:root.visible,time:currentTime,

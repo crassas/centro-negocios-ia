@@ -109,6 +109,34 @@ class Tests(unittest.TestCase):
   with patch.object(j,"http",side_effect=[{"status":"ok"},TimeoutError()]) as http,patch.object(j,"llm_start",side_effect=AssertionError("restart")):
    with self.assertRaisesRegex(RuntimeError,"did not respond in time"):j.infer("pedido")
    self.assertEqual(http.call_args.kwargs["timeout"],45)
+ def test_spoken_video_search_selection_and_controls_share_session(self):
+  videos=[{"videoId":"M7lc1UVf-VE","title":"Bicycles one","channel":"A","duration":"1:00"},{"videoId":"dQw4w9WgXcQ","title":"Bicycles two","channel":"B","duration":"2:00"}]
+  ctx={"session":"voice-video-session","activeProject":"beatriz"}
+  with patch.object(j.travis_web_tools,"youtube_search",return_value={"query":"bicicletas","videos":videos}) as search,patch.object(j,"infer",side_effect=AssertionError("No model needed for media actions")):
+   answer=j.route("Olha, procura um vídeo sobre bicicletas e seleciona o primeiro vídeo",ctx)
+   search.assert_called_once_with("bicicletas")
+   self.assertEqual(answer["result"]["videoId"],videos[0]["videoId"])
+   self.assertEqual(answer["ui"]["items"][1]["videoId"],videos[1]["videoId"])
+   self.assertEqual(j.route("o segundo",ctx)["result"]["videoId"],videos[1]["videoId"])
+   self.assertEqual(j.route("o anterior",ctx)["result"]["videoId"],videos[0]["videoId"])
+   self.assertEqual(j.route("o seguinte",ctx)["result"]["videoId"],videos[1]["videoId"])
+   self.assertEqual(j.route("pausa isso",ctx)["tool"],"pause_youtube")
+   self.assertEqual(j.route("continua",ctx)["tool"],"resume_youtube")
+   self.assertEqual(j.route("o primeiro",{"session":"another-video-session"})["result"]["action"],"youtube_selection_missing")
+   self.assertEqual(j.route("o oitavo",ctx)["result"]["action"],"youtube_selection_missing")
+   self.assertEqual(j.route("fecha isso",ctx)["tool"],"close_youtube")
+   self.assertEqual(j.route("o primeiro",ctx)["result"]["action"],"youtube_selection_missing")
+ def test_failed_video_search_cannot_select_previous_results(self):
+  ctx={"session":"voice-video-failed"}
+  j.media_session(ctx["session"],{"open":True,"query":"old","videos":[{"videoId":"M7lc1UVf-VE"}]})
+  with patch.object(j.travis_web_tools,"youtube_search",side_effect=RuntimeError("Consent page")),patch.object(j,"infer",side_effect=AssertionError("No model")):
+   answer=j.route("Procura um vídeo sobre bicicletas e abre o primeiro",ctx)
+   self.assertNotIn("videoId",answer["result"])
+   self.assertIn("did not return",answer["reply"])
+   self.assertEqual(j.route("o primeiro",ctx)["result"]["action"],"youtube_selection_missing")
+ def test_media_phrases_do_not_execute_negation_or_explanations(self):
+  for text in ["não procures um vídeo de bicicletas","como procurar um vídeo e abrir o primeiro?","não abras o primeiro","don't select the first video"]:
+   self.assertEqual(j.classify(text)[0],"local_llm",text)
  def test_shared_context_for_reasoning(self):
   with patch.object(j,"infer",return_value="Confirmed response.") as inference:
    j.route("Analisa o meu negócio",{"projects":[{"name":"Pentehouse"}]})

@@ -1,10 +1,10 @@
-import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=presence-2';
-import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=2';
+import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=voice-flow-3';
+import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=3';
 import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
 import { createBacklight } from './travis-atmosphere.mjs?v=connections1';
 import { createFaceRig } from './travis-face-rig.mjs?v=articulation-2';
 import * as THREE from 'three';
-import { createNeuralField } from './travis-brain-view.mjs?v=2';
+import { createNeuralField } from './travis-brain-view.mjs?v=3';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -601,7 +601,7 @@ if (!hud || !launcher || !canvas) {
     clearTimeout(voiceTaskTimer);voiceTaskTimer=0;
   }
 
-  function releaseVoiceMic({stopRecorder=false}={}) {
+  function releaseVoiceMic({stopRecorder=false,keepStream=false}={}) {
     clearInterval(voiceVadTimer);
     clearTimeout(voiceRecordTimer);
     voiceVadTimer=0;
@@ -616,8 +616,7 @@ if (!hud || !launcher || !canvas) {
     micSourceNode?.disconnect?.();
     micSourceNode=null;
     micAnalyser=null;
-    voiceStream?.getTracks?.().forEach(track=>track.stop());
-    voiceStream=null;
+    if(!keepStream){voiceStream?.getTracks?.().forEach(track=>track.stop());voiceStream=null;}
     externalVoiceLevel=0;
   }
 
@@ -851,7 +850,7 @@ if (!hud || !launcher || !canvas) {
 
     try {
       setState('listening','I’m listening.');
-      const stream=await navigator.mediaDevices.getUserMedia({
+      const stream=voiceStream?.getAudioTracks().some(track=>track.readyState==='live')?voiceStream:await navigator.mediaDevices.getUserMedia({
         audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}
       });
       if (!opened || session!==voiceSession) {
@@ -877,12 +876,17 @@ if (!hud || !launcher || !canvas) {
       recorder.onstop=()=>{
         const blob=new Blob(voiceChunks,{type:mime});
         const valid=opened && session===voiceSession && heardSpeech && blob.size>400;
-        releaseVoiceMic();
+        releaseVoiceMic({keepStream:true});
         if (valid) handleVoiceBlob(blob,mime,session);
         else if (opened && session===voiceSession) {
-          setState('ready','I did not hear any speech.');
-          scheduleListening(session,300);
+          scheduleListening(session,30);
         }
+      };
+
+      recorder.onerror=()=>{
+        if(session!==voiceSession)return;
+        releaseVoiceMic({stopRecorder:true});voiceBusy=false;
+        setState('ready','Reconnecting the microphone…');scheduleListening(session,700);
       };
 
       recorder.start(120);
@@ -917,18 +921,19 @@ if (!hud || !launcher || !canvas) {
             lastSpeech=performance.now();
             voiceSpeechEndedAt=lastSpeech;
           }
-          const pause=now-firstSpeech<1800?1100:850;
+          // Give natural pauses and a second clause time to arrive.
+          const pause=now-firstSpeech<1800?1400:1200;
           if (heardSpeech && speechFrames>=3 && now-lastSpeech>pause) {
             recorder.stop();
             return;
           }
-          if (!heardSpeech && now-began>7000) recorder.stop();
+          if (!heardSpeech && now-began>25000) recorder.stop();
         },50);
       }
 
       voiceRecordTimer=setTimeout(()=>{
         if (recorder.state==='recording') recorder.stop();
-      },20000);
+      },30000);
     } catch (error) {
       releaseVoiceMic({stopRecorder:true});
       if (!opened || session!==voiceSession) return;
@@ -938,8 +943,28 @@ if (!hud || !launcher || !canvas) {
           ? 'Allow microphone access so you can speak to me.'
           : 'Microphone: '+(error?.message||'unavailable.')
       );
+      if(!['NotAllowedError','SecurityError'].includes(error?.name))scheduleListening(session,1500);
     }
   }
+
+  let mediaNoticeTimer=0;
+  window.addEventListener('travis:media-notice',event=>{
+    clearTimeout(mediaNoticeTimer);
+    const session=voiceSession,text=String(event.detail?.text||'').slice(0,400);
+    async function tell(){
+      if(!opened||session!==voiceSession||!window.TravisProjection?.media().error)return;
+      if(voiceBusy||externalVoiceLevel>.04){mediaNoticeTimer=setTimeout(tell,900);return;}
+      voiceBusy=true;releaseVoiceMic({stopRecorder:true,keepStream:true});
+      try{
+        const speech=await localFetch('/speak',{body:{text,language:'en'}});
+        if(!speech.ok)throw new Error('Voice unavailable');
+        await playVoiceArrayBuffer(await speech.arrayBuffer(),session,text);
+      }catch{
+        if(session===voiceSession){voiceBusy=false;scheduleListening(session,300);}
+      }
+    }
+    mediaNoticeTimer=setTimeout(tell,1200);
+  });
 
   async function startVoiceConversation({greet=true}={}) {
     if (voiceStarting) return;
@@ -1410,7 +1435,8 @@ if (!hud || !launcher || !canvas) {
     if (!renderer || !camera) return;
     const w=Math.max(1,innerWidth);
     const h=Math.max(1,innerHeight);
-    const dpr=Math.min(devicePixelRatio||1,innerWidth<700?1.25:1.55);
+    // Sharper contours on the phone while bounding the full-screen pixel budget.
+    const dpr=Math.min(devicePixelRatio||1,1.75,Math.max(1,Math.sqrt(1600000/(w*h))));
     camera.aspect=w/h;
     sizeForViewport();
     renderer.setPixelRatio(dpr);

@@ -80,6 +80,7 @@ def database():
  c=sqlite3.connect(ROOT/"memory.sqlite",timeout=10)
  c.execute("PRAGMA journal_mode=WAL")
  c.execute("CREATE TABLE IF NOT EXISTS tasks(id INTEGER PRIMARY KEY,title TEXT,due TEXT,status TEXT DEFAULT 'pendente')")
+ c.execute("CREATE TABLE IF NOT EXISTS media_sessions(session TEXT PRIMARY KEY,updated REAL,data TEXT)")
  for t in TABLES:c.execute(f"CREATE TABLE IF NOT EXISTS {t}(id INTEGER PRIMARY KEY,created REAL,data TEXT)")
  c.execute("PRAGMA user_version=1")
  return c
@@ -128,6 +129,28 @@ def dialogue_turns(context):
   rows=c.execute("SELECT data FROM conversations WHERE created>? AND json_valid(data) AND json_extract(data,'$.session')=? ORDER BY id DESC LIMIT 8",(time.time()-86400,session)).fetchall()
  return [json.loads(row[0]) for row in reversed(rows)]
 
+def media_session(session,data=None):
+ if not dialogue_session({"session":session}):return {}
+ with database() as c:
+  if data is not None:
+   c.execute("INSERT OR REPLACE INTO media_sessions VALUES(?,?,?)",(session,time.time(),json.dumps(data,ensure_ascii=False)))
+   c.execute("DELETE FROM media_sessions WHERE updated<?",(time.time()-86400,))
+   return data
+  row=c.execute("SELECT data FROM media_sessions WHERE session=? AND updated>?",(session,time.time()-1800)).fetchone()
+ return json.loads(row[0]) if row else {}
+
+def select_youtube_result(state,args):
+ videos=state.get("videos",[])
+ if not state.get("open") or not videos:
+  return {"action":"youtube_selection_missing","reply":"Tell me what video to look for first. For example, find a video about bicycles and open the first one."}
+ index=args.get("index",state.get("selectedIndex",-1)+args.get("direction",1))
+ if not isinstance(index,int) or not 0<=index<len(videos):
+  return {"action":"youtube_selection_missing","reply":"That result is not in this search. There are "+str(len(videos))+" videos. Say first, second, or search for something else."}
+ video=videos[index]
+ if not re.fullmatch(r"[A-Za-z0-9_-]{11}",str(video.get("videoId",""))):raise ValueError("Vídeo inválido")
+ state["selectedIndex"]=index
+ return {"action":"youtube_play","videoId":video["videoId"],"title":video.get("title",""),"selectedIndex":index,"query":state.get("query",""),"videos":videos}
+
 def contextual_request(text,context=None):
  """Resolve explicit follow-ups before dispatch. History cannot authorize new writes."""
  context=dict(context or {});turns=dialogue_turns(context);last=turns[-1] if turns else {}
@@ -149,10 +172,14 @@ def contextual_request(text,context=None):
    prompts={"site_check":"Verifica o site ","git_status":"Estado git ","git_diff":"Git diff ","projects_status":"Mostra o projeto ","search_positions":"Posições ","repo_review":"Analisa o projeto "}
    text=prompts[previous]+target
  # Short player controls refer to the last player action, never arbitrary tools.
- if last.get("tool") in {"open_youtube","search_youtube","play_youtube","pause_youtube","resume_youtube"}:
+ media=media_session(dialogue_session(context))
+ if media.get("open") or last.get("tool") in {"open_youtube","search_youtube","play_youtube","select_youtube","pause_youtube","resume_youtube"}:
   if t in {"fecha isso","fecha","close it"}:text="Fecha o YouTube"
   elif t in {"pausa","pausa isso","pause it"}:text="Pausa o YouTube"
   elif t in {"retoma","continua","resume it"}:text="Retoma o YouTube"
+  elif t in {"pesquisa outra vez","pesquisa de novo","tenta outra vez","search again","try again"} and media.get("query"):text="Pesquisa no YouTube "+media["query"]
+  elif last.get("tool")=="open_youtube" and len(t)<200 and classify(text)[0]=="local_llm":text="Pesquisa no YouTube "+text
+ if travis_core.classify_local_intent(text)[0].endswith("_youtube"):return text,context,turns
  explicit_action=bool(re.match(r"^(?:(?:podes|consegues|por favor)\s+)?(?:analisa|analise|analisa-o|reve|verifica|corrige|corrigir|melhora|melhorar|altera|atualiza|actualiza|implementa|optimiza|resolve|faz|trata|review|check|fix|update|improve|implement)\b",t))
  project_subject=bool(re.search(r"\b(?:site|pagina|codigo|repositorio|projeto|projecto|cabecalho|seo|website|code|repository|project|header)\b",t))
  if active and (follow or (explicit_action and (project_subject or len(t.split())<=2))):
@@ -464,12 +491,32 @@ def execute(tool,args):
  if tool=="agent_sessions":return cockpit_snapshot()
  if tool=="projects_status":return projects_status(args.get("target"))
  if tool=="presence":return "I’m Travis. I’m here. Tell me what you need."
- if tool=="open_youtube":return {"action":"open_url","url":"https://www.youtube.com/","embedded":True}
- if tool=="search_youtube":return travis_web_tools.youtube_search(args["query"])
+ if tool=="open_youtube":
+  media_session(args.get("session"),{"open":True})
+  return {"action":"open_url","url":"https://www.youtube.com/","embedded":True}
+ if tool=="search_youtube":
+  # Invalidate old choices before a new network request, including a failed search.
+  state={"open":True,"query":args["query"],"videos":[]};media_session(args.get("session"),state)
+  try:result=travis_web_tools.youtube_search(args["query"])
+  except (OSError,RuntimeError,ValueError) as exc:
+   return {**state,"error":type(exc).__name__,"reply":"YouTube did not return a usable search. Say search again, or give me another topic."}
+  state.update(result);media_session(args.get("session"),state)
+  if "index" in args and state["videos"]:
+   result=select_youtube_result(state,args);media_session(args.get("session"),state)
+  return result
+ if tool=="select_youtube":
+  state=media_session(args.get("session"));result=select_youtube_result(state,args)
+  if result.get("videoId"):media_session(args.get("session"),state)
+  return result
  if tool=="play_youtube":
   if not re.fullmatch(r"[A-Za-z0-9_-]{11}",str(args.get("videoId",""))):raise ValueError("Vídeo inválido")
-  return {"action":"youtube_play","videoId":args["videoId"]}
- if tool in {"close_youtube","close_projection","pause_youtube","resume_youtube"}:return {"action":tool}
+  state=media_session(args.get("session"));state["open"]=True
+  state["selectedIndex"]=next((i for i,v in enumerate(state.get("videos",[])) if v["videoId"]==args["videoId"]),-1)
+  media_session(args.get("session"),state)
+  return {"action":"youtube_play","videoId":args["videoId"],"query":state.get("query",""),"videos":state.get("videos",[])}
+ if tool in {"close_youtube","close_projection","pause_youtube","resume_youtube"}:
+  if tool.startswith("close_"):media_session(args.get("session"),{})
+  return {"action":tool}
  if tool=="repo_access":
   snapshot=projects_status();available=[r for r in snapshot["projects"] if r["available"]]
   reply=("Yes. I can read "+str(len(available))+" repositories: "+", ".join(r["project"] for r in available)+". Tell me which one you want me to inspect or change." if available else "I could not confirm access to any repository on the phone. The local check failed.")
@@ -661,8 +708,9 @@ def english_reply(value):
  return "I couldn't produce a reliable English response. Please try again."
 def result_cards(tool,args,result):
  project_id=args.get("target")
- if tool in {"open_youtube","search_youtube","play_youtube"}:
-  return {"kind":"youtube","title":"YouTube","query":result.get("query",""),"videoId":result.get("videoId"),"items":[{"title":v["title"],"detail":" · ".join(x for x in [v["channel"],v["duration"]] if x),"videoId":v["videoId"],"request":"Reproduz vídeo "+v["videoId"]} for v in result.get("videos",[])]}
+ if tool in {"open_youtube","search_youtube","play_youtube","select_youtube"}:
+  if result.get("action")=="youtube_selection_missing":return None
+  return {"kind":"youtube","title":"YouTube","query":result.get("query",""),"videoId":result.get("videoId"),"videoTitle":result.get("title",""),"selectedIndex":result.get("selectedIndex"),"items":[{"title":v["title"],"detail":" · ".join(x for x in [v.get("channel",""),v.get("duration","")] if x),"videoId":v["videoId"],"request":"Reproduz vídeo "+v["videoId"]} for v in result.get("videos",[])]}
  if tool in {"repo_access","projects_status"}:
   items=[{"title":r["name"],"detail":("Code accessible" if r["available"] else "Code unavailable")+(" · "+str(r.get("changedFiles",0))+" changed files" if r["available"] else ""),"project":r["project"],"request":"Mostra o projeto "+r["project"],"available":r["available"]} for r in result["projects"]]
   return {"kind":"projects","title":"Your repositories","items":items,"project":project_id}
@@ -688,6 +736,10 @@ def _route(text,context=None):
  original_text=text
  text,context,turns=contextual_request(text,context)
  start=time.monotonic();tool,args=classify(text,context.get("activeProject"))
+ if tool=="select_youtube" and not media_session(dialogue_session(context)).get("open"):
+  web=travis_web_tools.classify(text)
+  if web and web[0]=="web_follow":tool,args=web
+ if tool.endswith("_youtube") or tool=="close_projection":args["session"]=dialogue_session(context)
  INFERENCE_INFO.value={"provider":"local","model":""}
  TRAVIS_BRAIN.mark("executive","planning",tool)
  failure_lessons=TRAVIS_COG.reflexion.recall(text,tool,3)
@@ -754,8 +806,8 @@ def _route(text,context=None):
  elif tool in {"search_positions","projects_status","repo_access"}:reply=result["reply"]
  elif tool=="site_check":reply=" ".join(k+": "+("online." if v["online"] is True else "I could not confirm availability. "+v.get("error","")) for k,v in result.items())
  elif tool=="open_youtube":reply="YouTube, right here. What would you like to watch?"
- elif tool=="search_youtube":reply=("Here are the YouTube results. Choose a video.") if result["videos"] else "No videos appeared for that search. Try another title."
- elif tool=="play_youtube":reply="Loading the video here."
+ elif tool=="search_youtube":reply=result.get("reply") or ("Opening result "+str(result["selectedIndex"]+1)+" here." if result.get("videoId") else ("Here are the videos. Say open the first, the second, or the next one." if result.get("videos") else "No videos appeared for that search. Tell me another topic."))
+ elif tool in {"play_youtube","select_youtube"}:reply=result.get("reply") or "Opening the video here."
  elif tool=="close_youtube":reply="Closing YouTube."
  elif tool=="close_projection":reply="Back with you."
  elif tool=="pause_youtube":reply="Pausing the video."
@@ -781,9 +833,11 @@ def _route(text,context=None):
   else:reply=str(result)
  elif tool=="stop":reply="Stopped."
  else:reply=result if isinstance(result,str) else json.dumps(result,ensure_ascii=False)
+ ui=result_cards(tool,args,result)
+ if ui and ui.get("kind")!="youtube":media_session(session,{})
  if session:event("conversations",{"session":session,"user":original_text[:1600],"assistant":str(reply)[:1600],"tool":tool,"project":runtime.project_id or context.get("activeProject"),"verification":verification["verdict"]})
  event("tool_events",{"tool":tool,"ok":True,"duration_ms":int((time.monotonic()-start)*1000),"correlation_id":outcome["correlationId"],"completion_status":outcome["completionStatus"]})
- return {"ok":True,"ui":result_cards(tool,args,result),**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool in {"local_llm","expert_query"} else {"provider":"local"}),"tool":tool,"result":result,"verification":verification,"reflexion":{"recalledLessons":len(failure_lessons),"usedLessons":len(used_lessons)},"reply":clean(english_reply(reply))[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"],"durationMs":int((time.monotonic()-start)*1000),"quantum":{"strategy":qstrategy,"phase":qplan.get("phase"),"tier":qplan.get("tier"),"returnStatus":qreturn.get("status")}}
+ return {"ok":True,"ui":ui,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool in {"local_llm","expert_query"} else {"provider":"local"}),"tool":tool,"result":result,"verification":verification,"reflexion":{"recalledLessons":len(failure_lessons),"usedLessons":len(used_lessons)},"reply":clean(english_reply(reply))[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"],"durationMs":int((time.monotonic()-start)*1000),"quantum":{"strategy":qstrategy,"phase":qplan.get("phase"),"tier":qplan.get("tier"),"returnStatus":qreturn.get("status")}}
 
 VOICE_JOBS={}
 VOICE_JOB_LOCK=threading.Lock()
