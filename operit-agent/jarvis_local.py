@@ -277,7 +277,9 @@ def classify(text,active_project=None):
        'o que aprendeste de novo','o que sabes de ti','o que mudou em ti','quais sao os teus limites',
        'do you know your new abilities','new capabilities','new abilities','your capabilities','your new features',
        'do you know what you can do','what are your limitations'))
-     or ('camara' in normalized or 'camera' in normalized) and ('tens acesso' in normalized or 'can you access' in normalized)):
+     or ('camara' in normalized or 'camera' in normalized) and ('tens acesso' in normalized or 'can you access' in normalized)
+     or re.search(r'\b(?:sabes|conheces|reconheces)\b.{0,55}\b(?:tens|teu|tua|tuas|teus)\b.{0,65}\b(?:cerebro|memoria|memorias|rede|particulas|aprendizagem|reflexao|ferramentas|capacidades)\b',normalized)):
+
   return 'capabilities_status',{'awareness':True}
  if any(x in normalized for x in ["pausa os sonhos","pausar os sonhos","pause dreams"]):return "brain_pause",{"paused":True}
  if any(x in normalized for x in ["retoma os sonhos","ativar os sonhos","resume dreams"]):return "brain_pause",{"paused":False}
@@ -848,8 +850,10 @@ def route(text,context=None):
  if context.get('wake') is True:prefs=dialogue_preferences(session,{'standby':False})
  ctrl=travis_dialogue.control(text)
  if ctrl and ctrl['setting'] in prefs:prefs=dialogue_preferences(session,{ctrl['setting']:ctrl['value']})
- preference=prefs['language'] if session else context.get('language','en')
- language=preference if preference in {'pt','en'} else travis_dialogue.detect_language(text,prefs['lastLanguage'])
+ preference=prefs['language'] if session else context.get('language','auto')
+ requested=context.get('language','auto')
+ fallback_language=requested if requested in {'pt','en'} else prefs['lastLanguage']
+ language=preference if preference in {'pt','en'} else travis_dialogue.detect_language(text,fallback_language)
  if ctrl and ctrl['setting']=='language' and ctrl['value'] in {'pt','en'}:language=ctrl['value']
  if session:dialogue_preferences(session,{'lastLanguage':language})
  previous=getattr(DIALOGUE_INFO,'language','en');DIALOGUE_INFO.language=language

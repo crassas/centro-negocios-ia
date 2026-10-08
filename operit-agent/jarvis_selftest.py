@@ -37,6 +37,25 @@ class Tests(unittest.TestCase):
   state=self.brain_post('/brain/state',{})['body']
   self.assertEqual(state['kind'],'functional-cognitive-architecture')
   self.assertEqual(state['consciousness'],'not_established')
+ def test_awareness_new_capabilities_and_language(self):
+  cases=[
+   ('Travis, conheces as tuas novas capacidades?','pt'),
+   ('Sabes que tens agora uma rede de memórias?','pt'),
+   ('Do you know about your new abilities?','en'),
+   ('Quais são os teus limites?','pt')
+  ]
+  for sentence,language in cases:
+   with self.subTest(sentence=sentence):
+    self.assertEqual(j.classify(sentence)[0],'capabilities_status')
+    self.assertEqual(j.travis_dialogue.detect_language(sentence,'en' if language=='pt' else 'pt'),language)
+  self.assertEqual(j.classify('Como vais melhorar o cérebro?')[0],'local_llm')
+  context={'language':'pt','session':'awareness-test-session-20261008'}
+  with patch.object(j,'infer',side_effect=AssertionError('Awareness must not call the model')):
+   response=j.route('Travis, conheces as tuas novas capacidades?',context)
+   self.assertEqual(response['tool'],'capabilities_status')
+   self.assertEqual(response['language'],'pt')
+   self.assertIn('Memória real:',response['reply'])
+
  def test_brain_routes_without_model(self):
   with patch.object(j,'infer',side_effect=AssertionError('Unnecessary model call')):
    self.assertEqual(j.route('estado do cérebro')['tool'],'brain_status')
@@ -132,11 +151,14 @@ class Tests(unittest.TestCase):
    self.assertEqual(j.english_reply("O projecto está pronto."),"The project is ready.")
    self.assertEqual(cloud.call_args.args[2],"translation")
    self.assertIn("Translate",cloud.call_args.args[1])
- def test_portuguese_input_gets_english_direct_reply(self):
+ def test_portuguese_input_respects_detected_or_selected_language(self):
   with patch.object(j,"infer",side_effect=AssertionError("LLM called")):
    reply=j.route("Travis, estás aí?")
    self.assertEqual(reply["tool"],"presence")
-   self.assertIn("I’m Travis",reply["reply"])
+   self.assertIn("Sou o Travis",reply["reply"])
+   english=j.route("Travis, estás aí?",{"language":"en"})
+   self.assertEqual(english["tool"],"presence")
+   self.assertIn("I’m Travis",english["reply"])
  def test_youtube_is_a_direct_action(self):
   with patch.object(j,"infer",side_effect=AssertionError("LLM called")):
    for text in ["consegues abrir o YouTube", "Travis, abre o YouTube", "podes abrir YouTube?"]:
