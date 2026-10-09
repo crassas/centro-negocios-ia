@@ -8,6 +8,60 @@ from jarvis_sherpa_selftest import SherpaTests
 from travis_library_selftest import LibraryTests
 
 class Tests(unittest.TestCase):
+ def test_centro_health_natural_speech_routes_to_real_status(self):
+  # Previously the actual screenshot utterance fell back to generic LLM.
+  positive=[
+   "Olá Travis, verifica o Centro de Negócios.»",
+   "Olá Travis, verifica o Centro de Negócios",
+   "Travis, verifica o Centro de Negócios",
+   "Verifica o Centro de Negócios",
+   "Travis, verifica o estado do Centro de Negócios",
+   "Olá para VIS, verifica o estado do Centro de Negócios",
+   "Confirma o Centro de Negócios",
+   "Olá, Travis, consegues verificar o Centro de Negócios?",
+   "Travis, podes confirmar o Centro?",
+   "Travis, testa o servidor do Centro",
+   "Travis, consulta o backend do Centro",
+   "Como está o Centro de Negócios?",
+   "Olá, como está o Centro?",
+   "Travis, qual o estado do Centro?",
+   "Travis, verifica se o Centro está operacional",
+   "Travis, verifica se o Centro de Negócios funciona",
+   "Travis, is the Centro online?",
+   "Travis, check the Centro de Negócios",
+   "Hey Travis, can you check the Centro?",
+   "Travis, confirma-me o Centro",
+  ]
+  for query in positive:
+   with self.subTest(query=query):
+    self.assertTrue(t.centro_operational_status_requested(query))
+    self.assertEqual(t.classify_local_intent(query,'centro')[0],"system_status")
+  negative=[
+   "Olá Travis, verifica o site do Centro de Negócios",
+   "Verifica a página do Centro de Negócios",
+   "Travis, verifica o repositório do Centro de Negócios",
+   "Travis, verifica o código do Centro",
+   "Travis, como verificar o Centro de Negócios?",
+   "Travis, explica o Centro de Negócios",
+   "Travis, publica o Centro de Negócios",
+   "Travis, quero alterar o Centro de Negócios",
+   "Travis, verifica e publica o Centro de Negócios",
+   "Travis, verifica o Centro e paga a fatura",
+   "Travis, verifica o Centro e apaga o histórico",
+   "Travis, não verifiques o Centro de Negócios",
+   "Travis, estado do projeto do Centro",
+   "Travis, quantos clientes tem o Centro",
+   "Travis, vê o SEO do Centro",
+   "Travis, verifica a conta Gmail do Centro",
+   "Travis, verifica os sites do Centro",
+   "Travis, verifica o Git do Centro",
+   "Travis, compara o Centro com outro negócio",
+   "O Centro de Negócios é um serviço de escritório?",
+  ]
+  for query in negative:
+   with self.subTest(query=query):
+    self.assertFalse(t.centro_operational_status_requested(query))
+    self.assertNotEqual(t.classify_local_intent(query,'centro')[0],"system_status")
  def test_registry(self):
   s=t.registry_snapshot();self.assertTrue(s["localFirst"]);self.assertFalse(s["paidFallback"])
   required={"presence","open_youtube","stop","system_status","quantum_status","repo_access","site_check","git_status","git_diff","create_task","task_list","neural_status","neural_recall","neural_consolidate","genome_status","genome_compare","genome_activate","laya_status","laya_decide","local_llm","repo_change","server_status","station_status","station_doctor","agents_status","autonomy_selftest","fault_timeout","fault_laya_recovery","git_pull","git_access_matrix","jarvis_query","claude_query","manus_status","manus_query"}
