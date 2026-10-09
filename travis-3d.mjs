@@ -1,13 +1,15 @@
 import { createConceptProjection } from './travis-concept-projection.mjs?v=conversation-2';
 import { createVoiceInput } from './travis-voice-input.mjs?v=conversation-2';
-import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=voice-flow-3';
+import { createTravisVision } from './travis-vision.mjs?v=1';
+import { cameraCommand } from './travis-vision-policy.mjs?v=1';
+import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=cinema-1';
 import { projectWebAnswer } from './travis-web-projection.mjs?v=agent-1';
 import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=3';
 import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
-import { createBacklight } from './travis-atmosphere.mjs?v=connections1';
+import { createBacklight } from './travis-atmosphere.mjs?v=cinema-1';
 import { createFaceRig } from './travis-face-rig.mjs?v=articulation-2';
 import * as THREE from 'three';
-import { createNeuralField } from './travis-brain-view.mjs?v=4';
+import { createNeuralField } from './travis-brain-view.mjs?v=cinema-1';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -34,6 +36,7 @@ if (!hud || !launcher || !canvas) {
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const presenceMotion=createPresenceMotion({reducedMotion});
   let presencePose={};
+  const visionLook={x:0,y:0};
   const stateCopy = {
     idle: ['Standing by.', 'STANDBY'],
     booting: ['Materializing core.', 'BOOTING'],
@@ -115,7 +118,8 @@ if (!hud || !launcher || !canvas) {
   const LOCAL_TRAVIS_BASE=IS_LOCAL_TRAVIS_UI?location.origin:'http://127.0.0.1:8770';
   let voiceSession=0;
   let voiceInput=null,voiceInputFailed=false,voicePaused=false,standby=false,initiativeTimer=0;
-  let replyLanguage='en',inputLanguage='auto',proactive=true,lastInteraction=performance.now();
+  const savedLanguage=(()=>{try{return sessionStorage.getItem('travis.language')||'auto';}catch{return 'auto';}})();
+  let replyLanguage=savedLanguage==='pt'?'pt':'en',inputLanguage='auto',preferredLanguage=['pt','en'].includes(savedLanguage)?savedLanguage:'auto',proactive=true,lastInteraction=performance.now();
   function interruptReply(){
     voiceSession++;voiceRequestController?.abort();voiceRequestController=null;
     clearTimeout(voiceFinishTimer);voiceFinishTimer=0;
@@ -206,6 +210,15 @@ if (!hud || !launcher || !canvas) {
 
   const clamp = THREE.MathUtils.clamp;
   const lerp = THREE.MathUtils.lerp;
+  const vision=createTravisVision({
+    onGesture(action){
+      if(!opened||!ready)return;
+      if(action==='show_hologram')toggleCommands(true,{automatic:true});
+      if(action==='hide_hologram')toggleCommands(false,{automatic:true});
+      if(action==='show_face')setForm('face',{manual:true});
+      if(action==='show_brain')setForm('core',{manual:true});
+    }
+  });
 
   function easeOutCubic(t) {
     return 1 - Math.pow(1 - clamp(t,0,1), 3);
@@ -298,7 +311,7 @@ if (!hud || !launcher || !canvas) {
           float d=distance(uv,vec2(.5));
           float vignette=1.0-smoothstep(.48,.78,d)*.34;
           vec3 color=(base+bloom*1.12)*vignette;
-          color+=vec3(.72,.94,1.0)*uFlash*.12;
+          color+=vec3(1.0,.84,.65)*uFlash*.12;
 
           gl_FragColor=vec4(max(color,vec3(0.0)),1.0);
         }
@@ -312,7 +325,7 @@ if (!hud || !launcher || !canvas) {
     return new THREE.ShaderMaterial({
       uniforms:{
         uTime:{value:0},
-        uColor:{value:new THREE.Color(0.055,.62,1.18)},
+        uColor:{value:new THREE.Color(.62,.41,.23)},
         uOpacity:{value:.34},
         uGlitch:{value:0},
         uState:{value:0}
@@ -409,7 +422,7 @@ if (!hud || !launcher || !canvas) {
     syncFormButtons();
   }
 
-  function holoLine(points,color=0x6ce8ff,opacity=.35,closed=false) {
+  function holoLine(points,color=0xcaa373,opacity=.35,closed=false) {
     const geometry=new THREE.BufferGeometry().setFromPoints(points);
     const material=new THREE.LineBasicMaterial({
       color,transparent:true,opacity,
@@ -420,7 +433,7 @@ if (!hud || !launcher || !canvas) {
     return line;
   }
 
-  function ellipseLine(rx,ry,z,color=0x76eaff,opacity=.36,segments=64) {
+  function ellipseLine(rx,ry,z,color=0xd1ad81,opacity=.36,segments=64) {
     const points=[];
     for(let i=0;i<=segments;i++){
       const a=i/segments*Math.PI*2;
@@ -497,7 +510,7 @@ if (!hud || !launcher || !canvas) {
         pivot.updateMatrixWorld(true);
         [sclera,iris,pupil].forEach(mesh=>pivot.attach(mesh));
         const glint=markBloom(new THREE.Mesh(new THREE.SphereGeometry(.0017,8,6),
-          new THREE.MeshBasicMaterial({color:0x68bdd4,toneMapped:false})));
+          new THREE.MeshBasicMaterial({color:0xcdb18b,toneMapped:false})));
         glint.name='TravisFace_EyeAccent_'+label;
         glint.position.set(-.009,.012,.053);pivot.add(glint);glint.visible=false;
         faceEyeGroups.push(pivot);realFaceIris.push(iris);
@@ -719,13 +732,14 @@ if (!hud || !launcher || !canvas) {
     await prepareSpeechFace(ac);
     if (!opened || session!==voiceSession) return;
     speechFace?.reset();
-    hud.dataset.lipSync=speechFace?'audio-visemes':'audio-envelope-fallback';
+    const useVisemes=Boolean(speechFace&&replyLanguage==='en');
+    hud.dataset.lipSync=useVisemes?'english-audio-visemes':'native-voice-envelope';
     const analyser=ac.createAnalyser();
     analyser.fftSize=1024;
     const samples=new Float32Array(analyser.fftSize);
     const source=ac.createBufferSource();
     source.buffer=decoded;
-    if(speechFace){
+    if(useVisemes){
       source.connect(speechFace.node);
       voiceOutputDelay=ac.createDelay(.2);voiceOutputDelay.delayTime.value=.08;
       source.connect(voiceOutputDelay);voiceOutputDelay.connect(analyser);
@@ -764,7 +778,7 @@ if (!hud || !launcher || !canvas) {
         setState(standby||voicePaused?'idle':'ready',standby?'Standing by. Say Travis.':voicePaused?'Microphone off.':'I’m here.');
         if(!voicePaused)scheduleListening(session,180);
       }
-    },speechFace?85:0);};
+    },useVisemes?85:0);};
 
     meter();
     source.start();
@@ -825,6 +839,16 @@ if (!hud || !launcher || !canvas) {
     } finally {scheduleVoiceTaskPoll();}
   }
 
+  // The user's spoken command is an explicit camera request. Browser permission is still required.
+  function cameraDirective(message){
+    const text=String(message).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
+      .replace(/^(?:travis|jarvis|olha|please)[,: ]+/,'').trim().replace(/[.!?]+$/,'');
+    if(/^(?:nao|nunca|do not|don't|never)\b/.test(text))return null;
+    if(/^(?:liga|ligar|ativa|ativar|activa|activar|abre|abrir|mostra|open|enable|start|turn on)\s+(?:(?:a|the|my|minha)\s+)?(?:camera|camara|webcam|vision|visao)$/.test(text))return 'start';
+    if(/^(?:desliga|desligar|desativa|desativar|fecha|fechar|stop|disable|close|turn off)\s+(?:(?:a|the|my|minha)\s+)?(?:camera|camara|webcam|vision|visao)$/.test(text))return 'stop';
+    return null;
+  }
+
   async function handleVoiceBlob(blob,mime,session) {
     if (!opened || session!==voiceSession) return;
     voiceBusy=true;
@@ -852,11 +876,46 @@ if (!hud || !launcher || !canvas) {
       if(standby){standby=false;text=text.replace(/^(?:hey |olá? )?(?:travis|jarvis)[ ,.!:]*/i,'')||'wake up';}
       lastInteraction=performance.now();
       text=window.TravisProjection?.select(text)||text;
+      const cameraAction=cameraCommand(text);
+      if(cameraAction){
+        const ptSpoken=/\b(?:liga|ligar|ativa|ativar|activa|abre|mostra|desliga|fecha|desativa)\b/i.test(text);
+        const locale=preferredLanguage==='pt'||preferredLanguage==='en'?preferredLanguage:(ptSpoken?'pt':'en');
+        let responseText;
+        setState('thinking',cameraAction==='start'?'Activating local vision…':'Disabling camera…');
+        try{
+          if(cameraAction==='start')await vision.start();
+          else vision.stop();
+          responseText=cameraAction==='start'
+            ? (locale==='pt'?'A câmara está activa. Consigo acompanhar o teu rosto e alguns gestos no ecrã.':'The camera is active. I can now follow your face position and recognised hand gestures on screen.')
+            : (locale==='pt'?'Câmara desligada.':'Camera switched off.');
+        }catch(error){
+          responseText=locale==='pt'?'Não consegui activar a câmara. Confirma a autorização no navegador.':'I could not activate the camera. Please check the browser permission.';
+        }
+        if(!opened||session!==voiceSession||controller.signal.aborted){if(cameraAction==='start')vision.stop();return;}
+        window.dispatchEvent(new CustomEvent('travis:transcript',{detail:{role:'assistant',text:responseText}}));
+        replyLanguage=locale;
+        const speech=await localFetch('/speak',{body:{text:responseText,language:locale},signal:controller.signal});
+        if(!speech.ok)throw new Error('Local voice unavailable');
+        await playVoiceArrayBuffer(await speech.arrayBuffer(),session,responseText);
+        return;
+      }
       setState('thinking','Handling your request…');
-      const answer=await localJson('/jarvis',{body:{text,session:dialogueSession,project:activeProject,language:inputLanguage,wake:wokeFromStandby},signal:controller.signal});
+      // MediaPipe metadata from the user's consented camera; no pixel data is sent.
+      const cameraState=vision.diagnostics();
+      const visualEvidence={
+        active:cameraState.active===true,
+        observedAt:Date.now()/1000,
+        frames:Number.isInteger(cameraState.frames)?Math.max(0,cameraState.frames):0,
+        faceDetected:cameraState.faceDetected===true,
+        gesture:['None','Victory','Open_Palm','Closed_Fist','Thumb_Up'].includes(cameraState.gesture)?cameraState.gesture:'None'
+      };
+      const answer=await localJson('/jarvis',{body:{text,session:dialogueSession,project:activeProject,language:inputLanguage,wake:wokeFromStandby,vision:visualEvidence},signal:controller.signal});
       if (!opened || session!==voiceSession) return;
       replyLanguage=answer.language==='pt'?'pt':'en';
-      inputLanguage=answer.preferences?.language||'auto';
+      // Listening stays bilingual even when the reply language is locked: the next command may switch it.
+      preferredLanguage=answer.preferences?.language||'auto';
+      try{sessionStorage.setItem('travis.language',preferredLanguage);}catch{}
+      inputLanguage='auto';
       proactive=answer.preferences?.proactive!==false;
       if(answer.result?.action==='conversation_control'){
         const {setting,value}=answer.result;
@@ -1062,10 +1121,13 @@ if (!hud || !launcher || !canvas) {
       }
       scheduleVoiceTaskPoll();scheduleInitiative();
       if (greet) {
+        const greetingLanguage=preferredLanguage==='pt'?'pt':'en';
+        replyLanguage=greetingLanguage;
+        const greetingText=greetingLanguage==='pt'?'Bem-vindo de volta, senhor Richards.':WELCOME_GREETING;
         setState('thinking','Starting voice system…');
         try {
           const speech=await localFetch('/speak',{
-            body:{text:WELCOME_GREETING,language:'en',mode:'welcome'},
+            body:{text:greetingText,language:greetingLanguage,mode:'welcome'},
             type:'application/json',
             signal:controller.signal
           });
@@ -1078,7 +1140,7 @@ if (!hud || !launcher || !canvas) {
             await new Promise(resolve=>setTimeout(resolve,50));
           }
           if(!opened || session!==voiceSession || controller.signal.aborted)return;
-          await playVoiceArrayBuffer(wav,session,WELCOME_GREETING);
+          await playVoiceArrayBuffer(wav,session,greetingText);
           return;
         } catch(error) {
           if(controller.signal.aborted || session!==voiceSession)return;
@@ -1099,14 +1161,14 @@ if (!hud || !launcher || !canvas) {
     }
   }
 
-  function radialTexture(inner='#bff8ff', outer='rgba(72,216,255,0)') {
+  function radialTexture(inner='#e9d0a9', outer='rgba(194,150,91,0)') {
     const c=document.createElement('canvas');
     c.width=c.height=256;
     const ctx=c.getContext('2d');
     const g=ctx.createRadialGradient(128,128,0,128,128,128);
     g.addColorStop(0,inner);
-    g.addColorStop(.08,'rgba(104,235,255,.9)');
-    g.addColorStop(.32,'rgba(36,165,255,.25)');
+    g.addColorStop(.08,'rgba(224,188,134,.78)');
+    g.addColorStop(.32,'rgba(171,117,61,.16)');
     g.addColorStop(1,outer);
     ctx.fillStyle=g;
     ctx.fillRect(0,0,256,256);
@@ -1123,14 +1185,14 @@ if (!hud || !launcher || !canvas) {
     ctx.textAlign='center';
     ctx.textBaseline='middle';
     ctx.font='700 44px Arial, sans-serif';
-    ctx.fillStyle='#e7fbff';
-    ctx.shadowColor='rgba(90,225,255,.65)';
+    ctx.fillStyle='#f0e1cd';
+    ctx.shadowColor='rgba(220,179,117,.4)';
     ctx.shadowBlur=16;
     ctx.fillText(title,256,72);
     ctx.shadowBlur=0;
     if (subtitle) {
       ctx.font='500 20px Arial, sans-serif';
-      ctx.fillStyle='rgba(132,188,211,.9)';
+      ctx.fillStyle='rgba(191,166,134,.9)';
       ctx.fillText(subtitle,256,119);
     }
     const tex=new THREE.CanvasTexture(c);
@@ -1143,11 +1205,11 @@ if (!hud || !launcher || !canvas) {
     const c=document.createElement('canvas');
     c.width=c.height=192;
     const ctx=c.getContext('2d');
-    ctx.strokeStyle='#bdf5ff';
+    ctx.strokeStyle='#e6c89b';
     ctx.lineWidth=7;
     ctx.lineCap='round';
     ctx.lineJoin='round';
-    ctx.shadowColor='rgba(84,220,255,.7)';
+    ctx.shadowColor='rgba(198,145,82,.38)';
     ctx.shadowBlur=12;
 
     if (kind==='centre') {
@@ -1180,14 +1242,14 @@ if (!hud || !launcher || !canvas) {
     const geo=new THREE.BufferGeometry();
     geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
     const mat=new THREE.PointsMaterial({
-      color:0x70ddff,size:innerWidth<700?.017:.021,transparent:true,opacity:.24,
+      color:0xc6a174,size:innerWidth<700?.017:.021,transparent:true,opacity:.24,
       blending:THREE.AdditiveBlending,depthWrite:false
     });
     dust=new THREE.Points(geo,mat);
     scene.add(dust);
 
     const beamMat=new THREE.MeshBasicMaterial({
-      color:0x48cfff,transparent:true,opacity:.0045,
+      color:0x9a734c,transparent:true,opacity:.0045,
       blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,toneMapped:false
     });
     beamTop=new THREE.Mesh(new THREE.ConeGeometry(1.7,8.2,48,1,true),beamMat.clone());
@@ -1200,7 +1262,7 @@ if (!hud || !launcher || !canvas) {
     scene.add(beamBottom);
 
     const haloMat=new THREE.MeshBasicMaterial({
-      color:0x36cfff,transparent:true,opacity:.055,
+      color:0xac7d50,transparent:true,opacity:.055,
       blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,toneMapped:false
     });
     floorHalo=markBloom(new THREE.Mesh(new THREE.RingGeometry(1.55,3.6,128),haloMat));
@@ -1240,7 +1302,7 @@ if (!hud || !launcher || !canvas) {
     orbitParticles=markBloom(new THREE.Points(
       orbitGeo,
       new THREE.PointsMaterial({
-        color:0x7ceeff,size:innerWidth<700?.022:.028,
+        color:0xdfbf94,size:innerWidth<700?.022:.028,
         transparent:true,opacity:.5,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
       })
     ));
@@ -1264,7 +1326,7 @@ if (!hud || !launcher || !canvas) {
       const line=markBloom(new THREE.LineLoop(
         new THREE.BufferGeometry().setFromPoints(pts),
         new THREE.LineBasicMaterial({
-          color:j%3===0?0xff3d67:0x5fe6ff,
+          color:j%3===0?0xc1905a:0xc7a37a,
           transparent:true,opacity:j%3===0?.07:.09,
           blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
         })
@@ -1278,21 +1340,21 @@ if (!hud || !launcher || !canvas) {
   }
 
   function createLights() {
-    const faceKey=new THREE.DirectionalLight(0xd9eeed,2.4);
+    const faceKey=new THREE.DirectionalLight(0xf4e5d1,2.4);
     faceKey.position.set(-3.8,1.0,2.0);scene.add(faceKey);
-    const faceFill=new THREE.DirectionalLight(0x8db8bd,.22);
+    const faceFill=new THREE.DirectionalLight(0xb49c83,.22);
     faceFill.position.set(2,-1.2,1.5);scene.add(faceFill);
-    scene.add(new THREE.HemisphereLight(0xa2c5cd,0x010203,.12));
+    scene.add(new THREE.HemisphereLight(0xe0c3a4,0x010203,.12));
 
-    const cyan=new THREE.PointLight(0x8bd5d9,3.8,12,2);
+    const cyan=new THREE.PointLight(0xc7a67c,2.8,12,2);
     cyan.position.set(-3.5,2.4,4.2);
     scene.add(cyan);
 
-    const red=new THREE.PointLight(0xb9977c,1.1,10,2);
+    const red=new THREE.PointLight(0xc09a76,1.1,10,2);
     red.position.set(3.4,-1.5,3.1);
     scene.add(red);
 
-    const rim=new THREE.PointLight(0xdafcff,2.2,9,2);
+    const rim=new THREE.PointLight(0xffead3,2.2,9,2);
     rim.position.set(0,3.5,2.5);
     scene.add(rim);
   }
@@ -1357,7 +1419,7 @@ if (!hud || !launcher || !canvas) {
     }
   }
 
-  function createCommandNode({label,panel,icon:iconKey,color=0x58ddff}) {
+  function createCommandNode({label,panel,icon:iconKey,color=0xd6b180}) {
     const group=new THREE.Group();
     group.userData.panel=panel;
 
@@ -1425,13 +1487,13 @@ if (!hud || !launcher || !canvas) {
 
     createCommandNode({label:'CENTRO',panel:'visao',icon:'centre'});
     createCommandNode({label:'PROJECTOS',panel:'crm',icon:'projects'});
-    createCommandNode({label:'SEO',panel:'seo',icon:'seo',color:0x75eaff});
-    createCommandNode({label:'AGENTES',panel:'agentes',icon:'agents',color:0xff4668});
+    createCommandNode({label:'SEO',panel:'seo',icon:'seo',color:0xdab684});
+    createCommandNode({label:'AGENTES',panel:'agentes',icon:'agents',color:0xa78369});
 
     commandLines=commandNodes.map((node)=>{
       const geo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]);
       const mat=new THREE.LineBasicMaterial({
-        color:node.group.userData.panel==='agentes'?0xff4668:0x5fe2ff,
+        color:node.group.userData.panel==='agentes'?0xa78369:0xd5b68f,
         transparent:true,opacity:0,blending:THREE.AdditiveBlending
       });
       const line=markBloom(new THREE.Line(geo,mat));
@@ -1543,7 +1605,7 @@ if (!hud || !launcher || !canvas) {
       webglLost=false;resize();lastFrame=performance.now();
       setLoading('BUSTO 3D PRONTO',true);
     });
-    renderer.setClearColor(0x02070b,1);
+    renderer.setClearColor(0x030405,1);
     renderer.outputColorSpace=THREE.SRGBColorSpace;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure=.98;
@@ -1551,8 +1613,8 @@ if (!hud || !launcher || !canvas) {
     scene=new THREE.Scene();
     conceptProjection=createConceptProjection(THREE,{reducedMotion});scene.add(conceptProjection.root);
     if(pendingConcept)conceptProjection.show(pendingConcept,performance.now()/1000);
-    scene.background=new THREE.Color(0x02070b);
-    scene.fog=new THREE.FogExp2(0x02070b,.045);
+    scene.background=new THREE.Color(0x030405);
+    scene.fog=new THREE.FogExp2(0x030405,.045);
 
     camera=new THREE.PerspectiveCamera(36,innerWidth/innerHeight,.1,60);
     camera.position.set(0,.3,9);
@@ -1684,6 +1746,15 @@ if (!hud || !launcher || !canvas) {
     const targetVoice=state==='speaking'?(externalVoiceLevel||0):0;
     speechLevel+=(targetVoice-speechLevel)*(1-Math.exp(-dt*(targetVoice>speechLevel?30:22)));
     presencePose=presenceMotion.update(dt,state,speechLevel,projection.amount);
+    const observedFace=vision.pose();
+    // Low-pass gaze tracking dampens jitter and returns gently to centre when no face is visible.
+    const trackingBlend=Math.min(1,dt*4);
+    visionLook.x=lerp(visionLook.x,observedFace?.x||0,trackingBlend);
+    visionLook.y=lerp(visionLook.y,observedFace?.y||0,trackingBlend);
+    presencePose.yaw-=visionLook.x*.28;
+    presencePose.pitch-=visionLook.y*.13;
+    presencePose.eyeX-=visionLook.x*.17;
+    presencePose.eyeY-=visionLook.y*.12;
     hud.style.setProperty('--travis-speech',state==='speaking'?speechLevel.toFixed(3):'0');
 
     for (const key of ['core','face']) {
@@ -1746,7 +1817,7 @@ if (!hud || !launcher || !canvas) {
     if(neuralBackdrop)neuralBackdrop.visible=formBlend.face>.5;
     cinematicBacklight?.update(reducedMotion?0:t,state==='speaking'?speechLevel:0);
     if(state==='speaking')speechFace?.update(dt);
-    faceRig?.update(state==='speaking'?speechLevel:0,state==='speaking'?speechFace?.weights:null);
+    faceRig?.update(state==='speaking'?speechLevel:0,state==='speaking'&&replyLanguage==='en'?speechFace?.weights:null);
     hud.dataset.mouthLevel=speechLevel.toFixed(2);
     if (faceRoot) {
       const faceMix=Math.max(.001,formBlend.face);
@@ -1878,7 +1949,7 @@ if (!hud || !launcher || !canvas) {
     if (moved>18 || elapsed>700) return;
 
     rayFromEvent(event);
-    // Inspect a real persisted memory before falling back to the legacy core hit.
+    // A memória selecionada corresponde a um nó SQLite real.
     const memory=neuralField?.pick(raycaster);
     if(memory){neuralField.select(memory.id);haptic(10);return;}
     const hit=raycaster.intersectObjects(interactiveObjects(),true)[0];
@@ -1926,6 +1997,7 @@ if (!hud || !launcher || !canvas) {
   }
 
   function closeHud() {
+    vision.stop();
     clearTimeout(introVoiceTimer);introVoiceTimer=0;
     stopVoiceConversation();
     faceRig?.update(0);
@@ -1987,7 +2059,7 @@ if (!hud || !launcher || !canvas) {
         neural:neuralField?.diagnostics(),
         presence:{...presencePose},projection:hologramPresentation.sample(performance.now()/1000),
         media:window.TravisProjection?.media(),
-        meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,voiceInput:voiceInput?.diagnostics(),replyLanguage,inputLanguage,standby,proactive,voicePaused,
+        meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,voiceInput:voiceInput?.diagnostics(),vision:vision.diagnostics(),replyLanguage,inputLanguage,preferredLanguage,standby,proactive,voicePaused,
         recording:voiceRecorder?.state,pendingTasks:[...pendingVoiceTasks.keys()],lastTaskResult:lastVoiceTaskResult,voiceMetrics:voiceMetrics.map(m=>({...m}))};
     },
     form(mode='auto') {

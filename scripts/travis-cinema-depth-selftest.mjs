@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const html=fs.readFileSync('index.html','utf8'),sw=fs.readFileSync('sw.js','utf8'),css=fs.readFileSync('travis-cinema-depth.css','utf8');
+assert.ok(html.includes('travis-cinema-depth.css?v=depth-2'));
+assert.ok(sw.includes('travis-cinema-depth.css?v=depth-2'));
+assert.equal((html.match(/class="travis-cinema-lightfield"/g)||[]).length,1);
+assert.ok(html.indexOf('class="travis-cinema-lightfield"')>html.indexOf('id="travis-three-canvas"'));
+for(const selector of ['.travis-cinema-godray','.travis-cinema-aura','.travis-cinema-horizon','.travis-cinema-reflection','.travis-status','.travis-command','.travis-form-selector'])assert.ok(css.includes(selector),selector);
+assert.ok(css.includes('pointer-events:none'));
+assert.equal((css.match(/\{/g)||[]).length,(css.match(/\}/g)||[]).length);
+for(const id of ['travis-hud-close','travis-camera-toggle','travis-command','travis-command-text','travis-voice-start','travis-three-canvas'])assert.ok(html.includes('id="'+id+'"'),id);
+console.log('CINEMATIC DEPTH v2 STATIC CHECK OK');

@@ -1,0 +1,14 @@
+name: Vision Bridge Check
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m py_compile operit-agent/travis_vision_bridge.py operit-agent/jarvis_local.py
+      - run: python3 operit-agent/jarvis_selftest.py
+      - run: node --check travis-3d.mjs

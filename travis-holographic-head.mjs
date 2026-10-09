@@ -34,15 +34,15 @@ export function createHolographicHeadMaterial(THREE,shell=false) {
         float assembly=exp(-pow(abs(vP.y-front)/.026,2.0))*(1.0-step(.999,uBuild));
         float side=max(0.0,dot(n,normalize(vec3(-.75,.35,.55))));
         ${shell?`
-        vec3 colour=vec3(.19,.72,.78)*(edge*.5+contour*.05+sweep*.1)+vec3(.66,.94,1.0)*(assembly+dissolveEdge*.7);
+        vec3 colour=vec3(.74,.48,.24)*(edge*.5+contour*.05+sweep*.1)+vec3(1.0,.81,.56)*(assembly+dissolveEdge*.7);
         gl_FragColor=vec4(colour,uOpacity*neck*(edge*.7+assembly*.9+contour*.06+dissolveEdge*.35));
         `:`
         float key=max(0.0,dot(n,normalize(vec3(-.35,.6,1.0))));
-        vec3 dark=vec3(.009,.038,.052);
-        vec3 colour=dark+vec3(.055,.29,.33)*side*.64+vec3(.04,.13,.16)*key;
-        colour+=vec3(.19,.61,.67)*(edge*.46+contour*.095+fine*.018+sweep*.13);
-        colour+=vec3(.63,.91,.98)*assembly*.72;
-        colour+=vec3(.44,.83,.92)*dissolveEdge*.65;
+        vec3 dark=vec3(.020,.016,.013);
+        vec3 colour=dark+vec3(.27,.16,.08)*side*.64+vec3(.13,.085,.045)*key;
+        colour+=vec3(.59,.35,.17)*(edge*.46+contour*.095+fine*.018+sweep*.13);
+        colour+=vec3(.98,.78,.54)*assembly*.72;
+        colour+=vec3(.82,.59,.34)*dissolveEdge*.65;
         colour*=neck*(.95+uState*.05);
         if(fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)>neck)discard;
         gl_FragColor=vec4(colour/max(neck,.001),1.0);

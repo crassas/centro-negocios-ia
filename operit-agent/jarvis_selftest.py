@@ -56,6 +56,27 @@ class Tests(unittest.TestCase):
    self.assertEqual(response['language'],'pt')
    self.assertIn('Memória real:',response['reply'])
 
+ def test_camera_uses_ephemeral_browser_evidence_not_llm(self):
+  now=j.time.time()
+  frame={'active':True,'observedAt':now,'frames':12,'faceDetected':True,'gesture':'Victory'}
+  with patch.object(j,'infer',side_effect=AssertionError('no model required')):
+   answer=j.route('Travis, consegues ver-me?',{'vision':frame,'language':'pt'})
+   self.assertEqual(answer['tool'],'vision_status')
+   self.assertIn('detectou um rosto',answer['reply'])
+   self.assertIn('dois dedos',answer['reply'])
+   self.assertIn('detected a face',j.route('Can you see me?',{'vision':frame,'language':'en'})['reply'])
+   self.assertIn('desligada',j.route('Consegues ver-me?',{'vision':{'active':False,'observedAt':now},'language':'pt'})['reply'])
+   self.assertIn('Não recebi',j.route('Consegues ver-me?',{'vision':{**frame,'observedAt':now-30},'language':'pt'})['reply'])
+   self.assertIn('presença de um rosto',j.route('Quais são as tuas capacidades?',{'vision':frame,'language':'pt'})['reply'])
+  self.assertNotEqual(j.classify('Consegues ver o site da Pentehouse?')[0],'vision_status')
+  self.assertEqual(j.classify('Can you see my repositories?')[0],'repo_access')
+  self.assertIsNone(j.travis_vision_bridge.observe({**frame,'image':'data:image/jpeg;base64,AA'}))
+  with patch.object(j,'infer',side_effect=AssertionError('HTTP camera question does not use LLM')):
+   reply=self.brain_post('/jarvis',{'text':'Consegues ver-me?','language':'pt','vision':frame})
+  self.assertEqual(reply['code'],200)
+  self.assertEqual(reply['body']['tool'],'vision_status')
+  self.assertEqual(self.brain_post('/jarvis',{'text':'Can you see me?','vision':frame},'https://untrusted.example')['code'],403)
+
  def test_brain_routes_without_model(self):
   with patch.object(j,'infer',side_effect=AssertionError('Unnecessary model call')):
    self.assertEqual(j.route('estado do cérebro')['tool'],'brain_status')
