@@ -42,6 +42,23 @@ class SherpaTests(unittest.TestCase):
             "Modifica os dados de clientes",
         ):
             self.assertFalse(sherpa.safe_short_read_transcript(text),text)
+    def test_clarity_gate_handles_additional_portuguese_commands(self):
+        for phrase in (
+            "Travis mostra e muda o preço do serviço",
+            "Verifica e guarda os dados pessoais",
+            "Travis procura e grava ficheiros",
+            "Por favor substitui o conteúdo do site",
+            "Travis envia emails aos clientes",
+        ):
+            self.assertFalse(sherpa.safe_short_read_transcript(phrase),phrase)
+        for phrase in (
+            "Travis compara Jung e Kant",
+            "Travis fecha o YouTube",
+            "Travis decide qual o próximo teste",
+            "Hello Travis check the local server",
+        ):
+            self.assertTrue(sherpa.safe_short_read_transcript(phrase),phrase)
+
     def test_empty_repeated_and_long_are_rejected(self):
         for text in ("", "sim", "Travis", "yuk "*23, "I "*121):
             self.assertFalse(sherpa.safe_short_read_transcript(text),text[:30])
