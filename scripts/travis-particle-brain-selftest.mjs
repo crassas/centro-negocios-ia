@@ -21,23 +21,23 @@ for(const marker of [
 assert.ok(!brain.includes('const pathways='),'pre-drawn cognitive pathways');
 assert.ok(!brain.includes('cortexMaterial'),'opaque fake solid cortex still present');
 for(const marker of [
-  "input.source!=='local-sqlite'",'snapshot.links','snapshot.nodes',
-  'PersistedSynapses','persisted-knowledge-graph',
+  "snapshot.source!=='local-sqlite'",'snapshot.links','snapshot.nodes',
+  'VerifiedMemoryNodes','persisted-knowledge-graph',
   'status===\'live\''
 ])assert.ok(graph.includes(marker),'graph missing '+marker);
 for(const marker of ["fetch('/brain/state'","fetch('/brain/graph'","onGraph(null)","setSelectedMemory"]){
   assert.ok(panel.includes(marker),'panel missing '+marker);
 }
 assert.ok(scene.includes("const memory=neuralField?.pick(raycaster)"));
-assert.ok(scene.includes("import { createNeuralField } from './travis-brain-view.mjs?v=4'"));
+assert.ok(scene.includes("import { createNeuralField } from './travis-brain-view.mjs?v=cinema-1'"));
 for(const ref of [
-  'travis-3d.mjs?v=particle-memory-1',
-  'travis-brain-view.mjs?v=4',
+  'travis-3d.mjs?v=depth-2',
+  'travis-brain-view.mjs?v=cinema-1',
   'travis-brain-panel.mjs?v=3',
-  'travis-knowledge-graph.mjs?v=3',
+  'travis-knowledge-graph.mjs?v=cinema-1',
   'travis-brain.css?v=3'
 ])assert.ok(sw.includes(ref),'cache mismatch '+ref);
-assert.ok(html.includes('travis-3d.mjs?v=particle-memory-1'));
+assert.ok(html.includes('travis-3d.mjs?v=depth-2'));
 assert.ok(html.includes('travis-brain.css?v=3'));
 assert.ok(backend.includes('"/brain/graph"'));
 assert.ok(runtime.includes("'FROM travis_synapses WHERE active=1 '"));

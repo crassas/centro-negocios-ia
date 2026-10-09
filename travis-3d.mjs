@@ -2,11 +2,11 @@ import { createConceptProjection } from './travis-concept-projection.mjs?v=conve
 import { createVoiceInput } from './travis-voice-input.mjs?v=conversation-2';
 import { createTravisVision } from './travis-vision.mjs?v=1';
 import { cameraCommand } from './travis-vision-policy.mjs?v=1';
-import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=cinema-1';
+import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=depth-2';
 import { projectWebAnswer } from './travis-web-projection.mjs?v=agent-1';
 import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=3';
 import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
-import { createBacklight } from './travis-atmosphere.mjs?v=cinema-1';
+import { createBacklight } from './travis-atmosphere.mjs?v=depth-2';
 import { createFaceRig } from './travis-face-rig.mjs?v=articulation-2';
 import * as THREE from 'three';
 import { createNeuralField } from './travis-brain-view.mjs?v=cinema-1';

@@ -1,0 +1,31 @@
+name: Travis cinematic depth v2
+on:
+  pull_request:
+    paths:
+      - "travis-cinema-depth.css"
+      - "travis-cinema.css"
+      - "travis-3d.mjs"
+      - "travis-holographic-head.mjs"
+      - "travis-atmosphere.mjs"
+      - "index.html"
+      - "sw.js"
+      - "scripts/travis-cinema-selftest.mjs"
+      - ".github/workflows/travis-cinema-depth.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  visual-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify cinematic assets and UI safety contracts
+        run: node scripts/travis-cinema-selftest.mjs
+      - name: Verify module syntax
+        run: |
+          for file in travis-3d.mjs travis-holographic-head.mjs travis-atmosphere.mjs sw.js; do
+            node --check "$file"
+          done

@@ -43,6 +43,12 @@ export function createHolographicHeadMaterial(THREE,shell=false) {
         colour+=vec3(.59,.35,.17)*(edge*.46+contour*.095+fine*.018+sweep*.13);
         colour+=vec3(.98,.78,.54)*assembly*.72;
         colour+=vec3(.82,.59,.34)*dissolveEdge*.65;
+        // Studio gradient: warm key from upper left, soft copper rim, darker right side.
+        float studioSide=smoothstep(-.55,.55,vP.x);
+        float upperLight=smoothstep(.40,1.08,vP.y);
+        colour*=mix(1.31,.81,studioSide);
+        colour+=vec3(.13,.075,.028)*upperLight*(1.0-studioSide);
+        colour+=vec3(.17,.10,.043)*edge*(1.0-studioSide*.52);
         colour*=neck*(.95+uState*.05);
         if(fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)>neck)discard;
         gl_FragColor=vec4(colour/max(neck,.001),1.0);
@@ -84,7 +90,7 @@ export function createAssemblyParticles(THREE,geometry) {
       float spark=smoothstep(0.0,.025,age)*(1.0-smoothstep(.08,.4,age))*(1.0-smoothstep(.88,1.0,uDissolve));
       vAlpha=max(vAlpha,spark*.75);
       vec4 mv=modelViewMatrix*vec4(p,1.0);gl_Position=projectionMatrix*mv;gl_PointSize=clamp(7.0/-mv.z,1.0,3.0);}`,
-    fragmentShader:`varying float vAlpha;void main(){float d=length(gl_PointCoord-.5);if(d>.5)discard;gl_FragColor=vec4(.48,.9,1.0,vAlpha*(1.0-d*2.0));}`,
+    fragmentShader:`varying float vAlpha;void main(){float d=length(gl_PointCoord-.5);if(d>.5)discard;gl_FragColor=vec4(.95,.72,.44,vAlpha*(1.0-d*2.0));}`,
     transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
   });
   const object=new THREE.Points(cloud,material);object.name='TravisLaserAssembly';return object;
