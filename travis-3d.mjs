@@ -900,7 +900,16 @@ if (!hud || !launcher || !canvas) {
         return;
       }
       setState('thinking','Handling your request…');
-      const answer=await localJson('/jarvis',{body:{text,session:dialogueSession,project:activeProject,language:inputLanguage,wake:wokeFromStandby},signal:controller.signal});
+      // MediaPipe metadata from the user's consented camera; no pixel data is sent.
+      const cameraState=vision.diagnostics();
+      const visualEvidence={
+        active:cameraState.active===true,
+        observedAt:Date.now()/1000,
+        frames:Number.isInteger(cameraState.frames)?Math.max(0,cameraState.frames):0,
+        faceDetected:cameraState.faceDetected===true,
+        gesture:['None','Victory','Open_Palm','Closed_Fist','Thumb_Up'].includes(cameraState.gesture)?cameraState.gesture:'None'
+      };
+      const answer=await localJson('/jarvis',{body:{text,session:dialogueSession,project:activeProject,language:inputLanguage,wake:wokeFromStandby,vision:visualEvidence},signal:controller.signal});
       if (!opened || session!==voiceSession) return;
       replyLanguage=answer.language==='pt'?'pt':'en';
       // Listening stays bilingual even when the reply language is locked: the next command may switch it.
