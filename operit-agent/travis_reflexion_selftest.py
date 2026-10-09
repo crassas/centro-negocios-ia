@@ -8,6 +8,19 @@ class Tests(unittest.TestCase):
   self.assertEqual(verify('local_llm',{'exitCode':0})['verdict'],'unknown')
   self.assertEqual(verify('command',{'exitCode':7})['verdict'],'failure')
   self.assertEqual(verify('gmail',{'requiresConnection':True})['verdict'],'failure')
+ def test_decision_requires_observed_readonly_postcondition(self):
+  result={"source":"travis-decision-governor","selected":"inspect_centro",
+    "status":"checked","verification":{"verdict":"success",
+       "scope":"local_dependency_health","code":"health_ok"}}
+  good=verify("decision_consult",result)
+  self.assertEqual(good["verdict"],"success")
+  self.assertEqual(good["scope"],"local_dependency_health")
+  result["status"]="deferred"
+  self.assertEqual(verify("decision_consult",result)["verdict"],"unknown")
+  result["status"]="checked";result["selected"]="repo_change"
+  self.assertEqual(verify("decision_consult",result)["verdict"],"unknown")
+  result["selected"]="inspect_centro";result["verification"]["scope"]="untrusted_claim"
+  self.assertEqual(verify("decision_consult",result)["verdict"],"unknown")
  def test_gmail_connection_failure_is_actionable(self):
   v=verify("gmail_inbox",error=ValueError("Liga primeiro o Gmail na Sala de Comando."))
   self.assertEqual(v["code"],"connection_required");self.assertIn("Connect Gmail",v["correction"])
