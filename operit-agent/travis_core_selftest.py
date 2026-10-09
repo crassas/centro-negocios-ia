@@ -2,6 +2,7 @@
 import tempfile,unittest
 from pathlib import Path
 import travis_core as t
+from travis_decision_selftest import DecisionTests
 
 class Tests(unittest.TestCase):
  def test_registry(self):

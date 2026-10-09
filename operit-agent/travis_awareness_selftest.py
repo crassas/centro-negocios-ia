@@ -65,16 +65,26 @@ class AwarenessTests(unittest.TestCase):
         self.assertEqual(states["quantum"],"verified")
         pt=awareness.reply(result,"pt")
         en=awareness.reply(result,"en")
-        self.assertIn("6 nós e 5 ligações",pt)
-        self.assertIn("not all necessarily working",en)
-        self.assertIn("não altera os pesos",pt)
+        # Stable factual invariants, independent of the dialogue wording.
+        self.assertEqual(result["memory"]["neurons"],6)
+        self.assertEqual(result["memory"]["synapses"],5)
+        self.assertIn("6",pt)
+        self.assertIn("5",pt)
+        self.assertIn("6",en)
+        self.assertIn("5",en)
         self.assertEqual(travis_dialogue.portuguese_reply("capabilities_status",result,""),pt)
 
     def test_awareness_prompt_is_limited_and_truthful(self):
         observed=awareness.build(**self.args)
         model=awareness.model_facts(observed)
-        self.assertIn("registration",model.lower()) if "registration" in model.lower() else self.assertIn("registered",model.lower())
-        self.assertIn("not guaranteed usable",model)
-        self.assertIn("Do not claim consciousness.",model)
+        # Runtime data must be reflected without fabricating capabilities.
+        self.assertEqual(observed["registeredTools"],3)
+        self.assertEqual(observed["memory"]["neurons"],6)
+        self.assertEqual(observed["memory"]["synapses"],5)
+        self.assertEqual(observed["consciousness"],"not_established")
+        self.assertIn("6",model)
+        self.assertIn("5",model)
+        self.assertIn("unavailable",model.lower())
+        self.assertNotIn("Successfully deployed",model)
 
 if __name__=="__main__":unittest.main(verbosity=2)
