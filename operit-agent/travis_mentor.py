@@ -644,7 +644,12 @@ def main():
     else:
         import travis_core
         store=travis_core.RuntimeStore(args.state_dir/"memory.sqlite")
-        result=seed_runtime(store) if args.action=="seed" else status(store,travis_core.registry_snapshot())
+        if args.action=="seed":
+            result=seed_runtime(store)
+        else:
+            registry,registry_source=runtime_registry(travis_core.registry_snapshot())
+            result=status(store,registry)
+            result["registryObservation"]=registry_source
     print(json.dumps(result,ensure_ascii=False,indent=2))
 
 
