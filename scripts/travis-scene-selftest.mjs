@@ -35,6 +35,9 @@ const t=new SceneTracker();t.update([make(.4)],now-900);const s=t.update([make(.
 assert.match(describeScene({active:true,objectModel:'ready',...s},'pt'),/garrafa ao centro/);
 assert.match(describeScene({active:true,objectModel:'ready',objects:s.objects.map(o=>({...o,observedAt:now-10000}))},'en'),/not confirmed/);
 assert(sceneSignature({active:true,...s}).includes('bottle'));
+const frontScene={active:true,facingMode:'user',objectModel:'ready',objects:[{...s.objects[0],box:{x:.1,y:.1,width:.1,height:.2}}]};
+assert.match(describeScene(frontScene,'pt'),/à direita/,'Front-camera speech follows the mirrored preview');
+assert.match(sceneSignature(frontScene),/right/);
 // Point upward towards a target, then pinch over two distinct hand samples.
 const hand=Array.from({length:21},()=>({x:.5,y:.85}));
 hand[0]={x:.5,y:.95};hand[5]={x:.5,y:.80};hand[6]={x:.5,y:.75};hand[8]={x:.5,y:.65};hand[4]={x:.65,y:.7};

@@ -133,7 +133,8 @@ export function describeScene(snapshot,locale='en',{selectedOnly=false}={}){
     return pt?'Ainda não confirmei nenhum objeto. Mantém a câmara estável e aproxima o que queres mostrar.':'I have not confirmed an object yet. Hold the camera steady and bring it into view.';
   }
   const phrases=targets.slice(0,4).map(o=>{
-    const x=o.box.x+o.box.width/2;
+    const cameraX=o.box.x+o.box.width/2;
+    const x=snapshot.facingMode==='user'?1-cameraX:cameraX;
     const position=pt?(x<.34?'à esquerda':x>.66?'à direita':'ao centro'):(x<.34?'on the left':x>.66?'on the right':'in the centre');
     const uncertainty=o.score<.7?(pt?'possivelmente ':'possibly '):'';
     return uncertainty+objectName(o.name,locale)+' '+position;
@@ -144,5 +145,8 @@ export function describeScene(snapshot,locale='en',{selectedOnly=false}={}){
 export function sceneSignature(snapshot){
   if(!snapshot?.active)return '';
   const objects=snapshot.objects||[];
-  return objects.length?objects.map(o=>o.name+':'+(o.box.x+o.box.width/2<.34?'left':o.box.x+o.box.width/2>.66?'right':'centre')).sort().join('|')+'#'+(snapshot.selectedTarget?.id||''):'';
+  return objects.length?objects.map(o=>{
+    const cameraX=o.box.x+o.box.width/2,x=snapshot.facingMode==='user'?1-cameraX:cameraX;
+    return o.name+':'+(x<.34?'left':x>.66?'right':'centre');
+  }).sort().join('|')+'#'+(snapshot.selectedTarget?.id||''):'';
 }

@@ -60,6 +60,7 @@ def describe_scene(vision, pt=False, identity=False):
     parts=[]
     for obj in targets:
         x=obj["box"]["x"]+obj["box"]["width"]/2
+        if vision.get("facingMode")=="user":x=1-x
         pos=("à esquerda" if x<.34 else "à direita" if x>.66 else "ao centro") if pt else (
             "on the left" if x<.34 else "on the right" if x>.66 else "in the centre")
         uncertain=("possivelmente " if pt else "possibly ") if obj["score"]<.7 else ""

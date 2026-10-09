@@ -21,6 +21,9 @@ class SceneTests(unittest.TestCase):
         clean=scene.clean_scene(self.data,self.now)
         self.assertEqual(clean['objects'],[])
         self.assertIsNone(clean['selectedTarget'])
+    def test_front_camera_position_follows_mirrored_preview(self):
+        self.data['facingMode']='user'
+        self.assertIn('garrafa à direita',scene.describe_scene(scene.clean_scene(self.data,self.now),True))
     def test_individual_expiry_and_future(self):
         for stamp in [self.now-3201,self.now+1,float('nan')]:
             self.data['objects'][0]['observedAt']=stamp
