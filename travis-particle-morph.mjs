@@ -1,5 +1,5 @@
 import {particleBounds,fitParticleToViewport} from './travis-projection-framing.mjs?v=1';
-import {createHolographicParticleMaterial} from './travis-holographic-head.mjs?v=continuous-1';
+import {createHolographicParticleMaterial} from './travis-holographic-head.mjs?v=cinema-2';
 
 export const morphEase=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
 export function morphVisibility(progress,returning,alphaStart=0,avatarStart=0){
@@ -12,7 +12,7 @@ export function morphVisibility(progress,returning,alphaStart=0,avatarStart=0){
 // Shapes are sampled from local geometry. GPU interpolates; CPU work only on scene changes.
 export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}={}){
  const root=new THREE.Group();root.name='TravisMatterField';
- const n=Math.max(128,Math.min(4500,Math.round(count)));
+ const n=Math.max(128,Math.min(18000,Math.round(count)));
  const from=new Float32Array(n*3),to=new Float32Array(n*3),seed=new Float32Array(n);
  const normalFrom=new Float32Array(n*3),normalTo=new Float32Array(n*3);
  const geometry=new THREE.BufferGeometry();
@@ -41,7 +41,7 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
  let currentBounds=particleBounds(to),lastFit=null,rawTarget=null,rawNormals=null;
  let viewKey='',lastTime=0,lastVoice=0,alphaStart=0,avatarStart=0,avatarDissolve=0;
  const frameOrigin=new THREE.Vector3();
- let fitMargin=.98;
+ let fitMargin=.98,presentation=null;
  function setTheme(scene){fitMargin=scene==='person'?.88:.98;}
  function advance(now){return reducedMotion?1:Math.max(0,Math.min(1,(now-started)/duration));}
  function current(now){
@@ -67,7 +67,7 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
    const reverse=new THREE.Matrix4().copy(root.matrixWorld).invert();
    const list=[];
    group.traverse(o=>{
-     if(!o.geometry?.attributes?.position)return;
+     if(!o.geometry?.attributes?.position||o.userData?.skipMorph)return;
      if(o.isPoints||o.isMesh||o.isLine||o.isLineSegments){
        const pos=o.geometry.attributes.position,count=pos.count;
        if(count<2)return;
@@ -130,6 +130,7 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
    }):{scale:1,x:0,y:0,z:0};
    lastFit=fit;if(!fit)return;
    const [cx,cy,cz]=bounds.center,cos=Math.cos(spin),sin=Math.sin(spin),scale=fit.scale*zoom;
+   presentation={position:[fit.x+cx*fit.scale-(cx*cos+cz*sin)*scale+dx,fit.y+cy*fit.scale-cy*scale+dy,fit.z+cz*fit.scale-(-cx*sin+cz*cos)*scale],scale,rotation:spin};
    for(let i=0;i<n;i++){
      const j=i*3,x=rawTarget[j]-cx,y=rawTarget[j+1]-cy,z=rawTarget[j+2]-cz;
      to[j]=fit.x+cx*fit.scale+(x*cos+z*sin)*scale+dx;
@@ -174,7 +175,7 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
  }
  function hide(){active=false;points.visible=false;currentAlpha=avatarDissolve=0;material.uniforms.uOpacity.value=0;}
  function dispose(){root.remove(points);geometry.dispose();material.dispose();}
- return {root,points,setSource,go,returnToSource,update,hide,dispose,setTheme,
+ return {root,points,presentation:()=>presentation,setSource,go,returnToSource,update,hide,dispose,setTheme,
   state:()=>({active,points:n,morphProgress:lastProgress,source:sourceSummary,target:targetSummary,
    returning:toCore,avatarDissolve,voice:lastVoice,opacity:currentAlpha,fit:lastFit,
    coordinateSpace:'projection-root',from:from.slice(0,9),to:to.slice(0,9)})};

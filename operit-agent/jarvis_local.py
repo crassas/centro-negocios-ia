@@ -1631,7 +1631,7 @@ def centro_activity():
  with urllib.request.urlopen(request,timeout=5) as response:return json.load(response)
 TRUSTED_WEB_ORIGINS={"https://crassas.github.io"}
 LOCAL_ORIGINS={"http://127.0.0.1:8770","http://localhost:8770"}
-WEB_VOICE_ENDPOINTS={"/health","/transcribe","/listen","/jarvis","/speak","/voice-task","/turn","/initiative","/resume","/visual-intent"}
+WEB_VOICE_ENDPOINTS={"/health","/transcribe","/listen","/jarvis","/speak","/voice-task","/turn","/initiative","/resume","/visual-intent","/visual-research"}
 
 LOCAL_COCKPIT_ENDPOINTS={"/awareness","/brain/state","/brain/graph","/brain/events","/brain/control","/brain/feedback","/connections","/cockpit","/gmail/configure","/gmail/start","/gmail/inbox","/gmail/disconnect"}
 
@@ -1708,6 +1708,10 @@ class Handler(BaseHTTPRequestHandler):
     return self.send({"text":text,**route(text)})
    obj=json.loads(data)
    if path=="/visual-intent":return self.send(visual_intent_model_request(obj))
+   if path=="/visual-research":
+    try:from travis_visual_research import request as visual_research_request
+    except ImportError:return self.send({"ok":False,"reason":"visual-research-update-pending"})
+    return self.send(visual_research_request(obj))
    if path=="/resume":return self.send(resume_brief(obj))
    if path=="/initiative":return self.send(initiative(obj))
    if path=="/awareness":return self.send(awareness_snapshot())

@@ -1,0 +1,54 @@
+// Audio-clock cues: noun positions approximate section timing, never claim
+// phoneme alignment. Source audio completion remains authoritative.
+const fold=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const topics=[
+ ['space','Space',/\b(?:space|espaco|galaxy|galaxia|universe|universo)\b/g],
+ ['planet','Solar system',/\b(?:solar system|sistema solar)\b/g],
+ ...Object.entries({Mercury:'mercury|mercurio',Venus:'venus',Earth:'earth|terra',Mars:'mars|marte',Jupiter:'jupiter',Saturn:'saturn|saturno',Uranus:'uranus|urano',Neptune:'neptune|neptuno',Moon:'moon|lua',Sun:'sun|sol'}).map(([name,terms])=>['planet',name,new RegExp('\\b(?:'+terms+')\\b','g')]),
+ ['diagram','DNA',/\b(?:dna|adn|double helix|dupla helice)\b/g],
+ ['diagram','Atom',/\b(?:atom|atoms|atomo|atomos)\b/g],
+ ['house','House',/\b(?:house|houses|casa|casas)\b/g],
+ ['vehicle','Car',/\b(?:car|cars|carro|carros)\b/g]
+];
+export function buildNarrationCues(text,initial=null){
+ const raw=fold(text),hits=[];
+ for(const [scene,title,re] of topics){re.lastIndex=0;let m;while((m=re.exec(raw)))hits.push({scene,title,index:m.index});}
+ hits.sort((a,b)=>a.index-b.index);
+ const cues=initial?[{scene:initial.scene,title:initial.title,at:0}]:[];
+ for(const hit of hits){
+  if(cues.at(-1)?.title===hit.title)continue;
+  if(cues.some(c=>c.title===hit.title))continue;
+  const at=Math.min(.88,hit.index/Math.max(raw.length,1));
+  if(cues.length&&at-cues.at(-1).at<.08){if(at<.10&&cues.length===1&&initial?.scene==='planet')continue;}
+  cues.push({scene:hit.scene,title:hit.title,at});if(cues.length>=6)break;
+ }
+ // For unfamiliar explanations, form short excerpts of the actual spoken
+ // sentences. This is readable content, never an invented generic 3D object.
+ if(cues.length<3&&initial){
+  const sentences=[...String(text||'').matchAll(/[^.!?]+[.!?]*/g)].filter(m=>m[0].trim().length>12);
+  for(const sentence of sentences.slice(1,4)){
+   const title=sentence[0].trim().replace(/[.!?]+$/,'').slice(0,72);
+   if(!title)continue;
+   cues.push({scene:'text',title,at:Math.min(.88,sentence.index/Math.max(raw.length,1))});
+  }
+  cues.sort((a,b)=>a.at-b.at);
+ }
+ return cues.slice(0,6);
+}
+export function cueAtTime(cues,elapsed,duration){
+ if(!Number.isFinite(elapsed)||!Number.isFinite(duration)||duration<=0||elapsed<0)return -1;
+ let chosen=-1;for(let i=0;i<cues.length;i++)if(elapsed>=Math.max(cues[i].at*duration,i*2.1))chosen=i;
+ return chosen;
+}
+export function hasLocalVisual(scene,title){
+ const t=fold(title).replace(/[.!?]/g,'').trim();
+ if(scene==='text')return true;
+ if(scene==='planet')return /\b(?:mercury|mercurio|venus|earth|terra|mars|marte|jupiter|saturn|saturno|uranus|urano|neptune|neptuno|pluto|plutao|moon|lua|sun|sol)\b/.test(t)||/^(?:planet|planeta|planets|planetas|planetary system|sistema solar|solar system)$/.test(t);
+ if(scene==='space')return /^(?:space|espaco|universe|universo|galaxy|galaxia|cosmos|via lactea|milky way|stars|estrelas)$/.test(t);
+ const known={house:/^(?:house|casa|uma casa|architecture|arquitetura)$/,person:/^(?:human|human figure|human body|corpo humano|pessoa|person|figura humana)$/,
+ vehicle:/^(?:car|carro|vehicle|veiculo|drone|rocket|foguetao|nave|spaceship)$/,
+ landscape:/^(?:landscape|paisagem|forest|floresta|mountain|montanha)$/,
+ diagram:/^(?:dna|adn|atom|atomo|diagram|diagrama|network|rede)$/,
+ object:/^(?:cube|cubo|sphere|esfera|pyramid|piramide)$/};
+ return Boolean(known[scene]?.test(t));
+}

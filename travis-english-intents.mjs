@@ -14,16 +14,18 @@ const directCue=/(?:\b(?:show|display|project|render|visualize|visualise|bring u
 const visualSpecific=/\b(?:holographic|hologram|3d|wireframe|em holograma|holografico|em 3d|em particulas|nas particulas|transforma-te|transform yourself|turn into|morph into)\b/;
 const verbsNoun=/^(?:(?:i(?:'d| would)?|i am|i'm|eu|nos)\s+)?(?:feel like|fancy|wish|would love|want|queria|gostava|apetece(?:-me)?|apetecia(?:-me)?|desejava)\s+/;
 const categories=[
+ ['text',/\b(?:letters?|letras?|alphabet|alfabeto|word|words|palavra|palavras|texto|text|escreve|write|numero|numeros|numbers?)\b/],
+ ['space',/\b(?:space|espaco|galaxy|galaxia|universe|universo|cosmos|via lactea|milky way)\b/],
  ['planet',/(?:\b(?:planet|planets|planetary|solar system|solar|sistema solar|planeta|planetas|estrela|estrela polar|star|stars|galaxy|galaxia|universo|universe|mercury|mercurio|venus|earth|terra|mars|marte|jupiter|saturn|saturno|uranus|urano|neptune|neptuno|neptun[oae]|pluto|plutao|moon|lua|sun|sol|asteroid|asteroide|comet|cometa)\b)/],
  ['map',/\b(?:map|maps|mapa|mapas|routes?|rotas?|rua|avenida|road|street|city|cidade|town|village|aldeia|pais|country|countries|world map|geografia|geography|globo terrestre|google maps|porto|lisboa|lisbon|paris|london|londres|tokyo|toquio|new york|coimbra|campanha|gaia)\b/],
  ['house',/\b(?:house|houses|home|apartment|apartamento|building|buildings|edificio|edificios|casa|casas|moradia|palacio|palace|castle|castelo|architecture|arquitetura|blueprint|planta|floor plan|floorplan|arranha-ceus|skyscraper|room|sala|quarto|kitchen|cozinha|bedroom|fachada|facade|armazem|warehouse|bridge|ponte|temple|templo)\b/],
  ['vehicle',/\b(?:car|cars|carro|carros|automovel|vehicle|veiculo|moto|motorcycle|camiao|truck|van|carrinha|bicycle|bicicleta|airplane|aviao|helicopter|helicoptero|spaceship|spacecraft|nave|foguetao|rocket|train|comboio|ship|barco|boat|drone|robot|robo|mecha|jet|satellite|satelite)\b/],
  ['person',/\b(?:person|people|human|humano|humana|pessoa|pessoas|corpo|body|human body|face|rosto|figura humana|silhouette|silhueta|portrait|retrato|bust|busto|anatomy|anatomia|skeleton|esqueleto|muscle|musculo|heart|coracao|brain|cerebro|alien|extraterrestre)\b/],
  ['landscape',/\b(?:landscape|paisagem|forest|floresta|tree|arvore|plant|planta|flower|flor|mountain|montanha|beach|praia|sea|ocean|oceano|waterfall|cascata|river|rio|desert|deserto|nature|natureza|volcano|vulcao|island|ilha|garden|jardim|cave|gruta|clouds|nuvens|animals?|animais?|dog|cao|cat|gato|dragon|dragao|dinossauro|dinosaur)\b/],
- ['diagram',/\b(?:diagram|diagrama|flowchart|fluxograma|network|rede|schema|esquema|molecule|molecula|dna|cell|celula|atom|atomo|timeline|linha temporal|graph|grafico|circuit|circuito|algorithm|algoritmo|system|sistema|process|processo)\b/],
+ ['diagram',/\b(?:diagram|diagrama|flowchart|fluxograma|network|rede|schema|esquema|molecule|molecula|dna|adn|cell|celula|atom|atomo|timeline|linha temporal|graph|grafico|circuit|circuito|algorithm|algoritmo|system|sistema|process|processo)\b/],
  ['object',/\b(?:object|objects|objeto|objetos|product|produto|item|items|model|modelo|cube|cubo|sphere|esfera|pyramid|piramide|phone|telemovel|telephone|telefone|book|livro|chair|cadeira|table|mesa|lamp|candeeiro|sculpture|escultura|sword|espada|tool|ferramenta|watch|relogio|camera|machine|maquina|key|chave|furniture|mobília|furniture)\b/]
 ];
-const baseNames={planet:'Planetary system',map:'Schematic map',house:'Architecture',person:'Human figure',vehicle:'Vehicle',landscape:'Landscape',diagram:'Diagram',object:'Object'};
+const baseNames={text:'ABC',space:'Space',planet:'Planetary system',map:'Schematic map',house:'Architecture',person:'Human figure',vehicle:'Vehicle',landscape:'Landscape',diagram:'Diagram',object:'Object'};
 const namedPlanets=new Map(Object.entries({mercurio:'Mercury',venus:'Venus',terra:'Earth',marte:'Mars',jupiter:'Jupiter',saturno:'Saturn',urano:'Uranus',neptuno:'Neptune',plutao:'Pluto',lua:'Moon',sol:'Sun'}));
 const asTitle=(raw,scene)=>{
  if(scene==='planet'){
@@ -35,7 +37,7 @@ const asTitle=(raw,scene)=>{
    if(new RegExp('\\b'+key+'\\b').test(raw))return name;
   }
  }
- let cleaned=raw.replace(/^(?:hey |hello |olha |please |por favor )?(?:travis|jarvis)[,\s]*/,'')
+ let cleaned=raw.replace(/^(?:explain|explain to me|explica(?:-me)?|explicar|ensina(?:-me)?|how does|como funciona|como se forma)\s+/,'').replace(/^(?:hey |hello |olha |please |por favor )?(?:travis|jarvis)[,\s]*/,'')
   .replace(/^(?:(?:i(?:'d| would)?|i am|i'm|eu|nos)\s+)?(?:feel like|fancy|wish|would love|want|queria|gostava|apetece(?:-me)?|apetecia(?:-me)?|desejava)\s+/,'')
   .replace(/^(?:can you|could you|would you|please|podes|podias|consegues|queria|gostava de|i want to|i'd like to|i would like to|quero|apetece-me|apetecia-me)\s+/,'')
   .replace(/^(?:me |to |a |um |uma |o |a |the )*/,'')
@@ -63,7 +65,7 @@ const controlRules=[
  ['next',/^(?:next|next one|show me the next one|proximo|seguinte|mostra o proximo)$/],
  ['previous',/^(?:previous|previous one|last one|anterior|mostra o anterior)$/]
 ];
-const spokenPortuguese=t=>/\b(?:quero|queria|gostava|apetece|apetecia|ver|mostra|mostrar|faz|por|poe|poe-me|podes|consegues|casa|carro|mapa|cidade|saturno|marte|planeta|agora|deixa|esquerda|direita|mais)\b/.test(t);
+const spokenPortuguese=t=>/\b(?:quero|queria|gostava|apetece|apetecia|ver|mostra|mostrar|faz|por|poe|poe-me|podes|consegues|casa|carro|mapa|cidade|saturno|marte|planeta|agora|deixa|esquerda|direita|mais|explica|explicar|ensina|escreve|espaco|letras|sol|terra)\b/.test(t);
 export function parseVisualIntent(text,{active=false,kind=''}={}){
  const raw=compact(text);
  if(raw.length<2||raw.length>650||negatives.test(raw)||/^(?:don't|do not|never|nao|nunca)\b/.test(raw))return null;
@@ -76,14 +78,23 @@ export function parseVisualIntent(text,{active=false,kind=''}={}){
  const followup=active&&kind==='illustration'&&Boolean(known)&&
     (/^(?:and|and now|now|what about|how about|switch to|change to|next show|e|e agora|agora|entao|que tal|muda para|troca para|passa para)\b/.test(raw)
      ||raw.split(' ').length<=4);
- const visual=directCue.test(raw)||visualSpecific.test(raw)||followup||
+ const explain=/\b(?:explain|explica|explicar|ensina|teach|how does|como funciona|como se forma)\b/.test(raw);
+ const research=/\b(?:pesquisa|research|search|procura)\b/.test(raw);
+ const bare=/^(?:(?:o|a|the) )?(?:mercury|mercurio|venus|earth|terra|mars|marte|jupiter|saturn|saturno|uranus|urano|neptune|neptuno|sun|sol|moon|lua|space|espaco|universe|universo|galaxy|galaxia|letras|letters|alfabeto|alphabet|sistema solar|solar system)[.!?]*$/.test(fold(text).trim());
+ const visual=/^(?:escreve|write)\b/.test(raw)||explain||bare||(research&&Boolean(known))||directCue.test(raw)||visualSpecific.test(raw)||followup||
     (request(verbsNoun)&&request(cue)&&/\b(?:see|ver|mostrar|show|look|visualiz|projet|hologram)\b/.test(raw));
  if(!visual)return null;
  // The request is explicitly visual. Any unfamiliar subject can at least be
  // represented by a generically labelled local particle concept.
  const entry=categories.find(([,re])=>re.test(raw));
  const scene=entry?.[0]||'object';
- return {type:'scene',scene,title:asTitle(raw,scene),subject:asTitle(raw,scene),
+ let title=asTitle(raw,scene);
+ if(scene==='text'){
+  const quoted=String(text).match(/[\"“«]([^\"”»]{1,90})[\"”»]/);
+  title=quoted?.[1]||String(text).replace(/^(?:escreve|write)\s+/i,'').replace(/^(?:(?:mostra|mostra-me|show me|show|write|escreve|projeta)\s+)?(?:(?:a|as|o|os|the|uma|umas)\s+)?(?:letters?|letras?|palavra|palavras|word|words|text|texto|numero|numeros|number|numbers)\s*/i,'').trim();
+  if(!title||/^(?:alfabeto|alphabet|letras|letters)$/i.test(title))title='ABC';
+ }
+ return {type:'scene',scene,title,subject:title,explain,research,query:String(text),
   autoReturn:true,source:'local-language-router',schematic:true,language:spokenPortuguese(fold(text))?'pt':'en'};
 }
 export const parseEnglishProjection=parseVisualIntent;

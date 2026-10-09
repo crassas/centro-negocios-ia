@@ -1,12 +1,16 @@
 // Front workspace driven by actual host tool results. Text is always inert.
 import {hologramPresentation as projection} from './travis-presence.mjs?v=3';
 import {mountYouTube,closeYouTube,controlYouTube,youtubeState} from './travis-youtube.mjs?v=3';
-import {parseVisualIntent,rewriteEnglishToolRequest,mayNeedVisualModel} from './travis-english-intents.mjs?v=2';
+import {parseVisualIntent,rewriteEnglishToolRequest,mayNeedVisualModel} from './travis-english-intents.mjs?v=cinema-2';
+import {buildNarrationCues,cueAtTime,hasLocalVisual} from './travis-visual-story.mjs?v=cinema-2';
 const hud=document.getElementById('travis-hud');
 const deck=document.getElementById('travis-action-deck');
 const heading=document.getElementById('travis-action-heading');
 const items=document.getElementById('travis-action-items');
 let current=null,selected=null,frame=0,wasVisible=false,returnTimer=0,pinned=false,highlighted=0,renderVersion=0;
+let narration=null,storyEpoch=0;
+const caption=document.createElement('div');caption.className='travis-visual-caption';caption.hidden=true;hud?.append(caption);
+function cancelNarration(){narration=null;storyEpoch++;}
 const planetSequence=['Mercury','Venus','Earth','Mars','Jupiter','Saturn','Uranus','Neptune'];
 function canReturn(){
   if(!current||pinned||current.autoReturn===false)return false;
@@ -29,10 +33,10 @@ function updatePin(){
   heading.title=pinned?'Pinned until you dismiss it':'Returns to Travis automatically';
 }
 const schematic=(scene,title)=>{
-  const names={planet:'PLANETARY CONCEPT',map:'SCHEMATIC MAP',house:'ARCHITECTURAL WIREFRAME',
+  const names={text:'TEXT',space:'SPACE',reference:'VISUAL REFERENCE',planet:'PLANETARY CONCEPT',map:'SCHEMATIC MAP',house:'ARCHITECTURAL WIREFRAME',
     person:'HUMAN FIGURE CONCEPT',vehicle:'VEHICLE CONCEPT',landscape:'NATURE CONCEPT',
     diagram:'CONCEPT DIAGRAM',object:'OBJECT WIREFRAME'};
-  const summaries={planet:'Illustrative orbital model, not NASA imagery.',
+  const summaries={text:'Letterforms made of holographic light.',space:'Illustrative star field, not a live sky chart.',reference:'Holographic relief from a sourced image; not a recovered 3D model.',planet:'Illustrative orbital model, not NASA imagery.',
     map:'Illustrative route grid, not live geography or verified coordinates.',
     house:'Conceptual building geometry, not a survey or architectural plan.',
     person:'Generic holographic figure, not a reconstruction of a real person.',
@@ -58,7 +62,8 @@ const menu={kind:'capabilities',title:'Your workspace',items:[
   {title:'Agents',detail:'Current executions',request:'Estado dos agentes'},
   {title:'Sites',detail:'Check availability',request:'Verifica os sites'}
 ]};
-function render(data){
+function render(data,{story=false}={}){
+  if(!story)cancelNarration();
   // Keep the real search choices available if a selected video cannot be embedded.
   if(data.kind==='youtube'&&data.videoId&&current?.kind==='youtube'){
     data={...data,query:current.query||data.query,items:data.items?.length?data.items:current.items};
@@ -68,10 +73,14 @@ function render(data){
   clearTimeout(returnTimer);updatePin();
   hud.dataset.projectionKind=String(data.kind||'result');
   window.dispatchEvent(new CustomEvent('travis:illustration',{detail:{
-    scene:data.kind==='illustration'?data.scene:null,subject:data.title||''
+    scene:data.kind==='illustration'?data.scene:null,subject:data.title||'',reference:data.reference||null
   }}));
   if(!matchMedia('(prefers-reduced-motion: reduce)').matches)deck.animate?.([{opacity:0,filter:'blur(9px)',transform:'translate(-50%, 16px) scale(.97)'},{opacity:1,filter:'blur(0px)',transform:'translate(-50%, 0) scale(1)'}],{duration:750,easing:'cubic-bezier(.16,1,.3,1)'});
   heading.textContent=String(data.title||'Your workspace');
+  caption.replaceChildren();caption.textContent=data.kind==='illustration'?String(data.title||''):'';
+  if(data.sourceUrl){const link=document.createElement('a');link.href=data.sourceUrl;link.target='_blank';link.rel='noopener noreferrer';link.textContent=' · '+String(data.sourceName||'Source');caption.append(link);}
+  if(data.creditUrl){const link=document.createElement('a');link.href=data.creditUrl;link.target='_blank';link.rel='noopener noreferrer';link.textContent=' · Image credit';caption.append(link);}
+  if(data.scene==='reference'){const note=document.createElement('small');note.textContent='IMAGE RELIEF';caption.append(note);}
   items.dataset.kind=String(data.kind||'result');
   const rows=Array.isArray(data.items)?data.items.slice(0,30):[];
   items.replaceChildren();
@@ -106,9 +115,14 @@ function render(data){
 function paint(){
   frame=0;
   const view=projection.sample(clock());
+  if(narration&&narration.epoch===storyEpoch){
+    const index=cueAtTime(narration.cues,narration.context.currentTime-narration.start,narration.duration);
+    if(index>narration.index){narration.index=index;const cue=narration.cues[index];if(cue&&(cue.title!==current?.title||cue.scene!==current?.scene))render({...schematic(cue.scene,cue.title),explaining:true},{story:true});}
+  }
   const immersive=current?.kind==='illustration';
   // Geometry occupies the centre: never cover planets/houses with repositories.
   deck.hidden=!view.visible||immersive;
+  caption.hidden=!view.visible||!immersive||view.amount<.55;
   deck.inert=immersive||view.panel<.65;
   hud.dataset.immersive=String(Boolean(view.visible&&immersive));
   deck.style.setProperty('--projection-opacity',view.panel.toFixed(3));
@@ -132,7 +146,7 @@ if(deck){
   window.addEventListener('travis:commands',e=>{
     if(e.detail.open){if(!current)render(menu);show(Boolean(e.detail.automatic));}
     else{
-      clearTimeout(returnTimer);closeYouTube();projection.close(clock());refresh();
+      cancelNarration();caption.hidden=true;clearTimeout(returnTimer);closeYouTube();projection.close(clock());refresh();
       pinned=false;current=null;updatePin();
       const version=++renderVersion;
       setTimeout(()=>{
@@ -143,41 +157,68 @@ if(deck){
   });
   window.addEventListener('travis:result',e=>{
     const data=e.detail?.ui;if(!data)return;
+    if(current?.explaining&&['web-search','web-page'].includes(data.kind)){
+      const source=data.items?.find(item=>item.url)?.url||data.url;
+      if(source){current.sourceUrl=source;current.sourceName='Source';}
+      return;
+    }
     if(data.project)selected=data.project;
     render(data);window.TravisVisual?.commands(true,{automatic:true});
     show(true);
   });
-  window.addEventListener('travis:speech-end',()=>scheduleReturn(current?.kind==='illustration'?10500:13500));
-  window.addEventListener('travis:user-start',()=>clearTimeout(returnTimer));
+  window.addEventListener('travis:speech-end',()=>{const explained=Boolean(narration);cancelNarration();scheduleReturn(explained?2800:current?.kind==='illustration'?10500:13500);});
+  window.addEventListener('travis:speech-cancel',()=>{cancelNarration();if(current)scheduleReturn(2800);});
+  window.addEventListener('travis:user-start',()=>{cancelNarration();clearTimeout(returnTimer);returnTimer=0;});
   window.addEventListener('travis:state',event=>{
-    if(event.detail?.state==='speaking'||event.detail?.state==='thinking')clearTimeout(returnTimer);
-    else if(event.detail?.state==='ready'&&current)scheduleReturn(12000);
+    if(event.detail?.state==='speaking'||event.detail?.state==='thinking'){clearTimeout(returnTimer);returnTimer=0;}
+    else if(event.detail?.state==='ready'&&current&&!returnTimer)scheduleReturn(12000);
   });
   for(const event of ['pointerdown','touchstart','scroll','focusin','keydown']){
     deck.addEventListener(event,touchProjection,{passive:true});
   }
-  window.addEventListener('travis:close',()=>{clearTimeout(returnTimer);renderVersion++;
+  window.addEventListener('travis:close',()=>{cancelNarration();caption.hidden=true;clearTimeout(returnTimer);renderVersion++;
     closeYouTube();cancelAnimationFrame(frame);frame=0;projection.reset();wasVisible=false;current=null;pinned=false;paint();
   });
   window.TravisProjection=Object.freeze({
     media:youtubeState,
     mayNeedModel:mayNeedVisualModel,
     applyModelIntent(result,text=''){
-      const valid=['planet','map','house','person','vehicle','landscape','diagram','object'];
+      const valid=['planet','map','house','person','vehicle','landscape','diagram','object','text','space'];
       if(result?.ok!==true||!valid.includes(result.scene)
           ||typeof result.title!=='string'||result.title.length>110)return null;
       const pt=/\b(?:quero|gostava|apetece|imagina|podes|consegues|como|seria|mostra)\b/i.test(text);
-      render(schematic(result.scene,result.title));
+      const needsReference=!hasLocalVisual(result.scene,result.title);
+      render(schematic(needsReference?'text':result.scene,result.title));
       window.TravisVisual?.commands(true,{automatic:true});show();
       return {handled:true,language:pt?'pt':'en',
         reply:pt?'A projetar '+result.title+'.':'Projecting '+result.title+'.',
-        kind:'scene',source:'local-language-model'};
+        kind:'scene',source:'local-language-model',title:result.title,needsReference,researchQuery:needsReference?result.title:null,visualVersion:storyEpoch};
     },
     status:()=>({kind:current?.kind||null,scene:current?.scene||null,pinned,
-      autoReturn:current?.autoReturn!==false,highlighted}),
+      autoReturn:current?.autoReturn!==false,highlighted,title:current?.title||'',narration:narration?{index:narration.index,cues:narration.cues}:null,sourceUrl:current?.sourceUrl||null}),
+    beginNarration({text,context,start,duration}){
+      if(!current?.explaining||pinned||!context)return;
+      const initial={scene:current.scene,title:current.title};
+      const cues=buildNarrationCues(text,initial);
+      narration={cues,context,start,duration,index:0,epoch:storyEpoch};refresh();
+    },
+    async applyReference(result,intent){
+      if(intent?.visualVersion!==storyEpoch)return null;
+      if(!result?.ok)return intent.language==='pt'?'Não encontrei uma referência visual fiável para esse pedido.':'I could not find a reliable visual reference for that request.';
+      if(!intent.needsReference){current.sourceUrl=result.url;current.sourceName=result.source;const link=document.createElement('a');link.href=result.url;link.target='_blank';link.rel='noopener noreferrer';link.textContent=' · '+String(result.source||'Source');caption.append(link);return null;}
+      let image=null;
+      if(/^data:image\/(?:jpeg|png|webp);base64,/.test(result.imageData||'')){
+        image=new Image();image.src=result.imageData;try{await image.decode();if(image.naturalWidth*image.naturalHeight>12000000)image=null;}catch{image=null;}
+      }
+      if(intent.visualVersion!==storyEpoch)return null;
+      const title=result.title||intent.title;
+      render({...schematic(image?'reference':'text',title),reference:image?{image}:null,sourceUrl:result.url,sourceName:result.source,creditUrl:result.creditUrl,explaining:Boolean(intent.explain)});
+      window.TravisVisual?.commands(true,{automatic:true});show();
+      return intent.language==='pt'?(image?'Encontrei uma imagem de referência de '+title+'.':'Encontrei informação sobre '+title+', mas sem imagem disponível.'):(image?'I found a visual reference for '+title+'.':'I found information about '+title+', but no image was available.');
+    },
     interpret(text){
       // The first-stage router is open-vocabulary for visual requests; unseen
-      // subjects become a labelled conceptual particle shape, not a workspace.
+      // unfamiliar subjects request a sourced reference instead of a generic solid.
 
       const intent=parseVisualIntent(text,{
         active:Boolean(current&&projection.sample(clock()).visible),
@@ -190,18 +231,20 @@ if(deck){
       if(intent.type==='scene'){
         if(intent.scene==='planet'&&/\b(?:random|any|aleatorio|aleatória|aleatoria|qualquer)\b/i.test(String(text).normalize('NFD').replace(/[\u0300-\u036f]/g,'')))
           intent.title=planetSequence[Math.floor(Math.random()*planetSequence.length)];
-        render(schematic(intent.scene,intent.title));
+        const needsReference=!hasLocalVisual(intent.scene,intent.title);
+        render({...schematic(needsReference?'text':intent.scene,intent.title),explaining:Boolean(intent.explain)});
         window.TravisVisual?.commands(true,{automatic:true});show();
-        return {handled:true,reply:intent.language==='pt'
+        return {...intent,handled:!intent.explain,reply:intent.language==='pt'
           ?'A projetar '+intent.title+'.':'Projecting '+intent.title+'.',
-          language:intent.language||'en',kind:'scene'};
+          language:intent.language||'en',kind:'scene',needsReference,
+          researchQuery:needsReference||intent.research?intent.title:null,visualVersion:storyEpoch};
       }
       if(intent.type==='dismiss'){
         window.TravisVisual?.commands(false,{automatic:true});
         return {handled:true,reply:'Returning to core.',kind:'dismiss'};
       }
       if(intent.type==='pin'){
-        pinned=true;updatePin();clearTimeout(returnTimer);
+        cancelNarration();pinned=true;updatePin();clearTimeout(returnTimer);
         return {handled:true,reply:'I will leave this open.',kind:'pin'};
       }
       if(intent.type==='unpin'){

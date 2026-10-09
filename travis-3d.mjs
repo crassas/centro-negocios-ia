@@ -1,14 +1,14 @@
-import { createConceptProjection } from './travis-concept-projection.mjs?v=continuous-1';
-import './travis-action-cards.mjs?v=continuous-1';
+import { createConceptProjection } from './travis-concept-projection.mjs?v=cinema-2';
+import './travis-action-cards.mjs?v=cinema-2';
 import { createVoiceInput } from './travis-voice-input.mjs?v=stt-fast-1';
-import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=continuous-1';
+import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=cinema-2';
 import { INTERFACE_COPY, interfaceLanguage, applyInterfaceLanguage, languageFromInterfaceCommand } from './travis-interface-language.mjs?v=1';
 import { resolveWakePhrase } from './travis-wake-phrase.mjs?v=pt-1';
 import { createTravisVision } from './travis-vision.mjs?v=scene-1';
 import { buildSpeechEnvelope, speechEnvelopeLevel } from './travis-audio-sync.mjs?v=1';
 import { sceneSignature } from './travis-scene-tracker.mjs?v=1';
 import { cameraCommand } from './travis-vision-policy.mjs?v=scene-1';
-import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=continuous-1';
+import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=cinema-2';
 import { projectWebAnswer } from './travis-web-projection.mjs?v=agent-1';
 import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=3';
 import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
@@ -66,7 +66,7 @@ if (!hud || !launcher || !canvas) {
   let neuralField=null,conceptProjection=null,pendingConcept=null,pendingSubject='';
   window.addEventListener('travis:illustration',event=>{
     pendingConcept=event.detail?.scene||null;pendingSubject=event.detail?.subject||'';
-    if(pendingConcept)conceptProjection?.show(pendingConcept,performance.now()/1000,pendingSubject);
+    if(pendingConcept)conceptProjection?.show(pendingConcept,performance.now()/1000,pendingSubject,{reference:event.detail?.reference});
     else conceptProjection?.hide();
   });
   window.addEventListener('travis:visual-control',event=>{
@@ -708,6 +708,7 @@ if (!hud || !launcher || !canvas) {
   }
 
   function stopVoiceConversation() {
+    window.dispatchEvent(new CustomEvent('travis:speech-cancel'));
     voiceInput?.stop();clearTimeout(initiativeTimer);
     voiceSession++;
     clearTimeout(voiceFinishTimer);
@@ -795,6 +796,7 @@ if (!hud || !launcher || !canvas) {
       }
     };
 
+    window.TravisProjection?.beginNarration?.({text:reply,context:ac,start:startAt,duration:decoded.duration});
     source.start(startAt);
     if(metrics){
       metrics.replyToFirstAudioMs=Math.round(performance.now()-metrics.replyAt);
@@ -1000,6 +1002,18 @@ if (!hud || !launcher || !canvas) {
         }catch(error){
           if(controller.signal.aborted||session!==voiceSession)return;
           console.debug('Visual intent model not ready:',error.message);
+        }
+      }
+      if(interpretation?.researchQuery){
+        setState('thinking',interpretation.language==='pt'?'A procurar uma referência visual…':'Finding a visual reference…');
+        try{
+          const reference=await localJson('/visual-research',{body:{query:interpretation.researchQuery,language:interpretation.language,includeImage:interpretation.needsReference},signal:AbortSignal.any([controller.signal,AbortSignal.timeout(18000)])});
+          if(!opened||session!==voiceSession||controller.signal.aborted)return;
+          const receipt=await window.TravisProjection?.applyReference?.(reference,interpretation);
+          if(receipt&&interpretation.handled)interpretation.reply=receipt;
+        }catch(error){
+          if(controller.signal.aborted||session!==voiceSession)return;
+          if(interpretation.handled)interpretation.reply=interpretation.language==='pt'?'Não consegui obter a referência visual agora.':'I could not retrieve that visual reference right now.';
         }
       }
       if(interpretation?.rewritten)text=interpretation.rewritten;

@@ -57,7 +57,7 @@ const scene=fs.readFileSync('travis-concept-projection.mjs','utf8');
 const client=fs.readFileSync('travis-3d.mjs','utf8');
 assert(engine.includes('fitParticleToViewport('));
 assert(engine.includes('geometry.setDrawRange(0,n)'));
-assert(fs.readFileSync('travis-holographic-head.mjs','utf8').includes('gl_PointSize=clamp((2.0+aSeed*2.3)'), 'Keep point-size bounds in the shared holographic material');
+assert(fs.readFileSync('travis-holographic-head.mjs','utf8').includes('gl_PointSize=clamp((.72+aSeed*.55)'), 'Keep point-size bounds in the shared holographic material');
 assert(engine.includes('dispose,setTheme,'), 'Keep the theme API available to the scene director');
 assert(scene.includes('setCamera(provider)'));
 assert(client.includes('conceptProjection.setCamera(()=>camera)'));

@@ -127,7 +127,7 @@ assert(brainPanel.includes("hud?.classList.contains('is-open')"),
 assert(ui.includes("visionStatusCopy(message,locale())"));
 assert(css.includes('display:none!important')&&css.includes('#travis-hud .travis-form-selector'),
   'Cached selector must remain hidden even during a partial update');
-assert(sw.includes('travis-form-director.mjs?v=continuous-1'));
+assert(sw.includes('travis-form-director.mjs?v=cinema-2'));
 assert(sw.includes('travis-interface-language.mjs?v=1'));
 assert(sw.includes('travis-brain-view.mjs?v=cinema-2'));
 assert(html.includes('data-ui-language="en"'));

@@ -69,6 +69,10 @@ TRAVIS_CLIENT_FILES = (
     "travis-english-intents.mjs",
     "travis-concept-projection.mjs",
     "travis-holographic-head.mjs",
+    "travis-holographic-surface.mjs",
+    "travis-visual-subjects.mjs",
+    "travis-visual-story.mjs",
+    "travis-earth-land.mjs",
     "travis-particle-morph.mjs",
     "travis-projection-framing.mjs",
     "travis-hud.css",
@@ -89,6 +93,7 @@ RUNTIME_FILES = {
     "travis_core.py": HOME / "travis_core.py",
     "travis_scene.py": HOME / "travis_scene.py",
     "travis_visual_semantics.py": HOME / "travis_visual_semantics.py",
+    "travis_visual_research.py": HOME / "travis_visual_research.py",
     "travis_genome.py": HOME / "travis_genome.py",
     "travis_cognitive.py": HOME / "travis_cognitive.py",
     "travis_brain.py": HOME / "travis_brain.py",
@@ -536,23 +541,29 @@ def sync_travis_client(ref):
             if not raw or len(raw) > 450000:
                 raise RuntimeError(f"{name}: resposta ausente ou demasiado grande")
             fetched[name] = raw.decode("utf-8")
-        if "travis-3d.mjs?v=continuous-1" not in fetched["index.html"]:
+        if "travis-3d.mjs?v=cinema-2" not in fetched["index.html"]:
             raise RuntimeError("index.html: versão de voz inesperada")
         if "travis-audio-sync.mjs?v=1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: sincronização de voz ausente")
         if "travis-vision.mjs?v=scene-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: visão não ligada")
-        if "travis-3d.mjs?v=continuous-1" not in fetched["sw.js"]:
+        if "travis-3d.mjs?v=cinema-2" not in fetched["sw.js"]:
             raise RuntimeError("sw.js: cache desatualizada")
-        if "travis-action-cards.mjs?v=continuous-1" not in fetched["travis-3d.mjs"]:
+        if "travis-action-cards.mjs?v=cinema-2" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: cinematic action deck not connected")
-        if "travis-action-cards.mjs?v=continuous-1" not in fetched["travis-cockpit.mjs"]:
+        if "travis-action-cards.mjs?v=cinema-2" not in fetched["travis-cockpit.mjs"]:
             raise RuntimeError("travis-cockpit.mjs: duplicate projection controller")
-        if "travis-holographic-head.mjs?v=continuous-1" not in fetched["travis-particle-morph.mjs"]:
+        if "travis-holographic-head.mjs?v=cinema-2" not in fetched["travis-particle-morph.mjs"]:
             raise RuntimeError("travis-particle-morph.mjs: shared holographic material missing")
-        if "travis-english-intents.mjs?v=2" not in fetched["travis-action-cards.mjs"]:
+        if "createDetailedSubject" not in fetched["travis-visual-subjects.mjs"] or "earthLand" not in fetched["travis-earth-land.mjs"]:
+            raise RuntimeError("Travis detailed visual content missing")
+        if "travis-visual-story.mjs?v=cinema-2" not in fetched["travis-action-cards.mjs"]:
+            raise RuntimeError("Travis narration cues disconnected")
+        if "travis-holographic-surface.mjs?v=cinema-2" not in fetched["travis-concept-projection.mjs"]:
+            raise RuntimeError("Travis fine light surfaces disconnected")
+        if "travis-english-intents.mjs?v=cinema-2" not in fetched["travis-action-cards.mjs"]:
             raise RuntimeError("travis-action-cards.mjs: English intent router missing")
-        if "travis-particle-morph.mjs?v=continuous-1" not in fetched["travis-concept-projection.mjs"]:
+        if "travis-particle-morph.mjs?v=cinema-2" not in fetched["travis-concept-projection.mjs"]:
             raise RuntimeError("travis-concept-projection.mjs: unified particle material missing")
         if "travis-projection-framing.mjs?v=1" not in fetched["travis-particle-morph.mjs"]:
             raise RuntimeError("travis-particle-morph.mjs: smartphone auto-framing disconnected")
@@ -560,7 +571,7 @@ def sync_travis_client(ref):
             raise RuntimeError("travis-projection-framing.mjs: fitting algorithm unavailable")
         if "conceptProjection.setCamera" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: camera framing not connected")
-        if "gl_PointSize=clamp((2.0+aSeed*2.3)" not in fetched["travis-holographic-head.mjs"]:
+        if "gl_PointSize=clamp((.72+aSeed*.55)" not in fetched["travis-holographic-head.mjs"]:
             raise RuntimeError("travis-holographic-head.mjs: visible GPU point size regression")
         if "TravisMorphParticles" not in fetched["travis-particle-morph.mjs"] or "geometry.setDrawRange(0,n)" not in fetched["travis-particle-morph.mjs"]:
             raise RuntimeError("travis-particle-morph.mjs: GPU draw count invalid")
@@ -570,7 +581,7 @@ def sync_travis_client(ref):
             raise RuntimeError("travis-hud.css: immersive overlay fix unavailable")
         if "autoReturn" not in fetched["travis-action-cards.mjs"]:
             raise RuntimeError("travis-action-cards.mjs: auto return missing")
-        if "travis-concept-projection.mjs?v=continuous-1" not in fetched["travis-3d.mjs"]:
+        if "travis-concept-projection.mjs?v=cinema-2" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: cinematic geometry missing")
         if "travis-voice-input.mjs?v=stt-fast-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: transcrição rápida não ligada")
@@ -578,7 +589,7 @@ def sync_travis_client(ref):
             raise RuntimeError("index.html: o seletor de modos voltou a aparecer")
         for module,token in (
             ("travis-interface-language.mjs","travis-interface-language.mjs?v=1"),
-            ("travis-form-director.mjs","travis-form-director.mjs?v=continuous-1"),
+            ("travis-form-director.mjs","travis-form-director.mjs?v=cinema-2"),
             ("travis-brain-view.mjs","travis-brain-view.mjs?v=cinema-2"),
         ):
             if token not in fetched["travis-3d.mjs"] or token not in fetched["sw.js"]:
@@ -597,7 +608,7 @@ def sync_travis_client(ref):
             raise RuntimeError("travis-brain-panel.mjs: versão de telemetria fora da cache")
         if "monitoring&&!disposed" not in fetched["travis-brain-panel.mjs"]:
             raise RuntimeError("travis-brain-panel.mjs: estado observado não persistente")
-        if "travis-hud.css?v=matter-3" not in fetched["index.html"] or "travis-hud.css?v=matter-3" not in fetched["sw.js"]:
+        if "travis-hud.css?v=cinema-2" not in fetched["index.html"] or "travis-hud.css?v=cinema-2" not in fetched["sw.js"]:
             raise RuntimeError("travis-hud.css: versão da interface incorreta")
         if "travis-wake-phrase.mjs?v=pt-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: wake word PT não ligado")
@@ -777,7 +788,7 @@ def main():
                         "output": "módulos atualizados: " + ", ".join(ui_changed),
                     })
             if changed:
-                if any(name in changed for name in ("jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh", "travis_brain.py", "travis_scene.py")):
+                if any(name in changed for name in ("jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh", "travis_brain.py", "travis_scene.py", "travis_visual_research.py")):
                     pending_jarvis_restart = True
                 if any(name in changed for name in ("centro_server.py", "business_db.py", "travis_core.py")):
                     pending_server_restart = True

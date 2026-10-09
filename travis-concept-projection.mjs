@@ -1,27 +1,30 @@
-import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=continuous-1';
+import {createDetailedSubject,identifyVisualSubject} from './travis-visual-subjects.mjs?v=cinema-2';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=cinema-2';
+import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=cinema-2';
 // Film-inspired schematic projections. Unprovided geographic/CAD/person
 // geometry stays visibly conceptual; real source links are separate.
 export function createConceptProjection(THREE,{reducedMotion=false}={}){
  const root=new THREE.Group();root.name='TravisConceptProjection';root.position.y=.34;
- const matter=createTravisParticleMorph(THREE,{count:2600,reducedMotion});
+ const matter=createTravisParticleMorph(THREE,{count:12000,reducedMotion});
  let sourceProvider=null,cameraProvider=null;
  root.add(matter.root);
- let active=new THREE.Group(),ghost=null,kind='',objects=[],mats=[],born=0;
+ let active=new THREE.Group(),activeFrame=new THREE.Group(),ghost=null,kind='',objects=[],mats=[],textures=[],born=0,variant='';
  let zoom=1,dx=0,dy=0,spin=0,planetName='',label='';
- root.add(active);root.visible=false;
+ activeFrame.add(active);root.add(activeFrame);root.visible=false;
  const limit=(v,a,b)=>Math.max(a,Math.min(b,v));
  const colours={earth:0x6785a7,mars:0xb97856,jupiter:0xbda180,saturn:0xcab391,venus:0xcbb393,
   mercury:0x8b8580,uranus:0x77949b,neptune:0x506e9b,moon:0xbab7af,sun:0xcfa26e};
- function dispose(group,materials){
+ function dispose(group,materials,maps=[]){
   if(!group)return;
   group.traverse(o=>o.geometry?.dispose?.());
   group.removeFromParent();
   for(const material of materials)material.dispose?.();
+  for(const texture of maps)texture.dispose?.();
  }
  function style(color,{lines=false,points=false,wire=false,alpha=.8}={}){
   const opts={color,transparent:true,opacity:alpha,depthWrite:false};
   const mat=points?new THREE.PointsMaterial({...opts,size:.024}):lines?
-   new THREE.LineBasicMaterial(opts):new THREE.MeshBasicMaterial({...opts,wireframe:wire,side:THREE.DoubleSide});
+   new THREE.LineBasicMaterial(opts):createHolographicSurfaceMaterial(THREE,{gain:wire?1.1:1});
   mat.userData.baseOpacity=alpha;mats.push(mat);return mat;
  }
  function add(object,x=0,y=0,z=0){object.position.set(x,y,z);active.add(object);return object;}
@@ -38,19 +41,7 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   for(let i=0;i<=84;i++){const a=i/84*Math.PI*2;vertices.push([radius*Math.cos(a),radius*Math.sin(a),0]);}
   const result=line(vertices,0x9c8a76);result.rotation.x=tilt;return result;
  }
- function planet(){
-  const color=colours[planetName]||0xbda18b;
-  const surface=sphere(.66,color);
-  const meshWire=sphere(.677,0xd4bc9d,0,0,0,true);
-  // Saturn receives a distinct, layered ring system. Mars, Earth and the
-  // other planets are free of misleading giant circumplanetary rings.
-  if(planetName==='saturn'){
-    ring(1.01,1.17);ring(1.18,1.17);ring(1.39,1.17);
-  }
-  const moon=sphere(.025,0xded0ad,1,0,0);
-  objects.push({type:'planet',surface,meshWire,moon});
-  // The requested planet defines the silhouette; no generic decorative globe.
- }
+ function planet(){const detailed=createDetailedSubject(THREE,'planet',label);active.add(detailed.group);mats.push(...detailed.materials);textures.push(...detailed.textures);variant=detailed.variant;}
  function map(){
   const grid=new THREE.Group();active.add(grid);grid.rotation.x=-.30;grid.rotation.z=.14;
   const gridLine=(a,b,color=0x777369)=>{
@@ -214,16 +205,17 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
    objects.push({type:'wave',wave,row:i});
   }
  }
- function show(scene,now,subject=''){
-  if(ghost){dispose(ghost.group,ghost.mats);ghost=null;}
-  if(active.children.length)ghost={group:active,mats,start:now};
-  else dispose(active,mats);
-  active=new THREE.Group();root.add(active);mats=[];objects=[];
-  kind=['orbit','atom','network','wave','planet','map','house','person','vehicle','landscape','diagram','object'].includes(scene)?scene:'network';
+ function show(scene,now,subject='',options={}){
+  if(ghost){dispose(ghost.group,ghost.mats,ghost.textures);ghost=null;}
+  if(active.children.length)ghost={group:activeFrame,mats,textures,start:now};
+  else dispose(activeFrame,mats,textures);
+  active=new THREE.Group();activeFrame=new THREE.Group();activeFrame.add(active);root.add(activeFrame);mats=[];objects=[];textures=[];
+  kind=['orbit','atom','network','wave','planet','map','house','person','vehicle','landscape','diagram','object','text','space','reference'].includes(scene)?scene:'network';
   planetName=['earth','mars','venus','saturn','jupiter','uranus','neptune','mercury','moon','sun'].find(x=>
    new RegExp('\\b'+x+'\\b').test(String(subject).toLowerCase()))||'';
-  born=now;zoom=1;dx=dy=spin=0;label=subject;
-  if(kind==='planet')planet();else if(kind==='map')map();else if(kind==='house')house();
+  born=now;zoom=1;dx=dy=spin=0;label=subject;variant=identifyVisualSubject(kind,subject);
+  if(['text','space','reference'].includes(kind)||['dna','atom','cube','sphere','pyramid'].includes(variant)){const detailed=createDetailedSubject(THREE,kind,subject,options);if(detailed){active.add(detailed.group);mats.push(...detailed.materials);textures.push(...detailed.textures);variant=detailed.variant;}}
+  else if(kind==='planet')planet();else if(kind==='map')map();else if(kind==='house')house();
   else if(kind==='person')person();else if(kind==='vehicle')vehicle();
   else if(kind==='landscape')landscape();else if(kind==='diagram')diagram();
   else if(kind==='object')object();else classic(kind);
@@ -231,14 +223,14 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   matter.setSource(typeof sourceProvider==='function'?sourceProvider():sourceProvider);
   matter.setTheme(kind,subject);
   matter.go(active,now,{label:String(subject||kind).slice(0,100),camera:typeof cameraProvider==='function'?cameraProvider():cameraProvider});
-  // The topology only determines particle destinations; never display solid meshes.
+  // Fine holographic surfaces share the head lighting; particles carry the transition.
   active.visible=false;
   root.visible=true;
  }
  function hide(){
   kind='';root.visible=false;
-  if(ghost){dispose(ghost.group,ghost.mats);ghost=null;}
-  dispose(active,mats);active=new THREE.Group();root.add(active);objects=[];mats=[];matter.hide();
+  if(ghost){dispose(ghost.group,ghost.mats,ghost.textures);ghost=null;}
+  dispose(activeFrame,mats,textures);active=new THREE.Group();activeFrame=new THREE.Group();activeFrame.add(active);root.add(activeFrame);objects=[];mats=[];textures=[];matter.hide();
   zoom=1;dx=dy=spin=0;
  }
  function setSource(provider){sourceProvider=provider;}
@@ -266,20 +258,21 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
  function update(now,projection,voice=0){
   if(!kind)return;
   const reveal=limit(projection.amount,0,1);
-  active.scale.setScalar((.5+.5*reveal)*zoom);
-  active.position.set(dx,dy,0);
-  active.rotation.y=spin+(reducedMotion?0:Math.sin(now*.19)*.08);
+
   matter.update(now,projection,{
     zoom,spin,dx,dy,camera:typeof cameraProvider==='function'?cameraProvider():cameraProvider,
     pixelRatio:typeof devicePixelRatio==='number'?devicePixelRatio:1,voice
   });
   root.visible=matter.state().active&&matter.state().opacity>.001;
-  for(const m of mats)m.opacity=m.userData.baseOpacity*reveal;
+  const state=matter.state(),frame=matter.presentation();
+  if(frame){activeFrame.position.set(...frame.position);activeFrame.scale.setScalar(frame.scale);activeFrame.rotation.y=frame.rotation;}
+  const build=state.returning?1-limit(state.morphProgress/.40,0,1):limit((state.morphProgress-.42)/.48,0,1);
+  active.visible=state.active&&build>.001;
+  for(const m of mats){if(m.uniforms?.uBuild){m.uniforms.uBuild.value=build;m.uniforms.uTime.value=now;m.uniforms.uVoice.value=voice;}else m.opacity=(m.userData.baseOpacity||.5)*build;}
   if(ghost){
    const remaining=1-limit((now-ghost.start)/(reducedMotion?.01:.74),0,1);
-   for(const m of ghost.mats)m.opacity=m.userData.baseOpacity*remaining;
-   ghost.group.scale.setScalar(.75+remaining*.25);
-   if(remaining<=0){dispose(ghost.group,ghost.mats);ghost=null;}
+   for(const m of ghost.mats){if(m.uniforms?.uBuild)m.uniforms.uBuild.value=Math.min(m.uniforms.uBuild.value,remaining);else m.opacity=(m.userData.baseOpacity||.5)*remaining;}
+   if(remaining<=0){dispose(ghost.group,ghost.mats,ghost.textures);ghost=null;}
   }
   if(reducedMotion)return;
   for(const o of objects){
@@ -299,6 +292,6 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   }
  }
  return {root,show,hide,update,control,setSource,setCamera,returnToCore,
-  state:()=>({kind,zoom,dx,dy,rotation:spin,morphing:Boolean(ghost)||matter.state().morphProgress<1,
+  state:()=>({kind,variant,label,quality:'fine-surface-and-particles',zoom,dx,dy,rotation:spin,morphing:Boolean(ghost)||matter.state().morphProgress<1,
    visible:root.visible,matter:matter.state()})};
 }

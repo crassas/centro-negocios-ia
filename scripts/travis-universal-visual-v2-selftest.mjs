@@ -81,15 +81,15 @@ assert(cards.includes("scene:data.kind==='illustration'?data.scene:null"));
 assert(cards.includes('mayNeedModel:mayNeedVisualModel'));
 assert(cards.includes('applyModelIntent(result'));
 assert(scene.includes('createTravisParticleMorph('),'Scene geometry must feed morph particles');
-assert(scene.includes('active.visible=false'),'Solid model must not be shown over the matter');
+assert(scene.includes('active.visible=false')&&scene.includes('createHolographicSurfaceMaterial'),'Fine surfaces must reconstruct after the particle transfer');
 assert(client.includes('conceptProjection.setSource('),'Morph origin must be the actual Travis 3D form');
 assert(client.includes("returnToCore?.("),'Returning holograms must reassemble the Travis core');
-assert(client.includes("travis-concept-projection.mjs?v=continuous-1"));
+assert(client.includes("travis-concept-projection.mjs?v=cinema-2"));
 assert(engine.includes('TravisMorphParticles'));
 assert(engine.includes('aFrom')&&engine.includes('aTo')&&engine.includes('uMorph'));
 assert(css.includes('data-immersive="true"'),'Visual projection must give full screen');
-assert(sw.includes('travis-particle-morph.mjs?v=continuous-1'));
+assert(sw.includes('travis-particle-morph.mjs?v=cinema-2'));
 console.log('PASS UNIVERSAL_VISUAL_V2',JSON.stringify({
  openVocabularyScenes:examples.length,controls:controls.length,negativeSafety:true,
- particleMorph:true,noOpaqueModels:true,immersive:true,modelFallback:true
+ particleMorph:true,fineLightSurfaces:true,immersive:true,modelFallback:true
 }));

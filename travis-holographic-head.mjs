@@ -118,8 +118,8 @@ export function createHolographicParticleMaterial(THREE){
       float key=max(0.,dot(viewNormal,normalize(vec3(-.35,.6,1.))));
       vLight=.42+key*.40+pow(1.-facing,2.4)*.18;
       gl_Position=projectionMatrix*mv;
-      gl_PointSize=clamp((2.0+aSeed*2.3)*uPixelRatio*8.0/max(2.0,-mv.z),2.5,5.1)*.72;
-      vSeed=aSeed;vOpacity=uOpacity;vHeight=p.y;
+      gl_PointSize=clamp((.72+aSeed*.55)*uPixelRatio*5.0/max(2.0,-mv.z),.85,2.1);
+      vSeed=aSeed;vOpacity=uOpacity*mix(.35,1.,rush);vHeight=p.y;
     }`,
   fragmentShader:`precision highp float;
     ${HOLOGRAPHIC_LIGHT_GLSL}

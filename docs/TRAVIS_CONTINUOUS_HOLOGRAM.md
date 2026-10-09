@@ -1,3 +1,5 @@
+> Superseded for projection detail by [Cinematic content](TRAVIS_CINEMATIC_CONTENT.md). The coordinate continuity fixes below remain in use.
+
 # Continuous Travis holograms
 
 The face, its assembly grains and the projected particle forms now share the

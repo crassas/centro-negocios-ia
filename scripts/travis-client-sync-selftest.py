@@ -37,7 +37,7 @@ with tempfile.TemporaryDirectory(prefix="travis-client-sync-") as temporary:
         # A broken shared shader must reject the complete update before any write.
         before = {name: (installed / name).read_bytes() for name in sources}
         sources["travis-holographic-head.mjs"] = sources["travis-holographic-head.mjs"].replace(
-            b"gl_PointSize=clamp((2.0+aSeed*2.3)", b"gl_PointSize=clamp((1.0+aSeed*2.3)"
+            b"gl_PointSize=clamp((.72+aSeed*.55)", b"gl_PointSize=clamp((1.0+aSeed*2.3)"
         )
         sources["index.html"] += b"\n<!-- staged but invalid client -->\n"
         changed, errors = station.sync_travis_client(ref)
