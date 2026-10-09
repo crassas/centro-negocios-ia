@@ -96,3 +96,28 @@ Não se exportam emails, tokens, dados de saúde ou o histórico integral de
 conversas privadas. A atualização não contorna autorização nem dá acesso
 ilimitado a contas ou dispositivos. O grafo é memória computacional e a
 animação é uma analogia, não prova de neurónios biológicos.
+
+## Diagnóstico operacional reforçado
+
+O comando `travismentor abilities` consulta primeiro o processo local
+`127.0.0.1:8770/awareness`, onde as ferramentas são registadas em tempo
+de execução. Se este endpoint não responder, mostra explicitamente
+`registryObservation.state=static_fallback`, em vez de apresentar o catálogo
+estático como um inventário completo. Ferramentas dinâmicas sem metadados
+são apresentadas com `actionType=UNKNOWN` e `modifiesData=null`:
+a ausência de metadados **não** é autorização.
+
+Existem duas provas independentes e **não intercambiáveis**:
+
+- `observedSuccesses` e `observedFailures` vêm de execuções efetivas do Travis
+  analisadas pelo verificador de resultados, não de ficheiros ou registos.
+- `liveReadOnlyProbes` mede apenas as dependências de leitura: saúde do Centro
+  e do Laya, integridade de memórias, acesso à base de tarefas e estado do
+  checkout Git. Uma dependência saudável não prova a correção da resposta
+  gerada ou que uma janela holográfica abriu no ecrã.
+
+Ferramentas como `web_research`, `web_open`, `web_read` e `update_task`
+continuam sem selo de sucesso automático: exigem testes específicos
+por tarefa, interface ou autorização. O programa nunca atribui sucessos
+históricos artificialmente.
+
