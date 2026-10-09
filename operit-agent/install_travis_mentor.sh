@@ -12,7 +12,7 @@ set -eu
 action="${1:-status}"
 shift || true
 case "$action" in
-  status|seed|export|context|plan) ;;
+  status|seed|export|context|plan|abilities) ;;
   *) echo "Usage: travismentor [status|seed|export|context|plan] [--query text] [--tool tool]" >&2; exit 2 ;;
 esac
 exec python3 "$HOME/travis_mentor.py" "$action" --state-dir "$HOME/.centro-jarvis" "$@"
