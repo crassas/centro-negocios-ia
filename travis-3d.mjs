@@ -1,6 +1,7 @@
 import { createConceptProjection } from './travis-concept-projection.mjs?v=cinema-1';
 import './travis-action-cards.mjs?v=cinema-1';
 import { createVoiceInput } from './travis-voice-input.mjs?v=stt-fast-1';
+import { resolveWakePhrase } from './travis-wake-phrase.mjs?v=pt-1';
 import { createTravisVision } from './travis-vision.mjs?v=4';
 import { buildSpeechEnvelope, speechEnvelopeLevel } from './travis-audio-sync.mjs?v=1';
 import { cameraCommand } from './travis-vision-policy.mjs?v=2';
@@ -876,9 +877,21 @@ if (!hud || !launcher || !canvas) {
       let text=String(transcript.text||'').trim();
       window.dispatchEvent(new CustomEvent('travis:transcript',{detail:{role:'user',text}}));
       if (!text) throw new Error('No speech recognized. Please speak again.');
-      if(standby&&!/\b(?:travis|jarvis|acorda|wake up)\b/i.test(text)){voiceBusy=false;setState('idle','Standing by. Say Travis.');scheduleListening(session,100);return;}
+      // Only audio may use narrow acoustic wake recovery. Typed messages never
+      // receive fuzzy corrections, and raw ASR text remains visible.
+      const wakeAddress=resolveWakePhrase(text,{allowFuzzy:typeof blob!=='string'});
+      if(standby&&!wakeAddress.matched){
+        voiceBusy=false;setState('idle','Standing by. Say Travis.');
+        scheduleListening(session,100);return;
+      }
       const wokeFromStandby=standby;
-      if(standby){standby=false;text=text.replace(/^(?:hey |olá? )?(?:travis|jarvis)[ ,.!:]*/i,'')||'wake up';}
+      if(standby){
+        standby=false;
+        text=wakeAddress.command||'acorda';
+      }else if(wakeAddress.corrected && typeof blob!=='string'){
+        text=wakeAddress.command||text;
+      }
+      if(wakeAddress.corrected)metrics.wakeRecoveryKind=wakeAddress.kind;
       lastInteraction=performance.now();
       text=window.TravisProjection?.select(text)||text;
       const interpretation=window.TravisProjection?.interpret?.(text);
