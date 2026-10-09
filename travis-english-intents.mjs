@@ -4,7 +4,7 @@ const norm=text=>String(text??'').normalize('NFD').replace(/[\u0300-\u036f]/g,''
  .toLowerCase().replace(/^(?:hey |hello |okay |ok )?(?:travis|jarvis)[ ,:;!]*/,'')
  .replace(/[.!?]+$/,'').replace(/\s+/g,' ').trim();
 const lead=/^(?:(?:hey|please|can you|could you|would you|will you|i want you to|i'd like you to)\s+)*\s*/;
-const display=/\b(?:show(?: me| us)?|bring up|pull up|bring out|display|project|render|visualize|visualise|let me see|i want to see|i'd like to see|can i see|could you show|give me a view of|switch to|change to|transform into|turn (?:this|that|it) into|reveal|load up|put (?:it|that) on screen)\b/;
+const display=/\b(?:show(?: me| us)?|bring up|pull up|bring out|display|project|render|visualize|visualise|let me see|i want to see|i'd like to see|i would like to see|can i see|could you show|give me a view of|switch to|change to|transform into|turn (?:this|that|it) into|reveal|load up|put (?:it|that) on screen)\b/;
 const categories=[
  ['planet',/\b(?:planet|planets|solar system|galaxy|globe|mercury|venus|earth|mars|jupiter|saturn|uranus|neptune|pluto|moon|sun)\b/],
  ['map',/\b(?:map|maps|route|routes|city map|street map|geography|location map)\b/],
@@ -53,7 +53,7 @@ export function rewriteEnglishToolRequest(text){
  if(!raw||raw.length>450)return text;
  if(/^(?:(?:open|bring up|pull up|take me to|launch|display|show|show me|switch to|go to|load|visit)(?: the)? )?youtube(?: for me| now)?$/.test(raw))return 'Open YouTube';
  if(/^(?:(?:close|shut|exit|leave|hide|dismiss)(?: the)? )youtube$/.test(raw))return 'Close YouTube';
- const video=raw.match(/^(?:find|search for|look up|show me|pull up|bring up) (?:some )?(?:youtube )?videos? (?:on|about|of|for) (.{1,230})$/);
+ const video=raw.match(/^(?:find|search for|look up|show me|pull up|bring up) (?:(?:some|a|the) )?(?:youtube )?videos? (?:on|about|of|for) (.{1,230})$/);
  if(video)return 'Search YouTube '+video[1];
  if(/^(?:open|bring up|pull up|take me to|launch|display|show|show me|switch to|go to|load|visit)(?: the)? google$/.test(raw))return 'Open Google';
  if(/^(?:(?:show|bring up|pull up|display|list)(?: me)? )?(?:my|our|the) (?:tasks|to-?do(?: list)?)$/.test(raw))return 'Show my tasks';
