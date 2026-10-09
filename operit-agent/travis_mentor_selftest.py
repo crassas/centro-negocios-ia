@@ -111,8 +111,9 @@ class MentorshipTests(unittest.TestCase):
             self.assertEqual(catalog["registered"],2)
             self.assertEqual(catalog["observedSuccessTools"],1)
             self.assertEqual(catalog["registeredOnly"],1)
-            self.assertEqual(catalog["capabilities"][0]["lastObservedState"],"registered_only")
-            self.assertEqual(catalog["capabilities"][1]["lastObservedState"],"observed_tool_success")
+            by_id={entry["id"]:entry for entry in catalog["capabilities"]}
+            self.assertEqual(by_id["repo_change"]["lastObservedState"],"registered_only")
+            self.assertEqual(by_id["read_status"]["lastObservedState"],"observed_tool_success")
             self.assertIn("not current authorization",catalog["warning"])
 
     def test_status_does_not_call_any_external_service(self):
