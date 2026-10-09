@@ -15,6 +15,19 @@ def verify(tool,result=None,error=None):
   kind=type(error).__name__
   return {'verdict':'failure','scope':'tool_execution','code':kind,'cause':'Tool raised '+kind,
    'correction':{'TimeoutError':'Check service health; retry a read once or split the request.','PermissionError':'Check the required authorization; do not bypass it.','ValueError':'Validate the input against the tool contract before retrying.','ConnectionError':'Check the service connection before retrying.'}.get(kind,'Inspect the tool failure and validate a proposed fix before retrying.')}
+ if tool=="decision_consult":
+  safe={"inspect_centro","inspect_laya","inspect_router","inspect_memory","inspect_repo"}
+  if (isinstance(result,dict) and result.get("source")=="travis-decision-governor"
+      and result.get("selected") in safe and result.get("status") in {"checked","check_failed"}):
+   observed=result.get("verification") or {}
+   v=observed.get("verdict")
+   scope=observed.get("scope")
+   if v in {"success","failure"} and scope in {"local_dependency_health","sqlite_readonly","read_only_git"}:
+    return {"verdict":v,"scope":scope,"code":str(observed.get("code") or "unknown")[:75],
+            "cause":"Independent read-only postcondition observed by Decision Governor.",
+            "correction":"Inspect the local dependency and retry a read-only check."}
+  return {"verdict":"unknown","scope":"decision_only","code":"unverified_decision",
+          "cause":"The choice was not independently executed and confirmed.","correction":""}
  if tool in {'local_llm','expert_query','repo_review','web_research'}:
   return {'verdict':'unknown','scope':'unverified_result','code':'no_verifier','cause':'Model output requires an independent verifier.','correction':''}
  if isinstance(result,dict):
