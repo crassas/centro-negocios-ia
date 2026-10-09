@@ -186,6 +186,7 @@ def select_youtube_result(state,args):
 
 
 # Browser-only visual inference supplies detection metadata, not raw camera frames.
+TRAVIS_VISUAL_LABELS=set("person|bicycle|car|motorcycle|airplane|bus|train|truck|boat|traffic light|fire hydrant|stop sign|parking meter|bench|bird|cat|dog|horse|sheep|cow|elephant|bear|zebra|giraffe|backpack|umbrella|handbag|tie|suitcase|frisbee|skis|snowboard|sports ball|kite|baseball bat|baseball glove|skateboard|surfboard|tennis racket|bottle|wine glass|cup|fork|knife|spoon|bowl|banana|apple|sandwich|orange|broccoli|carrot|hot dog|pizza|donut|cake|chair|couch|potted plant|bed|dining table|toilet|tv|laptop|mouse|remote|keyboard|cell phone|microwave|oven|toaster|sink|refrigerator|book|clock|vase|scissors|teddy bear|hair drier|toothbrush".split("|"))
 def clean_vision(value):
  if not isinstance(value,dict) or value.get("source")!="on-device-mediapipe":return {"active":False}
  active=value.get("active") is True
@@ -201,7 +202,7 @@ def clean_vision(value):
    name=str(item.get("name","")).strip()
    try:score=float(item.get("score",0))
    except (TypeError,ValueError):continue
-   if re.fullmatch(r"[A-Za-z][A-Za-z _-]{0,47}",name) and .4<=score<=1 and name.lower() not in {o["name"].lower() for o in objects}:
+   if name.lower() in TRAVIS_VISUAL_LABELS and .4<=score<=1 and name.lower() not in {o["name"].lower() for o in objects}:
     objects.append({"name":name,"score":round(score,2)})
  gesture=str(value.get("gesture","None")) if fresh else "None"
  if gesture not in {"None","Open_Palm","Closed_Fist","Victory","Thumb_Up","Thumb_Down","Pointing_Up","ILoveYou"}:gesture="None"
