@@ -43,7 +43,7 @@ const main=fs.readFileSync('travis-3d.mjs','utf8');
 const camera=fs.readFileSync('travis-vision.mjs','utf8');
 const sw=fs.readFileSync('sw.js','utf8');
 assert(page.includes('id="travis-camera-toggle"'));
-assert(page.includes('travis-3d.mjs?v=vision-2'));
+assert(page.includes('travis-3d.mjs?v=audio-1'));
 assert(main.includes('vision.stop();'),'Closing the scene must turn off camera');
 assert(main.includes('cameraCommand(text)'),'Voice/typed instructions must control camera');
 assert(main.includes("inputLanguage='auto'"),'Always understand a language-switching command');
@@ -51,7 +51,7 @@ assert(camera.includes('audio: false'),'The camera must never implicitly request
 assert(camera.includes('getTracks().forEach(track => track.stop())'),'The camera hardware must be released');
 assert(camera.includes("document.addEventListener('visibilitychange'"),'Background tab must close camera');
 assert(camera.includes('recognizeForVideo(') && camera.includes('detectForVideo('));
-assert(sw.includes('./travis-vision.mjs?v=2'));
+assert(sw.includes('./travis-vision.mjs?v=3'));
 assert(camera.includes('ObjectDetector.createFromOptions'), 'Objects must be analysed locally');
 assert(main.includes('vision:vision.snapshot()'), 'Detected objects must reach voice conversation');
 assert(fs.statSync('vendor/mediapipe/efficientdet_lite0.tflite').size > 10_000_000, 'Local vision model exists');
