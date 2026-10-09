@@ -1,6 +1,7 @@
 // Camera vision is opt-in and runs in the current browser. Frames never enter Travis HTTP requests.
 import { FilesetResolver, GestureRecognizer, FaceDetector, ObjectDetector } from './vendor/mediapipe/vision_bundle.mjs';
 import { facePosition, gestureDecision, faceColourFromPixels } from './travis-vision-policy.mjs?v=2';
+import { INTERFACE_COPY, visionStatusCopy } from './travis-interface-language.mjs?v=1';
 
 export function createTravisVision({ onGesture = () => {}, onPose = () => {}, isSpeechCritical = () => false } = {}) {
   const button = document.getElementById('travis-camera-toggle');
@@ -17,18 +18,24 @@ export function createTravisVision({ onGesture = () => {}, onPose = () => {}, is
   const sampleContext=sampleCanvas.getContext('2d',{willReadFrequently:true});
   let labelText = 'Câmara desligada';
   const state = { name: null, since: 0, latched: false, lastActionAt: -3000 };
+  const locale = () => dock?.closest('#travis-hud')?.dataset.uiLanguage==='pt'?'pt':'en';
   const setLabel = message => {
     labelText = message;
-    if (label) label.textContent = message;
+    if (label) label.textContent = visionStatusCopy(message,locale());
   };
   function updateControls() {
     if (button) {
       button.disabled = Boolean(opening);
       button.setAttribute('aria-pressed', String(active));
-      button.textContent = active ? 'Desligar câmara' : 'Ligar câmara';
+      const copy=INTERFACE_COPY[locale()];
+      button.textContent = active ? copy.cameraDisable : copy.cameraEnable;
     }
     if (dock) dock.dataset.active = String(active);
   }
+  window.addEventListener('travis:interface-language',()=>{
+    setLabel(labelText);
+    updateControls();
+  });
   async function prepareModels() {
     if (!fileset) fileset = await FilesetResolver.forVisionTasks('./vendor/mediapipe/wasm');
     if (!recognizer) {
