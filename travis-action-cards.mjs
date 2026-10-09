@@ -1,11 +1,52 @@
 // Front workspace driven by actual host tool results. Text is always inert.
 import {hologramPresentation as projection} from './travis-presence.mjs?v=3';
 import {mountYouTube,closeYouTube,controlYouTube,youtubeState} from './travis-youtube.mjs?v=3';
+import {parseEnglishProjection,rewriteEnglishToolRequest} from './travis-english-intents.mjs?v=1';
 const hud=document.getElementById('travis-hud');
 const deck=document.getElementById('travis-action-deck');
 const heading=document.getElementById('travis-action-heading');
 const items=document.getElementById('travis-action-items');
-let current=null,selected=null,frame=0,wasVisible=false,returnTimer=0;
+let current=null,selected=null,frame=0,wasVisible=false,returnTimer=0,pinned=false,highlighted=0;
+const planetSequence=['Mercury','Venus','Earth','Mars','Jupiter','Saturn','Uranus','Neptune'];
+function canReturn(){
+  if(!current||pinned||current.autoReturn===false)return false;
+  return true;
+}
+function scheduleReturn(delay=13000){
+  clearTimeout(returnTimer);returnTimer=0;
+  if(!canReturn())return;
+  returnTimer=setTimeout(()=>{
+    if(!canReturn())return;
+    if(youtubeState().playing || hud.dataset.state==='speaking'||hud.dataset.state==='thinking'){
+      scheduleReturn(3200);return;
+    }
+    window.TravisVisual?.commands(false,{automatic:true});
+  },Math.max(2200,delay));
+}
+function touchProjection(){if(current)scheduleReturn(16500);}
+function updatePin(){
+  hud.dataset.projectionPinned=String(pinned);
+  heading.title=pinned?'Pinned until you dismiss it':'Returns to Travis automatically';
+}
+const schematic=(scene,title)=>{
+  const names={planet:'PLANETARY CONCEPT',map:'SCHEMATIC MAP',house:'ARCHITECTURAL WIREFRAME',
+    person:'HUMAN FIGURE CONCEPT',object:'OBJECT WIREFRAME'};
+  const summaries={planet:'Illustrative orbital model, not NASA imagery.',
+    map:'Illustrative route grid, not live geography or verified coordinates.',
+    house:'Conceptual building geometry, not a survey or architectural plan.',
+    person:'Generic holographic figure, not a reconstruction of a real person.',
+    object:'Generic 3D placeholder, not a scan of a physical object.'};
+  const result={kind:'illustration',scene,title:String(title||names[scene]).slice(0,110),
+    summary:summaries[scene],autoReturn:true,items:[]};
+  if(scene==='map'){
+    const query=String(title||'').replace(/^(?:the )?(?:(?:street|city|location) )?maps? (?:of |for |around |in )?/i,'').trim();
+    if(query && query.toLowerCase()!=='location map')result.items.push({
+      title:'View the actual map',detail:'Open an external, georeferenced map for '+query.slice(0,65),
+      url:'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(query.slice(0,120))
+    });
+  }
+  return result;
+};
 const clock=()=>performance.now()/1000;
 const menu={kind:'capabilities',title:'Your workspace',items:[
   {title:'Repositories',detail:'Inspect your projects',request:'Mostra os meus repositórios'},
@@ -19,18 +60,21 @@ function render(data){
     data={...data,query:current.query||data.query,items:data.items?.length?data.items:current.items};
   }
   closeYouTube();
-  current=data;clearTimeout(returnTimer);
+  current={...data,autoReturn:data.autoReturn!==false};pinned=false;highlighted=0;
+  clearTimeout(returnTimer);updatePin();
   hud.dataset.projectionKind=String(data.kind||'result');
-  window.dispatchEvent(new CustomEvent('travis:illustration',{detail:{scene:data.kind==='illustration'?data.scene:null}}));
+  window.dispatchEvent(new CustomEvent('travis:illustration',{detail:{
+    scene:data.kind==='illustration'?data.scene:null,subject:data.title||''
+  }}));
   if(!matchMedia('(prefers-reduced-motion: reduce)').matches)deck.animate?.([{opacity:0,filter:'blur(9px)',transform:'translate(-50%, 16px) scale(.97)'},{opacity:1,filter:'blur(0px)',transform:'translate(-50%, 0) scale(1)'}],{duration:750,easing:'cubic-bezier(.16,1,.3,1)'});
   heading.textContent=String(data.title||'Your workspace');
   items.dataset.kind=String(data.kind||'result');
   const rows=Array.isArray(data.items)?data.items.slice(0,30):[];
   items.replaceChildren();
   if(data.summary){const paragraph=document.createElement('p');paragraph.className='travis-projection-summary';paragraph.textContent=String(data.summary);items.append(paragraph);}
-  if(data.kind==='illustration'){const label=document.createElement('p');label.className='travis-projection-caption';label.textContent='SCHEMATIC · CONCEPTUAL VIEW';items.append(label);return;}
+  if(data.kind==='illustration'){const label=document.createElement('p');label.className='travis-projection-caption';label.textContent='CINEMATIC · CONCEPTUAL VIEW';items.append(label);}
   if(data.kind==='youtube')mountYouTube(data,items);
-  const entries=rows.length?rows:data.kind==='youtube'?[]:[{title:data.kind==='tasks'?'No pending tasks':'No results',detail:data.kind==='tasks'?'Tell me what you want to add.':'The tool returned no entries.'}];
+  const entries=rows.length?rows:(data.kind==='youtube'||data.kind==='illustration')?[]:[{title:data.kind==='tasks'?'No pending tasks':'No results',detail:data.kind==='tasks'?'Tell me what you want to add.':'The tool returned no entries.'}];
   items.append(...entries.map((row,index)=>{
     const actionable=typeof row.request==='string'&&row.request.length<=500;
     const card=document.createElement(actionable?'button':'article');
@@ -53,6 +97,7 @@ function render(data){
     return card;
   }));
   deck.scrollTop=0;
+  scheduleReturn(18000);
 }
 function paint(){
   frame=0;
@@ -80,7 +125,14 @@ if(deck){
   document.getElementById('travis-action-close').addEventListener('click',()=>window.TravisVisual?.commands(false));
   window.addEventListener('travis:commands',e=>{
     if(e.detail.open){if(!current)render(menu);show(Boolean(e.detail.automatic));}
-    else{clearTimeout(returnTimer);closeYouTube();projection.close(clock());refresh();}
+    else{
+      clearTimeout(returnTimer);closeYouTube();projection.close(clock());refresh();
+      pinned=false;current=null;updatePin();
+      setTimeout(()=>{
+        if(!projection.sample(clock()).visible)
+          window.dispatchEvent(new CustomEvent('travis:illustration',{detail:{scene:null}}));
+      },1350);
+    }
   });
   window.addEventListener('travis:result',e=>{
     const data=e.detail?.ui;if(!data)return;
@@ -88,13 +140,73 @@ if(deck){
     render(data);window.TravisVisual?.commands(true,{automatic:true});
     show(true);
   });
-  window.addEventListener('travis:speech-end',()=>{if(current?.autoReturn){clearTimeout(returnTimer);returnTimer=setTimeout(()=>window.TravisVisual?.commands(false),1800);}});
+  window.addEventListener('travis:speech-end',()=>scheduleReturn(current?.kind==='illustration'?10500:13500));
   window.addEventListener('travis:user-start',()=>clearTimeout(returnTimer));
+  window.addEventListener('travis:state',event=>{
+    if(event.detail?.state==='speaking'||event.detail?.state==='thinking')clearTimeout(returnTimer);
+    else if(event.detail?.state==='ready'&&current)scheduleReturn(12000);
+  });
+  for(const event of ['pointerdown','touchstart','scroll','focusin','keydown']){
+    deck.addEventListener(event,touchProjection,{passive:true});
+  }
   window.addEventListener('travis:close',()=>{clearTimeout(returnTimer);
-    closeYouTube();cancelAnimationFrame(frame);frame=0;projection.reset();wasVisible=false;current=null;paint();
+    closeYouTube();cancelAnimationFrame(frame);frame=0;projection.reset();wasVisible=false;current=null;pinned=false;paint();
   });
   window.TravisProjection=Object.freeze({
     media:youtubeState,
+    status:()=>({kind:current?.kind||null,scene:current?.scene||null,pinned,
+      autoReturn:current?.autoReturn!==false,highlighted}),
+    interpret(text){
+      const intent=parseEnglishProjection(text,{
+        active:Boolean(current&&projection.sample(clock()).visible),
+        kind:current?.kind||''
+      });
+      if(!intent){
+        const rewritten=rewriteEnglishToolRequest(text);
+        return rewritten!==text?{handled:false,rewritten}:null;
+      }
+      if(intent.type==='scene'){
+        render(schematic(intent.scene,intent.title));
+        window.TravisVisual?.commands(true,{automatic:true});show();
+        return {handled:true,reply:'Projecting '+intent.title+'.',kind:'scene'};
+      }
+      if(intent.type==='dismiss'){
+        window.TravisVisual?.commands(false,{automatic:true});
+        return {handled:true,reply:'Returning to core.',kind:'dismiss'};
+      }
+      if(intent.type==='pin'){
+        pinned=true;updatePin();clearTimeout(returnTimer);
+        return {handled:true,reply:'I will leave this open.',kind:'pin'};
+      }
+      if(intent.type==='unpin'){
+        pinned=false;updatePin();scheduleReturn(10500);
+        return {handled:true,reply:'Automatic return is enabled.',kind:'unpin'};
+      }
+      if(intent.type==='control'){
+        const action=intent.action;
+        if((action==='next'||action==='previous')&&current?.scene==='planet'){
+          const index=planetSequence.findIndex(name=>current.title?.toLowerCase().includes(name.toLowerCase()));
+          const next=(index+(action==='next'?1:-1)+planetSequence.length)%planetSequence.length;
+          render(schematic('planet',planetSequence[next]));
+          window.TravisVisual?.commands(true,{automatic:true});show();
+          return {handled:true,reply:'Projecting '+planetSequence[next]+'.',kind:'scene'};
+        }
+        if(action==='next'||action==='previous'){
+          const rows=current?.items||[];
+          if(!rows.length)return {handled:true,reply:'There are no other results in this view.',kind:'control'};
+          highlighted=(highlighted+(action==='next'?1:-1)+rows.length)%rows.length;
+          const cards=items.querySelectorAll('.travis-action-card');
+          cards.forEach((card,index)=>card.setAttribute('aria-current',String(index===highlighted)));
+          cards[highlighted]?.scrollIntoView?.({behavior:'smooth',block:'nearest'});
+          touchProjection();
+          return {handled:true,reply:'Result '+(highlighted+1)+'.',kind:'control'};
+        }
+        window.dispatchEvent(new CustomEvent('travis:visual-control',{detail:{action}}));
+        touchProjection();
+        return {handled:true,reply:'',kind:'control'};
+      }
+      return null;
+    },
     action(result){
       if(result?.action==='close_projection'){
         closeYouTube();window.TravisVisual?.commands(false);return {ok:true};
@@ -109,6 +221,10 @@ if(deck){
       const t=String(text).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
       // Media selection is resolved from the server's session-scoped search results.
       if(current?.kind==='youtube')return null;
+      if(/^(?:open|select|choose|show)(?: the)? (?:highlighted|selected|current)(?: one| result)?$/.test(t)){
+        const row=current?.items?.[highlighted];
+        return row?.request||null;
+      }
       const match=t.match(/^(?:travis[, ]+)?(?:abre|seleciona|selecciona|escolhe|quero|open|select|choose)\s+(?:o |a |the )?(primeiro|primeira|first|segundo|segunda|second|terceiro|terceira|third|quarto|quarta|fourth|quinto|quinta|fifth|[1-9])(?:\s+(?:video|resultado|projeto))?[.!?]*$/);
       if(!match||deck.hidden)return null;
       const words=['primeiro primeira first','segundo segunda second','terceiro terceira third','quarto quarta fourth','quinto quinta fifth'];
