@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import fs from 'node:fs';
+import './travis-wake-phrase-selftest.mjs';
 
 let options, starts=0, stops=0, interruptions=0, semanticCalls=0;
 const submitted=[], timers=new Map();let nextTimer=0;
