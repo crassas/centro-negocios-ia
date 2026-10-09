@@ -624,6 +624,14 @@ button.travis-action-card{cursor:pointer}
 .travis-action-card:has(.travis-video-preview) strong,.travis-action-card:has(.travis-video-preview)>span:not(.travis-holo-number){padding-right:105px}
 .travis-youtube-screen{overflow:hidden;border-radius:0;box-shadow:0 12px 45px #02070b;mask-image:linear-gradient(transparent,#000 8px,#000 calc(100% - 8px),transparent)}
 #travis-hud[data-projection-kind="illustration"] .travis-action-deck{pointer-events:none;overflow:visible;mask-image:none}
+/* Pure 3D projections get the whole stage. No repositories, no overlay, no cyan panels. */
+#travis-hud[data-immersive="true"] .travis-action-deck{display:none!important}
+#travis-hud[data-immersive="true"] .travis-form-selector{opacity:.13;pointer-events:none;transition:opacity .6s ease}
+#travis-hud[data-immersive="true"] .travis-camera-dock{opacity:.48;transition:opacity .6s ease}
+#travis-hud[data-immersive="true"] .travis-camera-dock:focus-within{opacity:1}
+#travis-hud[data-immersive="true"] .travis-title{opacity:.20!important;transition:opacity .6s ease}
+#travis-hud[data-immersive="true"] .travis-hint{opacity:0;pointer-events:none}
+#travis-hud[data-immersive="false"] .travis-form-selector{opacity:1;transition:opacity .6s ease}
 #travis-hud[data-projection-kind="illustration"] .travis-action-deck>header{pointer-events:auto;align-items:flex-start}
 #travis-hud[data-projection-kind="illustration"] .travis-action-deck h2{max-width:29ch;font-size:clamp(18px,4vw,24px);line-height:1.4}
 .travis-projection-caption{position:fixed;top:56vh;left:0;right:0;text-align:center;font-size:9px;letter-spacing:.22em;color:#91aab4}

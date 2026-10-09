@@ -1,56 +1,102 @@
-// English conversational commands for temporary holographic projections.
-// Unknown commands pass unchanged to the real Travis tool router.
-const norm=text=>String(text??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
- .toLowerCase().replace(/^(?:hey |hello |okay |ok )?(?:travis|jarvis)[ ,:;!]*/,'')
- .replace(/[.!?]+$/,'').replace(/\s+/g,' ').trim();
-const lead=/^(?:(?:hey|please|can you|could you|would you|will you|i want you to|i'd like you to)\s+)*\s*/;
-const display=/\b(?:show(?: me| us)?|bring up|pull up|bring out|display|project|render|visualize|visualise|let me see|i want to see|i'd like to see|i would like to see|can i see|could you show|give me a view of|switch to|change to|transform into|turn (?:this|that|it) into|reveal|load up|put (?:it|that) on screen)\b/;
+// Universal conversational projection intent for PT-PT and English.
+// Explicitly requested conceptual imagery is routed to local particle shapes;
+// unrecognised real-world facts and private data stay with the normal tools.
+const fold=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const compact=s=>fold(s).replace(/\s+/g,' ').trim()
+ .replace(/^(?:(?:hey|hello|olha|okay|ok|bem|entao|well|please|por favor)[ ,:;.!-]+){0,4}/,'')
+ .replace(/^(?:(?:travis|jarvis)[,:;.! ]+){0,2}/,'')
+ .replace(/^(?:(?:olha|well|hey|please|por favor|entao|now|agora)[,:;.! ]+){0,4}/,'')
+ .replace(/[.!?]+$/,'').trim();
+const excludes=/\b(?:youtube|instagram|tiktok|facebook|google|github|reddit|website|webpage|browser|internet|email|emails|gmail|repository|repositories|repositorio|repositorios|file|ficheiro|document|documento|my camera|minha camara|camera feed|what do you see|o que ves|can you see me|consegues ver-me|my face|a minha cara|a minha pele|my skin|customer|cliente|bank|payment|pagamento|code|codigo|api|account|conta)\b/;
+const negatives=/(?:^|\b)(?:nao|nunca|nem|sem|don't|do not|never|without)\s+(?:quero\s+|want\s+to\s+|show\s+|mostrar\s+|mostres\s+|ver\s+|veja\s+|display\s+|project\s+)?(?:ver|see|show|mostrar|mostres|project|projetar|visualizar|render)\b/;
+const cue=/(?:\b(?:see|show|showing|visualize|visualise|project|display|render|imagine|picture|create|build|form|materialize|materialise|hologram|holographic|wireframe|3d|look at|pop up|appear|see what|look like|transform|morph|bring up|pull up|bring out|let me see|i feel like seeing|i fancy seeing|i'd love to see|i would like to see|i want to see|it would be nice to see|i'm curious to see|can we see|could we see|would you show|can you put|put.*in front of me)\b|\b(?:ver|vejo|veja|vermos|mostra|mostrar|mostre|projetar|projetes|projeta|projecao|visualizar|visualiza|imaginar|imagina|criar|cria|forma|aparecer|apareca|faz surgir|faz aparecer|faz-me ver|poe|podes por|coloca|consegues|transforma|transformes|transforma-te|apetece-me|apetecia-me|gostava de|queria|quero ver|deixa-me ver|consegues mostrar|traz-me|holograma|holografico|wireframe|modelo 3d)\b)/;
+const directCue=/(?:\b(?:show|display|project|render|visualize|visualise|bring up|pull up|show me|let me see|i feel like seeing|i fancy seeing|i want to see|i'd love to see|i would love to see|i would like to see|please show|can you show|could you show|would you show|make.*appear|turn (?:that|it|this) into|transform.*into)\b|\b(?:mostra|mostrar|mostre|projetar|projeta|visualizar|visualiza|faz surgir|faz aparecer|quero ver|gostava de ver|apetece-me ver|apetecia-me ver|deixa-me ver|podes mostrar|consegues mostrar|consegues por|podes por|poe-me|por.*a minha frente|transforma-te em|traz-me|coloca-me)\b)/;
+const visualSpecific=/\b(?:holographic|hologram|3d|wireframe|em holograma|holografico|em 3d|em particulas|nas particulas|transforma-te|transform yourself|turn into|morph into)\b/;
+const verbsNoun=/^(?:(?:i(?:'d| would)?|i am|i'm|eu|nos)\s+)?(?:feel like|fancy|wish|would love|want|queria|gostava|apetece(?:-me)?|apetecia(?:-me)?|desejava)\s+/;
 const categories=[
- ['planet',/\b(?:planet|planets|solar system|galaxy|globe|mercury|venus|earth|mars|jupiter|saturn|uranus|neptune|pluto|moon|sun)\b/],
- ['map',/\b(?:map|maps|route|routes|city map|street map|geography|location map)\b/],
- ['house',/\b(?:house|home|building|apartment|floor ?plan|property|architecture|blueprint|room layout)\b/],
- ['person',/\b(?:person|people|human figure|silhouette|portrait|body model|avatar|character|bust)\b/],
- ['object',/\b(?:object|product|item|3d model|model of|wireframe|prototype)\b/]
+ ['planet',/(?:\b(?:planet|planets|planetary|solar system|solar|sistema solar|planeta|planetas|estrela|estrela polar|star|stars|galaxy|galaxia|universo|universe|mercury|mercurio|venus|earth|terra|mars|marte|jupiter|saturn|saturno|uranus|urano|neptune|neptuno|neptun[oae]|pluto|plutao|moon|lua|sun|sol|asteroid|asteroide|comet|cometa)\b)/],
+ ['map',/\b(?:map|maps|mapa|mapas|routes?|rotas?|rua|avenida|road|street|city|cidade|town|village|aldeia|pais|country|countries|world map|geografia|geography|globo terrestre|google maps|porto|lisboa|lisbon|paris|london|londres|tokyo|toquio|new york|coimbra|campanha|gaia)\b/],
+ ['house',/\b(?:house|houses|home|apartment|apartamento|building|buildings|edificio|edificios|casa|casas|moradia|palacio|palace|castle|castelo|architecture|arquitetura|blueprint|planta|floor plan|floorplan|arranha-ceus|skyscraper|room|sala|quarto|kitchen|cozinha|bedroom|fachada|facade|armazem|warehouse|bridge|ponte|temple|templo)\b/],
+ ['vehicle',/\b(?:car|cars|carro|carros|automovel|vehicle|veiculo|moto|motorcycle|camiao|truck|van|carrinha|bicycle|bicicleta|airplane|aviao|helicopter|helicoptero|spaceship|spacecraft|nave|foguetao|rocket|train|comboio|ship|barco|boat|drone|robot|robo|mecha|jet|satellite|satelite)\b/],
+ ['person',/\b(?:person|people|human|humano|humana|pessoa|pessoas|corpo|body|human body|face|rosto|figura humana|silhouette|silhueta|portrait|retrato|bust|busto|anatomy|anatomia|skeleton|esqueleto|muscle|musculo|heart|coracao|brain|cerebro|alien|extraterrestre)\b/],
+ ['landscape',/\b(?:landscape|paisagem|forest|floresta|tree|arvore|plant|planta|flower|flor|mountain|montanha|beach|praia|sea|ocean|oceano|waterfall|cascata|river|rio|desert|deserto|nature|natureza|volcano|vulcao|island|ilha|garden|jardim|cave|gruta|clouds|nuvens|animals?|animais?|dog|cao|cat|gato|dragon|dragao|dinossauro|dinosaur)\b/],
+ ['diagram',/\b(?:diagram|diagrama|flowchart|fluxograma|network|rede|schema|esquema|molecule|molecula|dna|cell|celula|atom|atomo|timeline|linha temporal|graph|grafico|circuit|circuito|algorithm|algoritmo|system|sistema|process|processo)\b/],
+ ['object',/\b(?:object|objects|objeto|objetos|product|produto|item|items|model|modelo|cube|cubo|sphere|esfera|pyramid|piramide|phone|telemovel|telephone|telefone|book|livro|chair|cadeira|table|mesa|lamp|candeeiro|sculpture|escultura|sword|espada|tool|ferramenta|watch|relogio|camera|machine|maquina|key|chave|furniture|mobília|furniture)\b/]
 ];
-const notConcept=/\b(?:youtube|website|webpage|browser|facebook|instagram|github|google earth|my (?:face|skin)|what do you see|camera|webcam)\b/;
-const commands=[
- ['dismiss',/^(?:go back(?: to (?:travis|core|normal|main view))?|back to (?:travis|core|normal|the main view)|return to (?:travis|core|normal|main view)|restore (?:the )?(?:main|original|normal) view|close (?:it|that|this|the (?:view|projection|panel|hologram))|dismiss (?:it|that|this)|hide (?:it|that|this|the projection)|put (?:it|that|this) away|clear (?:it|that|this|the projection|the screen)|reset (?:the )?(?:scene|view)|cancel (?:the )?projection|take (?:it|this|that) (?:off|away))$/],
- ['pin',/^(?:keep (?:this|it|that)(?: open| up| on screen)?|leave (?:it|this|that) (?:up|open|there)|pin (?:this|it|that)(?: view)?|hold (?:this|it|that)(?: view)?|keep showing (?:it|this)|don't close (?:it|this))$/],
- ['unpin',/^(?:unpin|release|let it close|auto close|auto return|resume automatic return|don't pin|do not pin)(?: (?:it|this|the view))?$/],
- ['zoom-in',/^(?:zoom in|closer|move closer|bring it closer|enlarge(?: it)?|make (?:it|that|this) bigger|increase (?:the )?size|magnify(?: it)?|scale (?:it )?up)(?: (?:a bit|some more))?$/],
- ['zoom-out',/^(?:zoom out|pull back|move back|make (?:it|that|this) smaller|shrink(?: it)?|minimi[sz]e(?: it)?|scale (?:it )?down)(?: (?:a bit|some more))?$/],
- ['rotate-right',/^(?:rotate (?:it|that|this|the (?:view|model))|spin (?:it|that|this)|turn (?:it|that|this)(?: around)?|rotate right|turn right|spin right)$/],
- ['rotate-left',/^(?:rotate left|turn left|spin left)$/],
- ['move-left',/^(?:move (?:it|that|this) left|pan left|shift left)$/],
- ['move-right',/^(?:move (?:it|that|this) right|pan right|shift right)$/],
- ['move-up',/^(?:move (?:it|that|this) up|pan up|shift up)$/],
- ['move-down',/^(?:move (?:it|that|this) down|pan down|shift down)$/],
- ['reset-view',/^(?:cent(?:er|re) (?:it|that|this|the view)|reset zoom|reset rotation|reset position|default view|put it back in the middle)$/],
- ['next',/^(?:next|next one|show (?:me )?the next (?:one|result|view)|switch to the next one)$/],
- ['previous',/^(?:previous|previous one|last one|go to the previous (?:one|result|view)|show the previous one)$/]
-];
-export function parseEnglishProjection(text,{active=false,kind=''}={}){
- const raw=norm(text);
- if(!raw||raw.length>450||/^(?:don't|do not|never|stop me from|not now)\b/.test(raw))return null;
- const phrase=raw.replace(lead,'').replace(/\s+please$/,'');
- if(active){
-  for(const [action,pattern] of commands){
-   if(pattern.test(phrase)&&!(kind==='youtube'&&['next','previous'].includes(action)))
-    return {type:action==='pin'||action==='unpin'||action==='dismiss'?action:'control',action};
+const baseNames={planet:'Planetary system',map:'Schematic map',house:'Architecture',person:'Human figure',vehicle:'Vehicle',landscape:'Landscape',diagram:'Diagram',object:'Object'};
+const namedPlanets=new Map(Object.entries({mercurio:'Mercury',venus:'Venus',terra:'Earth',marte:'Mars',jupiter:'Jupiter',saturno:'Saturn',urano:'Uranus',neptuno:'Neptune',plutao:'Pluto',lua:'Moon',sol:'Sun'}));
+const asTitle=(raw,scene)=>{
+ if(scene==='planet'){
+  const planets={mars:'Mars',marte:'Mars',mercury:'Mercury',mercurio:'Mercury',
+   venus:'Venus',earth:'Earth',terra:'Earth',jupiter:'Jupiter',saturn:'Saturn',
+   saturno:'Saturn',uranus:'Uranus',urano:'Uranus',neptune:'Neptune',neptuno:'Neptune',
+   pluto:'Pluto',plutao:'Pluto',moon:'Moon',lua:'Moon',sun:'Sun',sol:'Sun'};
+  for(const [key,name] of Object.entries(planets)){
+   if(new RegExp('\\b'+key+'\\b').test(raw))return name;
   }
  }
- if(notConcept.test(phrase)||!display.test(phrase))return null;
- const chosen=categories.find(([_,pattern])=>pattern.test(phrase));
- if(!chosen)return null;
- const [scene]=chosen;
- const title=phrase.replace(display,'').replace(/^(?:me\s+)?(?:a |an |the |of |for |in |around |at |to )*/,'')
-  .replace(/\b(?:in|as) (?:a )?(?:3d|holographic|hologram|wireframe) (?:view|model|projection)?$/,'')
-  .replace(/\b(?:please|for me|right now)\s*$/,'').slice(0,100).trim();
- return {type:'scene',scene,title:title||({planet:'Planetary system',map:'Location map',house:'Architectural model',person:'Human figure',object:'3D object'}[scene]),autoReturn:true};
+ let cleaned=raw.replace(/^(?:hey |hello |olha |please |por favor )?(?:travis|jarvis)[,\s]*/,'')
+  .replace(/^(?:(?:i(?:'d| would)?|i am|i'm|eu|nos)\s+)?(?:feel like|fancy|wish|would love|want|queria|gostava|apetece(?:-me)?|apetecia(?:-me)?|desejava)\s+/,'')
+  .replace(/^(?:can you|could you|would you|please|podes|podias|consegues|queria|gostava de|i want to|i'd like to|i would like to|quero|apetece-me|apetecia-me)\s+/,'')
+  .replace(/^(?:me |to |a |um |uma |o |a |the )*/,'')
+  .replace(/^(?:see|show|showing|seeing|look at|view|watch|visualize|visualise|project|display|render|imagine|create|form|materialize|materialise|transform|ver|veja|mostrar|mostra|mostra-me|projeta|projetar|visualiza|imagina|cria|faz aparecer|faz surgir|deixa-me ver|deixa-me|poe-me|bring up|pull up|put|por)\s+/,'')
+  .replace(/^(?:change to|switch to|what about|how about|e agora|agora|and now|now|que tal|muda para|troca para|passa para)\s+/,'')
+  .replace(/^(?:me |of |um |uma |the |a |an |o |a |ao |da |de |do |em |no |na )+/,'')
+  .replace(/\b(?:holographic|hologram|em holograma|holografico|as a hologram|in 3d|em 3d|por favor|please|right now|agora|in front of me)\b/g,'')
+  .replace(/\s+/g,' ').trim();
+ for(const [pt,en] of namedPlanets.entries())cleaned=cleaned.replace(new RegExp('\\b'+pt+'\\b','g'),en);
+ return (cleaned.replace(/^(?:a|an|the|um|uma|o|as|os)\s+/,'').slice(0,100)||baseNames[scene]).replace(/^./,c=>c.toUpperCase());
+};
+const controlRules=[
+ ['dismiss',/^(?:(?:can|could|would) you )?(?:close (?:it|that|this|the (?:view|projection|panel|hologram))|dismiss (?:it|that|this)|hide (?:it|that|this|the projection)|clear (?:the screen|it|this|that)|go back|back to (?:core|travis|normal|the main view)|return to (?:core|travis|normal|main view)|restore (?:the )?(?:original|main|normal) view|volta (?:ao )?(?:travis|normal|inicio|nucleo)?|regressa (?:ao )?(?:travis|nucleo)?|fecha (?:isso|isto|a projecao|o holograma)|limpa (?:o ecra|isso)|desfaz(?: a projecao)?|voltar ao nucleo)$/],
+ ['pin',/^(?:keep (?:this|it|that)(?: open| up)?|pin (?:this|it|that)|leave (?:it|that|this) (?:there|open)|hold (?:this|that) view|mantem (?:isso|isto|a projecao)(?: aberto)?|mantem aberto|deixa (?:isso|isto|aberto|ai)|fixa(?: isso| isto| o holograma)?)$/],
+ ['unpin',/^(?:unpin(?: it)?|auto return|let it close|resume automatic return|desafixa(?: isso| isto)?|podes fechar automaticamente|retoma o regresso automatico)$/],
+ ['zoom-in',/^(?:zoom in|closer|bring it closer|make (?:it|that) bigger|enlarge(?: it)?|aproxima(?:-o|-me)?|amplia(?: isso| isto)?|aumenta(?: isso| isto)?|mais perto)$/],
+ ['zoom-out',/^(?:zoom out|pull back|make (?:it|that) smaller|afasta(?:-o)?|diminui(?: isso| isto)?|mais longe)$/],
+ ['rotate-right',/^(?:rotate (?:it|that|this)|spin (?:it|that)|turn (?:it|that) around|rotate right|turn right|roda(?: isso| isto)?|gira(?: isso| isto)?|roda para a direita)$/],
+ ['rotate-left',/^(?:rotate left|turn left|roda para a esquerda|gira para a esquerda)$/],
+ ['move-left',/^(?:move (?:it|that) left|pan left|move left|move-o para a esquerda|move para a esquerda)$/],
+ ['move-right',/^(?:move (?:it|that) right|pan right|move right|move para a direita)$/],
+ ['move-up',/^(?:move (?:it|that) up|pan up|move up|sobe(?: isso| isto)?|move para cima)$/],
+ ['move-down',/^(?:move (?:it|that) down|pan down|move down|desce(?: isso| isto)?|move para baixo)$/],
+ ['reset-view',/^(?:reset (?:the )?view|reset zoom|center it|centre it|repor vista|centra(?: isso| isto)?|recomeca a vista)$/],
+ ['next',/^(?:next|next one|show me the next one|proximo|seguinte|mostra o proximo)$/],
+ ['previous',/^(?:previous|previous one|last one|anterior|mostra o anterior)$/]
+];
+const spokenPortuguese=t=>/\b(?:quero|queria|gostava|apetece|apetecia|ver|mostra|mostrar|faz|por|poe|poe-me|podes|consegues|casa|carro|mapa|cidade|saturno|marte|planeta|agora|deixa|esquerda|direita|mais)\b/.test(t);
+export function parseVisualIntent(text,{active=false,kind=''}={}){
+ const raw=compact(text);
+ if(raw.length<2||raw.length>650||negatives.test(raw)||/^(?:don't|do not|never|nao|nunca)\b/.test(raw))return null;
+ if(active)for(const [action,re] of controlRules)if(re.test(raw) &&
+   !(kind==='youtube'&&['next','previous'].includes(action)))
+   return {type:action==='pin'||action==='unpin'||action==='dismiss'?action:'control',action};
+ if(excludes.test(raw))return null;
+ const request=cues=>cues.test(raw);
+ const known=categories.find(([,re])=>re.test(raw));
+ const followup=active&&kind==='illustration'&&Boolean(known)&&
+    (/^(?:and|and now|now|what about|how about|switch to|change to|next show|e|e agora|agora|entao|que tal|muda para|troca para|passa para)\b/.test(raw)
+     ||raw.split(' ').length<=4);
+ const visual=directCue.test(raw)||visualSpecific.test(raw)||followup||
+    (request(verbsNoun)&&request(cue)&&/\b(?:see|ver|mostrar|show|look|visualiz|projet|hologram)\b/.test(raw));
+ if(!visual)return null;
+ // The request is explicitly visual. Any unfamiliar subject can at least be
+ // represented by a generically labelled local particle concept.
+ const entry=categories.find(([,re])=>re.test(raw));
+ const scene=entry?.[0]||'object';
+ return {type:'scene',scene,title:asTitle(raw,scene),subject:asTitle(raw,scene),
+  autoReturn:true,source:'local-language-router',schematic:true,language:spokenPortuguese(fold(text))?'pt':'en'};
+}
+export const parseEnglishProjection=parseVisualIntent;
+export function mayNeedVisualModel(text){
+ const raw=compact(text);
+ if(!raw||excludes.test(raw)||negatives.test(raw))return false;
+ if(parseVisualIntent(text))return false;
+ return /(imagina|imagine|i wonder what|how would .* look|como seria(?: .*?)? visualmente|como seria visualmente|como ficaria|i(?:'d| would) love (?:an|a) image|transforma-te|morph into|make it look like|draw me|faz uma imagem)/.test(raw);
 }
 export function rewriteEnglishToolRequest(text){
- const raw=norm(text).replace(lead,'').replace(/\s+please$/,'');
- if(!raw||raw.length>450)return text;
+ const raw=compact(text).replace(/^(?:please|could you|can you|would you|will you|i'd like you to|i want you to)\s+/,'')
+  .replace(/\s+please$/,'');
+ if(!raw||raw.length>500)return text;
  if(/^(?:(?:open|bring up|pull up|take me to|launch|display|show|show me|switch to|go to|load|visit)(?: the)? )?youtube(?: for me| now)?$/.test(raw))return 'Open YouTube';
  if(/^(?:(?:close|shut|exit|leave|hide|dismiss)(?: the)? )youtube$/.test(raw))return 'Close YouTube';
  const video=raw.match(/^(?:find|search for|look up|show me|pull up|bring up) (?:(?:some|a|the) )?(?:youtube )?videos? (?:on|about|of|for) (.{1,230})$/);
