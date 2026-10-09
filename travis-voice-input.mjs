@@ -36,7 +36,9 @@ export function createVoiceInput({onStart,onSpeech,onLevel,checkTurn,onError}){
     speaking=false;pending=append(pending,audio);const epoch=++generation;
     clearTimeout(timer);
     // Never wait indefinitely for the semantic detector. A natural silence remains a fallback.
-    timer=setTimeout(()=>submit(epoch),1250);
+    timer=setTimeout(()=>submit(epoch),720);
+    // Avoid running a second neural model alongside Whisper for normal commands.
+    if(!checkTurn || pending.length<160000)return;
     try{
       const result=await checkTurn(pcmWave(pending.slice(-128000)));
       if(!active||generation!==epoch||speaking)return;
@@ -52,7 +54,7 @@ export function createVoiceInput({onStart,onSpeech,onLevel,checkTurn,onError}){
         if(!detector)detector=await window.vad.MicVAD.new({
           startOnLoad:false,
           model:'v5',baseAssetPath:'/assets/voice/vad/',onnxWASMBasePath:'/assets/voice/ort/',
-          positiveSpeechThreshold:.65,negativeSpeechThreshold:.35,minSpeechMs:320,preSpeechPadMs:450,redemptionMs:650,
+          positiveSpeechThreshold:.57,negativeSpeechThreshold:.33,minSpeechMs:210,preSpeechPadMs:500,redemptionMs:570,
           onSpeechStart(){if(!active)return;speaking=true;generation++;clearTimeout(timer);},
           onSpeechRealStart(){if(active)onStart();},
           onVADMisfire(){if(!active)return;speaking=false;if(pending){const epoch=++generation;timer=setTimeout(()=>submit(epoch),600);}},

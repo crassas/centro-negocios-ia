@@ -1,5 +1,5 @@
 import { createConceptProjection } from './travis-concept-projection.mjs?v=conversation-2';
-import { createVoiceInput } from './travis-voice-input.mjs?v=conversation-2';
+import { createVoiceInput } from './travis-voice-input.mjs?v=stt-fast-1';
 import { createTravisVision } from './travis-vision.mjs?v=4';
 import { buildSpeechEnvelope, speechEnvelopeLevel } from './travis-audio-sync.mjs?v=1';
 import { cameraCommand } from './travis-vision-policy.mjs?v=2';
@@ -621,7 +621,7 @@ if (!hud || !launcher || !canvas) {
   }
 
   function localFetch(path,{body=null,type='application/json',method='POST',signal=null}={}) {
-    const endpoint=path.split('?')[0],timeout=endpoint==='/jarvis'?120000:endpoint==='/transcribe'?80000:30000;
+    const endpoint=path.split('?')[0],timeout=endpoint==='/jarvis'?120000:endpoint==='/transcribe'?30000:30000;
     const headers={};
     if (body!=null && type) headers['Content-Type']=type;
     const init={
@@ -843,14 +843,18 @@ if (!hud || !launcher || !canvas) {
   async function handleVoiceBlob(blob,mime,session) {
     if (!opened || session!==voiceSession) return;
     voiceBusy=true;
+    // Silero has finished this utterance. Keep the microphone off until playback finishes.
+    if(typeof blob!=='string')voiceInput?.stop();
     voiceRequestController?.abort();
     const controller=new AbortController();
     voiceRequestController=controller;
 
     try {
-      setState('thinking','Understanding…');
+      setState('thinking','Transcribing speech…');
       const metrics={speechEndedAt:voiceSpeechEndedAt||performance.now()};
-      const transcript=typeof blob==='string'?{text:blob}:await localJson('/transcribe?language='+inputLanguage,{
+      const recognitionLanguage=inputLanguage!=='auto'
+        ? inputLanguage : (preferredLanguage==='en'||preferredLanguage==='pt' ? preferredLanguage : 'auto');
+      const transcript=typeof blob==='string'?{text:blob}:await localJson('/transcribe?language='+recognitionLanguage,{
         body:blob,
         type:mime||'application/octet-stream',
         signal:controller.signal
@@ -859,9 +863,11 @@ if (!hud || !launcher || !canvas) {
 
       metrics.transcriptAt=performance.now();
       metrics.speechEndToTranscriptMs=Math.round(metrics.transcriptAt-metrics.speechEndedAt);
+      metrics.sttDurationMs=transcript.durationMs??null;
+      metrics.recognitionLanguage=recognitionLanguage;
       let text=String(transcript.text||'').trim();
       window.dispatchEvent(new CustomEvent('travis:transcript',{detail:{role:'user',text}}));
-      if (!text) throw new Error('I could not understand the speech.');
+      if (!text) throw new Error('No speech recognized. Please speak again.');
       if(standby&&!/\b(?:travis|jarvis|acorda|wake up)\b/i.test(text)){voiceBusy=false;setState('idle','Standing by. Say Travis.');scheduleListening(session,100);return;}
       const wokeFromStandby=standby;
       if(standby){standby=false;text=text.replace(/^(?:hey |olá? )?(?:travis|jarvis)[ ,.!:]*/i,'')||'wake up';}

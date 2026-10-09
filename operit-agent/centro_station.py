@@ -59,6 +59,7 @@ RAW_REPO_BASE = "https://raw.githubusercontent.com/crassas/centro-negocios-ia"
 TRAVIS_CLIENT_FILES = (
     "travis-audio-sync.mjs",
     "travis-vision.mjs",
+    "travis-voice-input.mjs",
     "travis-vision-policy.mjs",
     "travis-face-rig.mjs",
     "travis-3d.mjs",
@@ -517,14 +518,18 @@ def sync_travis_client(ref):
             if not raw or len(raw) > 450000:
                 raise RuntimeError(f"{name}: resposta ausente ou demasiado grande")
             fetched[name] = raw.decode("utf-8")
-        if "travis-3d.mjs?v=color-1" not in fetched["index.html"]:
+        if "travis-3d.mjs?v=stt-fast-1" not in fetched["index.html"]:
             raise RuntimeError("index.html: versão de voz inesperada")
         if "travis-audio-sync.mjs?v=1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: sincronização de voz ausente")
         if "travis-vision.mjs?v=4" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: visão não ligada")
-        if "travis-3d.mjs?v=color-1" not in fetched["sw.js"]:
+        if "travis-3d.mjs?v=stt-fast-1" not in fetched["sw.js"]:
             raise RuntimeError("sw.js: cache desatualizada")
+        if "travis-voice-input.mjs?v=stt-fast-1" not in fetched["travis-3d.mjs"]:
+            raise RuntimeError("travis-3d.mjs: transcrição rápida não ligada")
+        if "timer=setTimeout(()=>submit(epoch),720)" not in fetched["travis-voice-input.mjs"]:
+            raise RuntimeError("travis-voice-input.mjs: fim da frase não atualizado")
         if "ObjectDetector.createFromOptions" not in fetched["travis-vision.mjs"]:
             raise RuntimeError("travis-vision.mjs: modelo de visão ausente")
         if "faceColourFromPixels" not in fetched["travis-vision-policy.mjs"]:
