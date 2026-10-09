@@ -97,6 +97,24 @@ class MentorshipTests(unittest.TestCase):
         self.assertEqual(mentor.SCOPE,"technical_procedures_only")
         self.assertNotIn("consciente",mentor.mentor_context("Qual é o modelo usado?",250).lower().split("objetivo")[0])
 
+    def test_ability_inventory_separates_history_from_permissions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/"capabilities-and-limits.json"
+            path.write_text(json.dumps({"capabilities":[
+                {"task_type":"read_status","last_verdict":"success",
+                 "last_scope":"process_exit","successes":4,"failures":1,"unknowns":2}
+            ]}),encoding="utf-8")
+            catalog=mentor.capability_inventory({"capabilities":[
+                {"id":"read_status","owner":"travis","action_type":"READ","mutation":False},
+                {"id":"repo_change","owner":"travis","action_type":"REPO_CHANGE","mutation":True}
+            ]},tmp)
+            self.assertEqual(catalog["registered"],2)
+            self.assertEqual(catalog["observedSuccessTools"],1)
+            self.assertEqual(catalog["registeredOnly"],1)
+            self.assertEqual(catalog["capabilities"][0]["lastObservedState"],"registered_only")
+            self.assertEqual(catalog["capabilities"][1]["lastObservedState"],"observed_tool_success")
+            self.assertIn("not current authorization",catalog["warning"])
+
     def test_status_does_not_call_any_external_service(self):
         status = mentor.status(None,{"capabilities":[{"id":"x"}]})
         self.assertEqual(status["registeredTools"],1)
