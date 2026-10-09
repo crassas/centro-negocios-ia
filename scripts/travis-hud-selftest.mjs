@@ -17,9 +17,9 @@ for(const text of ['id="travis-three-canvas"','id="travis-camera-toggle"','id="t
 for(const file of ['travis-cinema.css','travis-cinema-depth.css','travis-vision.mjs','travis-vision-policy.mjs']){
   assert(fs.statSync(file).size>100,'Missing cinematic/vision asset: '+file);
 }
-assert(html.includes('travis-3d.mjs?v=vision-2'),'Main scene version must match release.');
-assert(sw.includes('travis-3d.mjs?v=vision-2'),'PWA cache must use the released scene.');
-assert(sw.includes('travis-vision.mjs?v=2'),'PWA cache must use current camera script.');
+assert(html.includes('travis-3d.mjs?v=audio-1'),'Main scene version must match release.');
+assert(sw.includes('travis-3d.mjs?v=audio-1'),'PWA cache must use the released scene.');
+assert(sw.includes('travis-vision.mjs?v=3'),'PWA cache must use current camera script.');
 assert(cinema.length>1000 && cinemaDepth.length>1000,'Cinematic layers must be present.');
 assert(css.includes('#travis-three-canvas'),'Full-screen scene styling required.');
 
@@ -36,6 +36,10 @@ for(const feature of [
 assert(!ui.includes("WELCOME_GREETING='Welcome back, Mister Richards.'"),'Stale fixed welcome text must stay removed.');
 assert(ui.includes("localJson('/resume'"),'Real conversational continuity must be connected.');
 assert(ui.includes('Object') || vision.includes('ObjectDetector.createFromOptions'),'Object recognition is missing.');
+assert(ui.includes("import { buildSpeechEnvelope, speechEnvelopeLevel }"),'Playback clock module must be loaded.');
+assert(ui.includes('voiceInput?.stop();'),'Microphone must be paused while Travis speaks.');
+assert(ui.includes('speechClock={source,context:ac,start:startAt,envelope};'),'Lip movement must be tied to audio clock.');
+assert(sw.includes('travis-audio-sync.mjs?v=1'),'PWA must cache the audio synchronization module.');
 assert(vision.includes('navigator.mediaDevices.getUserMedia'),'Browser camera permission must remain explicit.');
 assert(vision.includes('audio: false'),'Camera start must not open the microphone.');
 assert(vision.includes('getTracks().forEach(track => track.stop())'),'Media tracks must be released.');
