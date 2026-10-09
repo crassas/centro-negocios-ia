@@ -24,6 +24,23 @@ class BrainTests(unittest.TestCase):
   self.assertEqual(before['synapses'],self.store.health()['synapses'])
   self.assertTrue(all(x['epistemic'] in {'hypothesis_not_memory','reflection_not_fact'} for x in self.brain.status()['journal']))
   self.assertEqual(result['associations'],1)
+ def test_idle_library_study_callback_is_bounded_and_opt_in(self):
+  actions=[]
+  self.brain.study_callback=lambda:actions.append("one") or {"ok":True}
+  self.assertFalse(self.brain.cycle()['ran'])
+  self.assertEqual(actions,[])
+  self.idle();outcome=self.brain.cycle()
+  self.assertTrue(outcome['ran'])
+  self.assertEqual(actions,["one"])
+  self.assertEqual(outcome['reading']['ok'],True)
+  self.assertFalse(self.brain.cycle()['ran'])
+  self.assertEqual(actions,["one"])
+ def test_idle_library_failure_does_not_cancel_reflection(self):
+  self.brain.study_callback=lambda:(_ for _ in ()).throw(ValueError("no book"))
+  self.idle();outcome=self.brain.cycle()
+  self.assertTrue(outcome["ran"])
+  self.assertFalse(outcome["reading"]["ok"])
+  self.assertEqual(outcome["reading"]["reason"],"ValueError")
  def test_interval_prevents_repeat(self):
   self.idle();self.assertTrue(self.brain.cycle()['ran']);self.assertFalse(self.brain.cycle()['ran'])
  def test_pause_persists(self):
