@@ -15,6 +15,24 @@ class BrainTests(unittest.TestCase):
   self.brain=BrainRuntime(self.root/'brain.sqlite',self.store,self.cog,clock=lambda:self.now[0],resources=lambda:{'memoryMB':1500,'diskMB':500})
  def tearDown(self):self.brain.stop();self.tmp.cleanup()
  def idle(self):self.now[0]+=181
+ def test_events_are_readonly_bounded_and_exclude_private_details(self):
+  self.brain.mark('attention','received','PRIVATE USER TEXT MUST NEVER BE EXPORTED')
+  before=self.brain.path.read_bytes()
+  observed=self.brain.events()
+  self.assertTrue(observed['ok'])
+  self.assertEqual(observed['source'],'brain-sqlite')
+  self.assertEqual(observed['engine'],'persisted-observed-events-v1')
+  self.assertTrue(observed['events'])
+  self.assertEqual(observed['events'][0]['region'],'attention')
+  self.assertEqual(observed['events'][0]['phase'],'received')
+  self.assertNotIn('detail',observed['events'][0])
+  self.assertNotIn('PRIVATE USER',str(observed))
+  self.assertEqual(before,self.brain.path.read_bytes())
+  for i in range(110):
+   self.brain.mark('attention','observed')
+  self.assertLessEqual(len(self.brain.events(limit=999)['events']),80)
+  self.assertEqual(len(self.brain.events(limit=1)['events']),1)
+  self.assertEqual(self.brain.events()['observedAt'],self.now[0])
  def test_no_cycle_while_user_active(self):
   self.idle()
   with self.brain.request('Teste'):self.assertFalse(self.brain.cycle()['ran'])
