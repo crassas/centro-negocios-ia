@@ -33,7 +33,7 @@ LESSONS = (
     {
         "id": "evidence",
         "title": "Hipóteses, evidência e falsificação",
-        "keywords": "experiência ciência observar factos provas verdade consciência saber evidência Carl Sagan Popper hypothesis falsifiable",
+        "keywords": "experiência experimento testar falsificável falsificabilidade ciência observar factos provas verdade veracidade consciência saber evidência Carl Sagan Popper hypothesis falsifiable",
         "objective": "Distinguir o que é observado, inferido, imaginado e desconhecido.",
         "procedure": (
             "Escrever uma hipótese operacional e uma previsão mensurável.",
