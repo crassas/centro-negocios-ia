@@ -1060,7 +1060,7 @@ def _route(text,context=None):
  else:reply=result if isinstance(result,str) else json.dumps(result,ensure_ascii=False)
  ui=result_cards(tool,args,result)
  if tool in {'local_llm','expert_query'}:ui=travis_dialogue.illustration(original_text) or ui
- if getattr(DIALOGUE_INFO,'language','en')=='pt':reply=travis_dialogue.portuguese_reply(tool,result,reply)
+ if getattr(DIALOGUE_INFO,'language','en')=='pt' and not (tool=='capabilities_status' and args.get('focus')=='learning'):reply=travis_dialogue.portuguese_reply(tool,result,reply)
  if ui and ui.get("kind")!="youtube":media_session(session,{})
  learning=record_learning(cog_run,verification,used_memories,session,runtime.project_id,str(reply))
  if session:event("conversations",{"session":session,"user":original_text[:1600],"assistant":str(reply)[:1600],"tool":tool,"project":runtime.project_id or context.get("activeProject"),"verification":verification["verdict"],"memoryRun":cog_run if learning['ok'] else None})
