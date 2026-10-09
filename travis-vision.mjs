@@ -2,7 +2,7 @@
 import { FilesetResolver, GestureRecognizer, FaceDetector, ObjectDetector } from './vendor/mediapipe/vision_bundle.mjs';
 import { facePosition, gestureDecision } from './travis-vision-policy.mjs?v=1';
 
-export function createTravisVision({ onGesture = () => {}, onPose = () => {} } = {}) {
+export function createTravisVision({ onGesture = () => {}, onPose = () => {}, isSpeechCritical = () => false } = {}) {
   const button = document.getElementById('travis-camera-toggle');
   const label = document.getElementById('travis-camera-state');
   const preview = document.getElementById('travis-camera-preview');
@@ -59,10 +59,16 @@ export function createTravisVision({ onGesture = () => {}, onPose = () => {} } =
   }
   function frame(timestamp) {
     if (!active || !stream || document.hidden) return;
+    // MediaPipe runs synchronously on the render thread; pause inference during speech.
+    // The granted camera stream remains visible and active throughout playback.
+    if (isSpeechCritical()) {
+      animation = requestAnimationFrame(frame);
+      return;
+    }
     if (preview?.readyState >= 2 && preview.videoWidth && preview.currentTime !== lastVideoTime) {
       lastVideoTime = preview.currentTime;
       const startAt = performance.now();
-      if (recognizer && timestamp - lastGestureAt >= Math.max(180, slowFrame ? 350 : 180)) {
+      if (recognizer && timestamp - lastGestureAt >= (slowFrame ? 700 : 360)) {
         lastGestureAt = timestamp;
         try {
           const found = recognizer.recognizeForVideo(preview, timestamp);
@@ -75,14 +81,14 @@ export function createTravisVision({ onGesture = () => {}, onPose = () => {} } =
           frames++;
         } catch (error) { setLabel('Gestos indisponíveis'); console.warn('Gesture capture:', error.message); }
       }
-      if (faceDetector && timestamp - lastFaceAt > (slowFrame ? 1100 : 480)) {
+      if (faceDetector && timestamp - lastFaceAt > (slowFrame ? 1500 : 750)) {
         lastFaceAt = timestamp;
         try {
           const value = facePosition(faceDetector.detectForVideo(preview, timestamp), preview.videoWidth, preview.videoHeight);
           if (value) { pose = value; lastPoseAt = timestamp; onPose(value); }
         } catch (error) { console.warn('Face tracking:', error.message); }
       }
-      if (objectDetector && timestamp - lastObjectAt >= (slowFrame ? 1800 : 900)) {
+      if (objectDetector && timestamp - lastObjectAt >= (slowFrame ? 2600 : 1500)) {
         lastObjectAt = timestamp;
         try {
           const result = objectDetector.detectForVideo(preview, timestamp);
@@ -131,6 +137,13 @@ export function createTravisVision({ onGesture = () => {}, onPose = () => {} } =
         });
         if (attempt !== generation) { candidate.getTracks().forEach(track => track.stop()); return false; }
         stream = candidate;
+        for (const track of candidate.getVideoTracks()) {
+          track.addEventListener('ended', () => {
+            if (attempt!==generation) return;
+            stop();
+            setLabel('Câmara interrompida · toca para retomar');
+          }, {once:true});
+        }
         if (!preview) throw new Error('Pré-visualização indisponível.');
         preview.srcObject = candidate;
         await preview.play();
@@ -157,7 +170,17 @@ export function createTravisVision({ onGesture = () => {}, onPose = () => {} } =
     return start();
   }
   button?.addEventListener('click', async () => { try { await toggle(); } catch (error) { console.warn('Travis camera:', error.message); } });
-  document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });
+  // Hidden pages cannot promise live capture on Android. Release hardware safely.
+  // The UI tells the user what happened and offers explicit reactivation on return.
+  let pausedForBackground=false;
+  document.addEventListener('visibilitychange', () => {
+    if(document.hidden){
+      if(active||opening){pausedForBackground=true;stop();}
+    } else if(pausedForBackground) {
+      pausedForBackground=false;
+      setLabel('Câmara em pausa · toca para retomar');
+    }
+  });
   window.addEventListener('pagehide', stop);
   updateControls();
   return Object.freeze({
