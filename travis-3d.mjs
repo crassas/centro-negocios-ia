@@ -1,6 +1,8 @@
 import { createConceptProjection } from './travis-concept-projection.mjs?v=matter-3';
 import './travis-action-cards.mjs?v=matter-2';
 import { createVoiceInput } from './travis-voice-input.mjs?v=stt-fast-1';
+import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS } from './travis-form-director.mjs?v=1';
+import { INTERFACE_COPY, interfaceLanguage, applyInterfaceLanguage, languageFromInterfaceCommand } from './travis-interface-language.mjs?v=1';
 import { resolveWakePhrase } from './travis-wake-phrase.mjs?v=pt-1';
 import { createTravisVision } from './travis-vision.mjs?v=4';
 import { buildSpeechEnvelope, speechEnvelopeLevel } from './travis-audio-sync.mjs?v=1';
@@ -31,7 +33,6 @@ const statusState = $('#travis-status-state');
 const loadingLabel = $('#travis-loading');
 const clockEl = $('#travis-clock-time');
 const dateEl = $('#travis-clock-date');
-const formButtons=[...document.querySelectorAll('[data-travis-form]')];
 
 if (!hud || !launcher || !canvas) {
   console.warn('Travis 3D: interface missing.');
@@ -85,8 +86,8 @@ if (!hud || !launcher || !canvas) {
   let realFaceBaseMaterial=null;
   let realFaceReady=false;
   let avatarMaterial;
-  let formPolicy='auto';
   let activeForm='core';
+  let manualFormUntil=0,lastAutoFormCheck=0;
   const formBlend={core:1,face:0};
   const formTarget={core:1,face:0};
   let energyMesh;
@@ -134,6 +135,16 @@ if (!hud || !launcher || !canvas) {
   let voiceInput=null,voiceInputFailed=false,voicePaused=false,standby=false,initiativeTimer=0;
   const savedLanguage=(()=>{try{return sessionStorage.getItem('travis.language')||'auto';}catch{return 'auto';}})();
   let replyLanguage=savedLanguage==='pt'?'pt':'en',inputLanguage='auto',preferredLanguage=['pt','en'].includes(savedLanguage)?savedLanguage:'auto',proactive=true,lastInteraction=performance.now();
+  // Display language is independent of the speaking language. Default: English.
+  const savedInterfaceLanguage=(()=>{try{return sessionStorage.getItem('travis.ui.language')||'en';}catch{return 'en';}})();
+  let uiLanguage='en';
+  function setInterfaceLanguage(language,{persist=true}={}){
+    uiLanguage=applyInterfaceLanguage(interfaceLanguage(language));
+    if(persist){try{sessionStorage.setItem('travis.ui.language',uiLanguage);}catch{}}
+    window.dispatchEvent(new CustomEvent('travis:interface-language',{detail:{language:uiLanguage}}));
+    return uiLanguage;
+  }
+  setInterfaceLanguage(savedInterfaceLanguage,{persist:false});
   function interruptReply(){
     voiceSession++;voiceRequestController?.abort();voiceRequestController=null;
     clearTimeout(voiceFinishTimer);voiceFinishTimer=0;
