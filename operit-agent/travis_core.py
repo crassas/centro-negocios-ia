@@ -112,10 +112,54 @@ def youtube_intent(text):
   if query:return "search_youtube",{"query":query[:240],**({"index":selected} if selected is not None else {})}
  return None
 
+def centro_operational_status_requested(text):
+ """Strictly recognize read-only health inquiries, not edits or site audits.
+
+ Normalization tolerates greetings, wake-address variants already resolved
+ by the UI, and punctuation including the » introduced in some transcripts.
+ A health query must be about the LOCAL CENTRO service, not a website,
+ repository, client record, business workflow or how-to explanation.
+ """
+ normalized=re.sub(r"[^a-z0-9]+"," ",_norm(text)).strip()
+ if not 3<=len(normalized)<=180:return False
+ normalized=re.sub(
+  r"^(?:(?:ola|oi|olha|hello|hey|amigo|bom dia|boa tarde|por favor|please|travis|jarvis|para vis|pravis|avis|atraviz)\s+)+",
+  "",normalized)
+ normalized=re.sub(
+  r"^(?:(?:podes|consegues|podias|poderias|can you|could you)\s+)+",
+  "",normalized)
+ normalized=re.sub(r"(?:\s+(?:por favor|please))+$","",normalized).strip()
+ if re.search(r"\b(?:nao|nunca|never|not|dont|do not|"
+              r"site|sites|pagina|website|webpage|dominio|url|seo|"
+              r"repositorio|repositorios|repo|codigo|git|github|"
+              r"projeto|projecto|project|"
+              r"public\w*|apag\w*|elimin\w*|cri\w*|alter\w*|"
+              r"mud\w*|modific\w*|edit\w*|atuali\w*|"
+              r"envi\w*|pag\w*|compr\w*|"
+              r"publish|delete|deploy|commit|merge|write|pay)\b",normalized):
+  return False
+ subject=(r"(?:o |a |the )?"
+          r"(?:centro(?: de negocios)?|"
+          r"servidor(?: do centro(?: de negocios)?)?|"
+          r"backend(?: do centro(?: de negocios)?)?|"
+          r"sistema central|servidor central)")
+ ending=(r"(?: (?:responde|funciona|esta (?:online|ativo|operacional|disponivel|a funcionar)|"
+         r"is (?:online|running|healthy|up)|online|ativo|operacional|disponivel))?")
+ inquiry=(r"(?:verifica|verificar|verificas|confirma|confirmar|testa|testar|"
+          r"consulta|consultar|inspeciona|check|verify|test|inspect)(?: me)?")
+ if re.fullmatch(inquiry+r" (?:se )?(?:o estado (?:do|de) )?"+subject+ending,normalized):
+  return True
+ if re.fullmatch(r"(?:como (?:esta|vai|anda)|qual e o estado de|qual o estado de|"
+                 r"qual (?:e )?o estado (?:do|de)|esta|is|status of|health of|is the) "+subject+ending,normalized):
+  return True
+ return False
+
+
 def classify_local_intent(text,project_id=""):
  raw=_norm(text)
  raw=re.sub(r"^(?:travisse(?:-se)?|travisse|travis-se|travi)\b","travis",raw)
  t=re.sub(r"^(?:travis|jarvis)\b[\s,:;.!?-]*","",raw).strip();g=re.sub(r"[^a-z0-9 ]","",t).strip();p={"target":project_id or None}
+ if centro_operational_status_requested(text):return "system_status",{}
  if re.search(r"\b(?:le|ler|mostra|ver|consulta|consultar)\b",t) and any(w in t for w in ["gmail","emails","e-mails","correio"]):return "gmail_inbox",{}
  if any(w in t for w in ["sessoes dos agentes","estado dos agentes","sala dos agentes","sala de comando","show agents","agent sessions","command room"]):return "agent_sessions",{}
  if (not g and raw.strip(" ,:;.!?-") in {"travis","jarvis"}) or g in {"ai","tas ai","estas ai","estas aqui","ola","oi","bom dia","boa tarde","boa noite","alo","hi","hello","hey","are you there"}:return "presence",{}
