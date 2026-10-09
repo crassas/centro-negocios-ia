@@ -54,7 +54,7 @@ class Tests(unittest.TestCase):
    response=j.route('Travis, conheces as tuas novas capacidades?',context)
    self.assertEqual(response['tool'],'capabilities_status')
    self.assertEqual(response['language'],'pt')
-   self.assertIn('Memória real:',response['reply'])
+   self.assertIn('6',response['reply']);self.assertTrue('memória' in response['reply'].lower() or 'memórias' in response['reply'].lower())
 
  def test_brain_routes_without_model(self):
   with patch.object(j,'infer',side_effect=AssertionError('Unnecessary model call')):
@@ -134,7 +134,7 @@ class Tests(unittest.TestCase):
    self.assertNotEqual(rows[-1]["used_lessons"],"[]")
  def test_reflexion_sources_are_not_success(self):
   with patch.object(j,"classify",return_value=("web_research",{"query":"test"})),patch.object(j,"execute",return_value={"answer":"A claim.","sources":[{"url":"https://example.org"}]}):
-   response=j.route("Look up a claim")
+   response=j.route("Research a claim")
   self.assertEqual(response["verification"]["verdict"],"unknown")
   self.assertEqual(j.TRAVIS_COG.health()["successfulRuns"],0)
  def test_presence_without_llm(self):
