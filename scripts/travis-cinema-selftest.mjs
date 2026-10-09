@@ -11,7 +11,6 @@ assert.ok(html.includes('travis-cinema.css?v=cinema-1'));
 assert.ok(html.includes('travis-cinema-depth.css?v=depth-2'));
 assert.ok(html.includes('class="travis-cinema-lightfield" aria-hidden="true"'));
 assert.ok(html.includes('travis-3d.mjs?v=depth-2'));
-assert.ok(html.includes('travis-3d.mjs?v=cinema-1'));
 for(const name of ['travis-cinema-depth.css','travis-cinema.css','travis-3d.mjs','travis-brain-view.mjs','travis-knowledge-graph.mjs','travis-atmosphere.mjs','travis-holographic-head.mjs'])assert.ok(sw.includes(name),name);
 for(const id of ['travis-hud-close','travis-camera-toggle','travis-command','travis-command-text','travis-three-canvas','travis-voice-start'])assert.ok(html.includes('id="'+id+'"'),id);
 for(const selector of ['.travis-command','.travis-camera-dock','.travis-brain-panel','.travis-form-selector','prefers-reduced-motion'])assert.ok(css.includes(selector),selector);
