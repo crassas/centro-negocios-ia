@@ -14,6 +14,7 @@ import travis_cognitive
 import travis_brain
 import travis_awareness
 import travis_quantum
+import travis_decision
 import travis_web_tools
 import travis_dialogue
 import travis_semantic
@@ -37,10 +38,11 @@ TRAVIS_UTEF=travis_core.UnifiedExecutionFramework(TRAVIS_STORE)
 TRAVIS_GENOME=travis_genome.BehaviorGenome(ROOT)
 TRAVIS_COG=travis_cognitive.CognitiveKernel(ROOT/"cognitive.sqlite")
 TRAVIS_QUANTUM=travis_quantum.QuantumTravisBridge()
+TRAVIS_DECISIONS=travis_decision.DecisionGovernor(ROOT)
 TRAVIS_BRAIN=travis_brain.BrainRuntime(ROOT/"brain.sqlite",TRAVIS_STORE,TRAVIS_COG)
 for _tool,_mutation in [("brain_status",False),("brain_journal",False),("brain_pause",True)]:
  travis_core.register_capability(_tool,"jarvis","DB_MUTATION" if _mutation else "READ",_mutation,False)
-for _tool in ('conversation_control','connections_status','openclaw_status','agent_workflow','web_search'):
+for _tool in ('conversation_control','connections_status','openclaw_status','agent_workflow','web_search','decision_consult','decision_status'):
  travis_core.register_capability(_tool,'jarvis','READ',False,True)
 def brain_imagine(prompt,cancelled):
  # Local model only. No cloud calls, tool execution or promotion of imagined facts.
@@ -267,6 +269,11 @@ def classify(text,active_project=None):
  normalized=norm(text)
  controls=travis_dialogue.control(text)
  if controls:return 'conversation_control',controls
+ decision_text=re.sub(r"^(?:travis|jarvis)[,:;.!? ]+", "", normalized).strip()
+ if re.fullmatch(r"(?:estado das decisoes|estado do motor de decisoes|historico das decisoes|decision status|decision history)[.!? ]*",decision_text):
+  return 'decision_status',{}
+ if re.match(r"^(?:decide|decidir|toma uma decisao|analisa as probabilidades|avalia as probabilidades|make a decision|decide the next step)\b",decision_text):
+  return 'decision_consult',{'text':text}
  if re.search(r'\b(?:openclaw|opencloud|open cloud)\b',normalized) and re.search(r'\b(?:estado|ligado|verifica|check|status|connected|running)\b',normalized):return 'openclaw_status',{}
  if re.search(r'\b(?:ligacoes|conexoes|connections|connected services)\b',normalized):return 'connections_status',{}
  if (re.search(r'\b(?:awareness|autoconhecimento|autoconsciencia|self.?awareness)\b',normalized)
@@ -614,6 +621,9 @@ def execute(tool,args):
   return snapshot
  if tool=="system_status":return doctor()
  if tool=="quantum_status":return TRAVIS_QUANTUM.health()
+ if tool=="decision_consult":return TRAVIS_DECISIONS.decide(
+  str(args.get("text") or ""),language=getattr(DIALOGUE_INFO,"language","pt"))
+ if tool=="decision_status":return TRAVIS_DECISIONS.status()
  if tool=="capabilities_status":
   try:return awareness_snapshot()
   except Exception as exc:
@@ -946,6 +956,8 @@ def _route(text,context=None):
  elif tool=="agent_sessions":reply="The execution agent is "+("active" if result["agent"] else "not confirmed online")+". "+str(sum(j["status"] in {"running","queued"} for j in result["jobs"]))+" voice request(s) are running or queued."
  elif tool=="system_status":reply="The Centro is "+("active" if result["centro"].get("ok") else "unavailable")+". Available memory: "+str(result["ram_available_mb"])+" megabytes."
  elif tool=="quantum_status":reply=("Quantum Unified Agent V"+str(result.get("builtBaseline"))+" is online and governing Travis. Canonical Drive state: "+str(result.get("canonicalDriveState"))+".") if result.get("ok") else "Quantum Unified Agent is not available."
+ elif tool=="decision_consult":reply=str(result.get("reply") or "O motor não conseguiu justificar uma decisão.")
+ elif tool=="decision_status":reply=("O motor de decisões tem "+str(result.get("decisions",0))+" decisões registadas. As preferências do Laya não são probabilidades calibradas de sucesso.")
  elif tool=="capabilities_status":
   reply=travis_awareness.reply(result,getattr(DIALOGUE_INFO,"language","en")) if result.get("ok") else ("Não consegui verificar o meu registo de capacidades. Não vou inventar um estado." if getattr(DIALOGUE_INFO,"language","en")=="pt" else "I could not verify my capability registry, so I will not invent a status.")
  elif tool in {"search_positions","projects_status","repo_access"}:reply=result["reply"]
