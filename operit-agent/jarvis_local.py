@@ -1248,7 +1248,8 @@ class VoiceWorker:
   if self.kind=='turn' and not value.startswith('TRAVIS_TURN:'):return self.line(max(.1,deadline-time.monotonic()))
   return value
  def request(self,payload):
-  if not self.lock.acquire(timeout=2):raise RuntimeError("Voz ocupada; tenta novamente dentro de alguns segundos")
+  queue_timeout=12 if self.kind in {"stt","stt-fast"} else 2
+  if not self.lock.acquire(timeout=queue_timeout):raise RuntimeError("Transcrição ocupada. Tenta falar novamente.")
   try:
    self.start();self.process.stdin.write((json.dumps(payload,ensure_ascii=False)+"\n").encode());self.process.stdin.flush()
    return self.line(23 if self.kind=="stt-fast" else 48 if self.kind=="stt" else 4 if self.kind=="turn" else 45)
@@ -1265,7 +1266,7 @@ class VoiceWorker:
    self.process=None
   self.buffer=b""
 STT_WORKER=VoiceWorker("stt",MODELS/"stt/ggml-base.bin")
-FAST_STT_WORKER=VoiceWorker("stt-fast",MODELS/"stt/ggml-tiny.bin")
+FAST_STT_WORKER=VoiceWorker("stt-fast",MODELS/"stt/ggml-tiny-q5_1.bin")
 TURN_WORKER=VoiceWorker('turn')
 TTS_WORKER=VoiceWorker("tts",MODELS/"tts/pt_PT-tugao-medium.onnx")
 TTS_EN_WORKER=VoiceWorker("tts",MODELS/"tts/en_GB-northern_english_male-medium.onnx")
@@ -1326,7 +1327,7 @@ def _merge_wavs(paths,out):
    wav.writeframes(chunk)
 def warm_voice():
  # Prioritise the fast STT worker; semantic turn is deferred until explicitly used.
- workers=[FAST_STT_WORKER,STT_WORKER,TTS_EN_WORKER,TTS_WORKER]
+ workers=[FAST_STT_WORKER,TTS_EN_WORKER,TTS_WORKER]
  for worker in workers:
   try:
    with worker.lock:worker.start()
@@ -1505,9 +1506,10 @@ def transcribe(audio,language="auto"):
             "-ar","16000","-ac","1","-c:a","pcm_s16le",str(wav)],timeout=15)
   engine="base"
   if (ROOT/"venv/bin/python").is_file():
-   fast_allowed=language in {"en","auto"} and FAST_STT_WORKER.model.is_file()
+   precise_requested=os.environ.get("TRAVIS_STT_MODE","fast").strip().lower()=="precise"
+   fast_allowed=not precise_requested and FAST_STT_WORKER.model.is_file()
    worker=FAST_STT_WORKER if fast_allowed else STT_WORKER
-   engine="tiny-fast" if fast_allowed else "base-accurate"
+   engine="tiny-q5-fast" if fast_allowed else "base-accurate"
    raw=worker.request({"path":str(wav),"language":language})
    data=json.loads(raw.removeprefix("TRAVIS_STT:"))
    if data.get("error"):raise RuntimeError(data["error"])
