@@ -1,4 +1,4 @@
-import { createConceptProjection } from './travis-concept-projection.mjs?v=conversation-2';
+import { createConceptProjection } from './travis-concept-projection.mjs?v=cinema-1';
 import { createVoiceInput } from './travis-voice-input.mjs?v=stt-fast-1';
 import { createTravisVision } from './travis-vision.mjs?v=4';
 import { buildSpeechEnvelope, speechEnvelopeLevel } from './travis-audio-sync.mjs?v=1';
@@ -59,8 +59,15 @@ if (!hud || !launcher || !canvas) {
   let coreRoot;
   let faceRoot;
   let assemblyParticles=null;
-  let neuralField=null,conceptProjection=null,pendingConcept=null;
-  window.addEventListener('travis:illustration',event=>{pendingConcept=event.detail?.scene||null;if(pendingConcept)conceptProjection?.show(pendingConcept,performance.now()/1000);else conceptProjection?.hide();});
+  let neuralField=null,conceptProjection=null,pendingConcept=null,pendingSubject='';
+  window.addEventListener('travis:illustration',event=>{
+    pendingConcept=event.detail?.scene||null;pendingSubject=event.detail?.subject||'';
+    if(pendingConcept)conceptProjection?.show(pendingConcept,performance.now()/1000,pendingSubject);
+    else conceptProjection?.hide();
+  });
+  window.addEventListener('travis:visual-control',event=>{
+    conceptProjection?.control?.(event.detail?.action);
+  });
   const holographicEyeMaterials=[];
   let faceHit;
   let faceEyeGroups=[];
@@ -873,6 +880,25 @@ if (!hud || !launcher || !canvas) {
       if(standby){standby=false;text=text.replace(/^(?:hey |olá? )?(?:travis|jarvis)[ ,.!:]*/i,'')||'wake up';}
       lastInteraction=performance.now();
       text=window.TravisProjection?.select(text)||text;
+      const interpretation=window.TravisProjection?.interpret?.(text);
+      if(interpretation?.rewritten)text=interpretation.rewritten;
+      if(interpretation?.handled){
+        if(!interpretation.reply){
+          voiceBusy=false;setState('ready','I’m here.');scheduleListening(session,180);
+          return;
+        }
+        replyLanguage='en';
+        setState('thinking','Preparing short voice response…');
+        const speech=await localFetch('/speak',{
+          body:{text:interpretation.reply,language:'en'},
+          signal:controller.signal
+        });
+        if(!speech.ok)throw new Error('Local voice unavailable.');
+        const wav=await speech.arrayBuffer();
+        if(!opened||session!==voiceSession)return;
+        await playVoiceArrayBuffer(wav,session,interpretation.reply);
+        return;
+      }
       const cameraAction=cameraCommand(text);
       if(cameraAction){
         const ptSpoken=/\b(?:liga|ligar|ativa|ativar|activa|abre|mostra|desliga|fecha|desativa)\b/i.test(text);
@@ -1613,7 +1639,7 @@ if (!hud || !launcher || !canvas) {
 
     scene=new THREE.Scene();
     conceptProjection=createConceptProjection(THREE,{reducedMotion});scene.add(conceptProjection.root);
-    if(pendingConcept)conceptProjection.show(pendingConcept,performance.now()/1000);
+    if(pendingConcept)conceptProjection.show(pendingConcept,performance.now()/1000,pendingSubject);
     scene.background=new THREE.Color(0x030405);
     scene.fog=new THREE.FogExp2(0x030405,.045);
 
@@ -2067,6 +2093,7 @@ if (!hud || !launcher || !canvas) {
         neural:neuralField?.diagnostics(),
         presence:{...presencePose},projection:hologramPresentation.sample(performance.now()/1000),
         media:window.TravisProjection?.media(),
+        hologram:conceptProjection?.state?.(),projectionControl:window.TravisProjection?.status?.(),
         meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,voiceInput:voiceInput?.diagnostics(),vision:vision.diagnostics(),replyLanguage,inputLanguage,preferredLanguage,standby,proactive,voicePaused,
         recording:voiceRecorder?.state,pendingTasks:[...pendingVoiceTasks.keys()],lastTaskResult:lastVoiceTaskResult,voiceMetrics:voiceMetrics.map(m=>({...m}))};
     },
