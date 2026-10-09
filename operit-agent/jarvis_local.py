@@ -325,6 +325,13 @@ def classify(text,active_project=None):
  normalized=norm(text)
  controls=travis_dialogue.control(text)
  if controls:return 'conversation_control',controls
+ if any(phrase in normalized for phrase in (
+    'can you learn','are you learning','do you learn','learn new things','do you remember after',
+    'can you remember','do you retain','can you train yourself','how do you learn',
+    'what have you learned','podes aprender','consegues aprender','estas a aprender',
+    'estás a aprender','aprendes com','consegues lembrar','podes memorizar',
+    'o que aprendeste','aprendeste alguma coisa','como e que aprendes')):
+  return 'capabilities_status',{'awareness':True,'focus':'learning'}
  if re.search(r'\b(?:openclaw|opencloud|open cloud)\b',normalized) and re.search(r'\b(?:estado|ligado|verifica|check|status|connected|running)\b',normalized):return 'openclaw_status',{}
  if re.search(r'\b(?:ligacoes|conexoes|connections|connected services)\b',normalized):return 'connections_status',{}
  if (re.search(r'\b(?:awareness|autoconhecimento|autoconsciencia|self.?awareness)\b',normalized)
@@ -1011,7 +1018,16 @@ def _route(text,context=None):
  elif tool=="system_status":reply="The Centro is "+("active" if result["centro"].get("ok") else "unavailable")+". Available memory: "+str(result["ram_available_mb"])+" megabytes."
  elif tool=="quantum_status":reply=("Quantum Unified Agent V"+str(result.get("builtBaseline"))+" is online and governing Travis. Canonical Drive state: "+str(result.get("canonicalDriveState"))+".") if result.get("ok") else "Quantum Unified Agent is not available."
  elif tool=="capabilities_status":
-  reply=travis_awareness.reply(result,getattr(DIALOGUE_INFO,"language","en")) if result.get("ok") else ("Não consegui verificar o meu registo de capacidades. Não vou inventar um estado." if getattr(DIALOGUE_INFO,"language","en")=="pt" else "I could not verify my capability registry, so I will not invent a status.")
+  if args.get("focus")=="learning" and result.get("ok"):
+   memory=result.get("memory",{})
+   nodes=memory.get("neurons",0);links=memory.get("synapses",0);cycles=memory.get("cycles",0)
+   reply=(f"Sim. Guardo informação entre sessões: tenho {nodes} memórias, {links} ligações e {cycles} ciclos de reflexão registados. "
+          "Uso novos factos, os resultados das tarefas e as tuas correções para melhorar as próximas decisões."
+          if getattr(DIALOGUE_INFO,"language","en")=="pt" else
+          f"Yes. I retain information across sessions: {nodes} stored memories, {links} links and {cycles} recorded reflection cycles. "
+          "New facts, task outcomes and your corrections help me make better decisions on future tasks.")
+  else:
+   reply=travis_awareness.reply(result,getattr(DIALOGUE_INFO,"language","en")) if result.get("ok") else ("Ainda não consegui consultar a memória." if getattr(DIALOGUE_INFO,"language","en")=="pt" else "I couldn't retrieve memory status just now.")
  elif tool in {"search_positions","projects_status","repo_access"}:reply=result["reply"]
  elif tool=="site_check":reply=" ".join(k+": "+("online." if v["online"] is True else "I could not confirm availability. "+v.get("error","")) for k,v in result.items())
  elif tool=="open_youtube":reply="YouTube, right here. What would you like to watch?"
