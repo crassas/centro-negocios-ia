@@ -1,8 +1,8 @@
 import { createConceptProjection } from './travis-concept-projection.mjs?v=conversation-2';
 import { createVoiceInput } from './travis-voice-input.mjs?v=conversation-2';
-import { createTravisVision } from './travis-vision.mjs?v=3';
+import { createTravisVision } from './travis-vision.mjs?v=4';
 import { buildSpeechEnvelope, speechEnvelopeLevel } from './travis-audio-sync.mjs?v=1';
-import { cameraCommand } from './travis-vision-policy.mjs?v=1';
+import { cameraCommand } from './travis-vision-policy.mjs?v=2';
 import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=cinema-1';
 import { projectWebAnswer } from './travis-web-projection.mjs?v=agent-1';
 import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=3';

@@ -1,6 +1,6 @@
 // Camera vision is opt-in and runs in the current browser. Frames never enter Travis HTTP requests.
 import { FilesetResolver, GestureRecognizer, FaceDetector, ObjectDetector } from './vendor/mediapipe/vision_bundle.mjs';
-import { facePosition, gestureDecision } from './travis-vision-policy.mjs?v=1';
+import { facePosition, gestureDecision, faceColourFromPixels } from './travis-vision-policy.mjs?v=2';
 
 export function createTravisVision({ onGesture = () => {}, onPose = () => {}, isSpeechCritical = () => false } = {}) {
   const button = document.getElementById('travis-camera-toggle');
@@ -12,6 +12,9 @@ export function createTravisVision({ onGesture = () => {}, onPose = () => {}, is
   let lastGestureAt = 0, lastFaceAt = 0, lastVideoTime = -1, slowFrame = 0;
   let pose = null, lastPoseAt = 0, observedGesture = 'None', frames = 0;
   let observedObjects = [], lastObjectAt = 0, observedAt = 0, objectStatus = 'loading';
+  let faceColour = null, lastColourAt = 0;
+  const sampleCanvas=document.createElement('canvas');sampleCanvas.width=sampleCanvas.height=80;
+  const sampleContext=sampleCanvas.getContext('2d',{willReadFrequently:true});
   let labelText = 'Câmara desligada';
   const state = { name: null, since: 0, latched: false, lastActionAt: -3000 };
   const setLabel = message => {
@@ -57,6 +60,25 @@ export function createTravisVision({ onGesture = () => {}, onPose = () => {}, is
       }
     }
   }
+  function inspectFaceColour(detection) {
+    const box=detection?.detections?.[0]?.boundingBox;
+    if(!box||!sampleContext||!preview?.videoWidth||!preview?.videoHeight)return null;
+    const vw=preview.videoWidth,vh=preview.videoHeight;
+    const x=Math.max(0,Math.floor(box.originX)),y=Math.max(0,Math.floor(box.originY));
+    const right=Math.min(vw,Math.ceil(box.originX+box.width));
+    const bottom=Math.min(vh,Math.ceil(box.originY+box.height));
+    const w=right-x,h=bottom-y;
+    if(w<35||h<35)return null;
+    try {
+      sampleContext.drawImage(preview,x,y,w,h,0,0,80,80);
+      const {data}=sampleContext.getImageData(0,0,80,80);
+      const color=faceColourFromPixels(data,80,80);
+      return color?{...color,observedAt:Date.now()}:null;
+    } catch(error) {
+      console.warn('Travis local face-colour sampling:',error.message);
+      return null;
+    }
+  }
   function frame(timestamp) {
     if (!active || !stream || document.hidden) return;
     // MediaPipe runs synchronously on the render thread; pause inference during speech.
@@ -84,8 +106,15 @@ export function createTravisVision({ onGesture = () => {}, onPose = () => {}, is
       if (faceDetector && timestamp - lastFaceAt > (slowFrame ? 1500 : 750)) {
         lastFaceAt = timestamp;
         try {
-          const value = facePosition(faceDetector.detectForVideo(preview, timestamp), preview.videoWidth, preview.videoHeight);
-          if (value) { pose = value; lastPoseAt = timestamp; onPose(value); }
+          const faceResult=faceDetector.detectForVideo(preview, timestamp);
+          const value=facePosition(faceResult,preview.videoWidth,preview.videoHeight);
+          if(value){
+            pose=value;lastPoseAt=timestamp;onPose(value);
+            if(timestamp-lastColourAt>=1700){
+              lastColourAt=timestamp;
+              faceColour=inspectFaceColour(faceResult);
+            }
+          }
         } catch (error) { console.warn('Face tracking:', error.message); }
       }
       if (objectDetector && timestamp - lastObjectAt >= (slowFrame ? 2600 : 1500)) {
@@ -103,7 +132,7 @@ export function createTravisVision({ onGesture = () => {}, onPose = () => {}, is
       }
       observedAt = Date.now();
       slowFrame = performance.now() - startAt > 85 ? 1 : 0;
-      if (timestamp - lastPoseAt > 1600) pose = null;
+      if (timestamp - lastPoseAt > 1600) {pose = null;faceColour=null;}
     }
     animation = requestAnimationFrame(frame);
   }
@@ -112,7 +141,7 @@ export function createTravisVision({ onGesture = () => {}, onPose = () => {}, is
     active = false;
     if (animation) cancelAnimationFrame(animation);
     animation = 0; pose = null; observedGesture = 'None'; frames = 0;
-    observedObjects = []; lastObjectAt = 0; observedAt = 0;
+    observedObjects = []; lastObjectAt = 0; observedAt = 0; faceColour=null;lastColourAt=0;
     state.name = null; state.latched = false; onPose(null);
     const previousStream = stream; stream = null;
     previousStream?.getTracks().forEach(track => track.stop());
@@ -189,10 +218,11 @@ export function createTravisVision({ onGesture = () => {}, onPose = () => {}, is
     snapshot: () => ({
       active, source: 'on-device-mediapipe', observedAt: active ? observedAt : 0,
       faceDetected: active && Boolean(pose),
+      faceColor: active && pose && faceColour ? {...faceColour} : null,
       gesture: active ? observedGesture : 'None',
       objects: active && objectDetector ? observedObjects.map(({name,score}) => ({name,score})) : [],
       objectModel: objectStatus, frames
     }),
-    diagnostics: () => ({ active, opening: Boolean(opening), status: labelText, gesture: observedGesture, frames, faceDetected: Boolean(pose), objects: observedObjects, objectModel: objectStatus, localOnly: true })
+    diagnostics: () => ({ active, opening: Boolean(opening), status: labelText, gesture: observedGesture, frames, faceDetected: Boolean(pose), faceColorMeasured:Boolean(faceColour), objects: observedObjects, objectModel: objectStatus, localOnly: true })
   });
 }

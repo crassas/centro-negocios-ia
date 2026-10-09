@@ -215,33 +215,87 @@ def clean_vision(value):
  if gesture not in {"None","Open_Palm","Closed_Fist","Victory","Thumb_Up","Thumb_Down","Pointing_Up","ILoveYou"}:gesture="None"
  model=str(value.get("objectModel","loading")) if active else ""
  if model not in {"ready","loading","unavailable"}:model="loading"
+ color=None
+ raw=value.get("faceColor")
+ if fresh and value.get("faceDetected") is True and isinstance(raw,dict):
+  rgb=raw.get("rgb")
+  try:colour_age=int(time.time()*1000)-float(raw.get("observedAt",0))
+  except (TypeError,ValueError,OverflowError):colour_age=10**9
+  if (isinstance(rgb,list) and len(rgb)==3 and all(type(v) is int and 0<=v<=255 for v in rgb)
+       and 0<=colour_age<=6000):
+   try:contrast=int(raw.get("contrast",0))
+   except (TypeError,ValueError,OverflowError):contrast=0
+   color={"rgb":rgb,"contrast":max(0,min(255,contrast)),"observedAt":int(raw["observedAt"])}
  return {"active":active,"fresh":fresh,"faceDetected":bool(fresh and value.get("faceDetected") is True),
-         "gesture":gesture,"objects":objects,"objectModel":model,"frames":max(0,min(frames,10000000))}
+         "gesture":gesture,"objects":objects,"objectModel":model,"frames":max(0,min(frames,10000000)),
+         "faceColor":color}
+
+
+def face_colour_description(vision,pt):
+ """Observed camera pixel colours only; never infer identity, race or ethnicity."""
+ if not vision.get("faceDetected"):return None
+ color=vision.get("faceColor")
+ if not isinstance(color,dict):
+  return ("Deteto o teu rosto, mas ainda não tenho uma amostra de cor válida. Aproxima o rosto e ilumina-o de frente."
+          if pt else
+          "I can detect your face, but I don't have a valid colour sample yet. Face the camera in even light.")
+ r,g,b=color["rgb"]
+ brightness=.2126*r+.7152*g+.0722*b
+ warm=r>=g-4 and g>=b-6 and r-b>=12
+ if warm:
+  if brightness>=197:tone_pt,tone_en="bege claro","light beige"
+  elif brightness>=158:tone_pt,tone_en="bege médio","medium beige"
+  elif brightness>=117:tone_pt,tone_en="castanho claro","light brown"
+  elif brightness>=77:tone_pt,tone_en="castanho médio","medium brown"
+  else:tone_pt,tone_en="castanho escuro","dark brown"
+ else:
+  if brightness>=175:tone_pt,tone_en="claro","light"
+  elif brightness>=95:tone_pt,tone_en="médio","medium"
+  else:tone_pt,tone_en="escuro","dark"
+ suffix_pt=" Vejo alguma diferença de luz entre os dois lados do rosto." if color["contrast"]>=22 else ""
+ suffix_en=" The light differs across the two sides of your face." if color["contrast"]>=22 else ""
+ if pt:
+  return f"Na imagem, a tonalidade aparente do rosto é {tone_pt}. A amostra das bochechas mede aproximadamente RGB {r}, {g}, {b}."+suffix_pt
+ return f"In the image, the apparent facial tone is {tone_en}. The cheek colour sample is approximately RGB {r}, {g}, {b}."+suffix_en
+
 
 def vision_dialogue(text,context):
  t=norm(text)
  v=(context or {}).get("vision")
  if not isinstance(v,dict) or "fresh" not in v:v=clean_vision(v)
+ colour_question=bool(re.search(r"\b(?:cor|cores|color|colour|tonalidade|tom|tone|shades?|castanho|brown|skin|pele|complexion)\b",t))
+ face_target=bool(re.search(r"\b(?:rosto|face|cara|pele|skin|complexion|facial)\b",t))
+ # A short "and which colour?" is resolved from the last observed face.
+ if colour_question and not face_target and re.fullmatch(r"(?:e |and )?(?:que|what|which|qual|a|the|is|e|its|it|cor|color|colour|tom|tone|de|da|do|qual e|what is|color is|colour is|é|\s|\?){3,70}",t):
+  turns=dialogue_turns(context)
+  face_target=bool(turns and str(turns[-1].get("tool"))=="vision_observation" and
+                   re.search(r"rosto|face",str(turns[-1].get("assistant","")),re.I))
  camera_question=bool(re.search(r"\b(?:camara|camera|webcam|visao|vision|see|seeing|looking|look|ves|ver|mostrar|mostrando|showing|enxergar)\b|o que estas a ver",t))
  visual_deictic=bool(v["active"] and re.search(r"\b(?:what is this|what am i holding|identify this|recognize this|o que e isto|o que tenho na mao|que objeto|que cor)\b",t))
- if not (camera_question or visual_deictic):return None
+ if not (camera_question or visual_deictic or (colour_question and face_target)):return None
  if re.search(r"\b(?:youtube|website|pagina|page|site|video|browser|internet|search)\b",t):return None
  pt=getattr(DIALOGUE_INFO,"language","en")=="pt"
  if not v["active"]:
   return "Liga a câmara e mostra-me o que queres analisar." if pt else "Turn on the camera and show me what you'd like me to examine."
  if not v["fresh"]:
   return "A câmara está ligada. Aguardo uma imagem atual para analisar." if pt else "The camera is on. I'm waiting for a fresh frame to analyse."
+ if colour_question and face_target:
+  return face_colour_description(v,pt) or ("Mostra-me o rosto à câmara." if pt else "Show your face to the camera.")
  names=[o["name"] for o in v["objects"] if not (v["faceDetected"] and o["name"].lower()=="person")]
  translations={"cell phone":"telemóvel","bottle":"garrafa","cup":"chávena","laptop":"portátil","book":"livro","chair":"cadeira","dog":"cão","cat":"gato","car":"carro","remote":"comando","backpack":"mochila","handbag":"mala","keyboard":"teclado","person":"pessoa","mouse":"rato","tv":"televisão","dining table":"mesa","clock":"relógio","bicycle":"bicicleta","bird":"pássaro","apple":"maçã","banana":"banana","scissors":"tesoura","sandwich":"sandes"}
  if pt:
   parts=[]
-  if v["faceDetected"]:parts.append("um rosto")
+  if v["faceDetected"]:
+   colour=face_colour_description(v,True)
+   parts.append("um rosto"+(" — "+colour.split(". A amostra")[0].removeprefix("Na imagem, a tonalidade aparente do rosto é ") if colour and "Na imagem" in colour else ""))
   if names:parts.append("objetos: "+", ".join(translations.get(n.lower(),n) for n in names[:5]))
   if v["gesture"]!="None":parts.append("gesto: "+{"Open_Palm":"mão aberta","Closed_Fist":"punho fechado","Victory":"vitória","Thumb_Up":"polegar para cima","Thumb_Down":"polegar para baixo"}.get(v["gesture"],v["gesture"]))
   if parts:return "Pela câmara deteto "+ "; ".join(parts)+"."
   return "A câmara está ligada. Mostra-me um objeto mais de perto." if v["objectModel"]=="ready" else "A câmara está ligada. O reconhecimento visual está a preparar-se."
  parts=[]
- if v["faceDetected"]:parts.append("a face")
+ if v["faceDetected"]:
+  colour=face_colour_description(v,False)
+  parts.append("a face"+(" with an apparent "+colour.split(". The cheek")[0].removeprefix("In the image, the apparent facial tone is ")+" tone" if colour and "In the image" in colour else ""))
  if names:parts.append("objects: "+", ".join(names[:5]))
  if v["gesture"]!="None":parts.append("gesture: "+v["gesture"].replace("_"," ").lower())
  if parts:return "Through the camera, I can detect "+ "; ".join(parts)+"."

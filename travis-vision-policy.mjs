@@ -46,3 +46,39 @@ export function cameraCommand(message) {
   if (/^(?:desliga|desligar|desativa|desativar|fecha|fechar|stop|disable|close|turn off)\s+(?:(?:a|the|my|minha)\s+)?(?:camera|camara|webcam|vision|visao)$/.test(text)) return 'stop';
   return null;
 }
+
+
+// Measure the *apparent* facial colour in the current camera frame.
+// Only numerical samples are returned. No images, identity or ethnicity.
+export function faceColourFromPixels(rgba,width,height) {
+  if (!rgba || !Number.isInteger(width) || !Number.isInteger(height) ||
+      width<24 || height<24 || rgba.length<width*height*4) return null;
+  function cheek(cx,cy) {
+    const x0=Math.round(width*cx),y0=Math.round(height*cy);
+    const rx=Math.max(2,Math.round(width*.055));
+    const ry=Math.max(2,Math.round(height*.055));
+    const channels=[[],[],[]];
+    for(let y=Math.max(0,y0-ry);y<=Math.min(height-1,y0+ry);y++){
+      for(let x=Math.max(0,x0-rx);x<=Math.min(width-1,x0+rx);x++){
+        const i=(y*width+x)*4;
+        if(rgba[i+3]<180)continue;
+        const r=rgba[i],g=rgba[i+1],b=rgba[i+2];
+        const luma=.2126*r+.7152*g+.0722*b;
+        if(luma<12 || luma>250)continue;
+        channels[0].push(r);channels[1].push(g);channels[2].push(b);
+      }
+    }
+    if(channels[0].length<16)return null;
+    const median=a=>{a.sort((x,y)=>x-y);return a[Math.floor(a.length/2)];};
+    return channels.map(median);
+  }
+  const left=cheek(.30,.56),right=cheek(.70,.56);
+  if(!left||!right)return null;
+  const rgb=left.map((x,i)=>Math.round((x+right[i])/2));
+  const luminance=x=>.2126*x[0]+.7152*x[1]+.0722*x[2];
+  return {
+    rgb,
+    contrast:Math.min(255,Math.round(Math.abs(luminance(left)-luminance(right)))),
+    measuredPixels:true
+  };
+}
