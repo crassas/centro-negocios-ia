@@ -123,20 +123,20 @@ def centro_operational_status_requested(text):
  normalized=re.sub(r"[^a-z0-9]+"," ",_norm(text)).strip()
  if not 3<=len(normalized)<=180:return False
  normalized=re.sub(
-  r"^(?:(?:ola|oi|olha|hello|hey|amigo|bom dia|boa tarde|por favor|please|travis|jarvis)\\s+)+",
+  r"^(?:(?:ola|oi|olha|hello|hey|amigo|bom dia|boa tarde|por favor|please|travis|jarvis)\s+)+",
   "",normalized)
  normalized=re.sub(
-  r"^(?:(?:podes|consegues|podias|poderias|can you|could you)\\s+)+",
+  r"^(?:(?:podes|consegues|podias|poderias|can you|could you)\s+)+",
   "",normalized)
- normalized=re.sub(r"(?:\\s+(?:por favor|please))+$","",normalized).strip()
- if re.search(r"\\b(?:nao|nunca|never|not|dont|do not|"
+ normalized=re.sub(r"(?:\s+(?:por favor|please))+$","",normalized).strip()
+ if re.search(r"\b(?:nao|nunca|never|not|dont|do not|"
               r"site|sites|pagina|website|webpage|dominio|url|seo|"
               r"repositorio|repositorios|repo|codigo|git|github|"
               r"projeto|projecto|project|"
-              r"public\\w*|apag\\w*|elimin\\w*|cri\\w*|alter\\w*|"
-              r"mud\\w*|modific\\w*|edit\\w*|atuali\\w*|"
-              r"envi\\w*|pag\\w*|compr\\w*|"
-              r"publish|delete|deploy|commit|merge|write|pay)\\b",normalized):
+              r"public\w*|apag\w*|elimin\w*|cri\w*|alter\w*|"
+              r"mud\w*|modific\w*|edit\w*|atuali\w*|"
+              r"envi\w*|pag\w*|compr\w*|"
+              r"publish|delete|deploy|commit|merge|write|pay)\b",normalized):
   return False
  subject=(r"(?:o |a |the )?"
           r"(?:centro(?: de negocios)?|"
