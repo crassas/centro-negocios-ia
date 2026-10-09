@@ -32,6 +32,7 @@ class BrainRuntime:
         self.path = Path(path); self.store = store; self.cognitive = cognitive
         self.clock = clock; self.idle_seconds = idle_seconds; self.interval_seconds = interval_seconds
         self.daily_limit = daily_limit; self.resources = resources or self._resources; self.generator = generator
+        self.study_callback = None  # Optional bounded offline library step after idle reflection.
         self.lock = threading.RLock(); self.stop_event = threading.Event(); self.wake_event = threading.Event()
         self.active = 0; self.last_user = clock(); self.activity = {}; self.thread = None
         self.phase = 'awake'; self.reason = 'À espera de repouso'; self.last_error = ''
@@ -247,7 +248,18 @@ class BrainRuntime:
                 with self.db() as c: c.execute("UPDATE brain_cycles SET finished=?,status='completed',episodes=?,associations=? WHERE id=?", (self.clock(), len(runs), links, cycle))
                 self.mark('monitor', 'recorded', 'Diário guardado; hipóteses separadas de factos')
                 self.phase = 'resting'; self.reason = 'Ciclo concluído'; self.last_error = ''
-                return {'ran': True, 'id': cycle, 'episodes': len(runs), 'associations': links, 'journalEntries': 2}
+                reading = {'ok': False, 'reason': 'library_not_configured'}
+                if callable(self.study_callback) and not self.cancelled():
+                    try:
+                        reading = self.study_callback()
+                        if isinstance(reading, dict) and reading.get('ok'):
+                            self.mark('memory', 'reading', 'Passagem histórica consultada no índice local')
+                    except (OSError, ValueError, sqlite3.Error) as exc:
+                        reading = {'ok': False, 'reason': type(exc).__name__}
+                return {'ran': True, 'id': cycle, 'episodes': len(runs),
+                        'associations': links, 'journalEntries': 2,
+                        'reading': {'ok': bool(reading.get('ok')),
+                                    'reason': reading.get('reason', 'passage_examined' if reading.get('ok') else 'unavailable')}}
             except InterruptedError as exc:
                 with self.db() as c: c.execute("UPDATE brain_cycles SET finished=?,status='interrupted',error=? WHERE id=?", (self.clock(), str(exc), cycle))
                 self.phase = 'awake'; return {'ran': False, 'interrupted': True}
