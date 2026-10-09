@@ -65,6 +65,7 @@ RUNTIME_FILES = {
     "travis_brain.py": HOME / "travis_brain.py",
     "travis_reflexion.py": HOME / "travis_reflexion.py",
     "travis_quantum.py": HOME / "travis_quantum.py",
+    "travis_decision.py": HOME / "travis_decision.py",
     "travis_gmail.py": HOME / "travis_gmail.py",
     "travis_web_tools.py": HOME / "travis_web_tools.py",
     "business_db.py": HOME / "business_db.py",
