@@ -712,3 +712,16 @@ button.travis-action-card{cursor:pointer}
   visibility:hidden!important;
   pointer-events:none!important;
 }
+
+/* Vision Tracker: warm optical brackets, rear view unmirrored, targets on demand. */
+#travis-hud .travis-camera-dock[data-active="true"]{opacity:1;max-width:min(340px,calc(100vw - 100px));}
+#travis-hud .travis-camera-dock button{color:#e6ddce;border-color:rgba(210,182,144,.4);background:rgba(22,20,18,.90);}
+#travis-hud .travis-camera-dock span{color:#d0c3af;max-width:230px;}
+#travis-hud .travis-camera-switch{grid-column:2;grid-row:1;display:none;padding:6px 9px;font-size:10px;}
+#travis-hud .travis-camera-dock[data-active="true"] .travis-camera-switch{display:block;}
+#travis-hud .travis-vision-stage{display:none;position:relative;grid-column:1/-1;grid-row:3;width:min(320px,calc(100vw - 100px));max-height:36vh;overflow:hidden;border:1px solid rgba(213,188,152,.26);border-radius:9px;background:#0c0b0a;}
+#travis-hud .travis-camera-dock[data-active="true"] .travis-vision-stage{display:block;}
+#travis-hud .travis-vision-stage video{display:block;width:100%;height:100%;max-height:36vh;object-fit:fill;border:0;border-radius:0;opacity:1;transform:none;}
+#travis-hud .travis-camera-dock[data-facing="user"] .travis-vision-stage video{transform:scaleX(-1);}
+#travis-hud .travis-vision-overlay{position:absolute;inset:0;width:100%;height:100%;touch-action:manipulation;cursor:crosshair;}
+@media(max-width:480px){#travis-hud .travis-camera-dock{grid-template-columns:1fr auto;}#travis-hud .travis-vision-stage{width:min(250px,calc(100vw - 90px));}}

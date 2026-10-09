@@ -4,9 +4,10 @@ import { createVoiceInput } from './travis-voice-input.mjs?v=stt-fast-1';
 import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS } from './travis-form-director.mjs?v=1';
 import { INTERFACE_COPY, interfaceLanguage, applyInterfaceLanguage, languageFromInterfaceCommand } from './travis-interface-language.mjs?v=1';
 import { resolveWakePhrase } from './travis-wake-phrase.mjs?v=pt-1';
-import { createTravisVision } from './travis-vision.mjs?v=5';
+import { createTravisVision } from './travis-vision.mjs?v=scene-1';
 import { buildSpeechEnvelope, speechEnvelopeLevel } from './travis-audio-sync.mjs?v=1';
-import { cameraCommand } from './travis-vision-policy.mjs?v=2';
+import { sceneSignature } from './travis-scene-tracker.mjs?v=1';
+import { cameraCommand } from './travis-vision-policy.mjs?v=scene-1';
 import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=cinema-1';
 import { projectWebAnswer } from './travis-web-projection.mjs?v=agent-1';
 import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=3';
@@ -235,7 +236,9 @@ if (!hud || !launcher || !canvas) {
 
   const clamp = THREE.MathUtils.clamp;
   const lerp = THREE.MathUtils.lerp;
+  let pendingVisionScene=null,lastVisionSignature='',lastVisionSpeechAt=0,visionNarrationPreparing=false;
   const vision=createTravisVision({
+    onScene(scene){pendingVisionScene=scene.active?scene:null;if(!scene.active)lastVisionSignature='';},
     isSpeechCritical:()=>Boolean(voiceSource),
     onGesture(action){
       if(!opened||!ready)return;
@@ -844,15 +847,37 @@ if (!hud || !launcher || !canvas) {
     } finally {scheduleVoiceTaskPoll();}
   }
 
-  // The user's spoken command is an explicit camera request. Browser permission is still required.
-  function cameraDirective(message){
-    const text=String(message).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
-      .replace(/^(?:travis|jarvis|olha|please)[,: ]+/,'').trim().replace(/[.!?]+$/,'');
-    if(/^(?:nao|nunca|do not|don't|never)\b/.test(text))return null;
-    if(/^(?:liga|ligar|ativa|ativar|activa|activar|abre|abrir|mostra|open|enable|start|turn on)\s+(?:(?:a|the|my|minha)\s+)?(?:camera|camara|webcam|vision|visao)$/.test(text))return 'start';
-    if(/^(?:desliga|desligar|desativa|desativar|fecha|fechar|stop|disable|close|turn off)\s+(?:(?:a|the|my|minha)\s+)?(?:camera|camara|webcam|vision|visao)$/.test(text))return 'stop';
-    return null;
-  }
+  // Scene narration shares the existing voice engine and waits for a quiet turn.
+  // It never interrupts user speech, another response, a video, or standby.
+  const visionNarrationTimer=setInterval(async()=>{
+    if(visionNarrationPreparing||!pendingVisionScene||!vision.narration()||!opened||standby||voicePaused||voiceBusy||voiceSource||document.hidden)return;
+    if(voiceInput?.diagnostics().speaking||voiceRecorder?.state==='recording'||window.TravisProjection?.media().playing)return;
+    const now=performance.now();
+    if(now-lastInteraction<2500||now-lastVisionSpeechAt<9000)return;
+    const scene=vision.snapshot(),signature=sceneSignature(scene);
+    if(!signature||signature===lastVisionSignature)return;
+    const epoch=voiceSession;
+    const locale=preferredLanguage==='pt'?'pt':preferredLanguage==='en'?'en':replyLanguage;
+    const reply=vision.describe(locale);
+    visionNarrationPreparing=true;
+    let startedPlayback=false;
+    try{
+      const speech=await localFetch('/speak',{body:{text:reply,language:locale},signal:AbortSignal.timeout(12000)});
+      if(epoch!==voiceSession||!opened||voiceBusy||voiceInput?.diagnostics().speaking||!vision.snapshot().active||!vision.narration())return;
+      if(!speech.ok)throw new Error('Scene voice unavailable');
+      // Do not announce an object that disappeared while voice was prepared.
+      if(sceneSignature(vision.snapshot())!==signature)return;
+      const wav=await speech.arrayBuffer();
+      if(epoch!==voiceSession||!opened||voiceBusy||voiceInput?.diagnostics().speaking||!vision.narration()||sceneSignature(vision.snapshot())!==signature)return;
+      lastVisionSignature=signature;lastVisionSpeechAt=performance.now();voiceBusy=true;startedPlayback=true;
+      await playVoiceArrayBuffer(wav,epoch,reply);
+    }catch(error){
+      console.debug('Vision narration:',error.message);lastVisionSpeechAt=performance.now();
+      if(startedPlayback&&epoch===voiceSession&&!voiceSource){voiceBusy=false;scheduleListening(epoch,900);}
+    }
+    finally{visionNarrationPreparing=false;}
+  },750);
+  window.addEventListener('pagehide',()=>clearInterval(visionNarrationTimer),{once:true});
 
   async function handleVoiceBlob(blob,mime,session) {
     if (!opened || session!==voiceSession) return;
@@ -913,6 +938,49 @@ if (!hud || !launcher || !canvas) {
         await playVoiceArrayBuffer(await speech.arrayBuffer(),session,spoken);
         return;
       }
+      // Camera intent must resolve before the imaginative projection router.
+      const cameraAction=cameraCommand(text);
+      if(cameraAction){
+        const ptSpoken=/\b(?:liga|ligar|ativa|abre|mostra|desliga|fecha|desativa|muda|troca|tras|traseira|frontal|estas|detetas|descreve|diz|narra|liberta)\b/i.test(text.normalize('NFD').replace(/[\u0300-\u036f]/g,''));
+        const locale=preferredLanguage==='pt'||preferredLanguage==='en'?preferredLanguage:(ptSpoken?'pt':'en');
+        let responseText;
+        setState('thinking',locale==='pt'?'A preparar a visão…':'Preparing vision…');
+        try{
+          if(cameraAction==='stop'){
+            vision.stop();pendingVisionScene=null;lastVisionSignature='';
+            responseText=locale==='pt'?'Câmara desligada.':'Camera switched off.';
+          }else if(cameraAction==='narrate-off'||cameraAction==='narrate-on'){
+            vision.narration(cameraAction==='narrate-on');pendingVisionScene=vision.snapshot();
+            responseText=cameraAction==='narrate-on'
+              ?(locale==='pt'?'Vou descrever as deteções quando a cena mudar.':'I will describe confirmed detections when the scene changes.')
+              :(locale==='pt'?'Narração automática desativada. Podes continuar a perguntar o que vejo.':'Automatic narration is off. You can still ask what I see.');
+          }else if(cameraAction==='release'){
+            vision.releaseTarget();responseText=locale==='pt'?'Alvo libertado.':'Target released.';
+          }else{
+            if(cameraAction==='rear')await vision.start('environment');
+            else if(cameraAction==='front')await vision.start('user');
+            else if(cameraAction==='switch')await vision.switchCamera();
+            else if(cameraAction==='start')await vision.start();
+            if(!opened||session!==voiceSession||controller.signal.aborted)return;
+            const observation=await vision.waitForObservation();
+            if(cameraAction!=='describe'&&!observation.active)throw new Error('Camera request cancelled');
+            const side=observation.facingMode==='environment'?(locale==='pt'?'Câmara traseira ligada. ':'Rear camera on. '):(locale==='pt'?'Câmara frontal ligada. ':'Front camera on. ');
+            responseText=(cameraAction==='describe'?'':observation.facingVerified?side:(locale==='pt'?'Câmara ligada. ':'Camera on. '))+vision.describe(locale);
+            lastVisionSignature=sceneSignature(observation);lastVisionSpeechAt=performance.now();
+          }
+        }catch(error){
+          console.warn('Camera request:',error.message);
+          responseText=locale==='pt'
+            ?'Não consegui abrir a câmara pedida. Confirma a permissão e se essa câmara está disponível.'
+            :'I could not open the requested camera. Check the permission and whether that camera is available.';
+        }
+        if(!opened||session!==voiceSession||controller.signal.aborted)return;
+        replyLanguage=locale;
+        const speech=await localFetch('/speak',{body:{text:responseText,language:locale},signal:controller.signal});
+        if(!speech.ok)throw new Error('Local voice unavailable');
+        await playVoiceArrayBuffer(await speech.arrayBuffer(),session,responseText);
+        return;
+      }
       text=window.TravisProjection?.select(text)||text;
       let interpretation=window.TravisProjection?.interpret?.(text);
       // Unfamiliar colloquial image requests may use the already running
@@ -945,29 +1013,6 @@ if (!hud || !launcher || !canvas) {
         const wav=await speech.arrayBuffer();
         if(!opened||session!==voiceSession)return;
         await playVoiceArrayBuffer(wav,session,interpretation.reply);
-        return;
-      }
-      const cameraAction=cameraCommand(text);
-      if(cameraAction){
-        const ptSpoken=/\b(?:liga|ligar|ativa|ativar|activa|abre|mostra|desliga|fecha|desativa)\b/i.test(text);
-        const locale=preferredLanguage==='pt'||preferredLanguage==='en'?preferredLanguage:(ptSpoken?'pt':'en');
-        let responseText;
-        setState('thinking',cameraAction==='start'?'Activating local vision…':'Disabling camera…');
-        try{
-          if(cameraAction==='start')await vision.start();
-          else vision.stop();
-          responseText=cameraAction==='start'
-            ? (locale==='pt'?'Câmara ligada. Estou a analisar o que aparece à minha frente.':'Camera on. I’m watching what comes into view.')
-            : (locale==='pt'?'Câmara desligada.':'Camera switched off.');
-        }catch(error){
-          responseText=locale==='pt'?'Não consegui activar a câmara. Confirma a autorização no navegador.':'I could not activate the camera. Please check the browser permission.';
-        }
-        if(!opened||session!==voiceSession||controller.signal.aborted){if(cameraAction==='start')vision.stop();return;}
-        window.dispatchEvent(new CustomEvent('travis:transcript',{detail:{role:'assistant',text:responseText}}));
-        replyLanguage=locale;
-        const speech=await localFetch('/speak',{body:{text:responseText,language:locale},signal:controller.signal});
-        if(!speech.ok)throw new Error('Local voice unavailable');
-        await playVoiceArrayBuffer(await speech.arrayBuffer(),session,responseText);
         return;
       }
       setState('thinking','Handling your request…');

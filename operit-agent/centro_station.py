@@ -58,6 +58,7 @@ RAW_REPO_BASE = "https://raw.githubusercontent.com/crassas/centro-negocios-ia"
 # Avoid overwriting other operator-owned UI files and assets.
 TRAVIS_CLIENT_FILES = (
     "travis-audio-sync.mjs",
+    "travis-scene-tracker.mjs",
     "travis-vision.mjs",
     "travis-voice-input.mjs",
     "travis-interface-language.mjs",
@@ -84,6 +85,7 @@ RUNTIME_FILES = {
     "centro_station.py": SUPERVISOR_PATH,
     "centro_soak.py": HOME / "centro_soak.py",
     "travis_core.py": HOME / "travis_core.py",
+    "travis_scene.py": HOME / "travis_scene.py",
     "travis_visual_semantics.py": HOME / "travis_visual_semantics.py",
     "travis_genome.py": HOME / "travis_genome.py",
     "travis_cognitive.py": HOME / "travis_cognitive.py",
@@ -536,7 +538,7 @@ def sync_travis_client(ref):
             raise RuntimeError("index.html: versão de voz inesperada")
         if "travis-audio-sync.mjs?v=1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: sincronização de voz ausente")
-        if "travis-vision.mjs?v=5" not in fetched["travis-3d.mjs"]:
+        if "travis-vision.mjs?v=scene-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: visão não ligada")
         if "travis-3d.mjs?v=framing-1" not in fetched["sw.js"]:
             raise RuntimeError("sw.js: cache desatualizada")
@@ -593,6 +595,8 @@ def sync_travis_client(ref):
             raise RuntimeError("travis-wake-phrase.mjs: recuperador não encontrado")
         if "timer=setTimeout(()=>submit(epoch),720)" not in fetched["travis-voice-input.mjs"]:
             raise RuntimeError("travis-voice-input.mjs: fim da frase não atualizado")
+        if "travis-scene-tracker.mjs?v=1" not in fetched["travis-vision.mjs"] or "travis-scene-tracker.mjs?v=1" not in fetched["sw.js"]:
+            raise RuntimeError("travis-scene-tracker.mjs: associação visual não ligada")
         if "ObjectDetector.createFromOptions" not in fetched["travis-vision.mjs"]:
             raise RuntimeError("travis-vision.mjs: modelo de visão ausente")
         if "faceColourFromPixels" not in fetched["travis-vision-policy.mjs"]:
@@ -761,7 +765,7 @@ def main():
                         "output": "módulos atualizados: " + ", ".join(ui_changed),
                     })
             if changed:
-                if any(name in changed for name in ("jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh", "travis_brain.py")):
+                if any(name in changed for name in ("jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh", "travis_brain.py", "travis_scene.py")):
                     pending_jarvis_restart = True
                 if any(name in changed for name in ("centro_server.py", "business_db.py", "travis_core.py")):
                     pending_server_restart = True

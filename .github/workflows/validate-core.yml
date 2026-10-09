@@ -48,6 +48,8 @@ jobs:
           PYTHONPATH=operit-agent python3 operit-agent/travis_brain_graph_selftest.py
           node scripts/travis-particle-brain-selftest.mjs
           node scripts/travis-hud-selftest.mjs
+          node scripts/travis-scene-selftest.mjs
+          python3 operit-agent/travis_scene_selftest.py
 
       - name: Travis operational awareness regression
         shell: bash

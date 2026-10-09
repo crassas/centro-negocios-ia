@@ -22,6 +22,11 @@ import travis_web_tools
 import travis_dialogue
 import travis_semantic
 import travis_visual_semantics
+try:
+ import travis_scene
+except ModuleNotFoundError as exc:
+ if exc.name!="travis_scene":raise
+ travis_scene=None  # Older supervisors acquire this dependency on their next cycle.
 import travis_workflow
 from concurrent.futures import ThreadPoolExecutor
 ROOT=Path.home()/".centro-jarvis"
@@ -229,9 +234,15 @@ def clean_vision(value):
    try:contrast=int(raw.get("contrast",0))
    except (TypeError,ValueError,OverflowError):contrast=0
    color={"rgb":rgb,"contrast":max(0,min(255,contrast)),"observedAt":int(raw["observedAt"])}
- return {"active":active,"fresh":fresh,"faceDetected":bool(fresh and value.get("faceDetected") is True),
+ cleaned={"active":active,"fresh":fresh,"faceDetected":bool(fresh and value.get("faceDetected") is True),
          "gesture":gesture,"objects":objects,"objectModel":model,"frames":max(0,min(frames,10000000)),
          "faceColor":color}
+ if value.get("version")=="vision-tracker-1":
+  if travis_scene is None:
+   cleaned.update({"fresh":False,"objects":[],"faceDetected":False,"selectedTarget":None})
+  else:cleaned.update(travis_scene.clean_scene(value))
+  if not cleaned["faceDetected"]:cleaned["faceColor"]=None
+ return cleaned
 
 
 def face_colour_description(vision,pt):
@@ -274,7 +285,7 @@ def vision_dialogue(text,context):
   face_target=bool(turns and str(turns[-1].get("tool"))=="vision_observation" and
                    re.search(r"rosto|face",str(turns[-1].get("assistant","")),re.I))
  camera_question=bool(re.search(r"\b(?:camara|camera|webcam|visao|vision|see|seeing|looking|look|ves|ver|mostrar|mostrando|showing|enxergar)\b|o que estas a ver",t))
- visual_deictic=bool(v["active"] and re.search(r"\b(?:what is this|what am i holding|identify this|recognize this|o que e isto|o que tenho na mao|que objeto|que cor)\b",t))
+ visual_deictic=bool(v["active"] and re.search(r"\b(?:what is this|what am i holding|identify this|recognize this|o que e isto|o que tenho na mao|que objeto|que cor|quem e|quem esta|who is|alvo|selected target)\b",t))
  if not (camera_question or visual_deictic or (colour_question and face_target)):return None
  if re.search(r"\b(?:youtube|website|pagina|page|site|video|browser|internet|search)\b",t):return None
  pt=getattr(DIALOGUE_INFO,"language","en")=="pt"
@@ -284,6 +295,9 @@ def vision_dialogue(text,context):
   return "A câmara está ligada. Aguardo uma imagem atual para analisar." if pt else "The camera is on. I'm waiting for a fresh frame to analyse."
  if colour_question and face_target:
   return face_colour_description(v,pt) or ("Mostra-me o rosto à câmara." if pt else "Show your face to the camera.")
+ if v.get("sceneVersion")=="vision-tracker-1":
+  identity=bool(re.search(r"\b(?:quem e|quem esta|who is|who am|whose|nome da pessoa)\b",t))
+  return travis_scene.describe_scene(v,pt,identity)
  names=[o["name"] for o in v["objects"] if not (v["faceDetected"] and o["name"].lower()=="person")]
  translations={"cell phone":"telemóvel","bottle":"garrafa","cup":"chávena","laptop":"portátil","book":"livro","chair":"cadeira","dog":"cão","cat":"gato","car":"carro","remote":"comando","backpack":"mochila","handbag":"mala","keyboard":"teclado","person":"pessoa","mouse":"rato","tv":"televisão","dining table":"mesa","clock":"relógio","bicycle":"bicicleta","bird":"pássaro","apple":"maçã","banana":"banana","scissors":"tesoura","sandwich":"sandes"}
  if pt:

@@ -40,10 +40,25 @@ export function gestureDecision(recognition, timestamp, state) {
 
 export function cameraCommand(message) {
   const text = String(message).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-    .replace(/^(?:travis|jarvis|olha|please)[,: ]+/, '').trim().replace(/[.!?]+$/, '');
-  if (/^(?:nao|nunca|do not|don't|never)\b/.test(text)) return null;
-  if (/^(?:liga|ligar|ativa|ativar|activa|activar|abre|abrir|mostra|open|enable|start|turn on)\s+(?:(?:a|the|my|minha)\s+)?(?:camera|camara|webcam|vision|visao)$/.test(text)) return 'start';
-  if (/^(?:desliga|desligar|desativa|desativar|fecha|fechar|stop|disable|close|turn off)\s+(?:(?:a|the|my|minha)\s+)?(?:camera|camara|webcam|vision|visao)$/.test(text)) return 'stop';
+    .replace(/[’]/g,"'").replace(/\s+/g,' ').trim()
+    .replace(/^(?:(?:travis|jarvis|olha|amigo|please|hey)[,: ]+)+/, '')
+    .replace(/(?:[, ]+(?:por favor|please|sff))?[.!?]*$/, '')
+    .replace(/^(?:podes|consegues|can you|could you)\s+/, '')
+    .replace(/^quero que\s+/, '');
+  if (/\b(?:nao|nunca|not|don't|never)\b/.test(text)) return null;
+  if (/^(?:para de|deixa de) (?:descrever|anunciar|narrar)|^(?:stop|disable) (?:describing|narrating|announcing)|^(?:disable|turn off) (?:automatic )?narration|^(?:desliga|desativar|desativa) (?:a )?narracao/.test(text)) return 'narrate-off';
+  if (/^(?:vai dizendo|diz-me|descreve|anuncia|narra) (?:o que|os objetos)|^(?:describe|narrate|announce) (?:what|the objects)|^(?:enable|turn on) (?:automatic )?narration|^(?:liga|ativa) (?:a )?narracao/.test(text)) return 'narrate-on';
+  if (/^(?:liberta|limpa|solta) (?:o )?alvo$|^(?:release|clear) (?:the )?target$/.test(text)) return 'release';
+  if (/^(?:o que (?:estas a ver|consegues ver|detetas|estas a detetar)|que objetos (?:ves|detetas)|quem estas a localizar|what (?:can you see|do you see|are you detecting))$/.test(text)) return 'describe';
+  const camera=/\b(?:camera|camara|cameras|camaras|webcam|vision|visao)\b/.test(text);
+  if(!camera)return null;
+  if (/^(?:desliga|desligar|desligues|desativa|desativar|fecha|fechar|stop|disable|close|turn off)\b/.test(text)) return 'stop';
+  if (!/^(?:liga|ligar|ligues|ativa|ativar|activa|activar|abre|abrir|abrir|mostra|muda|mudar|troca|trocar|usar|usa|use|open|enable|start|turn on|switch|change|flip)\b/.test(text))return null;
+  // Use the first requested facing direction ("rear instead of front").
+  const direction=text.match(/\b(traseira|traseiro|de tras|rear|back|frontal|da frente|de frente|front|selfie)\b/);
+  if(direction)return /^(?:traseir|de tras|rear|back)/.test(direction[1])?'rear':'front';
+  if(/^(?:muda|mudar|troca|trocar|switch|change|flip)\b/.test(text))return 'switch';
+  if (/^(?:liga|ligar|ligues|ativa|ativar|activa|activar|abre|abrir|mostra|open|enable|start|turn on)\b/.test(text)) return 'start';
   return null;
 }
 

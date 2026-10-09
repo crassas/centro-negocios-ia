@@ -24,7 +24,7 @@ for(const file of ['travis-cinema.css','travis-cinema-depth.css','travis-vision.
 }
 assert(html.includes('travis-3d.mjs?v=framing-1'),'Main scene version must match release.');
 assert(sw.includes('travis-3d.mjs?v=framing-1'),'PWA cache must use the released scene.');
-assert(sw.includes('travis-vision.mjs?v=5'),'PWA cache must use current camera script.');
+assert(sw.includes('travis-vision.mjs?v=scene-1'),'PWA cache must use current camera script.');
 assert(cinema.length>1000 && cinemaDepth.length>1000,'Cinematic layers must be present.');
 assert(css.includes('#travis-three-canvas'),'Full-screen scene styling required.');
 

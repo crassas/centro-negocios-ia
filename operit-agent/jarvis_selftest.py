@@ -6,6 +6,21 @@ from unittest.mock import patch,Mock
 spec=importlib.util.spec_from_file_location("jarvis",Path(__file__).with_name("jarvis_local.py"))
 j=importlib.util.module_from_spec(spec);spec.loader.exec_module(j)
 class Tests(unittest.TestCase):
+ def test_scene_rolling_update_and_fresh_selected_target(self):
+  import time
+  now=int(time.time()*1000)
+  obj={"id":"vision-1","name":"bottle","score":.9,"observedAt":now,"box":{"x":.1,"y":.1,"width":.2,"height":.4}}
+  raw={"active":True,"version":"vision-tracker-1","source":"on-device-mediapipe","observedAt":now,"objectObservedAt":now,"objects":[obj],"selectedTarget":obj,"objectModel":"ready"}
+  clean=j.clean_vision(raw)
+  self.assertEqual(clean["selectedTarget"]["name"],"bottle")
+  self.assertIn("garrafa",j.travis_scene.describe_scene(clean,True))
+  with patch.object(j,"travis_scene",None):
+   pending=j.clean_vision(raw)
+   self.assertFalse(pending["fresh"])
+   self.assertEqual(pending["objects"],[])
+  raw["objects"][0]["observedAt"]=now-5000
+  self.assertEqual(j.clean_vision(raw)["objects"],[])
+
  def test_json_asset_bytes_never_go_through_json_dumps(self):
   handler=object.__new__(j.Handler)
   reply=io.BytesIO()

@@ -48,10 +48,10 @@ assert(main.includes('vision.stop();'),'Closing the scene must turn off camera')
 assert(main.includes('cameraCommand(text)'),'Voice/typed instructions must control camera');
 assert(main.includes("inputLanguage='auto'"),'Always understand a language-switching command');
 assert(camera.includes('audio: false'),'The camera must never implicitly request the microphone');
-assert(camera.includes('getTracks().forEach(track => track.stop())'),'The camera hardware must be released');
+assert(/getTracks\(\)\.forEach\(track\s*=>\s*track\.stop\(\)\)/.test(camera),'The camera hardware must be released');
 assert(camera.includes("document.addEventListener('visibilitychange'"),'Background tab must close camera');
 assert(camera.includes('recognizeForVideo(') && camera.includes('detectForVideo('));
-assert(sw.includes('./travis-vision.mjs?v=5'));
+assert(sw.includes('./travis-vision.mjs?v=scene-1'));
 assert(camera.includes('ObjectDetector.createFromOptions'), 'Objects must be analysed locally');
 assert(main.includes('vision:vision.snapshot()'), 'Detected objects must reach voice conversation');
 assert(fs.statSync('vendor/mediapipe/efficientdet_lite0.tflite').size > 10_000_000, 'Local vision model exists');
