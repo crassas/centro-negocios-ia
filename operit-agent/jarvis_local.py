@@ -212,7 +212,8 @@ def clean_vision(value):
 
 def vision_dialogue(text,context):
  t=norm(text)
- v=clean_vision((context or {}).get("vision"))
+ v=(context or {}).get("vision")
+ if not isinstance(v,dict) or "fresh" not in v:v=clean_vision(v)
  camera_question=bool(re.search(r"\b(?:camara|camera|webcam|visao|vision|see|seeing|looking|look|ves|ver|mostrar|mostrando|showing|enxergar)\b|o que estas a ver",t))
  visual_deictic=bool(v["active"] and re.search(r"\b(?:what is this|what am i holding|identify this|recognize this|o que e isto|o que tenho na mao|que objeto|que cor)\b",t))
  if not (camera_question or visual_deictic):return None
@@ -935,7 +936,7 @@ def _route(text,context=None):
  if visual is not None:
   session=dialogue_session(context)
   if session:event("conversations",{"session":session,"user":original_text[:1600],"assistant":visual,"tool":"vision_observation","verification":"browser_sensor"})
-  return {"ok":True,"reply":visual,"tool":"vision_observation","result":clean_vision(context.get("vision")),"provider":"local","ui":None}
+  return {"ok":True,"reply":visual,"tool":"vision_observation","result":context.get("vision",{"active":False}),"provider":"local","ui":None}
  start=time.monotonic();tool,args=classify(text,context.get("activeProject"))
  if tool=="select_youtube" and not media_session(dialogue_session(context)).get("open"):
   web=travis_web_tools.classify(text)
