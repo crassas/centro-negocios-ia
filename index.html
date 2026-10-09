@@ -33,6 +33,7 @@
   <link rel="stylesheet" href="./travis-hud.css?v=vision-1">
   <link rel="stylesheet" href="./travis-brain.css?v=3">
   <link rel="stylesheet" href="./travis-cinema.css?v=cinema-1">
+  <link rel="stylesheet" href="./travis-cinema-depth.css?v=depth-2">
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
@@ -41,6 +42,7 @@
 <body>
 <section id="travis-hud" class="travis-hud" data-state="idle" aria-hidden="true" aria-label="Travis">
   <canvas id="travis-three-canvas" aria-label="Núcleo 3D interactivo do Travis"></canvas>
+  <div class="travis-cinema-lightfield" aria-hidden="true"><span class="travis-cinema-godray"></span><span class="travis-cinema-aura"></span><span class="travis-cinema-horizon"></span><span class="travis-cinema-reflection"></span></div>
 
   <button id="travis-hud-close" class="travis-close" type="button" aria-label="Fechar Travis">×</button>
   <div id="travis-camera-dock" class="travis-camera-dock" data-active="false">
