@@ -935,6 +935,7 @@ def _route(text,context=None):
  TRAVIS_BRAIN.mark("monitor","verification",tool+": "+verification["verdict"])
  TRAVIS_COG.reflexion.observe(text,tool,verification,used_lessons=used_lessons)
  verified=verification["verdict"]=="success"
+ verified_completion=("VERIFIED" if tool=="decision_consult" and verified else outcome["completionStatus"])
  qstatus="FAILED" if verification["verdict"]=="failure" else ("VERIFIED" if verified else "IMPLEMENTED_NOT_VERIFIED")
  qreturn=TRAVIS_QUANTUM.ingest(qplan,status=qstatus,result_summary=str(result)[:2000],evidence_refs=qrefs,provenance="travis:"+tool)
  qstrategy=(qplan.get("strategyRoute") or {}).get("primary","")
@@ -996,8 +997,8 @@ def _route(text,context=None):
  if ui and ui.get("kind")!="youtube":media_session(session,{})
  learning=record_learning(cog_run,verification,used_memories,session,runtime.project_id,str(reply))
  if session:event("conversations",{"session":session,"user":original_text[:1600],"assistant":str(reply)[:1600],"tool":tool,"project":runtime.project_id or context.get("activeProject"),"verification":verification["verdict"],"memoryRun":cog_run if learning['ok'] else None})
- event("tool_events",{"tool":tool,"ok":True,"duration_ms":int((time.monotonic()-start)*1000),"correlation_id":outcome["correlationId"],"completion_status":outcome["completionStatus"]})
- return {"ok":True,"ui":ui,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool in {"local_llm","expert_query"} else {"provider":"local"}),"tool":tool,"result":result,"verification":verification,"reflexion":{"recalledLessons":len(failure_lessons),"usedLessons":len(used_lessons)},"learning":learning,"reply":clean(english_reply(reply) if getattr(DIALOGUE_INFO,"language","en")=="en" else reply)[:3000],"correlationId":outcome["correlationId"],"completionStatus":outcome["completionStatus"],"durationMs":int((time.monotonic()-start)*1000),"quantum":{"strategy":qstrategy,"phase":qplan.get("phase"),"tier":qplan.get("tier"),"returnStatus":qreturn.get("status")}}
+ event("tool_events",{"tool":tool,"ok":True,"duration_ms":int((time.monotonic()-start)*1000),"correlation_id":outcome["correlationId"],"completion_status":verified_completion})
+ return {"ok":True,"ui":ui,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool in {"local_llm","expert_query"} else {"provider":"local"}),"tool":tool,"result":result,"verification":verification,"reflexion":{"recalledLessons":len(failure_lessons),"usedLessons":len(used_lessons)},"learning":learning,"reply":clean(english_reply(reply) if getattr(DIALOGUE_INFO,"language","en")=="en" else reply)[:3000],"correlationId":outcome["correlationId"],"completionStatus":verified_completion,"durationMs":int((time.monotonic()-start)*1000),"quantum":{"strategy":qstrategy,"phase":qplan.get("phase"),"tier":qplan.get("tier"),"returnStatus":qreturn.get("status")}}
 
 VOICE_JOBS={}
 VOICE_JOB_LOCK=threading.Lock()
