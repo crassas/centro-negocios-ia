@@ -560,8 +560,8 @@ def sync_travis_client(ref):
             raise RuntimeError("travis-projection-framing.mjs: fitting algorithm unavailable")
         if "conceptProjection.setCamera" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: camera framing not connected")
-        if "gl_PointSize=clamp((2.0+aSeed*2.3)" not in fetched["travis-particle-morph.mjs"]:
-            raise RuntimeError("travis-particle-morph.mjs: visible GPU point size regression")
+        if "gl_PointSize=clamp((2.0+aSeed*2.3)" not in fetched["travis-holographic-head.mjs"]:
+            raise RuntimeError("travis-holographic-head.mjs: visible GPU point size regression")
         if "TravisMorphParticles" not in fetched["travis-particle-morph.mjs"] or "geometry.setDrawRange(0,n)" not in fetched["travis-particle-morph.mjs"]:
             raise RuntimeError("travis-particle-morph.mjs: GPU draw count invalid")
         if "geometry.setAttribute('position'" not in fetched["travis-particle-morph.mjs"]:

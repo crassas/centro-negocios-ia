@@ -43,6 +43,10 @@ real objects.
 
 ## Verification
 
+`python3 scripts/travis-client-sync-selftest.py` exercises the complete updater
+against repository files in a temporary installation. It verifies acceptance of
+the current bundle and preservation of installed files when shader validation fails.
+
 `scripts/travis-morph-continuity-selftest.mjs` accepts a Three.js 0.180.0 module
 path. It checks real transforms, destination-only fitting, interrupted morphs,
 view changes, the voice uniform, exact return bounds and continuous visibility.
