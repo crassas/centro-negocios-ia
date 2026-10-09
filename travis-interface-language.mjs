@@ -95,7 +95,7 @@ export function applyInterfaceLanguage(language,doc=globalThis.document){
   const setText=(id,value)=>{const e=element(id);if(e)e.textContent=value;};
   const setAria=(id,value)=>{const e=element(id);if(e)e.setAttribute('aria-label',value);};
   const hud=element('travis-hud');
-  if(hud)hud.dataset.uiLanguage=locale;
+  if(hud){hud.dataset.uiLanguage=locale;hud.lang=locale==='pt'?'pt-PT':'en';}
   const input=element('travis-command-text');
   if(input)input.placeholder=copy.command;
   setText('travis-voice-start',copy.enableVoice);
