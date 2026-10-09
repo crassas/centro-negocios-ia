@@ -23,9 +23,10 @@ with tempfile.TemporaryDirectory() as root:
  (root/"models/tiny.gguf").write_text("")
  fast=Worker("FAST_ENG",root/"models/tiny.gguf")
  precise=Worker("PRECISE_PT",root/"models/tiny.gguf")
+ pt_quant=Worker("PT_QUANT",root/"models/tiny.gguf")
  def event(kind,data):events.append((kind,data))
  def command(args,timeout):raise AssertionError("Already-PCM samples must skip FFmpeg")
- env={"ROOT":root,"MODELS":root,"FAST_STT_WORKER":fast,"STT_WORKER":precise,
+ env={"ROOT":root,"MODELS":root,"FAST_STT_WORKER":fast,"STT_WORKER":precise,"PT_STT_WORKER":pt_quant,
       "tempfile":tempfile,"time":time,"io":io,"wave":wave,"Path":Path,
       "json":json,"command":command,"event":event,"os":os}
  exec(compile(ast.Module(body=nodes,type_ignores=[]),"<transcribe-unit>","exec"),env)
@@ -36,14 +37,14 @@ with tempfile.TemporaryDirectory() as root:
  data=b.getvalue()
  assert env["transcribe"](data,"en")=="FAST_ENG"
  assert env["transcribe"](data,"auto")=="FAST_ENG"
- assert env["transcribe"](data,"pt")=="FAST_ENG"
+ assert env["transcribe"](data,"pt")=="PT_QUANT"
  previous_mode=os.environ.get("TRAVIS_STT_MODE")
  os.environ["TRAVIS_STT_MODE"]="precise"
  assert env["transcribe"](data,"en")=="PRECISE_PT"
  assert env["transcribe"](data,"pt")=="PRECISE_PT"
  if previous_mode is None:os.environ.pop("TRAVIS_STT_MODE",None)
  else:os.environ["TRAVIS_STT_MODE"]=previous_mode
- assert len(fast.calls)==3 and len(precise.calls)==2
+ assert len(fast.calls)==2 and len(pt_quant.calls)==1 and len(precise.calls)==2
  assert all(x[1]["pcmDirect"] for x in events)
- assert [r[1]["engine"] for r in events]==["tiny-q5-fast"]*3+["base-accurate"]*2
- print("PASS STT_POLICY: PT/EN/auto use quantized fast model; optional precise mode; no FFmpeg for PCM")
+ assert [r[1]["engine"] for r in events]==["tiny-q5-fast","tiny-q5-fast","base-q5-pt","base-accurate","base-accurate"]
+ print("PASS STT_POLICY: fast EN/auto, balanced PT, optional precise, direct PCM WAV")
