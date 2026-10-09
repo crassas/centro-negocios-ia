@@ -143,7 +143,8 @@ export function createNeuralField(THREE, {reducedMotion=false, compact=false}={}
       uniforms.uActivity.value=state==='thinking'?.95:state==='listening'?.8:state==='speaking'?.62:0;
       uniforms.uTool.value=performance.now()<toolUntil?.9:0;
       uniforms.uVoice.value=state==='speaking'?Math.min(1,Math.max(0,voice))*.7:0;
-      const faceAlpha=(state==='thinking'?.87:.65)*(1-projection);
+      // In face mode the cognitive signal remains perceptible but never masks the eyes/forehead.
+      const faceAlpha=(state==='thinking'?.19:.09)*(1-projection);
       uniforms.uOpacity.value=intro*(core+face*faceAlpha);
       root.visible=uniforms.uOpacity.value>.005;
       const fullScale=portrait?.88:1.36;

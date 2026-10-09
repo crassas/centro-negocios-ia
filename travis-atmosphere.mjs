@@ -28,14 +28,14 @@ export function createBacklight(THREE,scene) {
           float rayC=exp(-pow((q.x-.79+(1.0-q.y)*.25)/(spread*.75),2.0));
           float depth=field(q,vec2(.50,.57),vec2(.46,.50));
           float density=mist*depth*.16;
-          vec3 light=vec3(.29,.43,.46)*(rayA*.85+rayB*.42)
-                    +vec3(.09,.26,.29)*rayC*.65;
+          vec3 light=vec3(.45,.30,.17)*(rayA*.85+rayB*.42)
+                    +vec3(.21,.13,.075)*rayC*.65;
           colour+=transmission*density*light;
           transmission*=1.0-density;
         }
         float left=field(p,vec2(.30,.57),vec2(.105,.39));
         float right=field(p,vec2(.73,.49),vec2(.09,.33));
-        colour+=vec3(.022,.085,.096)*left+vec3(.027,.038,.046)*right;
+        colour+=vec3(.058,.035,.020)*left+vec3(.032,.026,.022)*right;
         // Sparse distant dust, embedded behind the avatar rather than over its face.
         vec2 grid=p*vec2(100.0,74.0);
         vec2 cell=floor(grid);
@@ -43,7 +43,7 @@ export function createBacklight(THREE,scene) {
         vec2 centre=vec2(hash(cell+13.0),hash(cell+29.0));
         float dust=exp(-dot(fract(grid)-centre,fract(grid)-centre)*220.0);
         dust*=step(.986,seed)*(.65+.35*sin(time*.35+seed*41.0));
-        colour+=vec3(.22,.33,.35)*dust*.19;
+        colour+=vec3(.41,.30,.19)*dust*.19;
         colour*=1.0+energy*.07;
         gl_FragColor=vec4(colour,1.0);
       }`,
@@ -51,9 +51,9 @@ export function createBacklight(THREE,scene) {
   });
   const field=new THREE.Mesh(new THREE.PlaneGeometry(15,11),material);
   field.name='TravisCinematicBacklight';field.position.set(0,.3,-3.4);scene.add(field);
-  const rimLeft=new THREE.DirectionalLight(0x9edcde,2.1);
+  const rimLeft=new THREE.DirectionalLight(0xe0bd94,1.9);
   rimLeft.position.set(-2,1.3,-1.8);scene.add(rimLeft);
-  const rimRight=new THREE.DirectionalLight(0x92aaba,.85);
+  const rimRight=new THREE.DirectionalLight(0x957f6b,.85);
   rimRight.position.set(2,.8,-1.5);scene.add(rimRight);
   return {update(time,energy){material.uniforms.time.value=time;material.uniforms.energy.value=energy;}};
 }

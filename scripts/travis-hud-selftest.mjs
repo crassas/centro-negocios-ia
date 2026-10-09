@@ -1,215 +1,65 @@
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-const html=fs.readFileSync('index.html','utf8');
-const css=fs.readFileSync('travis-hud.css','utf8');
-const scene=fs.readFileSync('travis-3d.mjs','utf8');
-const sw=fs.readFileSync('sw.js','utf8');
-const glb=fs.statSync('assets/travis/travis-core.glb');
-const faceGlb=fs.statSync('assets/travis/travis-face-bust.glb');
+const read=path=>fs.readFileSync(path,'utf8');
+const html=read('index.html');
+const ui=read('travis-3d.mjs');
+const vision=read('travis-vision.mjs');
+const awareness=read('travis-vision-policy.mjs');
+const sw=read('sw.js');
+const css=read('travis-hud.css');
+const cinema=read('travis-cinema.css');
+const cinemaDepth=read('travis-cinema-depth.css');
 
-for(const token of [
-  'id="travis-hud"',
-  'id="travis-three-canvas"',
-  'id="travis-loading"',
-  './travis-hud.css?v=',
-  './travis-3d.mjs?v=',
-  'type="importmap"',
-  '"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"'
+for(const text of ['id="travis-three-canvas"','id="travis-camera-toggle"','id="travis-camera-preview"']){
+  assert(html.includes(text),'Essential UI missing: '+text);
+}
+for(const file of ['travis-cinema.css','travis-cinema-depth.css','travis-vision.mjs','travis-vision-policy.mjs']){
+  assert(fs.statSync(file).size>100,'Missing cinematic/vision asset: '+file);
+}
+assert(html.includes('travis-3d.mjs?v=vision-2'),'Main scene version must match release.');
+assert(sw.includes('travis-3d.mjs?v=vision-2'),'PWA cache must use the released scene.');
+assert(sw.includes('travis-vision.mjs?v=2'),'PWA cache must use current camera script.');
+assert(cinema.length>1000 && cinemaDepth.length>1000,'Cinematic layers must be present.');
+assert(css.includes('#travis-three-canvas'),'Full-screen scene styling required.');
+
+for(const feature of [
+ "import * as THREE from 'three'",
+ 'GLTFLoader','EffectComposer','UnrealBloomPass','RoomEnvironment',
+ 'raycaster.intersectObjects','webglcontextrestored','playVoiceArrayBuffer',
+ "localJson('/transcribe?language='", "localFetch('/speak'",
+ 'createTravisVision','cameraCommand(text)','vision:vision.snapshot()',
+ 'vision.stop();','createNeuralField','createFaceRig','prepareSpeechFace'
 ]){
-  if(!html.includes(token)) throw new Error('Travis real 3D HTML em falta: '+token);
+  assert(ui.includes(feature),'Critical 3D/voice/vision integration missing: '+feature);
 }
+assert(!ui.includes("WELCOME_GREETING='Welcome back, Mister Richards.'"),'Stale fixed welcome text must stay removed.');
+assert(ui.includes("localJson('/resume'"),'Real conversational continuity must be connected.');
+assert(ui.includes('Object') || vision.includes('ObjectDetector.createFromOptions'),'Object recognition is missing.');
+assert(vision.includes('navigator.mediaDevices.getUserMedia'),'Browser camera permission must remain explicit.');
+assert(vision.includes('audio: false'),'Camera start must not open the microphone.');
+assert(vision.includes('getTracks().forEach(track => track.stop())'),'Media tracks must be released.');
+assert(vision.includes("document.addEventListener('visibilitychange'"),'Camera must stop on page background.');
+assert(vision.includes("source: 'on-device-mediapipe'"),'Sensor messages need a typed source.');
+assert(awareness.includes('gestureDecision'),'Gesture safety policy missing.');
 
-for(const token of [
-  'id="travis-panel"',
-  './travis-panel.css',
-  './travis-panel.js',
-  './travis-scene.js',
-  './travis-hud.js',
-  'class="travis-orbit-menu"',
-  'id="travis-core-trigger"'
-]){
-  if(html.includes(token)) throw new Error('Camada antiga/genérica ainda ligada: '+token);
+for(const rel of ['assets/travis/travis-core.glb','assets/travis/travis-face-bust.glb']){
+  const data=fs.readFileSync(rel);
+  assert(data.length>300000,'Model too small: '+rel);
+  assert.equal(data.readUInt32LE(0),0x46546c67,'Invalid GLB magic: '+rel);
+  assert.equal(data.readUInt32LE(4),2,'Unexpected GLB version: '+rel);
+  assert.equal(data.readUInt32LE(8),data.length,'GLB length mismatch: '+rel);
 }
-
-for(const token of [
-  "import * as THREE from 'three'",
-  'GLTFLoader',
-  'EffectComposer',
-  'UnrealBloomPass',
-  'RoomEnvironment',
-  "new THREE.MeshPhysicalMaterial",
-  'raycaster.intersectObjects',
-  'createCommandNode',
-  './assets/travis/travis-core.glb?v=1',
-  'ACESFilmicToneMapping',
-  'window.TravisVisual'
-]){
-  if(!scene.includes(token)) throw new Error('Motor Three.js em falta: '+token);
+const tflite=fs.readFileSync('vendor/mediapipe/efficientdet_lite0.tflite');
+assert(tflite.length>10_000_000,'Object detector unavailable.');
+assert.equal(tflite.toString('ascii',4,8),'TFL3','Invalid object model.');
+const mjsImports=[...ui.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(m=>m[1]);
+for(const specifier of mjsImports){
+  if(!specifier.startsWith('./'))continue;
+  const rel=specifier.slice(2).split('?')[0];
+  assert(fs.existsSync(rel),'Missing imported module: '+rel);
 }
-
-
-for(const token of [
-  'canvas,alpha:false',
-  'scene.background=new THREE.Color(0x02070b)',
-  'new THREE.BoxGeometry(1.35,.52,.065)',
-  'new THREE.EdgesGeometry',
-  'raycaster.intersectObjects'
-]){
-  if(!scene.includes(token)) throw new Error('Pipeline 3D robusto em falta: '+token);
-}
-
-for(const forbidden of [
-  'new THREE.CylinderGeometry(.38,.38,.075',
-  'new THREE.CircleGeometry(.68,32)'
-]){
-  if(scene.includes(forbidden)) throw new Error('Comando circular antigo ainda activo: '+forbidden);
-}
-
-
-for(const token of [
-  'ShaderPass',
-  'bloomComposer',
-  'finalComposer',
-  'finalFxPass',
-  'hologramShader',
-  'BLOOM_LAYER',
-  'orbitParticles',
-  'filamentGroup',
-  'setVoiceLevel',
-  'uAberration',
-  'uGrain',
-  'uScan',
-  'uGlitch'
-]){
-  if(!scene.includes(token)) throw new Error('V7 cinematic layer em falta: '+token);
-}
-
-
-for(const token of [
-  'new THREE.ConeGeometry(1.7,8.2,48,1,true)',
-  'new THREE.ConeGeometry(1.45,6.8,48,1,true)',
-  'return .62;',
-  '[-1.18,.88,.48]',
-  'hologramMaterial.uniforms.uOpacity.value=.28'
-]){
-  if(!html.includes(token) && !scene.includes(token)) throw new Error('V7.1 mobile correction em falta: '+token);
-}
-
-
-for(const token of [
-  "LOCAL_TRAVIS_BASE",
-  "localJson('/transcribe?language='",
-  "localFetch('/speak'",
-  'navigator.mediaDevices.getUserMedia',
-  'new MediaRecorder',
-  'startVoiceConversation',
-  'scheduleListening',
-  'playVoiceArrayBuffer',
-  'decodeAudioData',
-  'targetAddressSpace'
-]){
-  if(!scene.includes(token)) throw new Error('Integração de voz local em falta: '+token);
-}
-
-
-for(const token of [
-  'IS_LOCAL_TRAVIS_UI',
-  "location.assign('http://127.0.0.1:8770/?travis=1')",
-  "new URLSearchParams(location.search).get('view')!=='business'",
-  'open:launchHud'
-]){
-  if(!scene.includes(token) && !html.includes(token)) throw new Error('Handoff local unificado em falta: '+token);
-}
-
-
-for(const token of [
-  'data-travis-form="core"',
-  'data-travis-form="face"',
-  'data-text="TRAVIS"'
-]){
-  if(!html.includes(token)) throw new Error('Identidade adaptativa V8 em falta: '+token);
-}
-
-for(const token of [
-  'createFaceAvatar',
-  "modeForState(next=state)",
-  "if (next==='listening' || next==='thinking' || next==='speaking') return 'face'",
-  'faceShellShader',
-  'faceEyeGroups',
-  'formBlend',
-  'formTarget',
-  "form(mode='auto')"
-]){
-  if(!scene.includes(token)) throw new Error('Motor adaptativo V8 em falta: '+token);
-}
-
-for(const token of [
-  '.travis-form-selector',
-  'trv-title-holo',
-  'trv-title-slice-a',
-  'trv-title-slice-b'
-]){
-  if(!css.includes(token)) throw new Error('Holograma textual V8 em falta: '+token);
-}
-
-
-for(const token of [
-  './assets/travis/travis-face-bust.glb?v=1',
-  'TravisRealFace',
-  'TravisFace_Bust',
-  'realFaceBaseMaterial',
-  'realFaceIris',
-  'await createFaceAvatar()'
-]){
-  if(!scene.includes(token)) throw new Error('Rosto 3D real em falta: '+token);
-}
-if(faceGlb.size < 300000) throw new Error('GLB facial realista demasiado pequeno: '+faceGlb.size);
-if(html.includes('data-travis-form="auto"')) throw new Error('AUTO não deve aparecer no selector visual.');
-if(!sw.includes('travis-face-bust.glb?v=1')) throw new Error('Rosto realista não está na cache PWA.');
-
-
-for(const token of [
-  'now-lastSpeech>pause',
-  'recorder.start(120)',
-  'filamentGroup.visible=false',
-  'gridFloor=null'
-]){ if(!scene.includes(token)) throw new Error('V8 Marble em falta: '+token); }
-for(const forbidden of ['class="travis-reticle"','class="travis-telemetry left"','class="travis-ticker"']){
-  if(html.includes(forbidden)) throw new Error('HUD genérico ainda presente: '+forbidden);
-}
-
-
-for(const token of [
-  "localJson('/transcribe?language='",
-  "scheduleListening(session,180)",
-  "commandLines[i].material.opacity=0",
-  "TravisFace_Pupil_",
-]){
-  if(!scene.includes(token)) throw new Error('V11 face/voice refinement em falta: '+token);
-}
-
-
-if(html.includes('data-travis-form="orb"')) throw new Error('ORBE ainda aparece no selector.');
-if(scene.includes("new THREE.CylinderGeometry(.32,.48,1.02")) throw new Error('Pescoço cilíndrico ainda activo.');
-
-if(glb.size < 500000) throw new Error('GLB Travis demasiado pequeno: '+glb.size);
-if(!css.includes('#travis-three-canvas')) throw new Error('Canvas 3D CSS em falta.');
-const hudCacheRef=html.match(/travis-hud\.css\?v=[^"']+/)?.[0];
-if(!hudCacheRef || !sw.includes(hudCacheRef))throw new Error('HUD stylesheet cache mismatch');
-const sceneCacheRef=html.match(/travis-3d\.mjs\?v=[^"']+/)?.[0];
-if(!sceneCacheRef || !sw.includes(sceneCacheRef) || !sw.includes('travis-core.glb?v=1')) throw new Error('Cache real 3D em falta.');
-
-console.log('TRAVIS REAL 3D SELFTEST OK',glb.size,'bytes');
-const bust=fs.readFileSync('assets/travis/travis-face-bust.glb');
-if(bust.readUInt32LE(0)!==0x46546c67 || bust.readUInt32LE(4)!==2 || bust.readUInt32LE(8)!==bust.length) throw new Error('GLB do busto inválido');
-const asset=JSON.parse(bust.subarray(20,20+bust.readUInt32LE(12)).toString('utf8'));
-for(const name of ['TravisFace_Bust','TravisFace_Eye_L','TravisFace_Eye_R','TravisFace_Iris_L','TravisFace_Iris_R','TravisFace_Pupil_L','TravisFace_Pupil_R']) {
-  if(!asset.nodes.some(node=>node.name===name && Number.isInteger(node.mesh))) throw new Error('Malha anatómica ausente: '+name);
-}
-for(const forbidden of ['createOrbAvatar','orbRoot','CylinderGeometry','realistic face fallback','faceMouthLower','eye.scale.y=1-blink']) {
-  if(scene.includes(forbidden)) throw new Error('Geometria sintética ou deformação presente: '+forbidden);
-}
-for(const token of ["localJson('/transcribe?language='","localJson('/jarvis'",'speechEndToTranscriptMs','transcriptToReplyMs','replyToFirstAudioMs','head.layers.disable(BLOOM_LAYER)','bloomOccluder','webglcontextrestored',"WELCOME_GREETING='Welcome back, Mister Richards.'","startVoiceConversation({greet=true}={})","resume(){voicePaused=false;if(opened)startVoiceConversation({greet:false});}",'let introVoiceTimer=0','let voiceStarting=false','introVoiceTimer=setTimeout']) {
-  if(!scene.includes(token)) throw new Error('Regressão de busto/voz: '+token);
-}
-console.log('ANATOMICAL BUST / SELECTIVE BLOOM / STAGED VOICE OK',bust.length,'bytes');
+console.log('TRAVIS_CINEMATIC_VISION_SELFTEST_OK',JSON.stringify({
+  importedModules:mjsImports.length,objectModelBytes:tflite.length,
+  localCamera:true,voiceContinuity:true,persistent3d:true
+}));

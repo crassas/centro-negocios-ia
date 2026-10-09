@@ -1,0 +1,403 @@
+/* TRAVIS CINEMA / 2026-10-09
+   Optional, self-contained visual layer. No controls or data are created here.
+   Warm graphite / aged champagne. No neon, turquoise or fake activity. */
+
+.travis-hud {
+  --trv-cyan:#c7a377;
+  --trv-red:#c09376;
+  --trv-white:#f2e8d9;
+  --trv-muted:#a49a8d;
+  --cin-ink:#030405;
+  --cin-panel:rgba(7,8,10,.88);
+  --cin-ivory:#f2e8d9;
+  --cin-dim:#ada59a;
+  --cin-gold:#d8b789;
+  --cin-line:rgba(216,183,137,.31);
+  background:
+    radial-gradient(ellipse at 50% 68%, rgba(59,39,23,.28) 0%, rgba(8,9,10,.07) 34%, transparent 67%),
+    radial-gradient(ellipse at 50% 34%, rgba(29,25,23,.15), transparent 62%),
+    #030405;
+  color:var(--cin-ivory);
+  font-family:"Segoe UI",Inter,Arial,system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+body.travis-hud-open{background:#030405}
+
+/* Camera/particles stay separate. Only atmospheric optics cover the 3D canvas. */
+.travis-hud::before {
+  background:
+    radial-gradient(ellipse 94% 30% at 50% 76%,rgba(176,111,55,.12),transparent 67%),
+    radial-gradient(ellipse 85% 37% at 50% 105%,#030405 0 49%,rgba(202,145,83,.20) 49.6%,rgba(31,26,23,.09) 50.5%,transparent 52%),
+    linear-gradient(90deg,rgba(0,0,0,.26),transparent 18% 82%,rgba(0,0,0,.26)),
+    linear-gradient(180deg,rgba(0,0,0,.12),transparent 37%,rgba(0,0,0,.25));
+  mix-blend-mode:normal;opacity:1;
+}
+.travis-hud::after {
+  background:repeating-linear-gradient(180deg,rgba(221,196,156,.010) 0 1px,transparent 1px 6px);
+  mix-blend-mode:normal;opacity:.35;
+}
+
+/* Quiet editorial wordmark: always above the brain, never in its centre. */
+.travis-hud .travis-title,
+.travis-hud[data-form="face"] .travis-title,
+.travis-hud[data-neural-field][data-form="core"] .travis-title,
+.travis-hud[data-neural-field][data-form="face"] .travis-title {
+  top:calc(15px + env(safe-area-inset-top));
+  left:50%;width:min(290px,49vw);
+  opacity:1!important;filter:none!important;
+  z-index:9;pointer-events:none;
+}
+.travis-hud .travis-title h1 {
+  display:block;
+  margin:0;padding-left:.33em;
+  font:300 clamp(25px,3.6vw,37px)/1.22 "Segoe UI",Arial,system-ui,sans-serif!important;
+  letter-spacing:.33em!important;
+  color:#e8d9c3!important;
+  background:none!important;
+  -webkit-background-clip:initial!important;
+  background-clip:initial!important;
+  -webkit-text-fill-color:#e8d9c3!important;
+  -webkit-text-stroke:0!important;
+  text-shadow:0 2px 16px rgba(223,176,119,.12)!important;
+  filter:none!important;
+}
+.travis-hud .travis-title h1::before,
+.travis-hud .travis-title h1::after{display:none!important}
+.travis-hud .travis-title-signal{
+  width:48px;height:1px;margin:7px auto 0;
+  background:linear-gradient(90deg,transparent,var(--cin-gold),transparent);
+  box-shadow:none;opacity:.48;transform:none;
+}
+.travis-hud .travis-title::after {
+  content:"LOCAL  ·  PRIVADO  ·  CONTÍNUO";
+  display:block;margin-top:5px;
+  font-size:7px;letter-spacing:.17em;
+  color:#b4a18a;line-height:1.2;
+}
+
+/* Camera is a working control. Keep it visible, not hidden inside a fake HUD. */
+.travis-hud .travis-camera-dock {
+  top:calc(82px + env(safe-area-inset-top));left:clamp(16px,3vw,42px);
+  column-gap:9px;z-index:18;
+}
+.travis-hud .travis-camera-dock button {
+  min-height:41px;padding:9px 14px;
+  color:#ecdfc9;background:rgba(10,10,12,.93);
+  border:1px solid rgba(207,168,117,.37);
+  border-radius:12px;
+  font-weight:500;font-size:12px;letter-spacing:.015em;
+  box-shadow:0 7px 24px #0007,inset 0 1px rgba(255,246,229,.045);
+}
+.travis-hud .travis-camera-dock[data-active="true"] button {
+  color:#fff2db;border-color:rgba(224,190,135,.78);
+}
+.travis-hud .travis-camera-dock span {
+  color:#a49a89;letter-spacing:.02em;
+  overflow:hidden;text-overflow:ellipsis;
+}
+.travis-hud .travis-camera-dock video {
+  border:1px solid var(--cin-line);border-radius:10px;
+}
+.travis-hud .travis-camera-dock button:focus-visible {
+  outline:2px solid var(--cin-gold);outline-offset:3px;
+}
+.travis-hud .travis-close {
+  top:calc(17px + env(safe-area-inset-top));right:clamp(14px,3vw,40px);
+  width:47px;height:47px;border-radius:50%;
+  color:#eee1d0;border:1px solid rgba(215,181,130,.62);
+  background:rgba(8,8,10,.67);
+  box-shadow:0 0 0 4px rgba(8,8,9,.28),inset 0 0 16px rgba(164,114,68,.08);
+  font-size:27px;font-weight:250;
+}
+.travis-hud .travis-close:hover,
+.travis-hud .travis-close:focus-visible{
+  border-color:#e5c99e;outline:2px solid #d2b484;outline-offset:3px;
+  box-shadow:0 0 18px rgba(209,168,109,.18);
+}
+.travis-hud .travis-loading{color:#b8a185;top:calc(68px + env(safe-area-inset-top))}
+
+/* Real cognitive metrics: high contrast, no overlap with camera button. */
+.travis-hud .travis-brain-panel{
+  z-index:14;
+  top:calc(151px + env(safe-area-inset-top));left:clamp(14px,3vw,38px);
+  right:auto;width:clamp(166px,24vw,250px);
+  padding:16px 17px 15px;text-align:left;
+  border:1px solid rgba(189,157,112,.27);border-radius:16px;
+  background:linear-gradient(152deg,rgba(13,14,17,.91),rgba(4,5,7,.72));
+  box-shadow:0 18px 55px #0008,inset 0 1px rgba(244,225,189,.045);
+  backdrop-filter:blur(9px);
+  color:#c8bdad;
+}
+.travis-hud .travis-brain-panel::after {
+  content:"";display:block;width:26px;height:1px;margin-top:14px;
+  background:linear-gradient(90deg,var(--cin-gold),transparent);
+}
+.travis-hud .travis-brain-panel h2{
+  font-size:9px;letter-spacing:.21em;
+  font-weight:550;line-height:1.5;
+  color:#d9c4a3;margin:0 0 11px;
+}
+.travis-hud .travis-brain-panel p{
+  font-size:11px;line-height:1.6;margin:6px 0;
+  color:#ada9a3;overflow-wrap:anywhere;
+}
+.travis-hud .travis-brain-panel .brain-phase{
+  color:#e2c79f;font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;
+}
+.travis-hud .travis-brain-panel .brain-activity{
+  color:#c3b5a1;margin:11px 0;max-width:none;
+}
+.travis-hud .travis-brain-panel .brain-graph-count{
+  margin-top:14px;padding-top:12px;border-top:1px solid rgba(209,177,130,.20);
+  font-weight:500;color:#e5cfae;
+}
+.travis-hud .travis-brain-panel .brain-selected-memory{color:#e6d9c5;max-height:80px}
+
+.travis-hud .travis-brain-journal-button {
+  position:absolute;z-index:16;
+  top:calc(94px + env(safe-area-inset-top));right:clamp(15px,3vw,42px);left:auto;
+  transform:none;bottom:auto;max-width:124px;
+  min-height:43px;padding:7px 0;
+  font-size:9px;line-height:1.65;letter-spacing:.21em;
+  font-weight:500;text-align:right;white-space:normal;
+  color:#d1c3b1;border:0;border-bottom:1px solid var(--cin-line);
+  background:none;cursor:pointer;
+}
+.travis-hud .travis-brain-journal-button:hover{color:#fff1db;border-color:#d3af7b}
+.travis-brain-journal{
+  border-radius:17px;background:#0d0d0f;color:#e5dacc;
+  border-color:rgba(195,160,114,.35);
+  box-shadow:0 24px 100px #000d;
+}
+.travis-brain-journal::backdrop{background:rgba(1,2,3,.84)}
+.travis-brain-journal h2,.travis-brain-journal-records h3{color:#f3e9dc}
+.travis-brain-journal header button{color:#dfc8a5}
+.travis-brain-journal .brain-journal-note,.travis-brain-journal p{color:#b8b0a5}
+.travis-brain-journal-records article,.brain-functions{border-color:rgba(211,178,132,.24)}
+.travis-brain-journal-records small,.brain-functions dd{color:#a79b8c}
+.brain-functions summary,.brain-functions dt,.travis-brain-journal-records strong{color:#e0c69f}
+.travis-brain-journal .brain-cycle-pause{
+  background:#24201c;color:#efddc3;border:1px solid var(--cin-line);
+  border-radius:10px;
+}
+.travis-brain-journal :focus-visible,
+.travis-hud .travis-brain-journal-button:focus-visible{outline:2px solid #e0be8e;outline-offset:3px}
+
+/* A small stage selector anchored above the voice system. */
+.travis-hud[data-neural-field] .travis-form-selector {
+  display:flex!important;top:auto!important;
+  bottom:calc(210px + env(safe-area-inset-bottom))!important;
+  width:min(340px,63vw);min-height:51px;padding:4px;
+  background:rgba(7,8,10,.90);
+  border:1px solid rgba(216,180,128,.34);border-radius:100px;
+  box-shadow:0 8px 28px #0009,inset 0 1px rgba(255,242,215,.035);
+  backdrop-filter:blur(10px);overflow:hidden;
+  z-index:14;
+}
+.travis-hud[data-neural-field] .travis-form-selector button {
+  min-height:43px;height:43px;
+  border:0!important;border-radius:70px;
+  font-size:11px;letter-spacing:.20em;font-weight:550;
+  background:transparent;color:#918b82;
+  text-shadow:none;transition:background .2s ease,color .2s ease;
+}
+.travis-hud[data-neural-field] .travis-form-selector button.is-active{
+  background:linear-gradient(155deg,rgba(131,97,64,.49),rgba(33,25,19,.50));
+  color:#fff0db;text-shadow:none;
+  box-shadow:inset 0 0 0 1px rgba(231,192,139,.40),0 0 24px rgba(224,170,99,.10);
+}
+.travis-hud[data-neural-field] .travis-form-selector button::after{display:none}
+.travis-hud[data-neural-field] .travis-form-selector button:focus-visible{
+  outline:2px solid #e5bd82;outline-offset:-3px;
+}
+/* Project cards and overlays still take priority when open. */
+.travis-hud[data-neural-field].room-open .travis-form-selector,
+.travis-hud[data-neural-field].is-projecting .travis-form-selector{visibility:hidden}
+
+/* Voice has a dramatic but restrained soundtrack-like rhythm. */
+.travis-hud .travis-status {
+  left:50%;bottom:calc(111px + env(safe-area-inset-bottom));
+  width:min(610px,91vw);min-height:63px;
+  display:grid;grid-template-columns:61px minmax(0,1fr) auto;gap:14px;
+  padding:9px 13px;
+  background:linear-gradient(95deg,rgba(4,5,7,.93),rgba(11,12,14,.78) 50%,rgba(4,5,7,.93));
+  border:1px solid rgba(188,153,112,.29);
+  border-radius:14px;
+  box-shadow:0 12px 36px #0008,inset 0 1px rgba(240,224,192,.05);
+}
+.travis-hud .travis-wave i {
+  background:linear-gradient(180deg,#f0d5a4,#b98752);
+  box-shadow:0 0 8px rgba(232,171,97,.20);border-radius:2px;
+}
+.travis-hud .travis-status-message{
+  min-width:0;max-width:100%;
+  font:400 clamp(14px,1.8vw,19px)/1.3 Georgia,"Times New Roman",serif;
+  color:#eee3d5;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.travis-hud .travis-status-state {
+  color:#d4b58b;font-size:9px;letter-spacing:.19em;font-weight:550;
+}
+.travis-hud[data-state="listening"] .travis-status,
+.travis-hud[data-state="speaking"] .travis-status {
+  border-color:rgba(223,177,115,.46);
+  box-shadow:0 12px 36px #0008,0 0 22px rgba(172,115,53,.06);
+}
+
+/* Command form keeps native form semantics, input and submit button. */
+.travis-hud .travis-command {
+  bottom:calc(18px + env(safe-area-inset-bottom));
+  width:min(610px,91vw);min-height:74px;
+  padding:6px 6px 6px 14px;box-sizing:border-box;
+  border:1px solid rgba(205,183,153,.49);border-radius:17px;
+  background:linear-gradient(135deg,rgba(17,19,22,.95),rgba(7,8,10,.99));
+  box-shadow:0 14px 52px #0009,inset 0 1px rgba(245,229,198,.055);
+}
+.travis-hud .travis-command input {
+  color:#f2e9db!important;
+  background:transparent!important;
+  font:400 15px/1.5 "Segoe UI",Arial,system-ui,sans-serif!important;
+  min-width:0;min-height:56px;letter-spacing:.01em;
+  padding:10px 8px!important;outline:none;
+}
+.travis-hud .travis-command input::placeholder{color:#99948c;opacity:1}
+.travis-hud .travis-command:focus-within{border-color:#dabb8b}
+.travis-hud .travis-command button {
+  flex:0 0 58px;width:58px;min-height:58px;border-radius:12px;
+  border:1px solid rgba(240,203,149,.75);
+  color:#f7e7ce;font-size:27px;font-weight:350;
+  background:linear-gradient(140deg,#5b4832 0,#1e1914 56%,#15120f 100%);
+  box-shadow:inset 0 1px rgba(255,238,195,.25),0 0 21px rgba(181,128,62,.13);
+  cursor:pointer;
+}
+.travis-hud .travis-command button:hover,
+.travis-hud .travis-command button:focus-visible {
+  background:linear-gradient(145deg,#795736,#302419);
+  outline:2px solid #e6c395;outline-offset:2px;
+}
+
+/* In-world conversations/command room retain their real interactions. */
+.travis-hud .travis-voice-start {
+  background:#1b1712;border-color:#b08b5f;color:#f3e6d3;
+  box-shadow:0 8px 30px #000b;border-radius:18px;
+}
+.travis-hud .travis-room {
+  border:1px solid var(--cin-line);border-radius:18px;
+  background:rgba(10,11,13,.98);color:#efe5d8;
+  box-shadow:0 25px 65px #000d;
+}
+.travis-hud .travis-room section{border-color:rgba(202,165,119,.22)}
+.travis-hud .travis-room h3,.travis-hud .travis-room li strong{color:#eee0cd}
+.travis-hud .travis-room header small{color:#bfa17e}
+.travis-hud .travis-room p,
+.travis-hud .travis-room li span,
+.travis-hud .travis-system span{color:#b7aca0}
+.travis-hud .travis-room button,
+.travis-hud .travis-operations button{
+  background:#201b17;color:#efe1cd;
+  border:1px solid var(--cin-line);border-radius:10px;
+}
+.travis-hud .travis-operations span{color:#c7b7a3}
+.travis-hud .travis-operations span[data-online="true"]{color:#e0c495}
+.travis-hud .travis-operations span[data-online="false"]{color:#e9aa8f}
+.travis-hud #travis-gmail-setup a {color:#e8c496}
+.travis-hud .travis-action-deck h2{color:#f0e2ca;text-shadow:0 2px 12px #000}
+.travis-hud .travis-action-deck small,
+.travis-hud .travis-action-card .travis-holo-number{color:#dabb8a;text-shadow:none}
+.travis-hud .travis-action-card strong{color:#f0e5d6;text-shadow:none}
+.travis-hud .travis-action-card span,.travis-hud .travis-projection-summary{color:#c6b9a9}
+.travis-hud .travis-action-card::after{
+  background:linear-gradient(90deg,rgba(217,180,124,.5),transparent);box-shadow:none;
+}
+.travis-hud .travis-youtube-search {border-color:rgba(204,166,116,.42)}
+.travis-hud .travis-youtube-search input{color:#efdfcc!important}
+.travis-hud .travis-youtube-search button{color:#dec094!important}
+.travis-hud .travis-youtube-status{color:#d0bfa9}
+#travis-launcher {
+  border:1px solid rgba(185,151,108,.45);
+  color:#ead9c0;background:#161411;
+  box-shadow:0 8px 24px #0009;
+}
+#travis-launcher .trv-launch-label{color:#ecdbbe}
+.travis-hud button:focus-visible,
+.travis-hud input:focus-visible{
+  outline:2px solid #d9b682;outline-offset:3px;
+}
+
+/* Phone: top controls have separate lanes; no collision with title or footer. */
+@media (max-width:700px){
+ .travis-hud .travis-title,
+ .travis-hud[data-form="face"] .travis-title,
+ .travis-hud[data-neural-field][data-form="core"] .travis-title{
+   top:calc(19px + env(safe-area-inset-top));width:min(210px,51vw);
+ }
+ .travis-hud .travis-title h1{font-size:clamp(20px,5.5vw,28px)!important;letter-spacing:.27em!important}
+ .travis-hud .travis-title::after{font-size:5.5px;letter-spacing:.12em}
+ .travis-hud .travis-camera-dock{
+   top:calc(86px + env(safe-area-inset-top));left:14px;max-width:calc(100vw - 118px);
+ }
+ .travis-hud .travis-camera-dock button{padding:8px 12px;min-height:40px;font-size:11px}
+ .travis-hud .travis-camera-dock span{font-size:9px}
+ .travis-hud .travis-close{width:43px;height:43px;top:calc(18px + env(safe-area-inset-top))}
+ .travis-hud .travis-brain-panel{
+   top:calc(154px + env(safe-area-inset-top));left:13px;
+   width:min(179px,48vw);padding:12px 12px 11px;border-radius:13px;
+   backdrop-filter:blur(5px);
+ }
+ .travis-hud .travis-brain-panel h2{font-size:8px;letter-spacing:.13em;margin-bottom:8px}
+ .travis-hud .travis-brain-panel p{font-size:9.5px;line-height:1.45;margin:6px 0}
+ .travis-hud .travis-brain-panel .brain-activity{margin:9px 0}
+ .travis-hud .travis-brain-panel .brain-graph-count{margin-top:9px;padding-top:9px}
+ .travis-hud .travis-brain-journal-button{
+   top:calc(93px + env(safe-area-inset-top));right:15px;
+   font-size:8px;max-width:96px;letter-spacing:.13em;
+ }
+ .travis-hud[data-neural-field] .travis-form-selector{
+   width:min(278px,72vw);bottom:calc(202px + env(safe-area-inset-bottom))!important;
+   min-height:48px;
+ }
+ .travis-hud[data-neural-field] .travis-form-selector button{font-size:10px;height:40px;min-height:40px;letter-spacing:.12em}
+ .travis-hud .travis-status{
+   width:calc(100vw - 26px);bottom:calc(105px + env(safe-area-inset-bottom));
+   min-height:58px;grid-template-columns:40px minmax(0,1fr) auto;
+   gap:10px;padding:7px 9px;
+ }
+ .travis-hud .travis-status-message{font-size:14px}
+ .travis-hud .travis-status-state{font-size:8px;letter-spacing:.07em}
+ .travis-hud .travis-wave{transform:scale(.8);transform-origin:left center}
+ .travis-hud .travis-command{width:calc(100vw - 26px);min-height:69px;bottom:calc(18px + env(safe-area-inset-bottom));padding:5px 5px 5px 12px}
+ .travis-hud .travis-command input{font-size:14px!important;min-height:50px}
+ .travis-hud .travis-command button{flex-basis:55px;width:55px;min-height:55px}
+ .travis-hud .travis-room{top:160px;bottom:190px;left:12px;right:12px;width:auto}
+}
+@media (max-width:380px) {
+ .travis-hud .travis-brain-panel{width:154px}
+ .travis-hud .travis-title h1{font-size:21px!important;letter-spacing:.21em!important}
+ .travis-hud .travis-status{grid-template-columns:33px minmax(0,1fr) auto;gap:7px}
+ .travis-hud .travis-status-state{font-size:7px}
+ .travis-hud .travis-status-message{font-size:13px}
+}
+@media (max-height:710px){
+ .travis-hud .travis-title,.travis-hud[data-neural-field][data-form="core"] .travis-title{top:calc(9px + env(safe-area-inset-top));display:block}
+ .travis-hud .travis-camera-dock{top:calc(72px + env(safe-area-inset-top))}
+ .travis-hud .travis-brain-panel{top:calc(129px + env(safe-area-inset-top));max-height:190px;overflow:hidden}
+ .travis-hud .travis-brain-journal-button{top:calc(73px + env(safe-area-inset-top))}
+ .travis-hud[data-neural-field] .travis-form-selector{bottom:calc(176px + env(safe-area-inset-bottom))!important}
+ .travis-hud .travis-status{bottom:calc(89px + env(safe-area-inset-bottom));min-height:52px}
+ .travis-hud .travis-command{min-height:59px;bottom:calc(12px + env(safe-area-inset-bottom))}
+ .travis-hud .travis-command input{min-height:45px}
+ .travis-hud .travis-command button{min-height:46px}
+ .travis-hud .travis-room{bottom:154px;top:140px}
+}
+@media (prefers-reduced-motion:reduce){
+ .travis-hud .travis-title-signal,
+ .travis-hud .travis-form-selector button{transition:none!important;transform:none}
+}
+
+/* Projections close over the unobtrusive wordmark, not beneath it. */
+.travis-hud.is-projecting .travis-title,
+.travis-hud.room-open .travis-title { visibility:hidden!important; }
+@media (prefers-reduced-motion:reduce) {
+  .travis-hud .travis-status .travis-wave i { animation:none!important; }
+}

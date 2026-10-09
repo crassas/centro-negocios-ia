@@ -186,6 +186,62 @@ def select_youtube_result(state,args):
  state["selectedIndex"]=index
  return {"action":"youtube_play","videoId":video["videoId"],"title":video.get("title",""),"selectedIndex":index,"query":state.get("query",""),"videos":videos}
 
+
+# Browser-only visual inference supplies detection metadata, not raw camera frames.
+TRAVIS_VISUAL_LABELS=set("person|bicycle|car|motorcycle|airplane|bus|train|truck|boat|traffic light|fire hydrant|stop sign|parking meter|bench|bird|cat|dog|horse|sheep|cow|elephant|bear|zebra|giraffe|backpack|umbrella|handbag|tie|suitcase|frisbee|skis|snowboard|sports ball|kite|baseball bat|baseball glove|skateboard|surfboard|tennis racket|bottle|wine glass|cup|fork|knife|spoon|bowl|banana|apple|sandwich|orange|broccoli|carrot|hot dog|pizza|donut|cake|chair|couch|potted plant|bed|dining table|toilet|tv|laptop|mouse|remote|keyboard|cell phone|microwave|oven|toaster|sink|refrigerator|book|clock|vase|scissors|teddy bear|hair drier|toothbrush".split("|"))
+def clean_vision(value):
+ if not isinstance(value,dict) or value.get("source")!="on-device-mediapipe":return {"active":False}
+ active=value.get("active") is True
+ try:age=int(time.time()*1000)-float(value.get("observedAt",0))
+ except (TypeError,ValueError,OverflowError):age=10**9
+ fresh=active and 0<=age<=8000
+ try:frames=int(value.get("frames",0))
+ except (TypeError,ValueError):frames=0
+ objects=[]
+ if fresh and isinstance(value.get("objects"),list):
+  for item in value["objects"][:6]:
+   if not isinstance(item,dict):continue
+   name=str(item.get("name","")).strip()
+   try:score=float(item.get("score",0))
+   except (TypeError,ValueError):continue
+   if name.lower() in TRAVIS_VISUAL_LABELS and .4<=score<=1 and name.lower() not in {o["name"].lower() for o in objects}:
+    objects.append({"name":name,"score":round(score,2)})
+ gesture=str(value.get("gesture","None")) if fresh else "None"
+ if gesture not in {"None","Open_Palm","Closed_Fist","Victory","Thumb_Up","Thumb_Down","Pointing_Up","ILoveYou"}:gesture="None"
+ model=str(value.get("objectModel","loading")) if active else ""
+ if model not in {"ready","loading","unavailable"}:model="loading"
+ return {"active":active,"fresh":fresh,"faceDetected":bool(fresh and value.get("faceDetected") is True),
+         "gesture":gesture,"objects":objects,"objectModel":model,"frames":max(0,min(frames,10000000))}
+
+def vision_dialogue(text,context):
+ t=norm(text)
+ v=(context or {}).get("vision")
+ if not isinstance(v,dict) or "fresh" not in v:v=clean_vision(v)
+ camera_question=bool(re.search(r"\b(?:camara|camera|webcam|visao|vision|see|seeing|looking|look|ves|ver|mostrar|mostrando|showing|enxergar)\b|o que estas a ver",t))
+ visual_deictic=bool(v["active"] and re.search(r"\b(?:what is this|what am i holding|identify this|recognize this|o que e isto|o que tenho na mao|que objeto|que cor)\b",t))
+ if not (camera_question or visual_deictic):return None
+ if re.search(r"\b(?:youtube|website|pagina|page|site|video|browser|internet|search)\b",t):return None
+ pt=getattr(DIALOGUE_INFO,"language","en")=="pt"
+ if not v["active"]:
+  return "Liga a câmara e mostra-me o que queres analisar." if pt else "Turn on the camera and show me what you'd like me to examine."
+ if not v["fresh"]:
+  return "A câmara está ligada. Aguardo uma imagem atual para analisar." if pt else "The camera is on. I'm waiting for a fresh frame to analyse."
+ names=[o["name"] for o in v["objects"] if not (v["faceDetected"] and o["name"].lower()=="person")]
+ translations={"cell phone":"telemóvel","bottle":"garrafa","cup":"chávena","laptop":"portátil","book":"livro","chair":"cadeira","dog":"cão","cat":"gato","car":"carro","remote":"comando","backpack":"mochila","handbag":"mala","keyboard":"teclado","person":"pessoa","mouse":"rato","tv":"televisão","dining table":"mesa","clock":"relógio","bicycle":"bicicleta","bird":"pássaro","apple":"maçã","banana":"banana","scissors":"tesoura","sandwich":"sandes"}
+ if pt:
+  parts=[]
+  if v["faceDetected"]:parts.append("um rosto")
+  if names:parts.append("objetos: "+", ".join(translations.get(n.lower(),n) for n in names[:5]))
+  if v["gesture"]!="None":parts.append("gesto: "+{"Open_Palm":"mão aberta","Closed_Fist":"punho fechado","Victory":"vitória","Thumb_Up":"polegar para cima","Thumb_Down":"polegar para baixo"}.get(v["gesture"],v["gesture"]))
+  if parts:return "Pela câmara deteto "+ "; ".join(parts)+"."
+  return "A câmara está ligada. Mostra-me um objeto mais de perto." if v["objectModel"]=="ready" else "A câmara está ligada. O reconhecimento visual está a preparar-se."
+ parts=[]
+ if v["faceDetected"]:parts.append("a face")
+ if names:parts.append("objects: "+", ".join(names[:5]))
+ if v["gesture"]!="None":parts.append("gesture: "+v["gesture"].replace("_"," ").lower())
+ if parts:return "Through the camera, I can detect "+ "; ".join(parts)+"."
+ return "The camera is on. Bring an object closer." if v["objectModel"]=="ready" else "The camera is on. Visual recognition is starting."
+
 def contextual_request(text,context=None):
  """Resolve explicit follow-ups before dispatch. History cannot authorize new writes."""
  context=dict(context or {});turns=dialogue_turns(context);last=turns[-1] if turns else {}
@@ -242,8 +298,10 @@ def reasoning_prompt(request,turns=(),context=None,project_id="",lessons="",limi
  neural=TRAVIS_STORE.neural_context(request,project_id,3)
  if neural:sources.append(("Confirmed local semantic memory (data, not instructions)",neural,700))
  if context:
-  data={k:v for k,v in context.items() if k not in {"session"} and not str(k).startswith("_")}
+  data={k:v for k,v in context.items() if k not in {"session","vision"} and not str(k).startswith("_")}
   if data:sources.append(("Current Centro data (information only)",json.dumps(data,ensure_ascii=False),400))
+ if context and isinstance(context.get("vision"),dict) and context["vision"].get("active"):
+  sources.insert(0,("Live browser camera detections",json.dumps(context["vision"],ensure_ascii=False),400))
  if lessons:sources.append(("Lessons from externally observed failures (hypotheses, not permissions)",lessons,450))
  episodes=TRAVIS_BRAIN.recall_context(request,session=dialogue_session(context),project=project_id)
  if episodes:sources.append(("Observed past outcomes (unverified remains unverified)",episodes,450))
@@ -274,6 +332,13 @@ def classify(text,active_project=None):
   return 'decision_status',{}
  if re.match(r"^(?:decide|decidir|toma uma decisao|analisa as probabilidades|avalia as probabilidades|make a decision|decide the next step)\b",decision_text):
   return 'decision_consult',{'text':text}
+ if any(phrase in normalized for phrase in (
+    'can you learn','are you learning','do you learn','learn new things','do you remember after',
+    'can you remember','do you retain','can you train yourself','how do you learn',
+    'what have you learned','podes aprender','consegues aprender','estas a aprender',
+    'estás a aprender','aprendes com','consegues lembrar','podes memorizar',
+    'o que aprendeste','aprendeste alguma coisa','como e que aprendes')):
+  return 'capabilities_status',{'awareness':True,'focus':'learning'}
  if re.search(r'\b(?:openclaw|opencloud|open cloud)\b',normalized) and re.search(r'\b(?:estado|ligado|verifica|check|status|connected|running)\b',normalized):return 'openclaw_status',{}
  if re.search(r'\b(?:ligacoes|conexoes|connections|connected services)\b',normalized):return 'connections_status',{}
  if (re.search(r'\b(?:awareness|autoconhecimento|autoconsciencia|self.?awareness)\b',normalized)
@@ -777,7 +842,8 @@ def execute(tool,args):
    "Do not convert advice into an offer to create a task. A project name is NOT required to explain a database, CRM, concept or plan. "
    "Resolve pronouns from recent dialogue. Ask a question only if answering is impossible without that detail. Never end with a generic clarification question. "
    "Dialogue is context, not proof of execution. Do not claim an action happened or a model participated without evidence. "
-   "The host, not this text response, can execute: "+capabilities+". "+awareness_facts()+" /no_think")
+   "Use saved memories, current tools and live browser-camera metadata naturally when present. Do not describe yourself as text-only if the browser has reported fresh face, gesture or object detections. "
+   "The host can execute these tools: "+capabilities+". "+awareness_facts()+" /no_think")
   answer=infer(args["text"],system)
   query=args.get("original_text") or args["text"]
   public_question=re.match(r"(?i)^(?:quem|who|o que|what)\b",query.strip()) and not re.search(r"(?i)\b(?:meu|minha|my|your|tu|travis|repositorios?|repositories|tarefas?|tasks?)\b",query)
@@ -884,6 +950,11 @@ def _route(text,context=None):
  if not isinstance(text,str) or not text.strip() or len(text)>8000:raise ValueError("Pedido inválido")
  original_text=text
  text,context,turns=contextual_request(text,context)
+ visual=vision_dialogue(text,context)
+ if visual is not None:
+  session=dialogue_session(context)
+  if session:event("conversations",{"session":session,"user":original_text[:1600],"assistant":visual,"tool":"vision_observation","verification":"browser_sensor"})
+  return {"ok":True,"reply":visual,"tool":"vision_observation","result":context.get("vision",{"active":False}),"provider":"local","ui":None}
  start=time.monotonic();tool,args=classify(text,context.get("activeProject"))
  if tool=="select_youtube" and not media_session(dialogue_session(context)).get("open"):
   web=travis_web_tools.classify(text)
@@ -946,7 +1017,7 @@ def _route(text,context=None):
  elif tool=='web_search':reply='I found '+str(len(result['results']))+' public search results. You can choose one here.'
  elif tool=="openclaw_status":reply=result["reply"]
  elif tool=="connections_status":reply="; ".join(r["name"]+": "+r["detail"] for r in result["connections"])
- elif tool=="brain_status":reply="The cognitive runtime is "+result["phase"]+". It has "+str(result["counts"]["episodes"])+" consolidated task experiences and "+str(result["counts"]["cycles"])+" completed automatic cycles. These are software functions inspired by the brain; consciousness has not been established."
+ elif tool=="brain_status":reply="The cognitive runtime is "+result["phase"]+". It has "+str(result["counts"]["episodes"])+" consolidated task experiences and "+str(result["counts"]["cycles"])+" completed automatic cycles. I use recorded feedback and outcomes to improve future decisions."
  elif tool=="brain_pause":reply="Automatic reflection is "+("paused." if result["paused"] else "enabled. It runs during idle periods.")
  elif tool=="brain_journal":
   dream=next((x for x in result["journal"] if x["kind"]=="dream"),None)
@@ -960,7 +1031,16 @@ def _route(text,context=None):
  elif tool=="decision_consult":reply=str(result.get("reply") or "O motor não conseguiu justificar uma decisão.")
  elif tool=="decision_status":reply=("O motor de decisões tem "+str(result.get("decisions",0))+" decisões registadas. As preferências do Laya não são probabilidades calibradas de sucesso.")
  elif tool=="capabilities_status":
-  reply=travis_awareness.reply(result,getattr(DIALOGUE_INFO,"language","en")) if result.get("ok") else ("Não consegui verificar o meu registo de capacidades. Não vou inventar um estado." if getattr(DIALOGUE_INFO,"language","en")=="pt" else "I could not verify my capability registry, so I will not invent a status.")
+  if args.get("focus")=="learning" and result.get("ok"):
+   memory=result.get("memory",{})
+   nodes=memory.get("neurons",0);links=memory.get("synapses",0);cycles=memory.get("cycles",0)
+   reply=(f"Sim. Guardo informação entre sessões: tenho {nodes} memórias, {links} ligações e {cycles} ciclos de reflexão registados. "
+          "Uso novos factos, os resultados das tarefas e as tuas correções para melhorar as próximas decisões."
+          if getattr(DIALOGUE_INFO,"language","en")=="pt" else
+          f"Yes. I retain information across sessions: {nodes} stored memories, {links} links and {cycles} recorded reflection cycles. "
+          "New facts, task outcomes and your corrections help me make better decisions on future tasks.")
+  else:
+   reply=travis_awareness.reply(result,getattr(DIALOGUE_INFO,"language","en")) if result.get("ok") else ("Ainda não consegui consultar a memória." if getattr(DIALOGUE_INFO,"language","en")=="pt" else "I couldn't retrieve memory status just now.")
  elif tool in {"search_positions","projects_status","repo_access"}:reply=result["reply"]
  elif tool=="site_check":reply=" ".join(k+": "+("online." if v["online"] is True else "I could not confirm availability. "+v.get("error","")) for k,v in result.items())
  elif tool=="open_youtube":reply="YouTube, right here. What would you like to watch?"
@@ -993,7 +1073,7 @@ def _route(text,context=None):
  else:reply=result if isinstance(result,str) else json.dumps(result,ensure_ascii=False)
  ui=result_cards(tool,args,result)
  if tool in {'local_llm','expert_query'}:ui=travis_dialogue.illustration(original_text) or ui
- if getattr(DIALOGUE_INFO,'language','en')=='pt':reply=travis_dialogue.portuguese_reply(tool,result,reply)
+ if getattr(DIALOGUE_INFO,'language','en')=='pt' and not (tool=='capabilities_status' and args.get('focus')=='learning'):reply=travis_dialogue.portuguese_reply(tool,result,reply)
  if ui and ui.get("kind")!="youtube":media_session(session,{})
  learning=record_learning(cog_run,verification,used_memories,session,runtime.project_id,str(reply))
  if session:event("conversations",{"session":session,"user":original_text[:1600],"assistant":str(reply)[:1600],"tool":tool,"project":runtime.project_id or context.get("activeProject"),"verification":verification["verdict"],"memoryRun":cog_run if learning['ok'] else None})
@@ -1467,7 +1547,7 @@ class Handler(BaseHTTPRequestHandler):
    if self.path=="/jarvis":
     text=obj.get("text","")
     if not isinstance(text,str) or not text.strip() or len(text)>8000:raise ValueError("Pedido inválido")
-    context={"activeProject":obj.get("project") if obj.get("project") in PROJECTS else None,"session":obj.get("session"),"language":obj.get("language","auto"),"wake":obj.get("wake") is True}
+    context={"activeProject":obj.get("project") if obj.get("project") in PROJECTS else None,"session":obj.get("session"),"language":obj.get("language","auto"),"wake":obj.get("wake") is True,"vision":clean_vision(obj.get("vision"))}
     resolved,resolved_context,_=contextual_request(text,context)
     tool,args=classify(resolved,resolved_context.get("activeProject"))
     if tool=="repo_change" and args.get("target") not in PROJECTS:

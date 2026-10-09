@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {facePosition,gestureDecision,cameraCommand} from '../travis-vision-policy.mjs';
+
+assert.equal(cameraCommand('Travis, liga a câmara'), 'start');
+assert.equal(cameraCommand('ativa a câmera'), 'start');
+assert.equal(cameraCommand('Open the camera'), 'start');
+assert.equal(cameraCommand('turn on my webcam'), 'start');
+assert.equal(cameraCommand('Travis, desliga a câmara'), 'stop');
+assert.equal(cameraCommand('Turn off camera'), 'stop');
+assert.equal(cameraCommand('Não abras a câmara'), null);
+assert.equal(cameraCommand('Imagine a camera'), null);
+assert.equal(cameraCommand('Open Google'), null);
+
+const track = {name:null,since:0,latched:false,lastActionAt:-3000};
+const gesture=(name,score)=>({gestures:[[{categoryName:name,score}]]});
+assert.equal(gestureDecision(gesture('Open_Palm',.95),1000,track),null,'Dwell starts only on stable pose');
+assert.equal(gestureDecision(gesture('Open_Palm',.95),1300,track),null,'Do not trigger from transient motion');
+assert.equal(gestureDecision(gesture('Open_Palm',.95),1710,track)?.action,'show_hologram');
+assert.equal(gestureDecision(gesture('Open_Palm',.95),2600,track),null,'Holding same gesture must not repeat');
+assert.equal(gestureDecision(gesture('Closed_Fist',.72),3200,track),null,'Low confidence must not trigger');
+assert.equal(gestureDecision(gesture('Closed_Fist',.96),3700,track),null);
+assert.equal(gestureDecision(gesture('Closed_Fist',.96),4400,track)?.action,'hide_hologram');
+assert.equal(gestureDecision({gestures:[]},4600,track),null);
+assert.equal(gestureDecision(gesture('Victory',.93),5100,track),null);
+assert.equal(gestureDecision(gesture('Victory',.93),5800,track),null,'Gesture cooldown prevents rapid repeated actions');
+assert.equal(gestureDecision(gesture('Victory',.93),6900,track)?.action,'show_face');
+assert.equal(gestureDecision(gesture('Victory',.93),6950,track),null,'Latched gesture stays inactive while held');
+assert.equal(gestureDecision({gestures:[]},7000,track),null);
+assert.equal(gestureDecision(gesture('Victory',.94),7200,track),null);
+assert.equal(gestureDecision(gesture('Victory',.94),8000,track),null,'Cooldown must be honoured even after release');
+assert.equal(gestureDecision(gesture('Victory',.94),8600,track)?.action,'show_face');
+
+assert.deepEqual(facePosition({detections:[{boundingBox:{originX:100,originY:50,width:200,height:100}}]},400,200),{x:0,y:0});
+const shifted=facePosition({detections:[{boundingBox:{originX:200,originY:80,width:200,height:100}}]},400,200);
+assert.equal(shifted.x,.5);
+assert(Math.abs(shifted.y-.3)<1e-9);
+assert.equal(facePosition({detections:[]},400,200),null);
+assert.equal(facePosition({detections:[{boundingBox:{originX:0,originY:0,width:20,height:30}}]},0,200),null);
+
+const page=fs.readFileSync('index.html','utf8');
+const main=fs.readFileSync('travis-3d.mjs','utf8');
+const camera=fs.readFileSync('travis-vision.mjs','utf8');
+const sw=fs.readFileSync('sw.js','utf8');
+assert(page.includes('id="travis-camera-toggle"'));
+assert(page.includes('travis-3d.mjs?v=vision-2'));
+assert(main.includes('vision.stop();'),'Closing the scene must turn off camera');
+assert(main.includes('cameraCommand(text)'),'Voice/typed instructions must control camera');
+assert(main.includes("inputLanguage='auto'"),'Always understand a language-switching command');
+assert(camera.includes('audio: false'),'The camera must never implicitly request the microphone');
+assert(camera.includes('getTracks().forEach(track => track.stop())'),'The camera hardware must be released');
+assert(camera.includes("document.addEventListener('visibilitychange'"),'Background tab must close camera');
+assert(camera.includes('recognizeForVideo(') && camera.includes('detectForVideo('));
+assert(sw.includes('./travis-vision.mjs?v=2'));
+assert(camera.includes('ObjectDetector.createFromOptions'), 'Objects must be analysed locally');
+assert(main.includes('vision:vision.snapshot()'), 'Detected objects must reach voice conversation');
+assert(fs.statSync('vendor/mediapipe/efficientdet_lite0.tflite').size > 10_000_000, 'Local vision model exists');
+console.log('TRAVIS_VISION_POLICY_TESTS_OK',JSON.stringify({commands:9,gestures:12,face:4,permissionOnRequest:true,localModels:true}));
