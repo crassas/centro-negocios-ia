@@ -1,6 +1,8 @@
 """Deterministic tests for the fast speech backend without live services."""
 import ast,io,json,os,struct,tempfile,time,wave,types
 from pathlib import Path
+# This regression preserves the legacy Whisper policies; Sherpa has separate tests.
+os.environ['TRAVIS_STT_BACKEND']='whisper'
 
 source=Path(__file__).with_name("jarvis_local.py").read_text()
 tree=ast.parse(source)
