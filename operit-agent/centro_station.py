@@ -53,6 +53,17 @@ OPENCLAW_AUTOSTART = False  # Suspenso por decisão do operador.
 LAYA_AUTOSTART = os.environ.get("CENTRO_LAYA_AUTOSTART", "1").strip().lower() not in {"0", "false", "no", "off"}
 REMOTE_DESKTOP_AUTOSTART = os.environ.get("CENTRO_REMOTE_DESKTOP_AUTOSTART", "1").strip().lower() not in {"0", "false", "no", "off"}
 RAW_BASE = "https://raw.githubusercontent.com/crassas/centro-negocios-ia/main/operit-agent"
+RAW_REPO_BASE = "https://raw.githubusercontent.com/crassas/centro-negocios-ia"
+# Only the versioned client modules needed for voice/camera repairs are updated.
+# Avoid overwriting other operator-owned UI files and assets.
+TRAVIS_CLIENT_FILES = (
+    "travis-audio-sync.mjs",
+    "travis-vision.mjs",
+    "travis-face-rig.mjs",
+    "travis-3d.mjs",
+    "sw.js",
+    "index.html",
+)
 MAIN_COMMIT_API = "https://api.github.com/repos/crassas/centro-negocios-ia/commits/main"
 RUNTIME_FILES = {
     "centro_server.py": HOME / "centro_server.py",
@@ -479,6 +490,69 @@ def sync_runtime(ref=None):
     return changed, errors
 
 
+def sync_travis_client(ref):
+    """Stage and validate the complete Travis client before replacing any file.
+
+    Failures preserve the installed client; index.html is swapped last so the
+    browser never sees a new entry point before its imported modules exist.
+    """
+    if len(ref) != 40 or any(c not in "0123456789abcdef" for c in ref):
+        return [], ["Travis client: versão Git inválida"]
+    installed = HOME / ".centro-ui"
+    if not installed.is_dir():
+        return [], ["Travis client: interface local não encontrada"]
+    fetched = {}
+    try:
+        for name in TRAVIS_CLIENT_FILES:
+            url = f"{RAW_REPO_BASE}/{ref}/{name}"
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "Centro-Travis-Client-Sync/1.0",
+                "Cache-Control": "no-cache",
+            })
+            with urllib.request.urlopen(req, timeout=12) as response:
+                raw = response.read(450001)
+            if not raw or len(raw) > 450000:
+                raise RuntimeError(f"{name}: resposta ausente ou demasiado grande")
+            fetched[name] = raw.decode("utf-8")
+        if "travis-3d.mjs?v=audio-1" not in fetched["index.html"]:
+            raise RuntimeError("index.html: versão de voz inesperada")
+        if "travis-audio-sync.mjs?v=1" not in fetched["travis-3d.mjs"]:
+            raise RuntimeError("travis-3d.mjs: sincronização de voz ausente")
+        if "travis-vision.mjs?v=3" not in fetched["travis-3d.mjs"]:
+            raise RuntimeError("travis-3d.mjs: visão não ligada")
+        if "travis-3d.mjs?v=audio-1" not in fetched["sw.js"]:
+            raise RuntimeError("sw.js: cache desatualizada")
+        if "ObjectDetector.createFromOptions" not in fetched["travis-vision.mjs"]:
+            raise RuntimeError("travis-vision.mjs: modelo de visão ausente")
+        if "computeVertexNormals" not in fetched["travis-face-rig.mjs"]:
+            raise RuntimeError("travis-face-rig.mjs: geometria inválida")
+        node = shutil.which("node")
+        if node:
+            for name, source in fetched.items():
+                if not name.endswith(".mjs"):
+                    continue
+                test = subprocess.run(
+                    [node, "--check", "--input-type=module"],
+                    input=source, text=True, capture_output=True, timeout=7,
+                    check=False,
+                )
+                if test.returncode != 0:
+                    raise RuntimeError(name + ": " + test.stderr[-200:])
+    except Exception as exc:
+        return [], ["Travis client: " + str(exc)[:350]]
+    changed=[]
+    for name in TRAVIS_CLIENT_FILES:
+        path=installed/name
+        try:
+            previous=path.read_text(encoding="utf-8") if path.exists() else ""
+            if previous != fetched[name]:
+                atomic_write(path, fetched[name], mode=0o600)
+                changed.append(name)
+        except OSError as exc:
+            return changed, ["Travis client: " + name + ": " + str(exc)[:200]]
+    return changed, []
+
+
 def write_heartbeat():
     """Sinal mínimo para o WorkManager distinguir processo vivo de PID fantasma."""
     try:
@@ -604,6 +678,15 @@ def main():
             except Exception:
                 candidate_sha = ""
             changed, update_errors = sync_runtime(candidate_sha)
+            if candidate_sha:
+                ui_changed, ui_errors = sync_travis_client(candidate_sha)
+                update_errors.extend(ui_errors)
+                if ui_changed:
+                    actions.append({
+                        "service": "autoupdate/travis-client",
+                        "ok": not ui_errors,
+                        "output": "módulos atualizados: " + ", ".join(ui_changed),
+                    })
             if changed:
                 if any(name in changed for name in ("jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh", "travis_brain.py")):
                     pending_jarvis_restart = True
