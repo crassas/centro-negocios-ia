@@ -2155,7 +2155,7 @@ if (!hud || !launcher || !canvas) {
         presence:{...presencePose},projection:hologramPresentation.sample(performance.now()/1000),
         media:window.TravisProjection?.media(),
         hologram:conceptProjection?.state?.(),projectionControl:window.TravisProjection?.status?.(),
-        meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,voiceInput:voiceInput?.diagnostics(),vision:vision.diagnostics(),replyLanguage,inputLanguage,preferredLanguage,standby,proactive,voicePaused,
+        meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,voiceInput:voiceInput?.diagnostics(),vision:vision.diagnostics(),replyLanguage,inputLanguage,preferredLanguage,uiLanguage,visualModePolicy:'automatic',standby,proactive,voicePaused,
         recording:voiceRecorder?.state,pendingTasks:[...pendingVoiceTasks.keys()],lastTaskResult:lastVoiceTaskResult,voiceMetrics:voiceMetrics.map(m=>({...m}))};
     },
     form(mode='auto') {
