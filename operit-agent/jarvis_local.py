@@ -13,6 +13,7 @@ import travis_reflexion
 import travis_cognitive
 import travis_brain
 import travis_awareness
+import travis_vision_bridge
 import travis_quantum
 import travis_web_tools
 import travis_dialogue
@@ -265,6 +266,7 @@ def reasoning_prompt(request,turns=(),context=None,project_id="",lessons="",limi
 
 def classify(text,active_project=None):
  normalized=norm(text)
+ if travis_vision_bridge.visual_question(text):return 'vision_status',{}
  controls=travis_dialogue.control(text)
  if controls:return 'conversation_control',controls
  if re.search(r'\b(?:openclaw|opencloud|open cloud)\b',normalized) and re.search(r'\b(?:estado|ligado|verifica|check|status|connected|running)\b',normalized):return 'openclaw_status',{}
@@ -859,12 +861,26 @@ def route(text,context=None):
  previous=getattr(DIALOGUE_INFO,'language','en');DIALOGUE_INFO.language=language
  try:
   with TRAVIS_BRAIN.request(text):
-   feedback=memory_feedback_intent(text)
-   if feedback is not None:
-    learned=memory_feedback(context,feedback)
-    reply=('Essa avaliação já estava registada.' if learned['duplicate'] else 'Registei a tua avaliação e ajustei a utilidade das experiências usadas.') if language=='pt' else ('That feedback was already recorded.' if learned['duplicate'] else 'I recorded your feedback and adjusted the usefulness of the experiences used.')
-    result={'ok':True,'tool':'memory_feedback','provider':'local','reply':reply,'learning':learned,'ui':None}
-   else:result=_route(text,context)
+   if travis_vision_bridge.visual_question(text):
+    # Current, ephemeral browser observations only. No photo, no model invocation.
+    observation=travis_vision_bridge.observe(context.get('vision'))
+    result={'ok':True,'tool':'vision_status','provider':'browser-mediapipe',
+            'reply':travis_vision_bridge.reply(observation,language),
+            'result':{'cameraActive':observation['active'] if observation else None,
+                      'faceDetected':observation['faceDetected'] if observation else None,
+                      'source':'browser-mediapipe'},'ui':None}
+   else:
+    feedback=memory_feedback_intent(text)
+    if feedback is not None:
+     learned=memory_feedback(context,feedback)
+     reply=('Essa avaliação já estava registada.' if learned['duplicate'] else 'Registei a tua avaliação e ajustei a utilidade das experiências usadas.') if language=='pt' else ('That feedback was already recorded.' if learned['duplicate'] else 'I recorded your feedback and adjusted the usefulness of the experiences used.')
+     result={'ok':True,'tool':'memory_feedback','provider':'local','reply':reply,'learning':learned,'ui':None}
+    else:result=_route(text,context)
+   if result.get('tool')=='capabilities_status':
+    live=travis_vision_bridge.observe(context.get('vision'))
+    if live is not None:
+     result['reply']+=' '+travis_vision_bridge.capability_note(live,language)
+     result['liveVision']=live
    result['language']=travis_dialogue.detect_language(result['reply'],language)
    result['preferences']=dialogue_preferences(session)
    return result
@@ -1335,7 +1351,7 @@ class Handler(BaseHTTPRequestHandler):
    if self.path=="/jarvis":
     text=obj.get("text","")
     if not isinstance(text,str) or not text.strip() or len(text)>8000:raise ValueError("Pedido inválido")
-    context={"activeProject":obj.get("project") if obj.get("project") in PROJECTS else None,"session":obj.get("session"),"language":obj.get("language","auto"),"wake":obj.get("wake") is True}
+    context={"activeProject":obj.get("project") if obj.get("project") in PROJECTS else None,"session":obj.get("session"),"language":obj.get("language","auto"),"wake":obj.get("wake") is True,"vision":obj.get("vision")}
     resolved,resolved_context,_=contextual_request(text,context)
     tool,args=classify(resolved,resolved_context.get("activeProject"))
     if tool=="repo_change" and args.get("target") not in PROJECTS:
