@@ -80,6 +80,7 @@ RUNTIME_FILES = {
     "travis_quantum.py": HOME / "travis_quantum.py",
     "travis_decision.py": HOME / "travis_decision.py",
     "travis_speech_response.py": HOME / "travis_speech_response.py",
+    "jarvis_sherpa.py": HOME / "jarvis_sherpa.py",
     "travis_library.py": HOME / "travis_library.py",
     "travis_library_seed.py": HOME / "travis_library_seed.py",
     "travis_gmail.py": HOME / "travis_gmail.py",

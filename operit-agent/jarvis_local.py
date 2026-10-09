@@ -16,6 +16,7 @@ import travis_awareness
 import travis_quantum
 import travis_decision
 import travis_speech_response
+import jarvis_sherpa
 import travis_library
 import travis_web_tools
 import travis_dialogue
@@ -1222,7 +1223,8 @@ class VoiceWorker:
  def __init__(self,kind,model=None):self.kind=kind;self.model=Path(model) if model else None;self.process=None;self.buffer=b"";self.lock=threading.RLock()
  def start(self):
   if self.process is not None and self.process.poll() is None:return
-  if self.kind in {"stt","stt-fast","stt-pt"}:args=[str(ROOT/"venv/bin/python"),str(Path(__file__).with_name("jarvis_whisper.py")),str(self.model or MODELS/"stt/ggml-base.bin"),"--worker"]
+  if self.kind=="stt-sherpa":args=[str(ROOT/"conversation-v2-stage/venv/bin/python"),str(Path(__file__).with_name("jarvis_sherpa.py")),"--worker"]
+  elif self.kind in {"stt","stt-fast","stt-pt"}:args=[str(ROOT/"venv/bin/python"),str(Path(__file__).with_name("jarvis_whisper.py")),str(self.model or MODELS/"stt/ggml-base.bin"),"--worker"]
   elif self.kind=='turn':args=[str(ROOT/'conversation-v2-stage/venv/bin/python'),str(Path(__file__).with_name('jarvis_turn.py'))]
   else:
    model=self.model or MODELS/"tts/pt_PT-tugao-medium.onnx"
@@ -1233,7 +1235,7 @@ class VoiceWorker:
   if self.kind in {"stt-fast","stt-pt"}:worker_env["TRAVIS_STT_ACCURACY"]="fast"
   with (ROOT/(self.kind+"-worker.log")).open("ab") as log:self.process=subprocess.Popen(args,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=log,bufsize=0,env=worker_env)
   self.buffer=b""
-  if self.kind in {"stt","stt-fast","stt-pt","turn"}:
+  if self.kind in {"stt","stt-fast","stt-pt","stt-sherpa","turn"}:
    if not json.loads(self.line(20).split(':',1)[1]).get("ready"):raise RuntimeError("Voz não ficou pronta")
  def line(self,timeout):
   deadline=time.monotonic()+timeout
@@ -1245,15 +1247,15 @@ class VoiceWorker:
    self.buffer+=block
   line,self.buffer=self.buffer.split(b"\n",1)
   value=line.decode("utf-8",errors="replace")
-  if self.kind in {"stt","stt-fast","stt-pt"} and not value.startswith("TRAVIS_STT:"):return self.line(max(.1,deadline-time.monotonic()))
+  if self.kind in {"stt","stt-fast","stt-pt","stt-sherpa"} and not value.startswith("TRAVIS_STT:"):return self.line(max(.1,deadline-time.monotonic()))
   if self.kind=='turn' and not value.startswith('TRAVIS_TURN:'):return self.line(max(.1,deadline-time.monotonic()))
   return value
  def request(self,payload):
-  queue_timeout=12 if self.kind in {"stt","stt-fast","stt-pt"} else 2
+  queue_timeout=12 if self.kind in {"stt","stt-fast","stt-pt","stt-sherpa"} else 2
   if not self.lock.acquire(timeout=queue_timeout):raise RuntimeError("Transcrição ocupada. Tenta falar novamente.")
   try:
    self.start();self.process.stdin.write((json.dumps(payload,ensure_ascii=False)+"\n").encode());self.process.stdin.flush()
-   return self.line(23 if self.kind=="stt-fast" else 30 if self.kind=="stt-pt" else 48 if self.kind=="stt" else 4 if self.kind=="turn" else 45)
+   return self.line(16 if self.kind=="stt-sherpa" else 23 if self.kind=="stt-fast" else 30 if self.kind=="stt-pt" else 48 if self.kind=="stt" else 4 if self.kind=="turn" else 45)
   except Exception:self.stop();raise
   finally:self.lock.release()
  def stop(self):
@@ -1269,6 +1271,7 @@ class VoiceWorker:
 STT_WORKER=VoiceWorker("stt",MODELS/"stt/ggml-base.bin")
 FAST_STT_WORKER=VoiceWorker("stt-fast",MODELS/"stt/ggml-tiny-q5_1.bin")
 PT_STT_WORKER=VoiceWorker("stt-pt",MODELS/"stt/ggml-base-q5_1.bin")
+SHERPA_STT_WORKER=VoiceWorker("stt-sherpa")
 TURN_WORKER=VoiceWorker('turn')
 TTS_WORKER=VoiceWorker("tts",MODELS/"tts/pt_PT-tugao-medium.onnx")
 TTS_EN_WORKER=VoiceWorker("tts",MODELS/"tts/en_GB-northern_english_male-medium.onnx")
@@ -1329,7 +1332,7 @@ def _merge_wavs(paths,out):
    wav.writeframes(chunk)
 def warm_voice():
  # Prioritise the fast STT worker; semantic turn is deferred until explicitly used.
- workers=[FAST_STT_WORKER,PT_STT_WORKER,TTS_EN_WORKER,TTS_WORKER]
+ workers=[FAST_STT_WORKER,TTS_WORKER,TTS_EN_WORKER,SHERPA_STT_WORKER,PT_STT_WORKER]
  for worker in workers:
   try:
    with worker.lock:worker.start()
@@ -1509,18 +1512,31 @@ def transcribe(audio,language="auto"):
   engine="base"
   if (ROOT/"venv/bin/python").is_file():
    precise_requested=os.environ.get("TRAVIS_STT_MODE","fast").strip().lower()=="precise"
-   if precise_requested:
-    worker=STT_WORKER;engine="base-accurate"
-   elif language=="pt" and PT_STT_WORKER.model.is_file():
-    worker=PT_STT_WORKER;engine="base-q5-pt"
-   elif FAST_STT_WORKER.model.is_file():
-    worker=FAST_STT_WORKER;engine="tiny-q5-fast"
-   else:
-    worker=STT_WORKER;engine="base-fallback"
-   raw=worker.request({"path":str(wav),"language":language})
-   data=json.loads(raw.removeprefix("TRAVIS_STT:"))
-   if data.get("error"):raise RuntimeError(data["error"])
-   text=str(data.get("text","")).strip()
+   sherpa_opt_in=os.environ.get("TRAVIS_STT_BACKEND","sherpa").strip().lower()=="sherpa"
+   fast_verified=False
+   if sherpa_opt_in and not precise_requested:
+    try:
+     raw=SHERPA_STT_WORKER.request({"path":str(wav),"language":language})
+     item=json.loads(raw.removeprefix("TRAVIS_STT:"))
+     candidate=str(item.get("text") or "").strip()
+     if not item.get("error") and jarvis_sherpa.safe_short_read_transcript(candidate):
+      text=candidate;engine="sherpa-rapid-readonly";fast_verified=True
+    except (OSError,RuntimeError,ValueError,TimeoutError,TypeError):
+     # Fail closed to existing Whisper path, not to an invented transcript.
+     fast_verified=False
+   if not fast_verified:
+    if precise_requested:
+     worker=STT_WORKER;engine="base-accurate"
+    elif language=="pt" and PT_STT_WORKER.model.is_file():
+     worker=PT_STT_WORKER;engine="base-q5-pt"
+    elif FAST_STT_WORKER.model.is_file():
+     worker=FAST_STT_WORKER;engine="tiny-q5-fast"
+    else:
+     worker=STT_WORKER;engine="base-fallback"
+    raw=worker.request({"path":str(wav),"language":language})
+    data=json.loads(raw.removeprefix("TRAVIS_STT:"))
+    if data.get("error"):raise RuntimeError(data["error"])
+    text=str(data.get("text","")).strip()
   else:
    out=Path(tmp)/"transcript"
    command([str(ROOT/"bin/whisper-cli"),"-m",str(MODELS/"stt/ggml-base.bin"),
@@ -1709,7 +1725,7 @@ def main():
    try:ThreadingHTTPServer(("127.0.0.1",8770),Handler).serve_forever()
    finally:
     TRAVIS_BRAIN.stop()
-    FAST_STT_WORKER.stop();PT_STT_WORKER.stop();STT_WORKER.stop();TTS_WORKER.stop();TTS_EN_WORKER.stop();TURN_WORKER.stop()
+    SHERPA_STT_WORKER.stop();FAST_STT_WORKER.stop();PT_STT_WORKER.stop();STT_WORKER.stop();TTS_WORKER.stop();TTS_EN_WORKER.stop();TURN_WORKER.stop()
  elif a.action=="doctor":print(json.dumps(doctor(),indent=2,ensure_ascii=False))
  elif a.action=="ask":print(json.dumps(route(a.text),ensure_ascii=False))
  elif a.action=="llm-start":llm_start(a.text or "small")
