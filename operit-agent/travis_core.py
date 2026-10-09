@@ -123,7 +123,7 @@ def centro_operational_status_requested(text):
  normalized=re.sub(r"[^a-z0-9]+"," ",_norm(text)).strip()
  if not 3<=len(normalized)<=180:return False
  normalized=re.sub(
-  r"^(?:(?:ola|oi|olha|hello|hey|amigo|bom dia|boa tarde|por favor|please|travis|jarvis)\s+)+",
+  r"^(?:(?:ola|oi|olha|hello|hey|amigo|bom dia|boa tarde|por favor|please|travis|jarvis|para vis|pravis|avis|atraviz)\s+)+",
   "",normalized)
  normalized=re.sub(
   r"^(?:(?:podes|consegues|podias|poderias|can you|could you)\s+)+",
@@ -144,13 +144,13 @@ def centro_operational_status_requested(text):
           r"backend(?: do centro(?: de negocios)?)?|"
           r"sistema central|servidor central)")
  ending=(r"(?: (?:responde|funciona|esta (?:online|ativo|operacional|disponivel|a funcionar)|"
-         r"is (?:online|running|healthy|up)))?")
+         r"is (?:online|running|healthy|up)|online|ativo|operacional|disponivel))?")
  inquiry=(r"(?:verifica|verificar|verificas|confirma|confirmar|testa|testar|"
           r"consulta|consultar|inspeciona|check|verify|test|inspect)(?: me)?")
- if re.fullmatch(inquiry+r" (?:se )?"+subject+ending,normalized):
+ if re.fullmatch(inquiry+r" (?:se )?(?:o estado (?:do|de) )?"+subject+ending,normalized):
   return True
  if re.fullmatch(r"(?:como (?:esta|vai|anda)|qual e o estado de|qual o estado de|"
-                 r"esta|is|status of|health of|is the) "+subject+ending,normalized):
+                 r"qual (?:e )?o estado (?:do|de)|esta|is|status of|health of|is the) "+subject+ending,normalized):
   return True
  return False
 
