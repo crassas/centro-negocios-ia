@@ -1158,6 +1158,124 @@ def turn_complete(audio):
  except Exception as exc:
   return {'available':False,'complete':False,'error':type(exc).__name__}
 
+# Session continuity based only on observed conversation metadata.
+RESUME_PROJECT_LABELS = {
+    "best-pizza": ("Best Pizza and Kebab", "Best Pizza and Kebab"),
+    "pentehouse": ("Pentehouse", "Pentehouse"),
+    "2-irmaos": ("Restaurante Dois Irmãos", "Restaurante Dois Irmãos"),
+    "beatriz": ("Engomadoria Beatriz", "Engomadoria Beatriz"),
+    "centro": ("Centro de Negócios", "Centro de Negócios"),
+}
+RESUME_SKIP_TOOLS = {
+    "open_youtube", "close_youtube", "search_youtube", "play_youtube",
+    "select_youtube", "pause_youtube", "resume_youtube",
+    "presence", "conversation_control", "close_projection",
+}
+RESUME_TOPICS = {
+    "capabilities": (
+        "We were checking what I can actually do.",
+        "Estávamos a verificar o que consigo realmente fazer.",
+    ),
+    "memory": (
+        "We were testing memory and learning.",
+        "Estávamos a testar a memória e a aprendizagem.",
+    ),
+    "camera": (
+        "We were exploring the camera and visual perception.",
+        "Estávamos a explorar a câmara e a perceção visual.",
+    ),
+    "voice": (
+        "We were working on my voice and conversation.",
+        "Estávamos a trabalhar na minha voz e na conversa.",
+    ),
+    "rust": (
+        "We were working on the Rust components.",
+        "Estávamos a trabalhar nos componentes em Rust.",
+    ),
+    "sites": (
+        "We were reviewing your published websites.",
+        "Estávamos a analisar os teus sites publicados.",
+    ),
+}
+
+def _resume_plain(value):
+    value = unicodedata.normalize("NFKD", str(value).lower())
+    return "".join(ch for ch in value if not unicodedata.combining(ch))
+
+def _resume_focus(record, language):
+    tool = str(record.get("tool") or "")
+    if tool in RESUME_SKIP_TOOLS:
+        return None
+    project = str(record.get("project") or "")
+    if project in RESUME_PROJECT_LABELS:
+        label = RESUME_PROJECT_LABELS[project][0 if language == "en" else 1]
+        return (f"We were looking at the {label} project." if language == "en"
+                else f"Estávamos a analisar o projeto {label}.")
+    user = _resume_plain(record.get("user") or "")
+    if tool in {"capabilities_status", "neural_status", "brain_status"}:
+        category = "memory" if tool == "neural_status" else "capabilities"
+    elif re.search(r"\b(memoria|memory|aprend|learning)\b", user):
+        category = "memory"
+    elif re.search(r"\b(capacidades|capabilities|consciencia|consciousness|awareness|autonomia|autonomy)\b", user):
+        category = "capabilities"
+    elif re.search(r"\b(camara|camera|gestos|vision)\b", user):
+        category = "camera"
+    elif re.search(r"\b(voz|voice|sotaque|accent)\b", user):
+        category = "voice"
+    elif re.search(r"\brust\b", user):
+        category = "rust"
+    elif tool in {"site_check", "search_positions", "projects_status"}:
+        category = "sites"
+    else:
+        return None
+    return RESUME_TOPICS[category][0 if language == "en" else 1]
+
+def resume_brief(obj, now=None):
+    db_path=ROOT/"memory.sqlite"
+    session=dialogue_session(obj)
+    language=obj.get("language","en")
+    """Return a short factual re-entry line; repeated rapid opens stay quiet."""
+    if not re.fullmatch(r"[A-Za-z0-9-]{8,80}", str(session or "")):
+        raise ValueError("Invalid conversation session")
+    if language not in ("en", "pt"):
+        language = "en"
+    now = float(time.time() if now is None else now)
+    path = Path(db_path)
+    with sqlite3.connect(path, timeout=5) as db:
+        db.execute("CREATE TABLE IF NOT EXISTS resume_checkins "
+                   "(client TEXT PRIMARY KEY, session TEXT NOT NULL, seen REAL NOT NULL)")
+        last = db.execute("SELECT seen FROM resume_checkins WHERE client='local-phone'").fetchone()
+        recent = db.execute(
+            "SELECT created,data FROM conversations WHERE created>? "
+            "ORDER BY id DESC LIMIT 90", (now - 7 * 86400,)
+        ).fetchall()
+        db.execute("INSERT OR REPLACE INTO resume_checkins(client,session,seen) "
+                   "VALUES('local-phone',?,?)", (session, now))
+    gap = now - float(last[0]) if last else None
+    if gap is not None and 0 <= gap < 90:
+        return {"ok": True, "speak": False, "reply": "", "mode": "rapid-return", "topic": None}
+    focus = None
+    for created, raw in recent:
+        try:
+            row = json.loads(raw)
+            if not isinstance(row, dict):
+                continue
+            focus = _resume_focus(row, language)
+        except (ValueError, TypeError):
+            continue
+        if focus:
+            break
+    if language == "pt":
+        opening = ("Ainda por aqui, senhor." if gap is not None and gap < 3600
+                   else "É bom ter-te de volta, senhor.")
+        closing = "Podemos continuar a partir daí." if focus else "Por onde queres começar?"
+    else:
+        opening = ("There you are, sir." if gap is not None and gap < 3600
+                   else "Good to have you back, sir.")
+        closing = "We can pick up from there." if focus else "What shall we focus on?"
+    reply = " ".join(s for s in (opening, focus, closing) if s)
+    return {"ok": True, "speak": True, "reply": reply, "mode": "contextual", "topic": focus}
+
 INITIATIVE_LOCK=threading.Lock()
 def initiative(obj):
  session=dialogue_session(obj);prefs=dialogue_preferences(session)
@@ -1241,7 +1359,7 @@ def centro_activity():
  with urllib.request.urlopen(request,timeout=5) as response:return json.load(response)
 TRUSTED_WEB_ORIGINS={"https://crassas.github.io"}
 LOCAL_ORIGINS={"http://127.0.0.1:8770","http://localhost:8770"}
-WEB_VOICE_ENDPOINTS={"/health","/transcribe","/listen","/jarvis","/speak","/voice-task","/turn","/initiative"}
+WEB_VOICE_ENDPOINTS={"/health","/transcribe","/listen","/jarvis","/speak","/voice-task","/turn","/initiative","/resume"}
 
 LOCAL_COCKPIT_ENDPOINTS={"/awareness","/brain/state","/brain/graph","/brain/control","/brain/feedback","/connections","/cockpit","/gmail/configure","/gmail/start","/gmail/inbox","/gmail/disconnect"}
 
@@ -1317,6 +1435,7 @@ class Handler(BaseHTTPRequestHandler):
     if path=="/transcribe":return self.send({"ok":True,"text":text,"durationMs":int((time.monotonic()-stage_start)*1000)})
     return self.send({"text":text,**route(text)})
    obj=json.loads(data)
+   if path=="/resume":return self.send(resume_brief(obj))
    if path=="/initiative":return self.send(initiative(obj))
    if path=="/awareness":return self.send(awareness_snapshot())
    if path=="/brain/state":return self.send(TRAVIS_BRAIN.status())
