@@ -1221,7 +1221,7 @@ class VoiceWorker:
  def __init__(self,kind,model=None):self.kind=kind;self.model=Path(model) if model else None;self.process=None;self.buffer=b"";self.lock=threading.RLock()
  def start(self):
   if self.process is not None and self.process.poll() is None:return
-  if self.kind in {"stt","stt-fast"}:args=[str(ROOT/"venv/bin/python"),str(Path(__file__).with_name("jarvis_whisper.py")),str(self.model or MODELS/"stt/ggml-base.bin"),"--worker"]
+  if self.kind in {"stt","stt-fast","stt-pt"}:args=[str(ROOT/"venv/bin/python"),str(Path(__file__).with_name("jarvis_whisper.py")),str(self.model or MODELS/"stt/ggml-base.bin"),"--worker"]
   elif self.kind=='turn':args=[str(ROOT/'conversation-v2-stage/venv/bin/python'),str(Path(__file__).with_name('jarvis_turn.py'))]
   else:
    model=self.model or MODELS/"tts/pt_PT-tugao-medium.onnx"
@@ -1229,10 +1229,10 @@ class VoiceWorker:
    args=[str(ROOT/"bin/piper"),"-m",str(model),"--json-input","-q"]
   ROOT.mkdir(parents=True,exist_ok=True)
   worker_env=os.environ.copy()
-  if self.kind=="stt-fast":worker_env["TRAVIS_STT_ACCURACY"]="fast"
+  if self.kind in {"stt-fast","stt-pt"}:worker_env["TRAVIS_STT_ACCURACY"]="fast"
   with (ROOT/(self.kind+"-worker.log")).open("ab") as log:self.process=subprocess.Popen(args,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=log,bufsize=0,env=worker_env)
   self.buffer=b""
-  if self.kind in {"stt","stt-fast","turn"}:
+  if self.kind in {"stt","stt-fast","stt-pt","turn"}:
    if not json.loads(self.line(20).split(':',1)[1]).get("ready"):raise RuntimeError("Voz não ficou pronta")
  def line(self,timeout):
   deadline=time.monotonic()+timeout
@@ -1244,15 +1244,15 @@ class VoiceWorker:
    self.buffer+=block
   line,self.buffer=self.buffer.split(b"\n",1)
   value=line.decode("utf-8",errors="replace")
-  if self.kind in {"stt","stt-fast"} and not value.startswith("TRAVIS_STT:"):return self.line(max(.1,deadline-time.monotonic()))
+  if self.kind in {"stt","stt-fast","stt-pt"} and not value.startswith("TRAVIS_STT:"):return self.line(max(.1,deadline-time.monotonic()))
   if self.kind=='turn' and not value.startswith('TRAVIS_TURN:'):return self.line(max(.1,deadline-time.monotonic()))
   return value
  def request(self,payload):
-  queue_timeout=12 if self.kind in {"stt","stt-fast"} else 2
+  queue_timeout=12 if self.kind in {"stt","stt-fast","stt-pt"} else 2
   if not self.lock.acquire(timeout=queue_timeout):raise RuntimeError("Transcrição ocupada. Tenta falar novamente.")
   try:
    self.start();self.process.stdin.write((json.dumps(payload,ensure_ascii=False)+"\n").encode());self.process.stdin.flush()
-   return self.line(23 if self.kind=="stt-fast" else 48 if self.kind=="stt" else 4 if self.kind=="turn" else 45)
+   return self.line(23 if self.kind=="stt-fast" else 30 if self.kind=="stt-pt" else 48 if self.kind=="stt" else 4 if self.kind=="turn" else 45)
   except Exception:self.stop();raise
   finally:self.lock.release()
  def stop(self):
@@ -1267,6 +1267,7 @@ class VoiceWorker:
   self.buffer=b""
 STT_WORKER=VoiceWorker("stt",MODELS/"stt/ggml-base.bin")
 FAST_STT_WORKER=VoiceWorker("stt-fast",MODELS/"stt/ggml-tiny-q5_1.bin")
+PT_STT_WORKER=VoiceWorker("stt-pt",MODELS/"stt/ggml-base-q5_1.bin")
 TURN_WORKER=VoiceWorker('turn')
 TTS_WORKER=VoiceWorker("tts",MODELS/"tts/pt_PT-tugao-medium.onnx")
 TTS_EN_WORKER=VoiceWorker("tts",MODELS/"tts/en_GB-northern_english_male-medium.onnx")
@@ -1327,7 +1328,7 @@ def _merge_wavs(paths,out):
    wav.writeframes(chunk)
 def warm_voice():
  # Prioritise the fast STT worker; semantic turn is deferred until explicitly used.
- workers=[FAST_STT_WORKER,TTS_EN_WORKER,TTS_WORKER]
+ workers=[FAST_STT_WORKER,PT_STT_WORKER,TTS_EN_WORKER,TTS_WORKER]
  for worker in workers:
   try:
    with worker.lock:worker.start()
@@ -1507,9 +1508,14 @@ def transcribe(audio,language="auto"):
   engine="base"
   if (ROOT/"venv/bin/python").is_file():
    precise_requested=os.environ.get("TRAVIS_STT_MODE","fast").strip().lower()=="precise"
-   fast_allowed=not precise_requested and FAST_STT_WORKER.model.is_file()
-   worker=FAST_STT_WORKER if fast_allowed else STT_WORKER
-   engine="tiny-q5-fast" if fast_allowed else "base-accurate"
+   if precise_requested:
+    worker=STT_WORKER;engine="base-accurate"
+   elif language=="pt" and PT_STT_WORKER.model.is_file():
+    worker=PT_STT_WORKER;engine="base-q5-pt"
+   elif FAST_STT_WORKER.model.is_file():
+    worker=FAST_STT_WORKER;engine="tiny-q5-fast"
+   else:
+    worker=STT_WORKER;engine="base-fallback"
    raw=worker.request({"path":str(wav),"language":language})
    data=json.loads(raw.removeprefix("TRAVIS_STT:"))
    if data.get("error"):raise RuntimeError(data["error"])
@@ -1699,7 +1705,7 @@ def main():
    try:ThreadingHTTPServer(("127.0.0.1",8770),Handler).serve_forever()
    finally:
     TRAVIS_BRAIN.stop()
-    FAST_STT_WORKER.stop();STT_WORKER.stop();TTS_WORKER.stop();TTS_EN_WORKER.stop();TURN_WORKER.stop()
+    FAST_STT_WORKER.stop();PT_STT_WORKER.stop();STT_WORKER.stop();TTS_WORKER.stop();TTS_EN_WORKER.stop();TURN_WORKER.stop()
  elif a.action=="doctor":print(json.dumps(doctor(),indent=2,ensure_ascii=False))
  elif a.action=="ask":print(json.dumps(route(a.text),ensure_ascii=False))
  elif a.action=="llm-start":llm_start(a.text or "small")
