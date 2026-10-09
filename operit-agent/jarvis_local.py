@@ -18,6 +18,7 @@ import travis_web_tools
 import travis_dialogue
 import travis_semantic
 import travis_workflow
+import travis_toolhub
 from concurrent.futures import ThreadPoolExecutor
 ROOT=Path.home()/".centro-jarvis"
 MODELS=Path.home()/".centro-models"
@@ -41,6 +42,8 @@ TRAVIS_BRAIN=travis_brain.BrainRuntime(ROOT/"brain.sqlite",TRAVIS_STORE,TRAVIS_C
 for _tool,_mutation in [("brain_status",False),("brain_journal",False),("brain_pause",True)]:
  travis_core.register_capability(_tool,"jarvis","DB_MUTATION" if _mutation else "READ",_mutation,False)
 for _tool in ('conversation_control','connections_status','openclaw_status','agent_workflow','web_search'):
+ travis_core.register_capability(_tool,'jarvis','READ',False,True)
+for _tool in ('toolhub_status','toolhub_action'):
  travis_core.register_capability(_tool,'jarvis','READ',False,True)
 def brain_imagine(prompt,cancelled):
  # Local model only. No cloud calls, tool execution or promotion of imagined facts.
@@ -125,9 +128,11 @@ def awareness_snapshot():
  except (OSError,ValueError):gmail={}
  try:quantum=TRAVIS_QUANTUM.health()
  except Exception:quantum={}
- return travis_awareness.snapshot(registry=travis_core.registry_snapshot(),brain=TRAVIS_BRAIN,
+ data=travis_awareness.snapshot(registry=travis_core.registry_snapshot(),brain=TRAVIS_BRAIN,
      store=TRAVIS_STORE,ui_root=CENTRO_UI,model_root=MODELS,repo_root=REPOS,
      projects=PROJECTS,gmail=gmail,quantum=quantum,planner_enabled=(ROOT/"planner_enabled").is_file())
+ data["externalTools"]=travis_toolhub.snapshot()["tools"]
+ return data
 
 def awareness_facts():
  try:return travis_awareness.model_facts(awareness_snapshot())
@@ -267,6 +272,8 @@ def classify(text,active_project=None):
  normalized=norm(text)
  controls=travis_dialogue.control(text)
  if controls:return 'conversation_control',controls
+ toolhub_intent=travis_toolhub.classify(text)
+ if toolhub_intent:return toolhub_intent
  if re.search(r'\b(?:openclaw|opencloud|open cloud)\b',normalized) and re.search(r'\b(?:estado|ligado|verifica|check|status|connected|running)\b',normalized):return 'openclaw_status',{}
  if re.search(r'\b(?:ligacoes|conexoes|connections|connected services)\b',normalized):return 'connections_status',{}
  if (re.search(r'\b(?:awareness|autoconhecimento|autoconsciencia|self.?awareness)\b',normalized)
@@ -558,6 +565,8 @@ def projects_status(target=None):
  parts.append("Published-site availability was not tested in this query.")
  return {"projects":rows,"business":business,"reply":" ".join(parts)}
 def execute(tool,args):
+ if tool=='toolhub_status':return travis_toolhub.snapshot(args.get('tool'))
+ if tool=='toolhub_action':return travis_toolhub.perform(args)
  if tool=='conversation_control':return {'action':'conversation_control',**args}
  if tool=='connections_status':return connections_snapshot()
  if tool=='openclaw_status':return openclaw_status()
@@ -931,6 +940,7 @@ def _route(text,context=None):
  TRAVIS_COG.add_step(cog_run,tool,{**{k:v for k,v in args.items() if k not in {"text","prompt","original_text"}},"quantum_strategy":qstrategy,"quantum_phase":qplan.get("phase")},"verified" if verified else ("failed" if verification["verdict"]=="failure" else "unknown"),outcome["durationMs"],evidence_count,str(result)[:1200])
  TRAVIS_COG.finish(cog_run,verification["verdict"]=="success",verified,str(result)[:2000],verification=verification["verdict"])
  if tool=="conversation_control":reply=travis_dialogue.control_reply(args,getattr(DIALOGUE_INFO,"language","en"))
+ elif tool in {'toolhub_status','toolhub_action'}:reply=travis_toolhub.reply(result,getattr(DIALOGUE_INFO,'language','pt'))
  elif tool=='agent_workflow':reply='I checked '+str(result['completed'])+' of '+str(result['total'])+' requested areas. '+'; '.join(x['title']+': '+x['detail'] for x in result['steps'])
  elif tool=='web_search':reply='I found '+str(len(result['results']))+' public search results. You can choose one here.'
  elif tool=="openclaw_status":reply=result["reply"]
