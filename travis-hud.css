@@ -703,3 +703,12 @@ button.travis-action-card{cursor:pointer}
  .travis-camera-dock video{width:52px;height:42px}
  .travis-camera-dock span{font-size:8px;max-width:118px}
 }
+
+/* Immersive presence: the face/network selector has been removed from the DOM.
+   This high-specificity guard also hides stale cached markup during PWA updates;
+   neither old breakpoints nor legacy cinema overrides may resurrect it. */
+#travis-hud .travis-form-selector{
+  display:none!important;
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
