@@ -28,30 +28,30 @@ SUFFIX_SECONDS = 0.50
 # mutating-tool authorization. False negatives are still possible; this
 # conservative filter cannot replace runtime permission gates.
 SENSITIVE = re.compile(
-    r"\\b(?:apaga(?:r|s|m)?|apague|apagou|elimin\\w*|remov\\w*|"
+    r"\b(?:apaga(?:r|s|m)?|apague|apagou|elimin\w*|remov\w*|"
     r"publica(?:r|s|m|cao)?|publicou|"
     r"paga(?:r|s|m)?|pague|pagamento|compra(?:r|s|m)?|"
     r"envia(?:r|s|m)?|envie|enviou|"
-    r"instal\\w*|desinstal\\w*|altera(?:r|s|m)?|"
-    r"modific\\w*|edit\\w*|execut\\w*|escrev\\w*|atualiz\\w*|"
-    r"cria(?:r|s|m)?|crie|criou|renome\\w*|"
-    r"delete\\w*|eras\\w*|destroy\\w*|publish\\w*|deploy\\w*|"
-    r"pay|payment|purchas\\w*|buy|bought|send|sent|upload\\w*|"
-    r"install\\w*|uninstall\\w*|modify\\w*|change\\w*|"
-    r"edit\\w*|writ\\w*|execute\\w*|updat\\w*|commit\\w*|"
-    r"push|merge|rename\\w*|transf\\w*|post|forward\\w*)\\b",
+    r"instal\w*|desinstal\w*|altera(?:r|s|m)?|"
+    r"modific\w*|edit\w*|execut\w*|escrev\w*|atualiz\w*|"
+    r"cria(?:r|s|m)?|crie|criou|renome\w*|"
+    r"delete\w*|eras\w*|destroy\w*|publish\w*|deploy\w*|"
+    r"pay|payment|purchas\w*|buy|bought|send|sent|upload\w*|"
+    r"install\w*|uninstall\w*|modify\w*|change\w*|"
+    r"edit\w*|writ\w*|execute\w*|updat\w*|commit\w*|"
+    r"push|merge|rename\w*|transf\w*|post|forward\w*)\b",
     re.I,
 )
 # A candidate must have a positive, recognisable low-risk intention.
 # A syntactically harmless transcript is NOT enough to fast-approve a command.
 READ_ONLY_INTENT = re.compile(
-    r"\\b(?:verific\\w*|consult\\w*|mostr\\w*|explic\\w*|"
-    r"pesquis\\w*|procur\\w*|encontr\\w*|saber|"
-    r"diz|dizer|fala|falar|convers\\w*|"
+    r"\b(?:verific\w*|consult\w*|mostr\w*|explic\w*|"
+    r"pesquis\w*|procur\w*|encontr\w*|saber|"
+    r"diz|dizer|fala|falar|convers\w*|"
     r"abre|abrir|abro|ler|l[eê]|qual|quais|como|porque|"
     r"o que|quem|quando|onde|ol[aá]|bom dia|boa tarde|"
     r"check|show|explain|search|find|look|read|tell|"
-    r"speak|talk|hello|hi|what|how|who|where|when|why|open)\\b",
+    r"speak|talk|hello|hi|what|how|who|where|when|why|open)\b",
     re.I,
 )
 
