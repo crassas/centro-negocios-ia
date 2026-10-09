@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import './travis-cinematic-intents-selftest.mjs';
 import './travis-universal-visual-v2-selftest.mjs';
+import './travis-particle-draw-selftest.mjs';
 
 const read=path=>fs.readFileSync(path,'utf8');
 const html=read('index.html');
@@ -19,8 +20,8 @@ for(const text of ['id="travis-three-canvas"','id="travis-camera-toggle"','id="t
 for(const file of ['travis-cinema.css','travis-cinema-depth.css','travis-vision.mjs','travis-vision-policy.mjs']){
   assert(fs.statSync(file).size>100,'Missing cinematic/vision asset: '+file);
 }
-assert(html.includes('travis-3d.mjs?v=matter-2'),'Main scene version must match release.');
-assert(sw.includes('travis-3d.mjs?v=matter-2'),'PWA cache must use the released scene.');
+assert(html.includes('travis-3d.mjs?v=draw-1'),'Main scene version must match release.');
+assert(sw.includes('travis-3d.mjs?v=draw-1'),'PWA cache must use the released scene.');
 assert(sw.includes('travis-vision.mjs?v=4'),'PWA cache must use current camera script.');
 assert(cinema.length>1000 && cinemaDepth.length>1000,'Cinematic layers must be present.');
 assert(css.includes('#travis-three-canvas'),'Full-screen scene styling required.');
@@ -44,7 +45,7 @@ assert(ui.includes('speechClock={source,context:ac,start:startAt,envelope};'),'L
 assert(sw.includes('travis-audio-sync.mjs?v=1'),'PWA must cache the audio synchronization module.');
 assert(ui.includes("import './travis-action-cards.mjs?v=matter-2'"),'3D client must initialize the projection deck');
 assert(ui.includes('TravisProjection?.interpret?.(text)'),'Voice/keyboard must share the visual interpreter');
-assert(sw.includes('travis-concept-projection.mjs?v=matter-2'),'PWA must cache 3D projections');
+assert(sw.includes('travis-concept-projection.mjs?v=matter-3'),'PWA must cache 3D projections');
 assert(sw.includes('travis-english-intents.mjs?v=2'),'PWA must cache English grammar');
 assert(sw.includes('travis-action-cards.mjs?v=matter-2'),'PWA must cache auto-return action deck');
 

@@ -69,7 +69,7 @@ assert(deck.includes('travis:speech-end')&&deck.includes('travis:visual-control'
 for(const scene of ['planet','map','house','person','object'])
  assert(visual.includes("kind==='"+scene+"'"),'Missing '+scene+' 3D builder');
 assert(visual.includes('ghost')&&visual.includes('show(scene,now,subject'));
-assert(html.includes('travis-3d.mjs?v=matter-2'));
+assert(html.includes('travis-3d.mjs?v=draw-1'));
 assert(sw.includes('travis-english-intents.mjs?v=2'));
 console.log('TRAVIS_CINEMATIC_INTENTS_PASS',JSON.stringify({
  scenarios:scenarios.length,controls:controlCases.length,synonyms:synonyms.length,

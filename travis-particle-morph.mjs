@@ -5,6 +5,11 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
  const n=Math.max(128,Math.min(4500,Math.round(count)));
  const from=new Float32Array(n*3),to=new Float32Array(n*3),seed=new Float32Array(n);
  const geometry=new THREE.BufferGeometry();
+ // Three.js WebGLRenderer infers the non-indexed draw count from `position`.
+ // Without it, drawRange.count stays Infinity and renderBufferDirect skips
+ // every particle even though aFrom/aTo contain valid shader attributes.
+ geometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(n*3),3));
+ geometry.setDrawRange(0,n);
  const random=(a,b=1)=>{const v=Math.sin(a*12.9898+b*78.233)*43758.5453;return v-Math.floor(v);};
  const sourceCore=i=>{
   const theta=2.3999632297*i,ny=1-2*((i+.5)/n),r=Math.sqrt(Math.max(0,1-ny*ny));

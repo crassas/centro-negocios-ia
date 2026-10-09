@@ -84,11 +84,11 @@ assert(scene.includes('createTravisParticleMorph('),'Scene geometry must feed mo
 assert(scene.includes('active.visible=false'),'Solid model must not be shown over the matter');
 assert(client.includes('conceptProjection.setSource('),'Morph origin must be the actual Travis 3D form');
 assert(client.includes("returnToCore?.("),'Returning holograms must reassemble the Travis core');
-assert(client.includes("travis-concept-projection.mjs?v=matter-2"));
+assert(client.includes("travis-concept-projection.mjs?v=matter-3"));
 assert(engine.includes('TravisMorphParticles'));
 assert(engine.includes('aFrom')&&engine.includes('aTo')&&engine.includes('uMorph'));
 assert(css.includes('data-immersive="true"'),'Visual projection must give full screen');
-assert(sw.includes('travis-particle-morph.mjs?v=1'));
+assert(sw.includes('travis-particle-morph.mjs?v=2'));
 console.log('PASS UNIVERSAL_VISUAL_V2',JSON.stringify({
  openVocabularyScenes:examples.length,controls:controls.length,negativeSafety:true,
  particleMorph:true,noOpaqueModels:true,immersive:true,modelFallback:true
