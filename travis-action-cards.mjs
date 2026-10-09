@@ -1,12 +1,12 @@
 // Front workspace driven by actual host tool results. Text is always inert.
 import {hologramPresentation as projection} from './travis-presence.mjs?v=3';
 import {mountYouTube,closeYouTube,controlYouTube,youtubeState} from './travis-youtube.mjs?v=3';
-import {parseEnglishProjection,rewriteEnglishToolRequest} from './travis-english-intents.mjs?v=1';
+import {parseVisualIntent,rewriteEnglishToolRequest,mayNeedVisualModel} from './travis-english-intents.mjs?v=2';
 const hud=document.getElementById('travis-hud');
 const deck=document.getElementById('travis-action-deck');
 const heading=document.getElementById('travis-action-heading');
 const items=document.getElementById('travis-action-items');
-let current=null,selected=null,frame=0,wasVisible=false,returnTimer=0,pinned=false,highlighted=0;
+let current=null,selected=null,frame=0,wasVisible=false,returnTimer=0,pinned=false,highlighted=0,renderVersion=0;
 const planetSequence=['Mercury','Venus','Earth','Mars','Jupiter','Saturn','Uranus','Neptune'];
 function canReturn(){
   if(!current||pinned||current.autoReturn===false)return false;
@@ -30,12 +30,16 @@ function updatePin(){
 }
 const schematic=(scene,title)=>{
   const names={planet:'PLANETARY CONCEPT',map:'SCHEMATIC MAP',house:'ARCHITECTURAL WIREFRAME',
-    person:'HUMAN FIGURE CONCEPT',object:'OBJECT WIREFRAME'};
+    person:'HUMAN FIGURE CONCEPT',vehicle:'VEHICLE CONCEPT',landscape:'NATURE CONCEPT',
+    diagram:'CONCEPT DIAGRAM',object:'OBJECT WIREFRAME'};
   const summaries={planet:'Illustrative orbital model, not NASA imagery.',
     map:'Illustrative route grid, not live geography or verified coordinates.',
     house:'Conceptual building geometry, not a survey or architectural plan.',
     person:'Generic holographic figure, not a reconstruction of a real person.',
-    object:'Generic 3D placeholder, not a scan of a physical object.'};
+    vehicle:'Conceptual vehicle form; not a measured vehicle or CAD model.',
+    landscape:'Illustrative landscape, not a georeferenced place.',
+    diagram:'Conceptual arrangement; not a verified engineering diagram.',
+    object:'Generic particle concept, not a scan of a physical object.'};
   const result={kind:'illustration',scene,title:String(title||names[scene]).slice(0,110),
     summary:summaries[scene],autoReturn:true,items:[]};
   if(scene==='map'){
@@ -60,7 +64,7 @@ function render(data){
     data={...data,query:current.query||data.query,items:data.items?.length?data.items:current.items};
   }
   closeYouTube();
-  current={...data,autoReturn:data.autoReturn!==false};pinned=false;highlighted=0;
+  current={...data,autoReturn:data.autoReturn!==false};pinned=false;highlighted=0;renderVersion++;
   clearTimeout(returnTimer);updatePin();
   hud.dataset.projectionKind=String(data.kind||'result');
   window.dispatchEvent(new CustomEvent('travis:illustration',{detail:{
@@ -102,8 +106,11 @@ function render(data){
 function paint(){
   frame=0;
   const view=projection.sample(clock());
-  deck.hidden=!view.visible;
-  deck.inert=view.panel<.65;
+  const immersive=current?.kind==='illustration';
+  // Geometry occupies the centre: never cover planets/houses with repositories.
+  deck.hidden=!view.visible||immersive;
+  deck.inert=immersive||view.panel<.65;
+  hud.dataset.immersive=String(Boolean(view.visible&&immersive));
   deck.style.setProperty('--projection-opacity',view.panel.toFixed(3));
   deck.style.setProperty('--projection-shift',`${((1-view.panel)*18).toFixed(1)}px`);
   hud.style.setProperty('--travis-presence',(1-view.amount).toFixed(3));
@@ -128,8 +135,9 @@ if(deck){
     else{
       clearTimeout(returnTimer);closeYouTube();projection.close(clock());refresh();
       pinned=false;current=null;updatePin();
+      const version=++renderVersion;
       setTimeout(()=>{
-        if(!projection.sample(clock()).visible)
+        if(version===renderVersion&&!projection.sample(clock()).visible)
           window.dispatchEvent(new CustomEvent('travis:illustration',{detail:{scene:null}}));
       },1350);
     }
@@ -149,15 +157,30 @@ if(deck){
   for(const event of ['pointerdown','touchstart','scroll','focusin','keydown']){
     deck.addEventListener(event,touchProjection,{passive:true});
   }
-  window.addEventListener('travis:close',()=>{clearTimeout(returnTimer);
+  window.addEventListener('travis:close',()=>{clearTimeout(returnTimer);renderVersion++;
     closeYouTube();cancelAnimationFrame(frame);frame=0;projection.reset();wasVisible=false;current=null;pinned=false;paint();
   });
   window.TravisProjection=Object.freeze({
     media:youtubeState,
+    mayNeedModel:mayNeedVisualModel,
+    applyModelIntent(result,text=''){
+      const valid=['planet','map','house','person','vehicle','landscape','diagram','object'];
+      if(result?.ok!==true||!valid.includes(result.scene)
+          ||typeof result.title!=='string'||result.title.length>110)return null;
+      const pt=/\b(?:quero|gostava|apetece|imagina|podes|consegues|como|seria|mostra)\b/i.test(text);
+      render(schematic(result.scene,result.title));
+      window.TravisVisual?.commands(true,{automatic:true});show();
+      return {handled:true,language:pt?'pt':'en',
+        reply:pt?'A projetar '+result.title+'.':'Projecting '+result.title+'.',
+        kind:'scene',source:'local-language-model'};
+    },
     status:()=>({kind:current?.kind||null,scene:current?.scene||null,pinned,
       autoReturn:current?.autoReturn!==false,highlighted}),
     interpret(text){
-      const intent=parseEnglishProjection(text,{
+      // The first-stage router is open-vocabulary for visual requests; unseen
+      // subjects become a labelled conceptual particle shape, not a workspace.
+
+      const intent=parseVisualIntent(text,{
         active:Boolean(current&&projection.sample(clock()).visible),
         kind:current?.kind||''
       });
@@ -168,7 +191,9 @@ if(deck){
       if(intent.type==='scene'){
         render(schematic(intent.scene,intent.title));
         window.TravisVisual?.commands(true,{automatic:true});show();
-        return {handled:true,reply:'Projecting '+intent.title+'.',kind:'scene'};
+        return {handled:true,reply:intent.language==='pt'
+          ?'A projetar '+intent.title+'.':'Projecting '+intent.title+'.',
+          language:intent.language||'en',kind:'scene'};
       }
       if(intent.type==='dismiss'){
         window.TravisVisual?.commands(false,{automatic:true});

@@ -21,6 +21,7 @@ import travis_library
 import travis_web_tools
 import travis_dialogue
 import travis_semantic
+import travis_visual_semantics
 import travis_workflow
 from concurrent.futures import ThreadPoolExecutor
 ROOT=Path.home()/".centro-jarvis"
@@ -527,6 +528,26 @@ def infer(text,system="You are Travis, the Centro de Negócios AI assistant. Und
   if fallback_reason:INFERENCE_INFO.value.update(degraded=True,fallbackReason=fallback_reason)
   event("executions",{"provider":"local","model":r.get("model"),"latency_ms":int((time.monotonic()-start)*1000),"usage":r.get("usage")})
   return re.sub(r"<think>.*?</think>","",r["choices"][0]["message"]["content"],flags=re.S).strip()
+def visual_intent_model_request(body):
+ """Semantic visual fallback: only local, already running LLM, bounded 8s."""
+ text=body.get("text","") if isinstance(body,dict) else ""
+ if not travis_visual_semantics.candidate(text):
+  return {"ok":False,"reason":"not-a-visual-request"}
+ try:
+  health=http("http://127.0.0.1:8771/health",timeout=.8)
+  if health.get("status") not in {"ok","ready"}:
+   return {"ok":False,"reason":"semantic-model-unavailable"}
+ except (OSError,TimeoutError,ValueError):
+  return {"ok":False,"reason":"semantic-model-unavailable"}
+ def ask(system,question):
+  payload={"messages":[{"role":"system","content":system},{"role":"user","content":question[:600]}],
+           "temperature":0.1,"max_tokens":110,"stream":False,
+           "response_format":{"type":"json_object"},
+           "chat_template_kwargs":{"enable_thinking":False}}
+  response=http("http://127.0.0.1:8771/v1/chat/completions",payload,timeout=7)
+  return response["choices"][0]["message"]["content"]
+ return travis_visual_semantics.resolve(text,ask)
+
 def web_research_answer(query):
  data=travis_web_tools.research(query,5,3)
  sources=[];chunks=[]
@@ -1596,7 +1617,7 @@ def centro_activity():
  with urllib.request.urlopen(request,timeout=5) as response:return json.load(response)
 TRUSTED_WEB_ORIGINS={"https://crassas.github.io"}
 LOCAL_ORIGINS={"http://127.0.0.1:8770","http://localhost:8770"}
-WEB_VOICE_ENDPOINTS={"/health","/transcribe","/listen","/jarvis","/speak","/voice-task","/turn","/initiative","/resume"}
+WEB_VOICE_ENDPOINTS={"/health","/transcribe","/listen","/jarvis","/speak","/voice-task","/turn","/initiative","/resume","/visual-intent"}
 
 LOCAL_COCKPIT_ENDPOINTS={"/awareness","/brain/state","/brain/graph","/brain/control","/brain/feedback","/connections","/cockpit","/gmail/configure","/gmail/start","/gmail/inbox","/gmail/disconnect"}
 
@@ -1672,6 +1693,7 @@ class Handler(BaseHTTPRequestHandler):
     if path=="/transcribe":return self.send({"ok":True,"text":text,"durationMs":int((time.monotonic()-stage_start)*1000),"languageRequested":language})
     return self.send({"text":text,**route(text)})
    obj=json.loads(data)
+   if path=="/visual-intent":return self.send(visual_intent_model_request(obj))
    if path=="/resume":return self.send(resume_brief(obj))
    if path=="/initiative":return self.send(initiative(obj))
    if path=="/awareness":return self.send(awareness_snapshot())

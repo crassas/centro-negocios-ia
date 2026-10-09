@@ -1,5 +1,5 @@
-import { createConceptProjection } from './travis-concept-projection.mjs?v=cinema-1';
-import './travis-action-cards.mjs?v=cinema-1';
+import { createConceptProjection } from './travis-concept-projection.mjs?v=matter-2';
+import './travis-action-cards.mjs?v=matter-2';
 import { createVoiceInput } from './travis-voice-input.mjs?v=stt-fast-1';
 import { resolveWakePhrase } from './travis-wake-phrase.mjs?v=pt-1';
 import { createTravisVision } from './travis-vision.mjs?v=4';
@@ -69,6 +69,9 @@ if (!hud || !launcher || !canvas) {
   });
   window.addEventListener('travis:visual-control',event=>{
     conceptProjection?.control?.(event.detail?.action);
+  });
+  window.addEventListener('travis:commands',event=>{
+    if(event.detail?.open===false)conceptProjection?.returnToCore?.(performance.now()/1000);
   });
   const holographicEyeMaterials=[];
   let faceHit;
@@ -894,17 +897,31 @@ if (!hud || !launcher || !canvas) {
       if(wakeAddress.corrected)metrics.wakeRecoveryKind=wakeAddress.kind;
       lastInteraction=performance.now();
       text=window.TravisProjection?.select(text)||text;
-      const interpretation=window.TravisProjection?.interpret?.(text);
+      let interpretation=window.TravisProjection?.interpret?.(text);
+      // Unfamiliar colloquial image requests may use the already running
+      // local language model. This never starts a heavyweight LLM mid-voice.
+      if(!interpretation?.handled&&window.TravisProjection?.mayNeedModel?.(text)){
+        try{
+          const semantic=await localJson('/visual-intent',{
+            body:{text},signal:AbortSignal.any([controller.signal,AbortSignal.timeout(8500)])
+          });
+          if(!opened||session!==voiceSession)return;
+          if(semantic?.ok)interpretation=window.TravisProjection?.applyModelIntent?.(semantic,text);
+        }catch(error){
+          if(controller.signal.aborted||session!==voiceSession)return;
+          console.debug('Visual intent model not ready:',error.message);
+        }
+      }
       if(interpretation?.rewritten)text=interpretation.rewritten;
       if(interpretation?.handled){
         if(!interpretation.reply){
           voiceBusy=false;setState('ready','I’m here.');scheduleListening(session,180);
           return;
         }
-        replyLanguage='en';
+        replyLanguage=interpretation.language==='pt'?'pt':'en';
         setState('thinking','Preparing short voice response…');
         const speech=await localFetch('/speak',{
-          body:{text:interpretation.reply,language:'en'},
+          body:{text:interpretation.reply,language:replyLanguage},
           signal:controller.signal
         });
         if(!speech.ok)throw new Error('Local voice unavailable.');
@@ -1652,7 +1669,12 @@ if (!hud || !launcher || !canvas) {
     renderer.toneMappingExposure=.98;
 
     scene=new THREE.Scene();
-    conceptProjection=createConceptProjection(THREE,{reducedMotion});scene.add(conceptProjection.root);
+    conceptProjection=createConceptProjection(THREE,{reducedMotion});
+    conceptProjection.setSource(()=>realFaceHead&&formBlend.face>.42
+      ? realFaceHead : coreRoot||realFaceHead);
+    scene.add(conceptProjection.root);
+    // No secondary solid overlay: every projected shape uses the shared matter.
+    conceptProjection.root.traverse(obj=>{if(obj.isPoints)obj.layers.enable(BLOOM_LAYER);});
     if(pendingConcept)conceptProjection.show(pendingConcept,performance.now()/1000,pendingSubject);
     scene.background=new THREE.Color(0x030405);
     scene.fog=new THREE.FogExp2(0x030405,.045);
@@ -1813,7 +1835,7 @@ if (!hud || !launcher || !canvas) {
     if (coreRoot) {
       const baseScale=(innerWidth/innerHeight<.72?.47:.70)*(.35+.65*introEase);
       const speechExpand=state==='speaking'?speechLevel*.045:0;
-      const coreScale=Math.max(.001,formBlend.core);
+      const coreScale=Math.max(.001,formBlend.core*(1-projection.amount));
       coreRoot.visible=coreScale>.012;
       coreRoot.scale.setScalar(baseScale*(1+speechExpand)*coreScale);
       coreRoot.rotation.x=lerp(-.24,-.08,introEase);
