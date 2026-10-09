@@ -1,5 +1,5 @@
 import {particleBounds,fitParticleToViewport} from './travis-projection-framing.mjs?v=1';
-import {createHolographicParticleMaterial} from './travis-holographic-head.mjs?v=cinema-2';
+import {createHolographicParticleMaterial} from './travis-holographic-head.mjs?v=detail-1';
 
 export const morphEase=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
 export function morphVisibility(progress,returning,alphaStart=0,avatarStart=0){

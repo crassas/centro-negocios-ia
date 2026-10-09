@@ -1,5 +1,5 @@
 import {earthLand} from './travis-earth-land.mjs?v=1';
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=cinema-2';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=detail-1';
 export const foldVisual=s=>String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 export const celestialNames={mercury:['mercury','mercurio'],venus:['venus'],earth:['earth','terra'],mars:['mars','marte'],jupiter:['jupiter'],saturn:['saturn','saturno'],uranus:['uranus','urano'],neptune:['neptune','neptuno'],pluto:['pluto','plutao'],moon:['moon','lua'],sun:['sun','sol']};
 export function identifyVisualSubject(scene,subject){
@@ -65,7 +65,7 @@ function planetMap(THREE,name){
 export function createDetailedSubject(THREE,scene,subject,{reference=null}={}){
  const variant=identifyVisualSubject(scene,subject),group=new THREE.Group(),materials=[],textures=[];
  group.name='TravisSubject:'+variant;
- const surface=(geometry,{map=null,mask=false,gain=1}={})=>{const mat=createHolographicSurfaceMaterial(THREE,{map,mask,gain});materials.push(mat);const mesh=new THREE.Mesh(geometry,mat);group.add(mesh);return mesh;};
+ const surface=(geometry,{map=null,mask=false,gain=1,photo=false}={})=>{const mat=createHolographicSurfaceMaterial(THREE,{map,mask,gain,photo});materials.push(mat);const mesh=new THREE.Mesh(geometry,mat);group.add(mesh);return mesh;};
  const line=(points,opacity=.5)=>{const mat=new THREE.LineBasicMaterial({color:0xc8a876,transparent:true,opacity,depthWrite:false});mat.userData.baseOpacity=opacity;materials.push(mat);const o=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points.map(p=>new THREE.Vector3(...p))),mat);group.add(o);return o;};
  const body=(name,r=.82)=>{const map=planetMap(THREE,name);textures.push(map);const mesh=surface(new THREE.SphereGeometry(r,96,64),{map,gain:name==='sun'?1.5:1.12});mesh.userData.visualBody=name;return mesh;};
  if(celestialNames[variant]){
@@ -121,14 +121,15 @@ export function createDetailedSubject(THREE,scene,subject,{reference=null}={}){
   const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
   const mat=new THREE.PointsMaterial({color:0xd6b88c,size:.005,transparent:true,opacity:.35,depthWrite:false});mat.userData.baseOpacity=.35;materials.push(mat);group.add(new THREE.Points(geo,mat));
  }else if(variant==='reference'&&reference?.image){
-  const image=reference.image,c=canvas(Math.min(512,image.width),Math.min(512,Math.round(image.height*Math.min(512,image.width)/image.width)));
+  const image=reference.image,scale=Math.min(1,960/Math.max(image.width,image.height)),c=canvas(Math.max(1,Math.round(image.width*scale)),Math.max(1,Math.round(image.height*scale)));
   const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(image,0,0,c.width,c.height);
-  const data=ctx.getImageData(0,0,c.width,c.height),aspect=c.width/c.height;
+  const depth=canvas(48,48),dc=depth.getContext('2d',{willReadFrequently:true});dc.drawImage(image,0,0,48,48);
+  const data=dc.getImageData(0,0,48,48),aspect=c.width/c.height;
   // A depth relief of a sourced image, explicitly not a recovered 3D model.
   const width=aspect>=1?2.4:2.1*aspect,height=aspect>=1?2.4/aspect:2.1;
   const geo=new THREE.PlaneGeometry(width,height,96,96),a=geo.attributes.position,uv=geo.attributes.uv;
-  for(let i=0;i<a.count;i++){const x=Math.min(c.width-1,Math.floor(uv.getX(i)*c.width)),y=Math.min(c.height-1,Math.floor((1-uv.getY(i))*c.height)),j=(y*c.width+x)*4,l=(data.data[j]*.2126+data.data[j+1]*.7152+data.data[j+2]*.0722)/255;a.setZ(i,l*.12);}
-  geo.computeVertexNormals();const map=new THREE.CanvasTexture(c);textures.push(map);surface(geo,{map,gain:1.12});
+  for(let i=0;i<a.count;i++){const x=Math.min(47,Math.floor(uv.getX(i)*48)),y=Math.min(47,Math.floor((1-uv.getY(i))*48)),j=(y*48+x)*4,l=(data.data[j]*.2126+data.data[j+1]*.7152+data.data[j+2]*.0722)/255;a.setZ(i,l*.025);}
+  geo.computeVertexNormals();const map=new THREE.CanvasTexture(c);textures.push(map);surface(geo,{map,gain:1.05,photo:true});
  }else return null;
  group.userData.visualVariant=variant;
  return {group,materials,textures,variant};

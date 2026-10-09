@@ -127,9 +127,9 @@ assert(brainPanel.includes("hud?.classList.contains('is-open')"),
 assert(ui.includes("visionStatusCopy(message,locale())"));
 assert(css.includes('display:none!important')&&css.includes('#travis-hud .travis-form-selector'),
   'Cached selector must remain hidden even during a partial update');
-assert(sw.includes('travis-form-director.mjs?v=cinema-2'));
+assert(sw.includes('travis-form-director.mjs?v=detail-1'));
 assert(sw.includes('travis-interface-language.mjs?v=1'));
-assert(sw.includes('travis-brain-view.mjs?v=cinema-2'));
+assert(sw.includes('travis-brain-view.mjs?v=detail-1'));
 assert(html.includes('data-ui-language="en"'));
 assert(html.includes('placeholder="Speak to me, or type a request…"'));
 console.log('PASS IMMERSIVE_TRAVIS: automatic observed-state morph, invisible switch, PT/EN voice, English-first UI and accessibility');

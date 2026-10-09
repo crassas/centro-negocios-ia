@@ -1,21 +1,21 @@
-import { createConceptProjection } from './travis-concept-projection.mjs?v=cinema-2';
-import './travis-action-cards.mjs?v=cinema-2';
+import { createConceptProjection } from './travis-concept-projection.mjs?v=detail-1';
+import './travis-action-cards.mjs?v=detail-1';
 import { createVoiceInput } from './travis-voice-input.mjs?v=stt-fast-1';
-import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=cinema-2';
+import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=detail-1';
 import { INTERFACE_COPY, interfaceLanguage, applyInterfaceLanguage, languageFromInterfaceCommand } from './travis-interface-language.mjs?v=1';
 import { resolveWakePhrase } from './travis-wake-phrase.mjs?v=pt-1';
 import { createTravisVision } from './travis-vision.mjs?v=scene-1';
 import { buildSpeechEnvelope, speechEnvelopeLevel } from './travis-audio-sync.mjs?v=1';
 import { sceneSignature } from './travis-scene-tracker.mjs?v=1';
 import { cameraCommand } from './travis-vision-policy.mjs?v=scene-1';
-import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=cinema-2';
+import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=detail-1';
 import { projectWebAnswer } from './travis-web-projection.mjs?v=agent-1';
 import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=3';
 import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
 import { createBacklight } from './travis-atmosphere.mjs?v=cinema-1';
 import { createFaceRig } from './travis-face-rig.mjs?v=articulation-2';
 import * as THREE from 'three';
-import { createNeuralField } from './travis-brain-view.mjs?v=cinema-2';
+import { createNeuralField } from './travis-brain-view.mjs?v=detail-1';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -1007,7 +1007,7 @@ if (!hud || !launcher || !canvas) {
       if(interpretation?.researchQuery){
         setState('thinking',interpretation.language==='pt'?'A procurar uma referência visual…':'Finding a visual reference…');
         try{
-          const reference=await localJson('/visual-research',{body:{query:interpretation.researchQuery,language:interpretation.language,includeImage:interpretation.needsReference},signal:AbortSignal.any([controller.signal,AbortSignal.timeout(18000)])});
+          const reference=await localJson('/visual-research',{body:{query:interpretation.researchQuery,language:interpretation.language,includeImage:interpretation.needsReference,imageIndex:interpretation.imageIndex||0},signal:AbortSignal.any([controller.signal,AbortSignal.timeout(25000)])});
           if(!opened||session!==voiceSession||controller.signal.aborted)return;
           const receipt=await window.TravisProjection?.applyReference?.(reference,interpretation);
           if(receipt&&interpretation.handled)interpretation.reply=receipt;

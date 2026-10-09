@@ -1,8 +1,8 @@
 // Front workspace driven by actual host tool results. Text is always inert.
 import {hologramPresentation as projection} from './travis-presence.mjs?v=3';
 import {mountYouTube,closeYouTube,controlYouTube,youtubeState} from './travis-youtube.mjs?v=3';
-import {parseVisualIntent,rewriteEnglishToolRequest,mayNeedVisualModel} from './travis-english-intents.mjs?v=cinema-2';
-import {buildNarrationCues,cueAtTime,hasLocalVisual} from './travis-visual-story.mjs?v=cinema-2';
+import {parseVisualIntent,rewriteEnglishToolRequest,mayNeedVisualModel} from './travis-english-intents.mjs?v=detail-1';
+import {buildNarrationCues,cueAtTime,hasLocalVisual} from './travis-visual-story.mjs?v=detail-1';
 const hud=document.getElementById('travis-hud');
 const deck=document.getElementById('travis-action-deck');
 const heading=document.getElementById('travis-action-heading');
@@ -81,6 +81,21 @@ function render(data,{story=false}={}){
   if(data.sourceUrl){const link=document.createElement('a');link.href=data.sourceUrl;link.target='_blank';link.rel='noopener noreferrer';link.textContent=' · '+String(data.sourceName||'Source');caption.append(link);}
   if(data.creditUrl){const link=document.createElement('a');link.href=data.creditUrl;link.target='_blank';link.rel='noopener noreferrer';link.textContent=' · Image credit';caption.append(link);}
   if(data.scene==='reference'){const note=document.createElement('small');note.textContent='IMAGE RELIEF';caption.append(note);}
+  if(data.gallery?.count>1){
+    const navigation=document.createElement('div');navigation.className='travis-reference-navigation';
+    navigation.setAttribute('aria-label',data.gallery.language==='pt'?'Imagens de referência':'Reference images');
+    for(const [command,label] of [['Previous image','‹'],['Next image','›']]){
+      const button=document.createElement('button');button.type='button';button.textContent=label;
+      button.setAttribute('aria-label',command);button.addEventListener('click',()=>window.TravisVisual?.ask(command));
+      navigation.append(button);
+      if(command==='Previous image'){const count=document.createElement('span');count.textContent=(data.gallery.index+1)+' / '+data.gallery.count;navigation.append(count);}
+    }
+    caption.append(navigation);
+  }else if(data.kind==='illustration'&&!['text','reference'].includes(data.scene)){
+    const photos=document.createElement('button');photos.type='button';photos.className='travis-reference-photos';photos.textContent='Photos';
+    photos.addEventListener('click',()=>window.TravisVisual?.ask('Show photos of '+data.title));caption.append(photos);
+  }
+  if(data.imageAuthor||data.imageLicense){const credit=document.createElement('small');credit.className='travis-reference-credit';credit.textContent=[data.imageAuthor,data.imageLicense].filter(Boolean).join(' · ');caption.append(credit);}
   items.dataset.kind=String(data.kind||'result');
   const rows=Array.isArray(data.items)?data.items.slice(0,30):[];
   items.replaceChildren();
@@ -195,7 +210,7 @@ if(deck){
         kind:'scene',source:'local-language-model',title:result.title,needsReference,researchQuery:needsReference?result.title:null,visualVersion:storyEpoch};
     },
     status:()=>({kind:current?.kind||null,scene:current?.scene||null,pinned,
-      autoReturn:current?.autoReturn!==false,highlighted,title:current?.title||'',narration:narration?{index:narration.index,cues:narration.cues}:null,sourceUrl:current?.sourceUrl||null}),
+      autoReturn:current?.autoReturn!==false,highlighted,title:current?.title||'',gallery:current?.gallery?{index:current.gallery.index,count:current.gallery.count,query:current.gallery.query}:null,narration:narration?{index:narration.index,cues:narration.cues}:null,sourceUrl:current?.sourceUrl||null}),
     beginNarration({text,context,start,duration}){
       if(!current?.explaining||pinned||!context)return;
       const initial={scene:current.scene,title:current.title};
@@ -212,8 +227,10 @@ if(deck){
       }
       if(intent.visualVersion!==storyEpoch)return null;
       const title=result.title||intent.title;
-      render({...schematic(image?'reference':'text',title),reference:image?{image}:null,sourceUrl:result.url,sourceName:result.source,creditUrl:result.creditUrl,explaining:Boolean(intent.explain)});
+      const gallery=image?{query:intent.researchQuery||result.query||intent.title,language:intent.language||'en',index:result.imageIndex||0,count:result.imageCount||1}:null;
+      render({...schematic(image?'reference':'text',title),reference:image?{image}:null,sourceUrl:result.url,sourceName:result.source,creditUrl:result.creditUrl,imageAuthor:result.author,imageLicense:result.license,gallery,explaining:Boolean(intent.explain)});
       window.TravisVisual?.commands(true,{automatic:true});show();
+      if(image&&intent.kind==='reference-next')return intent.language==='pt'?'Imagem '+(gallery.index+1)+' de '+gallery.count+'.':'Image '+(gallery.index+1)+' of '+gallery.count+'.';
       return intent.language==='pt'?(image?'Encontrei uma imagem de referência de '+title+'.':'Encontrei informação sobre '+title+', mas sem imagem disponível.'):(image?'I found a visual reference for '+title+'.':'I found information about '+title+', but no image was available.');
     },
     interpret(text){
@@ -231,7 +248,7 @@ if(deck){
       if(intent.type==='scene'){
         if(intent.scene==='planet'&&/\b(?:random|any|aleatorio|aleatória|aleatoria|qualquer)\b/i.test(String(text).normalize('NFD').replace(/[\u0300-\u036f]/g,'')))
           intent.title=planetSequence[Math.floor(Math.random()*planetSequence.length)];
-        const needsReference=!hasLocalVisual(intent.scene,intent.title);
+        const needsReference=Boolean(intent.referenceRequested)||!hasLocalVisual(intent.scene,intent.title);
         render({...schematic(needsReference?'text':intent.scene,intent.title),explaining:Boolean(intent.explain)});
         window.TravisVisual?.commands(true,{automatic:true});show();
         return {...intent,handled:!intent.explain,reply:intent.language==='pt'
@@ -253,6 +270,18 @@ if(deck){
       }
       if(intent.type==='control'){
         const action=intent.action;
+        if(action==='next'&&!current?.gallery&&current?.kind==='illustration'&&/\b(?:image|images|photo|imagem|imagens|foto)\b/i.test(text)){
+          cancelNarration();clearTimeout(returnTimer);
+          return {handled:true,kind:'scene',language:/imagem|imagens|foto|mais/i.test(text)?'pt':'en',title:current.title,reply:'',needsReference:true,
+            researchQuery:current.title,imageIndex:0,visualVersion:storyEpoch};
+        }
+        if((action==='next'||action==='previous')&&current?.gallery){
+          const gallery=current.gallery;
+          if(gallery.count<2)return {handled:true,reply:gallery.language==='pt'?'Só encontrei uma imagem para este tema.':'I found only one image for this subject.',kind:'control'};
+          cancelNarration();clearTimeout(returnTimer);
+          return {handled:true,kind:'reference-next',language:gallery.language,title:current.title,reply:'',needsReference:true,
+            researchQuery:gallery.query,imageIndex:(gallery.index+(action==='next'?1:-1)+gallery.count)%gallery.count,visualVersion:storyEpoch};
+        }
         if((action==='next'||action==='previous')&&current?.scene==='planet'){
           const index=planetSequence.findIndex(name=>current.title?.toLowerCase().includes(name.toLowerCase()));
           const next=(index+(action==='next'?1:-1)+planetSequence.length)%planetSequence.length;

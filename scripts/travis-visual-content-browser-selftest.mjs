@@ -15,7 +15,8 @@ const server=http.createServer(async(req,res)=>{try{
   if(name==='/speak'){res.setHeader('Content-Type','audio/wav');return res.end(voiceFixture());}
   res.setHeader('Content-Type','application/json');
   if(name==='/jarvis')return res.end(JSON.stringify({ok:true,reply:replyFixture,language:'pt',preferences:{proactive:false}}));
-  return res.end(await fs.readFile(process.argv[6],'utf8'));
+  const selected=JSON.parse(body).imageIndex;const fixture=selected?process.argv[6].replace(/\.json$/, '-next.json'):process.argv[6];
+  return res.end(await fs.readFile(fixture,'utf8'));
  }
 
  if(req.method!=='GET'||name==='/health'||name.startsWith('/brain/')||name.startsWith('/tasks')||name.startsWith('/initiative')){
@@ -48,13 +49,15 @@ try{
  for(const [request,variant] of [
   ['Mostra-me Júpiter','jupiter'],['Mostra-me Marte','mars'],['Mostra-me a Terra','earth'],
   ['Mostra-me o Sol','sun'],['Mostra-me o espaço','galaxy'],['Mostra as letras "TRAVIS"','text'],
-  ['Mostra-me ADN','dna'],['Mostra-me uma casa','house']
+  ['Mostra-me ADN','dna'],['Mostra-me uma casa','detailed-house'],['Mostra uma casa moderna','modern-house'],['Show a building','apartment-building']
  ]){
   const receipt=await page.evaluate(request=>TravisProjection.interpret(request),request);
   assert(receipt?.handled,request);await page.waitForTimeout(1600);
   await record(variant);assert.equal(states.at(-1).state.hologram.variant,variant,request);
   assert.equal(states.at(-1).state.hologram.matter.active,true);
  }
+ const photosFromShape=await page.evaluate(()=>TravisProjection.interpret('mais imagens'));
+ assert(photosFromShape.needsReference&&photosFromShape.researchQuery==='Building');
  const explanation=await page.evaluate(()=>TravisProjection.interpret('Explica-me o sistema solar'));
  assert.equal(explanation.handled,false,'Explanations must reach the conversational backend');
  await page.evaluate(()=>{window.testAudioClock={currentTime:0};TravisProjection.beginNarration({text:'O Sol fica no centro. A Terra orbita o Sol e tem uma lua. Júpiter é um gigante gasoso.',context:testAudioClock,start:0,duration:24});});
@@ -74,6 +77,18 @@ try{
   await page.waitForTimeout(1700);assert.equal(await page.evaluate(()=>TravisVisual.diagnostics().hologram.variant),'mars','Late reference results must not replace a new request');
  }
 
+ if(fixturePath){
+  await page.evaluate(()=>TravisVisual.ask('Show photos of football'));
+  await page.waitForFunction(()=>TravisProjection.status().gallery?.count>1,{},{timeout:20000});
+  await page.waitForTimeout(1600);await record('gallery-first');
+  await page.evaluate(()=>{TravisVisual.pause();TravisVisual.ready();});
+  await page.evaluate(()=>TravisVisual.ask('Next image'));
+  await page.waitForFunction(()=>TravisProjection.status().gallery?.index===1,{},{timeout:20000});
+  await page.waitForTimeout(1600);await record('gallery-next');
+  assert(fixtureRequests.some(r=>r.name==='/visual-research'&&r.body.imageIndex===1));
+  assert.equal(await page.locator('.travis-reference-navigation button').count(),2);
+  await page.evaluate(()=>{TravisVisual.pause();TravisVisual.ready();});
+ }
  await page.evaluate(()=>TravisVisual.ask('Explica-me o sistema solar'));
  await page.waitForFunction(()=>TravisVisual.diagnostics().lipSync.playbackClock&&TravisProjection.status().narration,{},{timeout:20000});
  await page.waitForFunction(()=>TravisVisual.diagnostics().hologram.variant==='earth',{},{timeout:12000});

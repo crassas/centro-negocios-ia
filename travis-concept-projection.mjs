@@ -1,6 +1,7 @@
-import {createDetailedSubject,identifyVisualSubject} from './travis-visual-subjects.mjs?v=cinema-2';
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=cinema-2';
-import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=cinema-2';
+import {createArchitecture} from './travis-architecture.mjs?v=detail-1';
+import {createDetailedSubject,identifyVisualSubject} from './travis-visual-subjects.mjs?v=detail-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=detail-1';
+import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=detail-1';
 // Film-inspired schematic projections. Unprovided geographic/CAD/person
 // geometry stays visibly conceptual; real source links are separate.
 export function createConceptProjection(THREE,{reducedMotion=false}={}){
@@ -62,35 +63,9 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   objects.push({type:'map',grid});
  }
  function house(){
-  const house=new THREE.Group();active.add(house);
-  const block=(w,h,d,y,z=0)=>{
-   const filled=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),style(0x767067,{alpha:.15}));
-   filled.position.set(0,y,z);house.add(filled);
-   const edge=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w,h,d)),
-    style(0xd9c29d,{lines:true,alpha:.85}));
-   edge.position.set(0,y,z);house.add(edge);
-  };
-  block(1.7,1.13,1.05,-.22);
-  const coords=[[-1.0,.36,-.60],[0,1.10,-.60],[1.0,.36,-.60],
-    [1.0,.36,.60],[0,1.10,.60],[-1.0,.36,.60]];
-  for(const [i,j] of [[0,1],[1,2],[2,3],[3,4],[4,5],[5,0],[1,4]]){
-   house.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(
-    [new THREE.Vector3(...coords[i]),new THREE.Vector3(...coords[j])]),
-    style(0xe0c69e,{lines:true,alpha:.88})));
-  }
-  for(const x of [-.48,.48]){
-   const windowFrame=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(.32,.32,.025)),
-    style(0xc6b599,{lines:true,alpha:.9}));
-   windowFrame.position.set(x,-.19,.54);house.add(windowFrame);
-  }
-  const roof=new THREE.BufferGeometry();
-  const roofVertices=[];
-  for(const tri of [[0,1,2],[5,3,4],[0,5,4],[0,4,1],[1,4,3],[1,3,2]])for(const i of tri)roofVertices.push(...coords[i]);
-  roof.setAttribute('position',new THREE.Float32BufferAttribute(roofVertices,3));roof.computeVertexNormals();
-  house.add(new THREE.Mesh(roof,style(0xc6a47c,{alpha:.3})));
-  const door=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(.24,.55,.025)),style(0xc6b599,{lines:true,alpha:.9}));
-  door.position.set(0,-.50,.54);house.add(door);
-  objects.push({type:'house',house});
+  const detailed=createArchitecture(THREE,label);active.add(detailed.group);
+  mats.push(...detailed.materials);variant=detailed.variant;
+  objects.push({type:'house',house:detailed.group});
  }
  function person(){
   const head=sphere(.32,0xc8b299,0,.73,0);
@@ -219,7 +194,7 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   else if(kind==='person')person();else if(kind==='vehicle')vehicle();
   else if(kind==='landscape')landscape();else if(kind==='diagram')diagram();
   else if(kind==='object')object();else classic(kind);
-  if(kind==='house')active.rotation.y=-.28;
+  if(kind==='house')active.rotation.y=-.50;
   matter.setSource(typeof sourceProvider==='function'?sourceProvider():sourceProvider);
   matter.setTheme(kind,subject);
   matter.go(active,now,{label:String(subject||kind).slice(0,100),camera:typeof cameraProvider==='function'?cameraProvider():cameraProvider});

@@ -45,7 +45,7 @@ export function hasLocalVisual(scene,title){
  if(scene==='text')return true;
  if(scene==='planet')return /\b(?:mercury|mercurio|venus|earth|terra|mars|marte|jupiter|saturn|saturno|uranus|urano|neptune|neptuno|pluto|plutao|moon|lua|sun|sol)\b/.test(t)||/^(?:planet|planeta|planets|planetas|planetary system|sistema solar|solar system)$/.test(t);
  if(scene==='space')return /^(?:space|espaco|universe|universo|galaxy|galaxia|cosmos|via lactea|milky way|stars|estrelas)$/.test(t);
- const known={house:/^(?:house|casa|uma casa|architecture|arquitetura)$/,person:/^(?:human|human figure|human body|corpo humano|pessoa|person|figura humana)$/,
+ const known={house:/^(?:house|casa|uma casa|architecture|arquitetura|moradia|modern house|casa moderna|moradia moderna|building|buildings|edificio|edificios|apartment building|predio)$/,person:/^(?:human|human figure|human body|corpo humano|pessoa|person|figura humana)$/,
  vehicle:/^(?:car|carro|vehicle|veiculo|drone|rocket|foguetao|nave|spaceship)$/,
  landscape:/^(?:landscape|paisagem|forest|floresta|mountain|montanha)$/,
  diagram:/^(?:dna|adn|atom|atomo|diagram|diagrama|network|rede)$/,

@@ -18,3 +18,10 @@ assert.equal(cueAtTime(cues,-1,24),-1);assert.equal(cues[cueAtTime(cues,23,24)].
 assert(cues.every((c,i)=>i===0||c.at>=cues[i-1].at));
 assert(buildNarrationCues('A fotossíntese utiliza luz. A planta transforma energia luminosa. Os açúcares armazenam energia.',{scene:'reference',title:'Fotossíntese'}).some(c=>c.scene==='text'&&c.title.includes('energia')));
 console.log('PASS VISUAL_CONTENT: named planets, sun, space, literal text, DNA, atom, geometry, research fallback and narration cues');
+
+for(const text of ['Show photos of Earth','Mostra imagens de uma casa','Find images of a butterfly']){
+ const intent=parseVisualIntent(text);assert(intent?.referenceRequested,text);assert(!/^(photos|images|imagens|find)/i.test(intent.title),intent.title);
+}
+assert.equal(parseVisualIntent('Show me you').type,'dismiss');
+for(const text of ['Next image','Mostra outra imagem','mais imagens','Previous image'])assert.equal(parseVisualIntent(text,{active:true,kind:'illustration'}).type,'control',text);
+for(const title of ['House','Casa moderna','Building'])assert(hasLocalVisual('house',title));

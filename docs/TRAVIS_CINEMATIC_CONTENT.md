@@ -19,20 +19,28 @@ public references and narration timing.
   maps are procedural illustrations, not NASA imagery or accurate relief maps.
 - Space produces a spiral star field. DNA and an atom have distinct educational
   geometry. Letters preserve accents and literal quoted text (up to 90 characters).
-- Simple local architecture, people, vehicles, landscapes and geometric objects
-  remain available. Unfamiliar subjects use public reference retrieval rather
+- Local architecture now has detailed traditional and modern houses plus a four-floor
+  apartment building: joinery, recessed windows, entrance panels, stairs, balconies,
+  roof details and masonry courses. Static parts are merged into eight draw calls.
+  People, vehicles, landscapes and geometric objects remain available. Unfamiliar subjects use public reference retrieval rather
   than pretending that one decorative solid represents everything.
 
 ## Search and narration
 
-`POST /visual-research` uses Wikipedia's search/PageImages APIs and free-image
-filter. It returns a public article, a short extract and, where available, a
+`POST /visual-research` uses Wikipedia's search/PageImages APIs and Wikimedia
+Commons image search. It ranks up to six references using subject words, dimensions
+and image descriptions, with lower priority for icons, historic engravings and
+near-duplicate numbered photographs in ordinary photo requests. It returns a public article, a short extract and, where available, a
 bounded JPEG/PNG/WebP thumbnail from a fixed Wikimedia host allowlist. No model
-subscription, new Python package or remote code execution is required. Responses
-are cached in memory (24 entries, one hour). Redirects stay on the same allowlist.
+subscription, new Python package or remote code execution is required. Result collections
+are cached in memory (24 entries, one hour), with a separate 12-image cache. Redirects stay on the same allowlist.
 
 A retrieved image becomes a textured depth relief in the existing hologram.
-The article and image-credit page are linked in the caption. This is explicitly
+The article and image-credit page are linked in the caption, with author and licence
+when returned by Commons. `Next image` / `Previous image`, Portuguese equivalents
+and unobtrusive caption arrows fetch one indexed image at a time. A `Photos` action
+allows a local 3D subject to switch to a real image collection. Thumbnails use up to
+960 pixels on the longest edge, and shallow smoothed depth preserves photo detail. This is explicitly
 an **image relief**, not a reconstructed, rotatable, true 3D model. Missing images
 or a failed search produce an honest text response. Later responses cannot replace
 an intervening user request. Images and article text never become executable code.
@@ -51,6 +59,8 @@ Examples:
 - `Mostra o espaço`, `Mostra o sistema solar`, `Mostra-me ADN`
 - `Escreve OLÁ`, `Mostra as letras "TRAVIS"`
 - `Mostra-me uma borboleta`, `Show me the Eiffel Tower`
+- `Mostra uma casa moderna`, `Show a building`
+- `Show photos of football`, `Mostra imagens de uma casa`, `Mostra outra imagem`
 - `Explica-me o sistema solar`, `Volta ao Travis`
 
 ## References and data

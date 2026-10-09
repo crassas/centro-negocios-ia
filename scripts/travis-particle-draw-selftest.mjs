@@ -44,5 +44,5 @@ assert(fragment.includes('vec3 holoCopper=vec3(.53,.33,.18)'),'Known visible cin
 const shader=engine.points.material.vertexShader;
 assert(shader.includes('aFrom')&&shader.includes('aTo')&&shader.includes('gl_PointSize'));
 const client=fs.readFileSync('travis-concept-projection.mjs','utf8');
-assert(client.includes("travis-particle-morph.mjs?v=cinema-2"));
+assert(client.includes("travis-particle-morph.mjs?v=detail-1"));
 console.log('PASS PARTICLE_DRAW: Three.js finite render count, attributes, visibility, 2600 GPU points');

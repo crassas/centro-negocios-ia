@@ -41,7 +41,7 @@ const asTitle=(raw,scene)=>{
   .replace(/^(?:(?:i(?:'d| would)?|i am|i'm|eu|nos)\s+)?(?:feel like|fancy|wish|would love|want|queria|gostava|apetece(?:-me)?|apetecia(?:-me)?|desejava)\s+/,'')
   .replace(/^(?:can you|could you|would you|please|podes|podias|consegues|queria|gostava de|i want to|i'd like to|i would like to|quero|apetece-me|apetecia-me)\s+/,'')
   .replace(/^(?:me |to |a |um |uma |o |a |the )*/,'')
-  .replace(/^(?:see|show|showing|seeing|look at|view|watch|visualize|visualise|project|display|render|imagine|create|form|materialize|materialise|transform|ver|veja|mostrar|mostra|mostra-me|projeta|projetar|visualiza|imagina|cria|faz aparecer|faz surgir|deixa-me ver|deixa-me|poe-me|bring up|pull up|put|por)\s+/,'')
+  .replace(/^(?:see|show|showing|seeing|look at|view|watch|visualize|visualise|project|display|render|imagine|create|form|materialize|materialise|transform|ver|veja|mostrar|mostra|mostra-me|projeta|projetar|visualiza|imagina|cria|faz aparecer|faz surgir|deixa-me ver|deixa-me|poe-me|bring up|pull up|put|por|find|search for|procura|pesquisa|arranja)\s+/,'')
   .replace(/^(?:change to|switch to|what about|how about|e agora|agora|and now|now|que tal|muda para|troca para|passa para)\s+/,'')
   .replace(/^(?:me |of |um |uma |the |a |an |o |a |ao |da |de |do |em |no |na )+/,'')
   .replace(/\b(?:holographic|hologram|em holograma|holografico|as a hologram|in 3d|em 3d|por favor|please|right now|agora|in front of me)\b/g,'')
@@ -62,8 +62,8 @@ const controlRules=[
  ['move-up',/^(?:move (?:it|that) up|pan up|move up|sobe(?: isso| isto)?|move para cima)$/],
  ['move-down',/^(?:move (?:it|that) down|pan down|move down|desce(?: isso| isto)?|move para baixo)$/],
  ['reset-view',/^(?:reset (?:the )?view|reset zoom|center it|centre it|repor vista|centra(?: isso| isto)?|recomeca a vista)$/],
- ['next',/^(?:next|next one|show me the next one|proximo|seguinte|mostra o proximo)$/],
- ['previous',/^(?:previous|previous one|last one|anterior|mostra o anterior)$/]
+ ['next',/^(?:next|next one|next image|next photo|another image|more images|show me (?:the next one|another image|more images)|proximo|seguinte|mais imagens|outra imagem|outra foto|proxima imagem|mostra (?:o proximo|outra imagem|mais imagens|a proxima imagem))$/],
+ ['previous',/^(?:previous|previous one|previous image|previous photo|last one|anterior|imagem anterior|foto anterior|mostra (?:o anterior|a imagem anterior))$/]
 ];
 const spokenPortuguese=t=>/\b(?:quero|queria|gostava|apetece|apetecia|ver|mostra|mostrar|faz|por|poe|poe-me|podes|consegues|casa|carro|mapa|cidade|saturno|marte|planeta|agora|deixa|esquerda|direita|mais|explica|explicar|ensina|escreve|espaco|letras|sol|terra)\b/.test(t);
 export function parseVisualIntent(text,{active=false,kind=''}={}){
@@ -72,6 +72,7 @@ export function parseVisualIntent(text,{active=false,kind=''}={}){
  if(active)for(const [action,re] of controlRules)if(re.test(raw) &&
    !(kind==='youtube'&&['next','previous'].includes(action)))
    return {type:action==='pin'||action==='unpin'||action==='dismiss'?action:'control',action};
+ if(/^(?:show (?:me )?(?:you|yourself)|mostra(?:-me)? (?:a ti|quem es)|volta a ti)$/.test(raw))return {type:'dismiss',action:'dismiss'};
  if(excludes.test(raw))return null;
  const request=cues=>cues.test(raw);
  const known=categories.find(([,re])=>re.test(raw));
@@ -79,9 +80,10 @@ export function parseVisualIntent(text,{active=false,kind=''}={}){
     (/^(?:and|and now|now|what about|how about|switch to|change to|next show|e|e agora|agora|entao|que tal|muda para|troca para|passa para)\b/.test(raw)
      ||raw.split(' ').length<=4);
  const explain=/\b(?:explain|explica|explicar|ensina|teach|how does|como funciona|como se forma)\b/.test(raw);
+ const referenceRequested=/\b(?:photos?|photographs?|pictures?|images?|fotos?|fotografias?|imagens?|references?|referencias?)\b/.test(raw)&&!/\b(?:imagina|imagine)\b/.test(raw);
  const research=/\b(?:pesquisa|research|search|procura)\b/.test(raw);
  const bare=/^(?:(?:o|a|the) )?(?:mercury|mercurio|venus|earth|terra|mars|marte|jupiter|saturn|saturno|uranus|urano|neptune|neptuno|sun|sol|moon|lua|space|espaco|universe|universo|galaxy|galaxia|letras|letters|alfabeto|alphabet|sistema solar|solar system)[.!?]*$/.test(fold(text).trim());
- const visual=/^(?:escreve|write)\b/.test(raw)||explain||bare||(research&&Boolean(known))||directCue.test(raw)||visualSpecific.test(raw)||followup||
+ const visual=/^(?:escreve|write)\b/.test(raw)||explain||bare||(referenceRequested&&/\b(?:find|get|procura|pesquisa|arranja)\b/.test(raw))||(research&&Boolean(known))||directCue.test(raw)||visualSpecific.test(raw)||followup||
     (request(verbsNoun)&&request(cue)&&/\b(?:see|ver|mostrar|show|look|visualiz|projet|hologram)\b/.test(raw));
  if(!visual)return null;
  // The request is explicitly visual. Any unfamiliar subject can at least be
@@ -89,12 +91,13 @@ export function parseVisualIntent(text,{active=false,kind=''}={}){
  const entry=categories.find(([,re])=>re.test(raw));
  const scene=entry?.[0]||'object';
  let title=asTitle(raw,scene);
+ if(referenceRequested)title=title.replace(/^(?:(?:some|more|real|actual|umas?|algumas?|mais)\s+)*(?:photos?|photographs?|pictures?|images?|fotos?|fotografias?|imagens?|references?|referencias?)\s*(?:(?:of|about|de|da|do|das|dos|sobre)\s+)?(?:(?:a|an|the|uma?|o|a)\s+)?/i,'').trim()||title;
  if(scene==='text'){
   const quoted=String(text).match(/[\"“«]([^\"”»]{1,90})[\"”»]/);
   title=quoted?.[1]||String(text).replace(/^(?:escreve|write)\s+/i,'').replace(/^(?:(?:mostra|mostra-me|show me|show|write|escreve|projeta)\s+)?(?:(?:a|as|o|os|the|uma|umas)\s+)?(?:letters?|letras?|palavra|palavras|word|words|text|texto|numero|numeros|number|numbers)\s*/i,'').trim();
   if(!title||/^(?:alfabeto|alphabet|letras|letters)$/i.test(title))title='ABC';
  }
- return {type:'scene',scene,title,subject:title,explain,research,query:String(text),
+ return {type:'scene',scene,title,subject:title,explain,research,referenceRequested,query:String(text),
   autoReturn:true,source:'local-language-router',schematic:true,language:spokenPortuguese(fold(text))?'pt':'en'};
 }
 export const parseEnglishProjection=parseVisualIntent;
