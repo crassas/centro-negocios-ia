@@ -1,4 +1,4 @@
-import { createConceptProjection } from './travis-concept-projection.mjs?v=matter-3';
+import { createConceptProjection } from './travis-concept-projection.mjs?v=matter-4';
 import './travis-action-cards.mjs?v=matter-2';
 import { createVoiceInput } from './travis-voice-input.mjs?v=stt-fast-1';
 import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS } from './travis-form-director.mjs?v=1';
@@ -1697,6 +1697,7 @@ if (!hud || !launcher || !canvas) {
     scene.fog=new THREE.FogExp2(0x030405,.045);
 
     camera=new THREE.PerspectiveCamera(36,innerWidth/innerHeight,.1,60);
+    conceptProjection.setCamera(()=>camera);
     camera.position.set(0,.3,9);
     camera.lookAt(0,.2,0);
 

@@ -15,7 +15,9 @@ class BufferGeometry {
 class ShaderMaterial {constructor(options){Object.assign(this,options);this.userData={};}}
 class Group {constructor(){this.children=[];}add(item){this.children.push(item);item.parent=this;}}
 class Points {constructor(geometry,material){this.geometry=geometry;this.material=material;this.visible=true;}}
-const MockThree={BufferAttribute,BufferGeometry,ShaderMaterial,Group,Points,AdditiveBlending:2};
+class Color {constructor(value){this.value=value;}setHex(value){this.value=value;return this;}}
+class Vector3 {constructor(x=0,y=0,z=0){this.x=x;this.y=y;this.z=z;}}
+const MockThree={BufferAttribute,BufferGeometry,ShaderMaterial,Group,Points,Color,Vector3,AdditiveBlending:2};
 const engine=createTravisParticleMorph(MockThree,{count:2600});
 const geometry=engine.points.geometry;
 function threeWebGLDrawCount(g) {
@@ -38,5 +40,5 @@ assert(engine.points.frustumCulled===false,'Dynamic particle bounds must not be 
 const shader=engine.points.material.vertexShader;
 assert(shader.includes('aFrom')&&shader.includes('aTo')&&shader.includes('gl_PointSize'));
 const client=fs.readFileSync('travis-concept-projection.mjs','utf8');
-assert(client.includes("travis-particle-morph.mjs?v=2"));
+assert(client.includes("travis-particle-morph.mjs?v=3"));
 console.log('PASS PARTICLE_DRAW: Three.js finite render count, attributes, visibility, 2600 GPU points');

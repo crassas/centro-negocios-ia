@@ -1,10 +1,10 @@
-import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=2';
+import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=3';
 // Film-inspired schematic projections. Unprovided geographic/CAD/person
 // geometry stays visibly conceptual; real source links are separate.
 export function createConceptProjection(THREE,{reducedMotion=false}={}){
  const root=new THREE.Group();root.name='TravisConceptProjection';root.position.y=.34;
  const matter=createTravisParticleMorph(THREE,{count:2600,reducedMotion});
- let sourceProvider=null;
+ let sourceProvider=null,cameraProvider=null;
  root.add(matter.root);
  let active=new THREE.Group(),ghost=null,kind='',objects=[],mats=[],born=0;
  let zoom=1,dx=0,dy=0,spin=0,planetName='',label='';
@@ -42,8 +42,13 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   const color=colours[planetName]||0xbda18b;
   const surface=sphere(.66,color);
   const meshWire=sphere(.677,0xd4bc9d,0,0,0,true);
-  ring(.98,.92);ring(1.28,.18);
-  if(planetName==='saturn')ring(1.13,1.24);
+  // Saturn receives a distinct, layered ring system. Mars, Earth and the
+  // other planets are free of misleading giant circumplanetary rings.
+  if(planetName==='saturn'){
+    ring(1.01,1.05);ring(1.18,1.18);ring(1.39,1.27);
+  }else{
+    ring(.91,1.2);
+  }
   const moon=sphere(.065,0xded0ad,1,0,0);
   objects.push({type:'planet',surface,meshWire,moon});
   const positions=new Float32Array(110*3);
@@ -225,6 +230,7 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   else if(kind==='landscape')landscape();else if(kind==='diagram')diagram();
   else if(kind==='object')object();else classic(kind);
   matter.setSource(typeof sourceProvider==='function'?sourceProvider():sourceProvider);
+  matter.setTheme(kind,subject);
   matter.go(active,now,{label:String(subject||kind).slice(0,100)});
   // The topology only determines particle destinations; never display solid meshes.
   active.visible=false;
@@ -237,6 +243,7 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   zoom=1;dx=dy=spin=0;
  }
  function setSource(provider){sourceProvider=provider;}
+ function setCamera(provider){cameraProvider=provider;}
  function returnToCore(now){
   if(!kind)return;
   matter.setSource(typeof sourceProvider==='function'?sourceProvider():sourceProvider);
@@ -264,7 +271,10 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   active.scale.setScalar((.5+.5*reveal)*zoom);
   active.position.set(dx,dy,0);
   active.rotation.y=spin+(reducedMotion?0:Math.sin(now*.19)*.08);
-  matter.update(now,projection,{zoom,spin,dx,dy,pixelRatio:typeof devicePixelRatio==='number'?devicePixelRatio:1});
+  matter.update(now,projection,{
+    zoom,spin,dx,dy,camera:typeof cameraProvider==='function'?cameraProvider():cameraProvider,
+    pixelRatio:typeof devicePixelRatio==='number'?devicePixelRatio:1
+  });
   for(const m of mats)m.opacity=m.userData.baseOpacity*reveal;
   if(ghost){
    const remaining=1-limit((now-ghost.start)/(reducedMotion?.01:.74),0,1);
@@ -289,7 +299,7 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
    }else if(o.type==='node')o.node.scale.setScalar(.95+Math.sin(now*1.3)*.12+voice*.22);
   }
  }
- return {root,show,hide,update,control,setSource,returnToCore,
+ return {root,show,hide,update,control,setSource,setCamera,returnToCore,
   state:()=>({kind,zoom,dx,dy,rotation:spin,morphing:Boolean(ghost)||matter.state().morphProgress<1,
    visible:root.visible,matter:matter.state()})};
 }

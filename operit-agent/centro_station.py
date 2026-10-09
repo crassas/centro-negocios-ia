@@ -68,6 +68,7 @@ TRAVIS_CLIENT_FILES = (
     "travis-english-intents.mjs",
     "travis-concept-projection.mjs",
     "travis-particle-morph.mjs",
+    "travis-projection-framing.mjs",
     "travis-hud.css",
     "travis-action-cards.mjs",
     "travis-vision-policy.mjs",
@@ -531,20 +532,26 @@ def sync_travis_client(ref):
             if not raw or len(raw) > 450000:
                 raise RuntimeError(f"{name}: resposta ausente ou demasiado grande")
             fetched[name] = raw.decode("utf-8")
-        if "travis-3d.mjs?v=draw-2" not in fetched["index.html"]:
+        if "travis-3d.mjs?v=framing-1" not in fetched["index.html"]:
             raise RuntimeError("index.html: versão de voz inesperada")
         if "travis-audio-sync.mjs?v=1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: sincronização de voz ausente")
         if "travis-vision.mjs?v=5" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: visão não ligada")
-        if "travis-3d.mjs?v=draw-2" not in fetched["sw.js"]:
+        if "travis-3d.mjs?v=framing-1" not in fetched["sw.js"]:
             raise RuntimeError("sw.js: cache desatualizada")
         if "travis-action-cards.mjs?v=matter-2" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: cinematic action deck not connected")
         if "travis-english-intents.mjs?v=2" not in fetched["travis-action-cards.mjs"]:
             raise RuntimeError("travis-action-cards.mjs: English intent router missing")
-        if "travis-particle-morph.mjs?v=2" not in fetched["travis-concept-projection.mjs"]:
+        if "travis-particle-morph.mjs?v=3" not in fetched["travis-concept-projection.mjs"]:
             raise RuntimeError("travis-concept-projection.mjs: unified particle material missing")
+        if "travis-projection-framing.mjs?v=1" not in fetched["travis-particle-morph.mjs"]:
+            raise RuntimeError("travis-particle-morph.mjs: smartphone auto-framing disconnected")
+        if "fitParticleToViewport" not in fetched["travis-projection-framing.mjs"]:
+            raise RuntimeError("travis-projection-framing.mjs: fitting algorithm unavailable")
+        if "conceptProjection.setCamera" not in fetched["travis-3d.mjs"]:
+            raise RuntimeError("travis-3d.mjs: camera framing not connected")
         if "TravisMorphParticles" not in fetched["travis-particle-morph.mjs"] or "geometry.setDrawRange(0,n)" not in fetched["travis-particle-morph.mjs"]:
             raise RuntimeError("travis-particle-morph.mjs: GPU draw count invalid")
         if "geometry.setAttribute('position'" not in fetched["travis-particle-morph.mjs"]:
@@ -553,7 +560,7 @@ def sync_travis_client(ref):
             raise RuntimeError("travis-hud.css: immersive overlay fix unavailable")
         if "autoReturn" not in fetched["travis-action-cards.mjs"]:
             raise RuntimeError("travis-action-cards.mjs: auto return missing")
-        if "travis-concept-projection.mjs?v=matter-3" not in fetched["travis-3d.mjs"]:
+        if "travis-concept-projection.mjs?v=matter-4" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: cinematic geometry missing")
         if "travis-voice-input.mjs?v=stt-fast-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: transcrição rápida não ligada")
