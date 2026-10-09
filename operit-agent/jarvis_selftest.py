@@ -6,6 +6,22 @@ from unittest.mock import patch,Mock
 spec=importlib.util.spec_from_file_location("jarvis",Path(__file__).with_name("jarvis_local.py"))
 j=importlib.util.module_from_spec(spec);spec.loader.exec_module(j)
 class Tests(unittest.TestCase):
+ def test_json_asset_bytes_never_go_through_json_dumps(self):
+  handler=object.__new__(j.Handler)
+  reply=io.BytesIO()
+  observed={}
+  handler.wfile=reply
+  handler.send_response=lambda code: observed.update(status=code)
+  handler.send_header=lambda name,value: observed.update({name:value})
+  handler.end_headers=lambda:None
+  handler.send_cors=lambda:None
+  raw=b'{"sites":[{"id":"pentehouse"}]}'
+  handler.send(raw,"application/json")
+  self.assertEqual(observed["status"],200)
+  self.assertEqual(observed["Content-Type"],"application/json")
+  self.assertEqual(int(observed["Content-Length"]),len(raw))
+  self.assertEqual(reply.getvalue(),raw)
+
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.old=j.ROOT;self.old_store=j.TRAVIS_STORE;self.old_utef=j.TRAVIS_UTEF;self.old_seed=j.NEURAL_SEEDED;j.ROOT=self.root
   self.old_brain=j.TRAVIS_BRAIN;self.old_cog=j.TRAVIS_COG;self.old_quantum=j.TRAVIS_QUANTUM;self.old_genome=j.TRAVIS_GENOME

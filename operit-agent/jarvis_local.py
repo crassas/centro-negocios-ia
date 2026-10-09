@@ -15,6 +15,7 @@ import travis_brain
 import travis_awareness
 import travis_quantum
 import travis_decision
+import travis_speech_response
 import travis_library
 import travis_web_tools
 import travis_dialogue
@@ -1531,6 +1532,9 @@ def transcribe(audio,language="auto"):
 def speak(text,language="en"):
  if not str(text).strip() or len(text)>3000:raise ValueError("Resposta vazia ou demasiado longa")
  if language not in {"en","pt","auto"}:raise ValueError("Idioma de voz inválido")
+ # Keep written answers and citations complete; only the TTS audio
+ # shortens verbose, sourced library results to one useful example.
+ text=travis_speech_response.spoken_reply(text,language)
  if language=="en":
   if not TTS_EN_WORKER.model or not TTS_EN_WORKER.model.is_file():raise RuntimeError("English voice model is unavailable")
   start=time.monotonic()
