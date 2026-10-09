@@ -1,4 +1,5 @@
 import { createConceptProjection } from './travis-concept-projection.mjs?v=cinema-1';
+import './travis-action-cards.mjs?v=cinema-1';
 import { createVoiceInput } from './travis-voice-input.mjs?v=stt-fast-1';
 import { createTravisVision } from './travis-vision.mjs?v=4';
 import { buildSpeechEnvelope, speechEnvelopeLevel } from './travis-audio-sync.mjs?v=1';
