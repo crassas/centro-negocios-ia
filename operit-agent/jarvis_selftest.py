@@ -72,6 +72,20 @@ class Tests(unittest.TestCase):
    self.assertEqual(response['language'],'pt')
    self.assertIn('6',response['reply']);self.assertTrue('memória' in response['reply'].lower() or 'memórias' in response['reply'].lower())
 
+ def test_brain_events_endpoint_uses_verified_local_origin(self):
+  j.TRAVIS_BRAIN.mark('attention','received','PRIVATE UTTERANCE MUST NOT LEAK')
+  success=self.brain_post('/brain/events',{})
+  self.assertEqual(success['code'],200)
+  data=success['body']
+  self.assertTrue(data['ok'])
+  self.assertEqual(data['source'],'brain-sqlite')
+  self.assertTrue(data['events'])
+  self.assertEqual(data['events'][0]['region'],'attention')
+  self.assertNotIn('detail',data['events'][0])
+  self.assertNotIn('PRIVATE UTTERANCE',json.dumps(data))
+  for origin in ('https://crassas.github.io','https://example.org'):
+   denied=self.brain_post('/brain/events',{},origin)
+   self.assertEqual(denied['code'],403)
  def test_brain_routes_without_model(self):
   with patch.object(j,'infer',side_effect=AssertionError('Unnecessary model call')):
    self.assertEqual(j.route('estado do cérebro')['tool'],'brain_status')
