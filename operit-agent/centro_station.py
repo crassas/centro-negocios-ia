@@ -534,13 +534,13 @@ def sync_travis_client(ref):
             if not raw or len(raw) > 450000:
                 raise RuntimeError(f"{name}: resposta ausente ou demasiado grande")
             fetched[name] = raw.decode("utf-8")
-        if "travis-3d.mjs?v=visible-1" not in fetched["index.html"]:
+        if "travis-3d.mjs?v=face-default-1" not in fetched["index.html"]:
             raise RuntimeError("index.html: versão de voz inesperada")
         if "travis-audio-sync.mjs?v=1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: sincronização de voz ausente")
         if "travis-vision.mjs?v=scene-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: visão não ligada")
-        if "travis-3d.mjs?v=visible-1" not in fetched["sw.js"]:
+        if "travis-3d.mjs?v=face-default-1" not in fetched["sw.js"]:
             raise RuntimeError("sw.js: cache desatualizada")
         if "travis-action-cards.mjs?v=matter-2" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: cinematic action deck not connected")
@@ -572,11 +572,15 @@ def sync_travis_client(ref):
             raise RuntimeError("index.html: o seletor de modos voltou a aparecer")
         for module,token in (
             ("travis-interface-language.mjs","travis-interface-language.mjs?v=1"),
-            ("travis-form-director.mjs","travis-form-director.mjs?v=1"),
+            ("travis-form-director.mjs","travis-form-director.mjs?v=2"),
             ("travis-brain-view.mjs","travis-brain-view.mjs?v=cinema-2"),
         ):
             if token not in fetched["travis-3d.mjs"] or token not in fetched["sw.js"]:
                 raise RuntimeError(module+": modo cinematográfico não ligado")
+        if "visibleProjectionAmount" not in fetched["travis-form-director.mjs"]:
+            raise RuntimeError("O rosto base não está protegido durante a mudança de holograma")
+        if "formBlend.face=1;" not in fetched["travis-3d.mjs"]:
+            raise RuntimeError("Travis: busto não é a forma inicial")
         if "automaticTravisForm" not in fetched["travis-form-director.mjs"]:
             raise RuntimeError("Diretor automático de formas indisponível")
         if "applyInterfaceLanguage" not in fetched["travis-interface-language.mjs"]:

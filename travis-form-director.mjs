@@ -2,8 +2,9 @@
  * Travis automatic visual composition.
  *
  * These are UI representations of measured runtime states, not consciousness.
- * The face remains the conversational default. Only sustained processing with
- * an observed local brain connection reveals the persisted particle network.
+ * The face remains the conversational default in every state, including
+ * background memory, speech recognition and extended reasoning. The detailed
+ * memory network is an explicit, temporary operator-requested view only.
  * No tool permissions or external actions are derived from these states.
  */
 export const THINKING_DWELL_MS = 1450;
@@ -17,10 +18,19 @@ export function automaticTravisForm({
   projectionActive=false,
 }={}) {
   if (!faceReady) return 'core'; // No synthetic fallback face.
-  if (projectionActive) return 'face'; // Keep the emitter for a real hologram.
-  if (state==='thinking' && brainConnected && elapsedMs>=THINKING_DWELL_MS)
-    return 'core';
-  return 'face'; // Idle, listening, speaking, and ready are personal presence.
+  // Do not replace the person's face with a memory graph just because the
+  // cognitive backend is responding. The graph can still be manually previewed.
+  return 'face';
+}
+
+/** Fade the avatar only when a real 3D projection is rendering.
+ * A missing/delayed projection must never leave the central stage empty. */
+export function visibleProjectionAmount(amount,sceneState) {
+  const requested=Number.isFinite(amount)?Math.max(0,Math.min(1,amount)):0;
+  if(!sceneState?.visible || sceneState?.matter?.active!==true ||
+     !Number.isFinite(sceneState?.matter?.opacity) ||
+     sceneState.matter.opacity<.018)return 0;
+  return requested;
 }
 
 export function nextFormBlend(value,target,dt,{reducedMotion=false}={}) {

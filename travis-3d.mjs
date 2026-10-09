@@ -1,7 +1,7 @@
 import { createConceptProjection } from './travis-concept-projection.mjs?v=matter-5';
 import './travis-action-cards.mjs?v=matter-2';
 import { createVoiceInput } from './travis-voice-input.mjs?v=stt-fast-1';
-import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS } from './travis-form-director.mjs?v=1';
+import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=2';
 import { INTERFACE_COPY, interfaceLanguage, applyInterfaceLanguage, languageFromInterfaceCommand } from './travis-interface-language.mjs?v=1';
 import { resolveWakePhrase } from './travis-wake-phrase.mjs?v=pt-1';
 import { createTravisVision } from './travis-vision.mjs?v=scene-1';
@@ -562,7 +562,12 @@ if (!hud || !launcher || !canvas) {
 
   async function createAdaptiveForms() {
     await createFaceAvatar();
-    // No mode buttons: start with the face when the real mesh is ready.
+    // The conversational identity is the face, not the internal network.
+    // Materialization on first opening still follows the intro shader.
+    manualFormUntil=0;
+    applyForm('face');
+    formBlend.face=1;
+    formBlend.core=0;
     syncAutoForm();
   }
 
@@ -1864,6 +1869,10 @@ if (!hud || !launcher || !canvas) {
 
     const projection=hologramPresentation.sample(now/1000);
     conceptProjection?.update(now/1000,projection,speechLevel);
+    const visibleProjection=visibleProjectionAmount(
+      projection.amount,conceptProjection?.state?.());
+    // Keep the face visible until the particle hologram is actually drawn.
+    // This avoids an empty stage during slow voice / geometry startup.
 
     if (now>nextGlitchAt) {
       glitchPower=formBlend.face>.1?0:(state==='thinking'?.15:.06);
@@ -1879,7 +1888,7 @@ if (!hud || !launcher || !canvas) {
     }
     const targetVoice=state==='speaking'?(externalVoiceLevel||0):0;
     speechLevel+=(targetVoice-speechLevel)*(1-Math.exp(-dt*(targetVoice>speechLevel?30:22)));
-    presencePose=presenceMotion.update(dt,state,speechLevel,projection.amount);
+    presencePose=presenceMotion.update(dt,state,speechLevel,visibleProjection);
     const observedFace=vision.pose();
     // Low-pass gaze tracking dampens jitter and returns gently to centre when no face is visible.
     const trackingBlend=Math.min(1,dt*4);
@@ -1904,7 +1913,7 @@ if (!hud || !launcher || !canvas) {
     if (coreRoot) {
       const baseScale=(innerWidth/innerHeight<.72?.47:.70)*(.35+.65*introEase);
       const speechExpand=state==='speaking'?speechLevel*.045:0;
-      const coreScale=Math.max(.001,formBlend.core*(1-projection.amount));
+      const coreScale=Math.max(.001,formBlend.core*(1-visibleProjection));
       coreRoot.visible=coreScale>.012;
       coreRoot.scale.setScalar(baseScale*(1+speechExpand)*coreScale);
       coreRoot.rotation.x=lerp(-.24,-.08,introEase);
@@ -1960,7 +1969,7 @@ if (!hud || !launcher || !canvas) {
     hud.dataset.mouthLevel=speechLevel.toFixed(2);
     if (faceRoot) {
       const faceMix=Math.max(.001,formBlend.face);
-      faceRoot.visible=faceMix>.012 && projection.amount<.999;
+      faceRoot.visible=faceMix>.012 && visibleProjection<.999;
       const portrait=innerWidth/innerHeight<.72;
       const faceBase=(portrait?1.65:1.70);
       faceRoot.scale.setScalar(faceBase*faceMix);
@@ -1975,13 +1984,13 @@ if (!hud || !launcher || !canvas) {
         const build=reducedMotion?1:clamp(t/2.4,0,1);
         for(const mat of [realFaceBaseMaterial,avatarMaterial,...holographicEyeMaterials]){
           mat.uniforms.uTime.value=t;mat.uniforms.uBuild.value=build;
-          mat.uniforms.uDissolve.value=Math.max(projection.amount,
+          mat.uniforms.uDissolve.value=Math.max(visibleProjection,
             Math.min(1,(1-formBlend.face)*.93));
           mat.uniforms.uState.value=state==='speaking'?speechLevel:0;
         }
         assemblyParticles.material.uniforms.uBuild.value=build;
         assemblyParticles.material.uniforms.uTime.value=t;
-        assemblyParticles.material.uniforms.uDissolve.value=Math.max(projection.amount,
+        assemblyParticles.material.uniforms.uDissolve.value=Math.max(visibleProjection,
           Math.min(1,(1-formBlend.face)*.93));
         hud.dataset.materialization=build.toFixed(2);
       }
@@ -1994,7 +2003,7 @@ if (!hud || !launcher || !canvas) {
     }
 
     neuralField?.update({time:t,dt,state,voice:speechLevel,core:formBlend.core,face:formBlend.face,
-      faceRoot,intro:introEase,projection:projection.amount,portrait:innerWidth/innerHeight<.72,
+      faceRoot,intro:introEase,projection:visibleProjection,portrait:innerWidth/innerHeight<.72,
       pixelRatio:renderer.getPixelRatio()});
 
     if (hologramMaterial) {
@@ -2118,6 +2127,13 @@ if (!hud || !launcher || !canvas) {
     if(opened)return;
     opened=true;
     intro=0;
+    // Re-entry must never inherit a timed manual brain/network preview.
+    manualFormUntil=0;
+    if(realFaceReady){
+      applyForm('face');
+      formBlend.face=1;
+      formBlend.core=0;
+    }
     commandsOpen=false;
     commandTarget=0;
     hud.classList.add('is-open');
@@ -2146,6 +2162,7 @@ if (!hud || !launcher || !canvas) {
     opened=false;
     commandsOpen=false;
     commandTarget=0;
+    manualFormUntil=0;
     document.documentElement.classList.remove('travis-entry');
     window.travisDirectEntry=false;
     hud.classList.remove('commands-open','cards-open','is-open');

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {automaticTravisForm,nextFormBlend,THINKING_DWELL_MS,MANUAL_PREVIEW_MS}
+import {automaticTravisForm,nextFormBlend,visibleProjectionAmount,THINKING_DWELL_MS,MANUAL_PREVIEW_MS}
   from '../travis-form-director.mjs';
 import {INTERFACE_COPY,interfaceLanguage,applyInterfaceLanguage,languageFromInterfaceCommand,visionStatusCopy}
   from '../travis-interface-language.mjs';
@@ -11,12 +11,22 @@ assert.equal(automaticTravisForm({state:'ready',...full}),'face');
 assert.equal(automaticTravisForm({state:'listening',...full}),'face');
 assert.equal(automaticTravisForm({state:'speaking',...full}),'face');
 assert.equal(automaticTravisForm({state:'thinking',elapsedMs:THINKING_DWELL_MS-1,...full}),'face');
-assert.equal(automaticTravisForm({state:'thinking',elapsedMs:THINKING_DWELL_MS,...full}),'core');
+assert.equal(automaticTravisForm({state:'thinking',elapsedMs:THINKING_DWELL_MS,...full}),'face');
 assert.equal(automaticTravisForm({state:'thinking',elapsedMs:7000,faceReady:true,brainConnected:false}),'face');
 assert.equal(automaticTravisForm({state:'thinking',elapsedMs:7000,...full,projectionActive:true}),'face');
+assert.equal(automaticTravisForm({state:'thinking',elapsedMs:120000,...full}),'face',
+ 'A long-running task must not automatically replace the face with a memory graph');
 assert.equal(automaticTravisForm({state:'booting',...full}),'face');
 assert.equal(automaticTravisForm({state:'ready',faceReady:false}),'core');
 assert(MANUAL_PREVIEW_MS<=8000&&MANUAL_PREVIEW_MS>=2000);
+const visual={visible:true,matter:{active:true,opacity:.8}};
+assert.equal(visibleProjectionAmount(1,visual),1);
+assert.equal(visibleProjectionAmount(.5,visual),.5);
+assert.equal(visibleProjectionAmount(1,{visible:false,matter:{active:true,opacity:1}}),0);
+assert.equal(visibleProjectionAmount(1,{visible:true,matter:{active:false,opacity:1}}),0);
+assert.equal(visibleProjectionAmount(1,{visible:true,matter:{active:true,opacity:0}}),0);
+assert.equal(visibleProjectionAmount(1,null),0);
+assert.equal(visibleProjectionAmount(NaN,visual),0);
 
 let sixty=0,thirty=0;
 for(let i=0;i<60;i++)sixty=nextFormBlend(sixty,1,1/60);
@@ -94,6 +104,10 @@ assert(!html.includes('data-travis-form='),'No leftover face/core toggle');
 assert(!scene.includes('formButtons'),'No leftover button handlers');
 assert(scene.includes('automaticTravisForm('));
 assert(scene.includes('syncAutoForm(state,now)'),'Timed automatic decisions must be reevaluated');
+assert(scene.includes('visibleProjectionAmount('),'The face must be retained until particles are visible');
+assert(scene.includes("manualFormUntil=0;\n    if(realFaceReady){"),
+ 'Reopening must clear a previous brain preview and show the face');
+assert(scene.includes('formBlend.face=1;'),'Face must be visible immediately when the mesh loads');
 assert(scene.includes('formBlend[key]=nextFormBlend('));
 assert(scene.includes("Math.min(1,(1-formBlend.face)*.93)"),'Particle dissolution must accompany the morph');
 assert(scene.includes('manualFormUntil=manual?performance.now()+MANUAL_PREVIEW_MS:0'),
@@ -113,7 +127,7 @@ assert(brainPanel.includes("hud?.classList.contains('is-open')"),
 assert(ui.includes("visionStatusCopy(message,locale())"));
 assert(css.includes('display:none!important')&&css.includes('#travis-hud .travis-form-selector'),
   'Cached selector must remain hidden even during a partial update');
-assert(sw.includes('travis-form-director.mjs?v=1'));
+assert(sw.includes('travis-form-director.mjs?v=2'));
 assert(sw.includes('travis-interface-language.mjs?v=1'));
 assert(sw.includes('travis-brain-view.mjs?v=cinema-2'));
 assert(html.includes('data-ui-language="en"'));
