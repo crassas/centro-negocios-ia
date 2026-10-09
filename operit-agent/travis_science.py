@@ -19,7 +19,7 @@ import urllib.request
 from contextlib import closing
 from pathlib import Path
 
-VERSION = 1
+VERSION = "1.1"
 HEALTH_URLS = {
     "centro": "http://127.0.0.1:8765/health",
     "travis_router": "http://127.0.0.1:8770/health",
@@ -59,9 +59,12 @@ def read_only(path):
 
 
 class TravisScienceLab:
-    def __init__(self, state_dir, source_dir=None, fetch=None, clock=None):
+    def __init__(self, state_dir, source_dir=None, fetch=None, clock=None,
+                 model_dir=None, engine_path=None):
         self.state_dir = Path(state_dir)
         self.source_dir = Path(source_dir or state_dir)
+        self.model_dir = Path(model_dir or (Path.home()/'.centro-models/llm'))
+        self.engine_path = Path(engine_path or (Path.home()/'.centro-jarvis/bin/llama-server'))
         self.fetch = fetch or fetch_health
         self.clock = clock or time.time
         self.state_dir.mkdir(parents=True, exist_ok=True)
@@ -86,8 +89,20 @@ class TravisScienceLab:
             evidence = "health_json_ok" if ok else "health_not_ok"
         except (OSError, TimeoutError, ValueError, TypeError) as exc:
             result, evidence = "fail", "health_check_" + type(exc).__name__
-        return {"id": name, "result": result, "evidence": evidence,
-                "latencyMs": round((time.monotonic() - started) * 1000)}
+        check = {"id": name, "result": result, "evidence": evidence,
+                 "latencyMs": round((time.monotonic() - started) * 1000)}
+        if name == "local_llm":
+            try:
+                files_present = self.model_dir.is_dir() and any(
+                    x.is_file() and x.suffix == ".gguf" for x in self.model_dir.iterdir())
+                binary_present = self.engine_path.is_file()
+            except OSError:
+                files_present = binary_present = False
+            check.update(modelFilesPresent=files_present, engineBinaryPresent=binary_present,
+                         interpretation=("health_endpoint_responded" if result == "pass" else
+                                         "files_present_service_not_responding" if files_present else
+                                         "service_not_responding_model_installation_not_confirmed"))
+        return check
 
     def database(self, name, filename, table):
         path = self.source_dir / filename
@@ -99,8 +114,14 @@ class TravisScienceLab:
                 if integrity != "ok":
                     return {"id": name, "result": "fail", "evidence": "sqlite_integrity_failed"}
                 count = connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-            return {"id": name, "result": "pass",
-                    "evidence": "sqlite_readonly_integrity_ok", "recordCount": int(count)}
+                verified = (connection.execute(
+                    f"SELECT COUNT(*) FROM {table} WHERE verified=1").fetchone()[0]
+                    if name in {"episodic_memory", "execution_history"} else None)
+            observed = {"id": name, "result": "pass",
+                        "evidence": "sqlite_readonly_integrity_ok", "recordCount": int(count)}
+            if verified is not None:
+                observed["verifiedRecordCount"] = int(verified)
+            return observed
         except sqlite3.Error as exc:
             return {"id": name, "result": "inconclusive",
                     "evidence": "sqlite_" + type(exc).__name__}
@@ -114,6 +135,10 @@ class TravisScienceLab:
         try:
             with closing(read_only(path)) as connection:
                 connection.row_factory = sqlite3.Row
+                overview = connection.execute(
+                    "SELECT COUNT(*) AS total, COUNT(CASE WHEN verified=1 THEN 1 END) AS verified "
+                    "FROM brain_episodes").fetchone()
+                source_total, source_verified = int(overview["total"]), int(overview["verified"])
                 records = [dict(row) for row in connection.execute("""
                     SELECT e.id,e.updated,e.task,e.tool,e.verified,
                         COALESCE(s.session,'') AS session,
@@ -162,9 +187,15 @@ class TravisScienceLab:
             wins += int(a and not b)
             losses += int(b and not a)
             ties += int(a == b)
+        reason = (None if samples >= 20 else
+                  "no_verified_source_episodes" if source_verified == 0 else
+                  "no_comparable_verified_episodes" if samples == 0 else
+                  "insufficient_comparable_samples")
         return {"id": "episodic_retrieval_proxy",
                 "result": "measured" if samples >= 20 else "inconclusive",
                 "evidence": "temporal_holdout_prior_episode_tool_agreement",
+                "sourceEpisodes": source_total, "verifiedSourceEpisodes": source_verified,
+                "inconclusiveReason": reason,
                 "evaluated": samples, "minSamples": 20,
                 "retrievalTop1": round(retrieval_hits/samples, 4) if samples else None,
                 "recencyTop1": round(recency_hits/samples, 4) if samples else None,

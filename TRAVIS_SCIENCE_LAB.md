@@ -47,3 +47,18 @@ Os testes usam apenas dados sintéticos e não demonstram uma melhoria real.
 Um modelo que só inicia quando necessário pode falhar num health check sem
 ter sido desinstalado. A execução periódica automática requer avaliação
 prévia de estabilidade, CPU, RAM e armazenamento.
+
+## Diagnóstico adicional v1.1
+
+- O modelo local pode ter ficheiros GGUF e motor de execução instalados sem
+  que exista um servidor a responder na porta 8771. O estado do serviço
+  continua a ser falha no teste de saúde; a presença de ficheiros é indicada
+  separadamente e nunca equivale a uma inferência bem-sucedida.
+- A avaliação episódica divulga os totais e o número de episódios assinalados
+  como verificados. Se nenhum tiver verificação independente, o motivo
+  inconclusivo é `no_verified_source_episodes`.
+- A base de execuções pode conter registos verificados que ainda não foram
+  refletidos na memória episódica. O laboratório não os converte
+  automaticamente em experiências validadas.
+- Não se devem fabricar 20 execuções para atingir o limiar do ensaio. A
+  comparação futura exige tarefas observáveis e pós-condições independentes.

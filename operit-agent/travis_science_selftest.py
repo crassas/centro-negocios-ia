@@ -26,8 +26,8 @@ class Tests(unittest.TestCase):
             c.execute("CREATE TABLE travis_neurons(id TEXT PRIMARY KEY)")
             c.execute("INSERT INTO travis_neurons VALUES('node1')")
         with sqlite3.connect(self.source/"cognitive.sqlite") as c:
-            c.execute("CREATE TABLE runs(id TEXT PRIMARY KEY)")
-            c.execute("INSERT INTO runs VALUES('run1')")
+            c.execute("CREATE TABLE runs(id TEXT PRIMARY KEY, verified INTEGER)")
+            c.execute("INSERT INTO runs VALUES('run1',1)")
         with sqlite3.connect(self.source/"brain.sqlite") as c:
             c.execute("CREATE TABLE brain_episodes(id TEXT PRIMARY KEY,updated REAL,task TEXT,summary TEXT,status TEXT,verified INTEGER,tool TEXT)")
             c.execute("CREATE TABLE brain_episode_scopes(id TEXT PRIMARY KEY,session TEXT,project TEXT)")
@@ -51,6 +51,31 @@ class Tests(unittest.TestCase):
         self.assertEqual(report["counts"]["pass"], 0)
         self.assertEqual(report["checks"][-1]["result"], "inconclusive")
 
+    def test_detects_model_files_without_claiming_model_is_live(self):
+        models = self.root / "models"
+        models.mkdir()
+        (models / "test.gguf").write_bytes(b"synthetic-not-a-model")
+        binary = self.root / "fake-llama-server"
+        binary.write_bytes(b"synthetic")
+        lab = TravisScienceLab(self.root/"state", self.source,
+                               fetch=lambda _: {"ok": False},
+                               model_dir=models, engine_path=binary)
+        status = lab.service("local_llm", "http://127.0.0.1:8771/health")
+        self.assertEqual(status["result"], "fail")
+        self.assertTrue(status["modelFilesPresent"])
+        self.assertTrue(status["engineBinaryPresent"])
+        self.assertEqual(status["interpretation"], "files_present_service_not_responding")
+
+    def test_zero_verified_episodes_explained(self):
+        self.schema()
+        self.seed(2)
+        with sqlite3.connect(self.source/"brain.sqlite") as db:
+            db.execute("UPDATE brain_episodes SET verified=0")
+        result = self.lab().run(include_services=False)["checks"][-1]
+        self.assertEqual(result["sourceEpisodes"], 5)
+        self.assertEqual(result["verifiedSourceEpisodes"], 0)
+        self.assertEqual(result["inconclusiveReason"], "no_verified_source_episodes")
+
     def test_invalid_health_never_passes(self):
         report = self.lab(lambda _: {"ok": False, "status": "no"}).run()
         self.assertTrue(all(row["result"] == "fail" for row in report["checks"][:4]))
@@ -61,6 +86,8 @@ class Tests(unittest.TestCase):
         self.assertEqual(report["counts"]["pass"], 3)
         observed = {row["id"]: row for row in report["checks"]}
         self.assertEqual(observed["semantic_memory"]["recordCount"], 1)
+        self.assertEqual(observed["execution_history"]["verifiedRecordCount"], 1)
+        self.assertEqual(observed["episodic_memory"]["verifiedRecordCount"], 0)
 
     def test_small_sample_cannot_prove_improvement(self):
         self.schema()
