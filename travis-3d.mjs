@@ -409,18 +409,14 @@ if (!hud || !launcher || !canvas) {
     });
   }
 
-  function modeForState(next=state) {
-    if (next==='listening' || next==='thinking' || next==='speaking') return 'face';
-    return 'core';
-  }
-
-  function syncFormButtons() {
-    formButtons.forEach(button=>{
-      const value=button.dataset.travisForm;
-      button.classList.toggle('is-active',value===formPolicy || (formPolicy==='auto' && value==='auto'));
+  function modeForState(next=state,now=performance.now()) {
+    return automaticTravisForm({
+      state:next,
+      elapsedMs:Math.max(0,now-stateChangedAt),
+      faceReady:realFaceReady,
+      brainConnected:neuralField?.diagnostics()?.backendConnected===true,
+      projectionActive:Boolean(pendingConcept)||hud.dataset.immersive==='true'
     });
-    hud.dataset.form=activeForm;
-    hud.dataset.formPolicy=formPolicy;
   }
 
   function applyForm(form='core') {
@@ -429,23 +425,26 @@ if (!hud || !launcher || !canvas) {
     formTarget.core=form==='core'?1:0;
     formTarget.face=form==='face'?1:0;
     hud.dataset.form=form;
+    hud.dataset.formPolicy=manualFormUntil>performance.now()?'temporary':'auto';
   }
 
+  // Gestures/API can preview another form; automation takes over again.
   function setForm(mode='auto',{manual=false}={}) {
     if (mode==='auto') {
-      formPolicy='auto';
-      applyForm(modeForState());
+      manualFormUntil=0;
+      syncAutoForm(state);
     } else if (['core','face'].includes(mode)) {
-      formPolicy=manual?mode:formPolicy;
+      if(mode==='face'&&!realFaceReady)return;
+      manualFormUntil=manual?performance.now()+MANUAL_PREVIEW_MS:0;
       applyForm(mode);
     }
-    syncFormButtons();
   }
 
-  function syncAutoForm(next=state) {
-    if (formPolicy!=='auto') return;
-    applyForm(modeForState(next));
-    syncFormButtons();
+  function syncAutoForm(next=state,now=performance.now()) {
+    if(now<manualFormUntil)return;
+    const target=modeForState(next,now);
+    if(target!==activeForm)applyForm(target);
+    else hud.dataset.formPolicy='auto';
   }
 
   function holoLine(points,color=0xcaa373,opacity=.35,closed=false) {
@@ -560,16 +559,8 @@ if (!hud || !launcher || !canvas) {
 
   async function createAdaptiveForms() {
     await createFaceAvatar();
-    formButtons.forEach(button=>{
-      button.addEventListener('click',()=>{
-        const mode=button.dataset.travisForm||'auto';
-        if (mode!=='auto' && formPolicy===mode) setForm('auto');
-        else setForm(mode,{manual:mode!=='auto'});
-        haptic(8);
-        pulseTone(true);
-      });
-    });
-    syncFormButtons();
+    // No mode buttons: start with the face when the real mesh is ready.
+    syncAutoForm();
   }
 
   function updateClock() {
