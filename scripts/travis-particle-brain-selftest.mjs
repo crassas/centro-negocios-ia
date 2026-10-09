@@ -36,7 +36,7 @@ const entry=html.match(/src="\.\/(travis-3d\.mjs\?v=[^"]+)"/);
 assert.ok(entry,'page must load a versioned Travis scene');
 assert.ok(sw.includes(entry[1]),'service-worker cache must match the page scene');
 for(const name of ['travis-brain-panel.mjs','travis-knowledge-graph.mjs','travis-brain.css']){
-  assert.match(sw,new RegExp(name.replaceAll('.', '\\.')+'\\?v=[^\\\'"]+'),'missing versioned brain asset '+name);
+  assert.ok(sw.includes(name+'?v='),'missing versioned brain asset '+name);
 }
 assert.ok(html.includes('travis-brain.css?v='));
 assert.ok(backend.includes('"/brain/graph"'));
