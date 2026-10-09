@@ -22,10 +22,7 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
  geometry.setAttribute('aTo',new THREE.BufferAttribute(to,3));
  geometry.setAttribute('aSeed',new THREE.BufferAttribute(seed,1));
  const material=new THREE.ShaderMaterial({
-   uniforms:{
-     uMorph:{value:0},uTime:{value:0},uOpacity:{value:0},uPixelRatio:{value:1},
-     uLow:{value:new THREE.Color(0x5c4633)},uHigh:{value:new THREE.Color(0xc6a276)}
-   },
+   uniforms:{uMorph:{value:0},uTime:{value:0},uOpacity:{value:0},uPixelRatio:{value:1}},
    vertexShader:`attribute vec3 aFrom;attribute vec3 aTo;attribute float aSeed;
      uniform float uMorph,uTime,uOpacity,uPixelRatio;
      varying float vSeed,vOpacity;
@@ -41,20 +38,20 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
        p+=normalize(p+vec3(.01))*sin(uTime*.92+aSeed*19.0)*.008;
        vec4 mv=modelViewMatrix*vec4(p,1.0);
        gl_Position=projectionMatrix*mv;
-       gl_PointSize=clamp((1.0+aSeed*1.6)*uPixelRatio*5.0/max(3.0,-mv.z),1.0,2.85);
+       gl_PointSize=clamp((2.0+aSeed*2.3)*uPixelRatio*8.0/max(2.0,-mv.z),2.5,5.1);
        vSeed=aSeed;
        vOpacity=uOpacity;
      }`,
    fragmentShader:`precision mediump float;varying float vSeed,vOpacity;
-     uniform vec3 uLow,uHigh;
      void main(){
        vec2 uv=gl_PointCoord-.5;float d=length(uv);
        if(d>.50)discard;
        float core=1.0-smoothstep(.02,.50,d);
        float spark=pow(1.0-d*2.0,1.5);
-       vec3 color=mix(uLow,uHigh,vSeed);
-       color=mix(color,vec3(.93,.81,.66),core*.19);
-       gl_FragColor=vec4(color,clamp(vOpacity*(core*.62+spark*.48),0.,1.));
+       vec3 copper=vec3(.53,.33,.18),gold=vec3(.95,.78,.53),ivory=vec3(1.,.89,.69);
+       vec3 color=mix(copper,gold,vSeed);
+       color=mix(color,ivory,core*.62);
+       gl_FragColor=vec4(color,clamp(vOpacity*(core*.72+spark*.62),0.,1.));
      }`,
    transparent:true,depthWrite:false,depthTest:true,blending:THREE.AdditiveBlending,toneMapped:false
  });
@@ -65,25 +62,9 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
  let currentBounds=particleBounds(to),lastFit=null;
  let fitMargin=.84;
  const frameOrigin=new THREE.Vector3();
- const themes={
-   mars:[0x773c25,0xb87952],earth:[0x365771,0x92b09a],saturn:[0x61513f,0xd3bb90],
-   jupiter:[0x684737,0xc8a687],venus:[0x6c5340,0xbca185],neptune:[0x344d6c,0x6d88a7],
-   planet:[0x574738,0xd3b18c],map:[0x455a51,0xb3b99f],
-   house:[0x59473b,0xcfb090],person:[0x73513b,0xcda787],
-   vehicle:[0x454952,0xb49b80],landscape:[0x405846,0x99aa80],
-   diagram:[0x554452,0xc4a681],object:[0x594b47,0xb49b87]
- };
- function setTheme(scene,subject=''){
-   // Use more stage width for flat/architectural shapes; leave tall figures
-   // inside the tighter vertical space between mobile camera and controls.
-   fitMargin=({house:1.16,planet:1.09,person:.85,map:.95,vehicle:1.05,
-     landscape:1.07,diagram:.91,object:1.01})[scene]??.90;
-   const key=Object.keys(themes).find(k=>['mars','earth','saturn','jupiter','venus','neptune'].includes(k)&&
-     new RegExp('\\b'+k+'\\b','i').test(subject))||scene;
-   const [low,high]=themes[key]||themes.object;
-   material.uniforms.uLow.value.setHex(low);
-   material.uniforms.uHigh.value.setHex(high);
- }
+ // Keep the proven visible shader until physical rendering is confirmed.
+ // Geometry-specific materials can be restored after phone GPU verification.
+ function setTheme(){return;}
 
  function advance(elapsed){return reducedMotion?1:Math.max(0,Math.min(1,elapsed/duration));}
  const eased=t=>t*t*(3-2*t);
@@ -173,7 +154,7 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
    const expected=Math.min(1,Math.max(0,projection?.amount||0));
    const alpha=toCore?Math.max(0,expected):Math.min(1,expected*.9+.1*progress);
    currentAlpha=alpha;
-   material.uniforms.uOpacity.value=alpha*.76;
+   material.uniforms.uOpacity.value=alpha*.93;
    if(camera&&currentBounds){
      root.getWorldPosition(frameOrigin);
      const fit=fitParticleToViewport(currentBounds,{
