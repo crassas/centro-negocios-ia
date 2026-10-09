@@ -349,6 +349,36 @@ class BrainRuntime:
         self.mark('monitor','learning','Avaliação do utilizador registada; utilidade das experiências actualizada')
         return {'runId':run_id,'accepted':accepted,**result}
 
+    def events(self, limit=48):
+        """Read-only, bounded observations for the visible particle network.
+
+        Event phase and region are observed telemetry, not model reasoning
+        or private conversation text. Never return the free-form detail field.
+        """
+        count = max(1, min(int(limit), 80))
+        with contextlib.closing(sqlite3.connect(
+                self.path.resolve().as_uri()+'?mode=ro',
+                uri=True, timeout=2)) as c:
+            c.row_factory = sqlite3.Row
+            rows = c.execute(
+                'SELECT id,created,region,phase FROM brain_events '
+                'ORDER BY id DESC LIMIT ?', (count,)
+            ).fetchall()
+        entries = [{
+            'id': int(row['id']),
+            'created': float(row['created']),
+            'region': row['region'],
+            'phase': clean(row['phase'],60)
+        } for row in rows if row['region'] in REGIONS and row['created'] is not None]
+        return {
+            'ok': True, 'source': 'brain-sqlite',
+            'engine': 'persisted-observed-events-v1',
+            'observedAt': self.clock(),
+            'events': entries,
+            'privateDetailsOmitted': True,
+            'disclaimer': 'Recorded operational events, not access to private reasoning'
+        }
+
     def graph(self, limit=120):
         """Read-only snapshot of persisted memories and persisted relations."""
         limit = max(1, min(int(limit), 120))
