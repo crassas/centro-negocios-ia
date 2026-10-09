@@ -7,7 +7,8 @@ export function createBrainPanel(onSnapshot,onGraph=()=>{},onEvents=()=>{}){
   const activity=document.createElement('p');activity.className='brain-activity';
   const graphCount=document.createElement('p');graphCount.className='brain-graph-count';graphCount.textContent='A verificar memórias persistidas…';
   const selected=document.createElement('p');selected.className='brain-selected-memory';selected.setAttribute('aria-live','polite');
-  panel.append(title,state,counts,activity,graphCount,selected);hud.append(panel);
+  panel.append(title,state,counts,activity,graphCount,selected);
+  panel.hidden=true;hud.append(panel);
   const journalButton=document.createElement('button');journalButton.type='button';journalButton.className='travis-brain-journal-button';journalButton.textContent='DIÁRIO DOS CICLOS';journalButton.hidden=true;hud.append(journalButton);
   const dialog=document.createElement('dialog');dialog.className='travis-brain-journal';dialog.setAttribute('aria-labelledby','brain-journal-title');
   const header=document.createElement('header'),heading=document.createElement('h2');heading.id='brain-journal-title';heading.textContent='Diário do cérebro';
@@ -18,7 +19,7 @@ export function createBrainPanel(onSnapshot,onGraph=()=>{},onEvents=()=>{}){
   const records=document.createElement('div');records.className='brain-journal-records';
   const pause=document.createElement('button');pause.type='button';pause.className='brain-cycle-pause';pause.textContent='Pausar ciclos automáticos';
   dialog.append(header,note,functions,records,pause);hud.append(dialog);
-  let shown=false,disposed=false,timer=0,controller=null,snapshot=null,recordKey='',lastGraphPoll=0,lastEventsPoll=0;
+  let shown=false,monitoring=false,disposed=false,timer=0,controller=null,snapshot=null,recordKey='',lastGraphPoll=0,lastEventsPoll=0;
   const phases={awake:'DISPONÍVEL',consolidating:'A CONSOLIDAR MEMÓRIA',dreaming:'SIMULAÇÃO AUTÓNOMA',resting:'EM REPOUSO'};
   const date=value=>new Date(value*1000).toLocaleString('pt-PT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
   function journal(data){
@@ -34,7 +35,7 @@ export function createBrainPanel(onSnapshot,onGraph=()=>{},onEvents=()=>{}){
     }
   }
   async function poll(){
-    clearTimeout(timer);if(disposed||!shown||document.hidden)return;
+    clearTimeout(timer);if(disposed||!monitoring||document.hidden)return;
     controller?.abort();controller=new AbortController();const expiry=setTimeout(()=>controller?.abort(),4500);
     try{
       const response=await fetch('/brain/state',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}',cache:'no-store',signal:controller.signal});
@@ -72,7 +73,7 @@ export function createBrainPanel(onSnapshot,onGraph=()=>{},onEvents=()=>{}){
       }
     }catch(error){
       if(disposed)return;snapshot=null;onSnapshot(null);onGraph(null);onEvents(null);counts.textContent='Sem dados atuais';graphCount.textContent='REDE LOCAL INDISPONÍVEL';state.textContent='SEM LIGAÇÃO AO NÚCLEO';activity.textContent='A aguardar dados atuais do servidor.';panel.dataset.connected='false';
-    }finally{clearTimeout(expiry);if(shown&&!disposed)timer=setTimeout(poll,2400);}
+    }finally{clearTimeout(expiry);if(monitoring&&!disposed)timer=setTimeout(poll,2400);}
   }
   const openJournal=()=>{if(!dialog.open)dialog.showModal();};
   const closeJournal=()=>{dialog.close();journalButton.focus();};
@@ -81,15 +82,23 @@ export function createBrainPanel(onSnapshot,onGraph=()=>{},onEvents=()=>{}){
     try{const response=await fetch('/brain/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paused:!snapshot.paused}),signal:AbortSignal.timeout(8000)});if(!response.ok)throw Error();await poll();}
     catch{note.textContent='Não foi possível alterar o estado dos ciclos. Tenta novamente.';}finally{pause.disabled=false;}
   };
-  const visibility=()=>{if(document.hidden){controller?.abort();clearTimeout(timer);}else if(shown)poll();};
-  const closeHud=()=>{shown=false;onEvents(null);controller?.abort();clearTimeout(timer);if(dialog.open)dialog.close();};
+  const visibility=()=>{if(document.hidden){controller?.abort();clearTimeout(timer);}else if(monitoring)poll();};
+  const closeHud=()=>{shown=false;monitoring=false;panel.hidden=true;journalButton.hidden=true;onSnapshot(null);onEvents(null);controller?.abort();clearTimeout(timer);if(dialog.open)dialog.close();};
   journalButton.addEventListener('click',openJournal);close.addEventListener('click',closeJournal);pause.addEventListener('click',togglePause);
   document.addEventListener('visibilitychange',visibility);window.addEventListener('travis:close',closeHud);
   return {
     setSelectedMemory(memory){
       selected.textContent=memory?('MEMÓRIA: '+memory.title+' · '+memory.kind+' · origem '+memory.sourceType):'';
     },
-    setVisible(value){panel.hidden=!value;journalButton.hidden=!value;if(value===shown)return;shown=value;if(value)poll();else{controller?.abort();clearTimeout(timer);if(dialog.open)dialog.close();}},
+    setVisible(value){
+      // Observed brain data must remain live even when the technical panel
+      // is hidden. Only a selected memory makes the panel visible.
+      panel.hidden=!value;journalButton.hidden=!value;
+      if(shown!==Boolean(value)){shown=Boolean(value);if(!shown&&dialog.open)dialog.close();}
+      const active=Boolean(hud?.classList.contains('is-open'))&&!document.hidden;
+      if(active&&!monitoring){monitoring=true;poll();}
+      else if(!active&&monitoring){monitoring=false;controller?.abort();clearTimeout(timer);}
+    },
     dispose(){disposed=true;controller?.abort();clearTimeout(timer);document.removeEventListener('visibilitychange',visibility);window.removeEventListener('travis:close',closeHud);panel.remove();journalButton.remove();dialog.remove();}
   };
 }
