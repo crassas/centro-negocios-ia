@@ -1,4 +1,4 @@
-import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=3';
+import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=4';
 // Film-inspired schematic projections. Unprovided geographic/CAD/person
 // geometry stays visibly conceptual; real source links are separate.
 export function createConceptProjection(THREE,{reducedMotion=false}={}){
