@@ -1,4 +1,4 @@
-import { createBrainPanel } from './travis-brain-panel.mjs?v=3';
+import { createBrainPanel } from './travis-brain-panel.mjs?v=4';
 import { createKnowledgeGraph } from './travis-knowledge-graph.mjs?v=cinema-1';
 
 // Brain silhouette = particles used as a visual metaphor.
@@ -136,7 +136,7 @@ export function createNeuralField(THREE,{reducedMotion=false,compact=false}={}){
   function diagnostics(){return{
     kind:'event-linked-particle-brain',source:'brain/state + brain/graph + brain/events',
     nativeEventEngine:nativeEvents?.engine||'unavailable',observedEventCount:nativeEvents?.events?.length||0,
-    backendConnected:!!status,backendPhase:status?.phase,
+    backendConnected:!!status&&Math.abs(Date.now()/1000-status.observedAt)<15,backendPhase:status?.phase,
     silhouetteParticles:vertex.length/3,graph:graph.diagnostics(),
     activeRegions:keys.filter((_,i)=>activity[i]>.1),
     expanded:currentCore>.5,visible,time:clock,anatomyAnalogy:true
