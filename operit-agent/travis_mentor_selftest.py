@@ -116,6 +116,48 @@ class MentorshipTests(unittest.TestCase):
             self.assertEqual(by_id["read_status"]["lastObservedState"],"observed_tool_success")
             self.assertIn("not current authorization",catalog["warning"])
 
+    def test_runtime_registry_adds_dynamic_tools_without_inventing_permissions(self):
+        static={"capabilities":[{"id":"git_status","owner":"core",
+            "action_type":"RUN_COMMAND","mutation":False}]}
+        def actual():
+            return {"ok":True,"kind":"operational-awareness",
+                "toolIds":["git_status","agent_workflow","brain_pause"]}
+        result,source=mentor.runtime_registry(static,actual)
+        self.assertEqual(source["state"],"runtime_observed")
+        self.assertEqual(source["registered"],3)
+        self.assertEqual(source["metadataIncomplete"],2)
+        detail=mentor.capability_inventory(result,Path("/tmp/not-a-real-state-file"))
+        by_id={r["id"]:r for r in detail["capabilities"]}
+        self.assertEqual(by_id["git_status"]["actionType"],"RUN_COMMAND")
+        self.assertEqual(by_id["agent_workflow"]["actionType"],"UNKNOWN")
+        self.assertIsNone(by_id["brain_pause"]["modifiesData"])
+        self.assertTrue(all(r["runtimeRegistered"] for r in by_id.values()))
+
+    def test_runtime_registry_fallback_is_explicit(self):
+        static={"capabilities":[{"id":"git_status"}]}
+        result,source=mentor.runtime_registry(static,lambda:{"ok":True,"toolIds":[]})
+        self.assertEqual(source["state"],"static_fallback")
+        self.assertEqual(result,static)
+
+    def test_safe_readonly_probes_only_assert_dependency_health(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            db=travis_core.RuntimeStore(root/"memory.sqlite")
+            db.remember("observacao","conteudo","FACT",source_type="system_config")
+            with sqlite3.connect(root/"memory.sqlite") as c:
+                c.execute("CREATE TABLE tasks(id INTEGER PRIMARY KEY,title TEXT)")
+            with sqlite3.connect(root/"brain.sqlite") as c:
+                c.execute("CREATE TABLE brain_episodes(id TEXT)")
+            result=mentor.live_readonly_probes(root,
+                health_fetch=lambda url:{"ok":True} if "8765" in url else {"status":"ok"},
+                repo_root=root/"missing_repo")
+            self.assertEqual(result["tested"],6)
+            self.assertEqual(result["observed"],5)
+            self.assertEqual(result["scope"],"read_only_dependency_preflight_not_tool_postcondition")
+            self.assertEqual(result["tools"]["repo_access"]["state"],"unavailable")
+            self.assertEqual(result["tools"]["task_list"]["evidence"],"db_read_and_integrity_ok")
+            self.assertIn("Requires interactive",result["notTested"]["web_open"])
+
     def test_status_does_not_call_any_external_service(self):
         status = mentor.status(None,{"capabilities":[{"id":"x"}]})
         self.assertEqual(status["registeredTools"],1)
