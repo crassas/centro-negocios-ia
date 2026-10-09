@@ -65,6 +65,7 @@ O instalador:
 Comandos:
 
     travismentor status
+    travismentor abilities
     travismentor context --query "Como corrigir um bug com testes?"
     travismentor plan --query "Publicar no GitHub" --tool repo_change
     travismentor export
