@@ -36,6 +36,10 @@ export function createBacklight(THREE,scene) {
         float left=field(p,vec2(.30,.57),vec2(.105,.39));
         float right=field(p,vec2(.73,.49),vec2(.09,.33));
         colour+=vec3(.058,.035,.020)*left+vec3(.032,.026,.022)*right;
+        // Extra depth, not a new synthetic event or an image asset.
+        float amberPool=field(p,vec2(.22,.53),vec2(.35,.58));
+        float bronzePool=field(p,vec2(.70,.77),vec2(.42,.40));
+        colour+=vec3(.15,.079,.035)*amberPool+vec3(.055,.029,.017)*bronzePool;
         // Sparse distant dust, embedded behind the avatar rather than over its face.
         vec2 grid=p*vec2(100.0,74.0);
         vec2 cell=floor(grid);
