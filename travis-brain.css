@@ -27,32 +27,14 @@
 .brain-functions dt{color:#afc8d2}.brain-functions dd{margin:0;color:#7898a5}
 .travis-hud.is-projecting .travis-brain-panel,.travis-hud.is-projecting .travis-brain-journal-button,.travis-hud.room-open .travis-brain-panel,.travis-hud.room-open .travis-brain-journal-button{visibility:hidden}
 
-/* Compact telemetry: never block the avatar, input or projected holograms. */
-.travis-brain-panel{
-  top:max(58px,8vh);left:max(10px,env(safe-area-inset-left));right:auto;
-  width:min(176px,35vw);max-width:none;padding:8px 9px;
-  text-align:left;border:1px solid rgba(77,130,142,.15);
-  border-radius:6px;background:rgba(2,11,16,.26);
-  box-sizing:border-box;backdrop-filter:blur(3px)
-}
+/* Travis memory graph: compact overlay that preserves the central stage. */
+.travis-brain-panel{top:max(58px,8vh);left:max(10px,env(safe-area-inset-left));right:auto;width:min(176px,35vw);max-width:none;padding:8px 9px;text-align:left;border:1px solid rgba(77,130,142,.15);border-radius:6px;background:rgba(2,11,16,.26);box-sizing:border-box;backdrop-filter:blur(3px)}
 .travis-brain-panel h2{font-size:9px;letter-spacing:.16em;margin-bottom:5px}
 .travis-brain-panel p{font-size:9px;margin:3px 0;line-height:1.35}
 .travis-brain-panel .brain-phase{font-size:8px;letter-spacing:.08em}
 .travis-brain-panel .brain-activity{margin:4px 0;max-width:160px}
 .travis-brain-panel .brain-graph-count{font-weight:600;color:#abd6c8}
 .travis-brain-panel .brain-selected-memory{max-height:55px;overflow:hidden;overflow-wrap:anywhere;color:#e1d6b9}
-.travis-brain-journal-button{
-  bottom:auto;top:max(60px,9vh);left:auto;right:max(10px,env(safe-area-inset-right));
-  transform:none;max-width:115px;white-space:normal;text-align:right
-}
-@media(max-width:700px){
-  .travis-brain-panel{top:66px;width:min(135px,34vw);padding:6px 7px;backdrop-filter:none}
-  .travis-brain-panel h2{font-size:8px}
-  .travis-brain-panel p{font-size:8px}
-  .travis-brain-panel .brain-activity{max-width:120px}
-  .travis-brain-journal-button{top:68px;max-width:88px;font-size:7px}
-}
-@media(max-height:650px){
-  .travis-brain-panel{top:58px;width:135px}
-  .travis-brain-journal-button{top:62px;bottom:auto}
-}
+.travis-brain-journal-button{bottom:auto;top:max(60px,9vh);left:auto;right:max(10px,env(safe-area-inset-right));transform:none;max-width:115px;white-space:normal;text-align:right}
+@media(max-width:700px){.travis-brain-panel{top:66px;width:min(135px,34vw);padding:6px 7px;backdrop-filter:none}.travis-brain-panel h2{font-size:8px}.travis-brain-panel p{font-size:8px}.travis-brain-panel .brain-activity{max-width:120px}.travis-brain-journal-button{top:68px;max-width:88px;font-size:7px}}
+@media(max-height:650px){.travis-brain-panel{top:58px;width:135px}.travis-brain-journal-button{top:62px;bottom:auto}}

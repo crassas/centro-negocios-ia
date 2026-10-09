@@ -1354,7 +1354,18 @@ window.addEventListener('message',event=>{
 window.TravisBridge={async ask(question,signal){
   const q=question.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/^travis[, :]+/,'').trim();
   if(/^(estas ai|estas aqui|ola|bom dia|boa tarde|boa noite)[?.!]*$/.test(q))return {reply:'Estou aqui. Diz-me o que queres fazer.'};
-  if(/^(?:(?:podes|consegues) )?(?:abre|abrir) (?:o )?youtube[?.!]*$/.test(q)){window.location.assign('https://www.youtube.com/');return {reply:'A abrir o YouTube.'}}
+  // Route media/search requests to the persistent local hologram, never to a browser tab.
+  const projected=q.match(/^(?:(?:podes|consegues) )?(?:abre|abrir) (?:o )?(youtube|google)[?.!]*$/);
+  if(projected){
+    const service=projected[1];
+    const local=['127.0.0.1','localhost'].includes(location.hostname)&&location.port==='8770';
+    if(local&&window.TravisVisual?.ask){
+      window.TravisVisual.open();window.TravisVisual.ask('Abre o '+service);
+    }else{
+      window.location.assign('http://127.0.0.1:8770/?travis=1&projection='+service);
+    }
+    return {reply:service+' preparado no Travis.'};
+  }
   if(/\b(posicao|posicoes|ranking|rankings)\b/.test(q)){
     const project=allProjects().find(p=>q.includes(p.id)||q.includes(p.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()));
     const g=state.gsc;

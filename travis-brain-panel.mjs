@@ -1,4 +1,4 @@
-export function createBrainPanel(onSnapshot,onGraph=()=>{}){
+export function createBrainPanel(onSnapshot,onGraph=()=>{},onEvents=()=>{}){
   const hud=document.querySelector('#travis-hud');
   const panel=document.createElement('section');panel.className='travis-brain-panel';panel.setAttribute('aria-label','Atividade do cérebro funcional');
   const title=document.createElement('h2');title.textContent='REDE COGNITIVA';
@@ -18,7 +18,7 @@ export function createBrainPanel(onSnapshot,onGraph=()=>{}){
   const records=document.createElement('div');records.className='brain-journal-records';
   const pause=document.createElement('button');pause.type='button';pause.className='brain-cycle-pause';pause.textContent='Pausar ciclos automáticos';
   dialog.append(header,note,functions,records,pause);hud.append(dialog);
-  let shown=false,disposed=false,timer=0,controller=null,snapshot=null,recordKey='',lastGraphPoll=0;
+  let shown=false,disposed=false,timer=0,controller=null,snapshot=null,recordKey='',lastGraphPoll=0,lastEventsPoll=0;
   const phases={awake:'DISPONÍVEL',consolidating:'A CONSOLIDAR MEMÓRIA',dreaming:'SIMULAÇÃO AUTÓNOMA',resting:'EM REPOUSO'};
   const date=value=>new Date(value*1000).toLocaleString('pt-PT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
   function journal(data){
@@ -59,8 +59,19 @@ export function createBrainPanel(onSnapshot,onGraph=()=>{}){
           onGraph(null);graphCount.textContent='REDE LOCAL INDISPONÍVEL';
         }
       }
+
+      if(Date.now()-lastEventsPoll>2100){
+        lastEventsPoll=Date.now();
+        try{
+          const response=await fetch('/brain/events',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}',cache:'no-store',signal:controller.signal});
+          if(!response.ok)throw Error('HTTP '+response.status);
+          const observed=await response.json();
+          if(!observed.ok||observed.source!=='brain-sqlite'||!Array.isArray(observed.events))throw Error('Invalid event telemetry');
+          onEvents(observed);
+        }catch{onEvents(null);}
+      }
     }catch(error){
-      if(disposed)return;snapshot=null;onSnapshot(null);onGraph(null);counts.textContent='Sem dados atuais';graphCount.textContent='REDE LOCAL INDISPONÍVEL';state.textContent='SEM LIGAÇÃO AO NÚCLEO';activity.textContent='A aguardar dados atuais do servidor.';panel.dataset.connected='false';
+      if(disposed)return;snapshot=null;onSnapshot(null);onGraph(null);onEvents(null);counts.textContent='Sem dados atuais';graphCount.textContent='REDE LOCAL INDISPONÍVEL';state.textContent='SEM LIGAÇÃO AO NÚCLEO';activity.textContent='A aguardar dados atuais do servidor.';panel.dataset.connected='false';
     }finally{clearTimeout(expiry);if(shown&&!disposed)timer=setTimeout(poll,2400);}
   }
   const openJournal=()=>{if(!dialog.open)dialog.showModal();};
@@ -71,7 +82,7 @@ export function createBrainPanel(onSnapshot,onGraph=()=>{}){
     catch{note.textContent='Não foi possível alterar o estado dos ciclos. Tenta novamente.';}finally{pause.disabled=false;}
   };
   const visibility=()=>{if(document.hidden){controller?.abort();clearTimeout(timer);}else if(shown)poll();};
-  const closeHud=()=>{shown=false;controller?.abort();clearTimeout(timer);if(dialog.open)dialog.close();};
+  const closeHud=()=>{shown=false;onEvents(null);controller?.abort();clearTimeout(timer);if(dialog.open)dialog.close();};
   journalButton.addEventListener('click',openJournal);close.addEventListener('click',closeJournal);pause.addEventListener('click',togglePause);
   document.addEventListener('visibilitychange',visibility);window.addEventListener('travis:close',closeHud);
   return {

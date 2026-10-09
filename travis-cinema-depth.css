@@ -1,0 +1,174 @@
+/* TRAVIS CINEMA / DEPTH v2 · static, reversible tonal layer
+   Graph, voice, camera and interaction stay unchanged.
+   No cyan, imported fonts, external images or animated visual loops. */
+.travis-hud{
+  --cin-gold:#ddb584;
+  --cin-amber:#cd9053;
+  --cin-ivory:#f1e5d5;
+  background:
+    radial-gradient(ellipse 86% 53% at 2% 28%,rgba(143,75,36,.31),transparent 82%),
+    radial-gradient(ellipse 64% 37% at 52% 55%,rgba(130,78,35,.21),transparent 89%),
+    radial-gradient(ellipse 80% 36% at 50% 94%,rgba(137,82,41,.26),transparent 80%),
+    linear-gradient(130deg,#0b0909 3%,#040405 48%,#0e0b0a 74%,#030304 100%)!important;
+}
+.travis-hud::before{
+  background:
+    radial-gradient(ellipse 90% 39% at 50% 104%,#030405 0 46%,rgba(236,158,73,.31) 47.2%,rgba(173,99,41,.14) 49%,transparent 51%),
+    radial-gradient(ellipse 66% 22% at 53% 83%,rgba(184,107,48,.16),transparent 75%),
+    radial-gradient(ellipse 98% 78% at 50% 45%,transparent 45%,rgba(0,0,0,.23) 86%,rgba(0,0,0,.43) 100%);
+  opacity:.95;
+}
+.travis-hud::after{
+  background:repeating-linear-gradient(180deg,rgba(255,221,176,.012) 0 1px,transparent 1px 7px);
+  opacity:.45;
+}
+/* Atmospheric overlays: always behind real buttons and in front of WebGL's canvas. */
+.travis-hud .travis-cinema-lightfield{
+  position:absolute;inset:0;z-index:3;
+  overflow:hidden;pointer-events:none;isolation:isolate;
+  contain:layout paint;
+}
+.travis-hud .travis-cinema-lightfield::before{
+  content:"";position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 58% 57% at 3% 30%,rgba(187,102,44,.25),rgba(92,51,27,.08) 53%,transparent 92%),
+    radial-gradient(ellipse 68% 40% at 51% 65%,rgba(182,103,35,.14),transparent 88%);
+}
+.travis-hud .travis-cinema-lightfield span{
+  position:absolute;display:block;pointer-events:none;
+}
+.travis-hud .travis-cinema-godray{
+  top:-27%;left:-36%;width:119%;height:120%;
+  transform:rotate(-14deg);transform-origin:top left;
+  background:
+    linear-gradient(109deg,transparent 3%,rgba(255,212,144,.24) 23%,rgba(178,103,56,.14) 38%,transparent 64%),
+    linear-gradient(123deg,rgba(255,224,157,.12),rgba(174,101,47,.02) 62%,transparent 79%);
+  -webkit-mask-image:radial-gradient(ellipse 90% 89% at 4% 8%,#000 8%,rgba(0,0,0,.6) 50%,transparent 100%);
+  mask-image:radial-gradient(ellipse 90% 89% at 4% 8%,#000 8%,rgba(0,0,0,.6) 50%,transparent 100%);
+  mix-blend-mode:screen;opacity:.86;
+}
+.travis-hud .travis-cinema-aura{
+  top:20%;left:50%;
+  width:min(97vw,650px);aspect-ratio:1;transform:translateX(-50%);
+  background:
+    radial-gradient(circle at 50% 50%,transparent 0 52%,rgba(239,169,88,.13) 60%,transparent 61.2%),
+    radial-gradient(circle at 50% 50%,transparent 0 73%,rgba(222,158,83,.16) 73.4%,rgba(214,146,77,.035) 74.4%,transparent 75.3%),
+    radial-gradient(ellipse at 48% 48%,rgba(114,66,29,.055),transparent 67%);
+  opacity:.65;
+}
+.travis-hud .travis-cinema-aura::after{
+  content:"";position:absolute;inset:9%;border-radius:50%;
+  background:conic-gradient(from 32deg,transparent 0 19%,rgba(243,178,96,.24) 24%,transparent 31% 60%,rgba(229,158,83,.23) 64%,transparent 73% 92%,rgba(253,203,134,.14) 96%,transparent 100%);
+  -webkit-mask-image:radial-gradient(circle,transparent 0 81%,#000 82% 84%,transparent 86%);
+  mask-image:radial-gradient(circle,transparent 0 81%,#000 82% 84%,transparent 86%);
+}
+.travis-hud .travis-cinema-horizon{
+  bottom:-14%;left:-24%;width:148%;height:35%;
+  background:
+    radial-gradient(ellipse 55% 39% at 50% 44%,rgba(247,181,94,.25),rgba(182,105,42,.10) 39%,transparent 82%),
+    radial-gradient(ellipse 41% 77% at 53% 96%,rgba(153,94,46,.20),transparent 75%);
+  mix-blend-mode:screen;opacity:.9;
+}
+.travis-hud .travis-cinema-horizon::after{
+  content:"";position:absolute;left:12%;right:12%;top:27%;height:32%;
+  border-top:1px solid rgba(248,184,106,.28);
+  border-radius:50% 50% 0 0;
+  box-shadow:0 -8px 18px rgba(239,154,74,.14),0 -2px 6px rgba(255,220,154,.14);
+  transform:rotate(-2deg);
+}
+.travis-hud .travis-cinema-reflection{
+  bottom:-9%;left:0;width:100%;height:28%;opacity:.56;
+  background:
+    linear-gradient(180deg,transparent 11%,rgba(148,91,42,.08) 42%,transparent 77%),
+    repeating-linear-gradient(180deg,transparent 0 15px,rgba(212,146,80,.015) 16px 17px,transparent 18px 39px);
+  -webkit-mask-image:radial-gradient(ellipse at 50% 100%,#000,transparent 81%);
+  mask-image:radial-gradient(ellipse at 50% 100%,#000,transparent 81%);
+}
+.travis-hud .travis-title h1{
+  background:linear-gradient(180deg,#fff0d8 0%,#d8b88e 50%,#f6e0c4 74%,#b9976f 100%)!important;
+  -webkit-background-clip:text!important;background-clip:text!important;
+  -webkit-text-fill-color:transparent!important;text-shadow:none!important;
+  filter:drop-shadow(0 0 8px rgba(239,174,105,.18))!important;
+}
+.travis-hud .travis-title-signal{
+  background:linear-gradient(90deg,transparent,#f7d5a6 30%,#dcaa70 50%,#f3d5aa 70%,transparent);
+  box-shadow:0 0 11px rgba(247,187,105,.32);opacity:.8;
+}
+.travis-hud .travis-camera-dock button{
+  background:radial-gradient(ellipse 85% 70% at 17% -8%,rgba(201,136,64,.27),transparent 79%),
+    linear-gradient(155deg,#252019,#070809 60%,#211a15);
+  color:#f6e3c5;border-color:rgba(241,195,133,.66);
+  box-shadow:0 0 22px rgba(226,145,62,.12),0 13px 30px rgba(0,0,0,.65),
+    inset 0 1px rgba(255,237,196,.19),inset 0 -8px 18px rgba(0,0,0,.25);
+}
+.travis-hud .travis-close{
+  border-color:rgba(245,192,123,.78);
+  background:radial-gradient(circle at 37% 11%,rgba(201,138,63,.29),transparent 55%),#09090a;
+  box-shadow:0 0 24px rgba(213,137,50,.16),inset 0 1px rgba(255,236,192,.20);
+}
+.travis-hud .travis-brain-panel{
+  background:radial-gradient(ellipse 95% 58% at 3% 0%,rgba(119,72,34,.29),transparent 81%),
+    linear-gradient(155deg,rgba(28,22,18,.94),rgba(5,6,8,.9) 68%,rgba(18,15,13,.84));
+  border-color:rgba(210,161,102,.37);
+  box-shadow:0 14px 40px rgba(0,0,0,.72),inset 0 1px rgba(255,227,172,.11);
+}
+.travis-hud[data-neural-field] .travis-form-selector{
+  background:radial-gradient(ellipse 66% 84% at 51% 0%,rgba(182,111,47,.16),transparent 82%),
+    linear-gradient(145deg,#13110f 4%,#040507 53%,#1f170f 100%)!important;
+  border-color:rgba(221,174,114,.55)!important;
+  box-shadow:0 0 22px rgba(238,151,62,.15),0 14px 39px rgba(0,0,0,.75),
+    inset 0 1px rgba(255,232,180,.18)!important;
+}
+.travis-hud[data-neural-field] .travis-form-selector button.is-active{
+  color:#fff0d8!important;
+  background:radial-gradient(ellipse 86% 92% at 47% 0%,rgba(247,195,119,.28),transparent 80%),
+    linear-gradient(156deg,rgba(133,87,49,.82),rgba(33,25,19,.94) 65%,rgba(86,51,27,.73))!important;
+  box-shadow:0 0 0 1px rgba(248,207,144,.58),0 0 23px rgba(227,148,65,.18),
+    inset 0 1px rgba(255,230,183,.25)!important;
+}
+.travis-hud .travis-status{
+  background:radial-gradient(ellipse 59% 120% at 50% -65%,rgba(226,151,64,.28),transparent 95%),
+    radial-gradient(ellipse 50% 77% at 0 100%,rgba(121,72,31,.20),transparent 80%),
+    linear-gradient(105deg,#1d1511,#060709 47%,#15110f)!important;
+  border-color:rgba(230,178,107,.59)!important;
+  box-shadow:0 0 27px rgba(220,131,45,.13),0 19px 48px rgba(0,0,0,.71),
+    inset 0 1px rgba(255,228,175,.30)!important;
+}
+.travis-hud .travis-wave i{
+  background:linear-gradient(180deg,#fff1d0,#ebba73 44%,#925d2f);
+  box-shadow:0 0 11px rgba(238,161,79,.35);
+}
+.travis-hud .travis-status-message{color:#f6e6d3;text-shadow:0 1px 13px #0009;}
+.travis-hud .travis-status-state{color:#f0c38b;}
+.travis-hud .travis-command{
+  background:radial-gradient(ellipse 54% 81% at 8% 0%,rgba(109,74,49,.27),transparent 76%),
+    linear-gradient(117deg,#1a1b1f 0%,#0b0c10 42%,#110e0d 79%,#22180f)!important;
+  border-color:rgba(227,196,158,.64)!important;
+  box-shadow:0 0 0 1px rgba(246,213,180,.05),0 17px 52px rgba(0,0,0,.78),
+    0 -5px 24px rgba(196,125,47,.08),inset 0 1px rgba(255,242,216,.22),
+    inset 0 -6px 17px rgba(0,0,0,.32)!important;
+}
+.travis-hud .travis-command button{
+  background:radial-gradient(ellipse 106% 80% at 30% 0%,rgba(255,214,147,.40),transparent 83%),
+    linear-gradient(145deg,#885f39,#4c331e 40%,#181310 93%)!important;
+  border-color:rgba(248,205,143,.9)!important;color:#fff1dd!important;
+  box-shadow:0 0 24px rgba(248,171,82,.27),inset 0 1px rgba(255,232,187,.44)!important;
+}
+.travis-hud .travis-command button:hover{
+  background:linear-gradient(145deg,#a67744,#422b19 70%,#24180f)!important;
+}
+.travis-hud .travis-command input::placeholder{color:#aba5a0!important;opacity:1;}
+.travis-hud.is-projecting .travis-cinema-lightfield,
+.travis-hud.room-open .travis-cinema-lightfield{opacity:.18;}
+@media(max-width:700px){
+  .travis-hud .travis-cinema-godray{top:-17%;left:-45%;width:124%;height:105%;opacity:.86;}
+  .travis-hud .travis-cinema-aura{top:25%;width:112vw;opacity:.54;}
+  .travis-hud .travis-cinema-horizon{height:33%;bottom:-13%;}
+  .travis-hud .travis-cinema-reflection{height:26%;}
+}
+@media(max-height:670px){
+  .travis-hud .travis-cinema-aura{top:19%;width:85vw;opacity:.39;}
+}
+@media(prefers-reduced-motion:reduce){
+  .travis-hud .travis-cinema-lightfield *{animation:none!important;transition:none!important;}
+}

@@ -1,157 +1,169 @@
-// The only nodes and edges here come from the loopback /brain/graph SQLite snapshot.
-// Position, movement and colour are graphical metaphors, not hidden reasoning traces.
-export function createKnowledgeGraph(THREE,{reducedMotion=false}={}){
-  const root=new THREE.Group();root.name='TravisPersistedMemoryNetwork';
-  const colours={FACT:0x87cce7,CONCEPT:0x81d6c4,DECISION:0xd6a6c7,RULE:0xe4c28c};
-  let snapshot={nodes:[],links:[]},status='waiting',fingerprint='',updatedAt=0,selectedId='';
-  let nodesMesh=null,hitMesh=null,edgesMesh=null,signals=null,labels=[];
-  let edgePairs=[],positions=new Map();
-  const kinds=new Map(),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-  const colorOf=n=>new THREE.Color(colours[n?.kind]??0x9ab1bb);
-  const hash=value=>{let h=2166136261;for(const ch of String(value)){h=Math.imul(h^ch.charCodeAt(0),16777619);}return (h>>>0)/4294967296;};
+// Actual persisted Travis memory graph. Decorative neural field is a separate layer.
+// Only renders nodes and relations supplied by the loopback-only /brain/graph endpoint.
+export function createKnowledgeGraph(THREE,{reducedMotion=false}={}) {
+  const root=new THREE.Group();root.name='TravisKnowledgeGraph';
+  const colour={FACT:0xe4d0af,CONCEPT:0xbc9b75,DECISION:0xf1d9b7,RULE:0xd2a470};
+  let data={nodes:[],links:[]},fingerprint='',hits=null,shapes=null,lines=null,light=null,labels=[];
+  let selectedId='',status='waiting',lastUpdated=0;
+  const locationById=new Map(),nodeById=new Map();
+  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+  const shade=(n)=>new THREE.Color(colour[n.kind]??0xc3b2a0);
+  const seedOf=(s)=>{let h=2166136261;for(const ch of String(s)){h=Math.imul(h^ch.charCodeAt(0),16777619);}return (h>>>0)/4294967296;};
+  function positionGraph(nodes,edges) {
+    const pos=nodes.map((n,i)=>{
+      const az=(i*2.399963+seedOf(n.id)*.4),z=1-2*(i+.5)/nodes.length,r=Math.sqrt(1-z*z);
+      const m=.84+.44*seedOf(n.projectId||n.id);
+      return new THREE.Vector3(Math.cos(az)*r*m,Math.sin(az)*r*m,z*m*.55);
+    });
+    const lookup=new Map(nodes.map((n,i)=>[n.id,i]));
+    const springs=edges.map(e=>[lookup.get(e.source),lookup.get(e.target),clamp(e.weight||.5,.1,1)])
+      .filter(([a,b])=>a!==undefined&&b!==undefined&&a!==b);
+    const delta=pos.map(()=>new THREE.Vector3());
+    for(let pass=0;pass<Math.min(72,32+nodes.length);pass++){
+      delta.forEach(d=>d.set(0,0,0));
+      for(let i=0;i<pos.length;i++)for(let j=i+1;j<pos.length;j++){
+        const diff=pos[i].clone().sub(pos[j]),d2=Math.max(.025,diff.lengthSq());
+        const force=.0075/d2;diff.multiplyScalar(force/Math.sqrt(d2));
+        delta[i].add(diff);delta[j].sub(diff);
+      }
+      for(const [a,b,w] of springs){
+        const diff=pos[b].clone().sub(pos[a]),length=Math.max(.001,diff.length());
+        const spring=clamp((length-(.40+.42*(1-w)))*.023,-.032,.032);
+        diff.multiplyScalar(spring/length);delta[a].add(diff);delta[b].sub(diff);
+      }
+      for(let i=0;i<pos.length;i++)pos[i].addScaledVector(delta[i],.55)
+        .multiplyScalar(.996).clampLength(.10,1.65);
+    }
+    return pos;
+  }
   function disposeGraph(){
-    const materials=new Set(),geometries=new Set(),textures=new Set();
+    const geometries=new Set(),materials=new Set(),textures=new Set();
     root.traverse(o=>{
       if(o.geometry)geometries.add(o.geometry);
-      if(o.material)for(const m of(Array.isArray(o.material)?o.material:[o.material])){
+      if(o.material)for(const m of (Array.isArray(o.material)?o.material:[o.material])){
         materials.add(m);if(m.map)textures.add(m.map);
       }
     });
-    root.clear();for(const x of geometries)x.dispose();
-    for(const x of materials)x.dispose();for(const x of textures)x.dispose();
-    nodesMesh=hitMesh=edgesMesh=signals=null;labels=[];edgePairs=[];positions.clear();kinds.clear();
+    root.clear();geometries.forEach(g=>g.dispose());
+    materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());
+    hits=shapes=lines=light=null;labels=[];
+    locationById.clear();nodeById.clear();
   }
-  function layout(nodes){
-    const projects=[...new Set(nodes.map(n=>n.projectId||'local'))].sort();
-    const grouped=new Map(projects.map(p=>[p,[]]));
-    nodes.forEach(n=>grouped.get(n.projectId||'local').push(n));
-    projects.forEach((project,g)=>{
-      const items=grouped.get(project),angle=2*Math.PI*g/projects.length;
-      const spread=projects.length===1?0:.68;
-      const cx=Math.cos(angle)*spread,cy=Math.sin(angle)*spread;
-      items.forEach((n,i)=>{
-        const theta=2.3999632297*i+hash(n.id)*.2;
-        const ring=.23+.43*Math.sqrt((i+.5)/items.length);
-        const z=(hash(n.id+'z')-.5)*.65;
-        positions.set(n.id,new THREE.Vector3(cx+Math.cos(theta)*ring,cy+Math.sin(theta)*ring,z));
-      });
-    });
-  }
-  function makeLabel(node,p){
-    const canvas=document.createElement('canvas');canvas.width=512;canvas.height=112;
+  function makeLabel(n,p){
+    const canvas=document.createElement('canvas');canvas.width=512;canvas.height=128;
     const ctx=canvas.getContext('2d');if(!ctx)return null;
-    ctx.font='500 28px system-ui,sans-serif';ctx.fillStyle='#c7dfe5';ctx.textAlign='center';
-    let title=String(node.title||'').trim();if(title.length>28)title=title.slice(0,27)+'…';
-    ctx.fillText(title,256,42,490);
-    ctx.font='18px monospace';ctx.fillStyle='#7597a4';ctx.fillText(String(node.kind||'MEMÓRIA'),256,72);
+    ctx.clearRect(0,0,512,128);
+    ctx.font='500 26px system-ui,sans-serif';ctx.fillStyle='#f1e2c9';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    let label=String(n.title||'MEMÓRIA').replace(/\s+/g,' ').trim();
+    if(label.length>30)label=label.slice(0,29)+'…';
+    ctx.fillText(label,256,52,485);
+    ctx.font='19px monospace';ctx.fillStyle='#ac947b';ctx.fillText(n.kind||'MEMÓRIA',256,92);
     const texture=new THREE.CanvasTexture(canvas);
-    const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,opacity:.7,depthTest:false,depthWrite:false}));
-    sprite.position.copy(p).add(new THREE.Vector3(0,.15,.12));sprite.scale.set(.65,.14,1);
-    sprite.renderOrder=15;return sprite;
+    const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,opacity:.96,depthTest:false,depthWrite:false}));
+    sprite.position.copy(p).add(new THREE.Vector3(0,.15,.12));sprite.scale.set(.79,.198,1);
+    sprite.renderOrder=12;return sprite;
   }
-  function setData(input){
-    if(!input||!input.ok||input.source!=='local-sqlite'||!Array.isArray(input.nodes)||!Array.isArray(input.links))
-      throw Error('Fonte do grafo inválida');
-    const nodes=input.nodes.slice(0,120).filter(n=>n&&typeof n.id==='string'&&typeof n.title==='string');
-    const known=new Set(nodes.map(n=>n.id));
-    const links=input.links.filter(l=>l&&known.has(l.source)&&known.has(l.target)&&l.source!==l.target).slice(0,320);
-    const next=JSON.stringify([nodes.map(n=>[n.id,n.updated,n.importance,n.title]),links.map(l=>[l.source,l.target,l.weight])]);
-    status='live';updatedAt=Number(input.observedAt)||Date.now()/1000;
-    if(next===fingerprint)return;
-    fingerprint=next;disposeGraph();snapshot={nodes,links};
+  function setData(snapshot){
+    if(!snapshot||snapshot.source!=='local-sqlite'||!Array.isArray(snapshot.nodes)||!Array.isArray(snapshot.links))throw Error('Fonte de memória inválida');
+    const nodes=snapshot.nodes.slice(0,180).filter(n=>n&&typeof n.id==='string'&&typeof n.title==='string');
+    const valid=new Set(nodes.map(n=>n.id));
+    const links=snapshot.links.filter(l=>valid.has(l.source)&&valid.has(l.target)&&l.source!==l.target);
+    const key=JSON.stringify([nodes.map(n=>[n.id,n.updated,n.importance]),links.map(e=>[e.source,e.target,e.weight])]);
+    if(key===fingerprint)return;
+    fingerprint=key;data={nodes,links};disposeGraph();
+    for(const n of nodes)nodeById.set(n.id,n);
     if(!nodes.length){status='empty';selectedId='';return;}
-    for(const n of nodes)kinds.set(n.id,n);
-    layout(nodes);
-    const vertex=new THREE.IcosahedronGeometry(.046,1);
-    nodesMesh=new THREE.InstancedMesh(vertex,new THREE.MeshBasicMaterial({transparent:true,opacity:.86,depthWrite:false}),nodes.length);
-    const hitGeo=new THREE.SphereGeometry(.13,7,5);
-    hitMesh=new THREE.InstancedMesh(hitGeo,new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}),nodes.length);
+    const positions=positionGraph(nodes,links);
+    const positionMap=new Map(nodes.map((n,i)=>[n.id,positions[i]]));
+    for(const n of nodes)locationById.set(n.id,positionMap.get(n.id));
     const matrix=new THREE.Object3D();
-    for(let i=0;i<nodes.length;i++){
-      const n=nodes[i];matrix.position.copy(positions.get(n.id));matrix.updateMatrix();
-      nodesMesh.setMatrixAt(i,matrix.matrix);hitMesh.setMatrixAt(i,matrix.matrix);
-      nodesMesh.setColorAt(i,colorOf(n));
-    }
-    nodesMesh.instanceMatrix.needsUpdate=true;hitMesh.instanceMatrix.needsUpdate=true;
-    if(nodesMesh.instanceColor)nodesMesh.instanceColor.needsUpdate=true;
-    nodesMesh.name='PersistedMemoryNodes';hitMesh.name='MemoryNodeHitAreas';
-    root.add(nodesMesh,hitMesh);
-    const points=[],colors=[];
-    for(const link of links){
-      const a=positions.get(link.source),b=positions.get(link.target);
-      if(!a||!b)continue;
-      edgePairs.push([a,b]);
-      points.push(...a.toArray(),...b.toArray());
-      colors.push(...colorOf(kinds.get(link.source)).toArray(),...colorOf(kinds.get(link.target)).toArray());
-    }
-    const edgeGeo=new THREE.BufferGeometry();
-    edgeGeo.setAttribute('position',new THREE.Float32BufferAttribute(points,3));
-    edgeGeo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
-    edgesMesh=new THREE.LineSegments(edgeGeo,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.32,depthWrite:false,blending:THREE.AdditiveBlending}));
-    edgesMesh.name='PersistedSynapses';root.add(edgesMesh);
-    const packetGeo=new THREE.BufferGeometry();
-    packetGeo.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(edgePairs.length*3),3));
-    signals=new THREE.Points(packetGeo,new THREE.PointsMaterial({color:0x9fe3d9,size:.037,transparent:true,opacity:.68,depthWrite:false,blending:THREE.AdditiveBlending}));
-    signals.name='ObservedRecallPulses';root.add(signals);
-    nodes.slice(0,Math.min(nodes.length,10)).forEach(n=>{
-      const label=makeLabel(n,positions.get(n.id));if(label){root.add(label);labels.push(label);}
+    const geo=new THREE.IcosahedronGeometry(.059,1);
+    const material=new THREE.MeshBasicMaterial({vertexColors:false,transparent:true,opacity:.91,depthWrite:false});
+    shapes=new THREE.InstancedMesh(geo,material,nodes.length);
+    shapes.name='VerifiedMemoryNodes';shapes.renderOrder=11;
+    const hitgeo=new THREE.SphereGeometry(.13,6,5);
+    hits=new THREE.InstancedMesh(hitgeo,new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false}),nodes.length);
+    hits.name='MemoryNodeHitAreas';hits.renderOrder=10;
+    nodes.forEach((n,i)=>{
+      matrix.position.copy(positions[i]);matrix.updateMatrix();
+      shapes.setMatrixAt(i,matrix.matrix);shapes.setColorAt(i,shade(n));
+      hits.setMatrixAt(i,matrix.matrix);
     });
-    if(selectedId&&!known.has(selectedId))selectedId='';
-    recolor();
+    shapes.instanceMatrix.needsUpdate=true;hits.instanceMatrix.needsUpdate=true;
+    if(shapes.instanceColor)shapes.instanceColor.needsUpdate=true;
+    root.add(shapes,hits);
+    const pts=new Float32Array(nodes.length*3),colors=new Float32Array(nodes.length*3);
+    nodes.forEach((n,i)=>{
+      pts.set(positions[i].toArray(),i*3);colors.set(shade(n).toArray(),i*3);
+    });
+    const dotgeo=new THREE.BufferGeometry();
+    dotgeo.setAttribute('position',new THREE.BufferAttribute(pts,3));
+    dotgeo.setAttribute('color',new THREE.BufferAttribute(colors,3));
+    light=new THREE.Points(dotgeo,new THREE.PointsMaterial({size:.14,vertexColors:true,transparent:true,opacity:.38,depthWrite:false,blending:THREE.AdditiveBlending}));
+    light.renderOrder=9;root.add(light);
+    const linesPosition=[],linesColor=[];
+    for(const l of links){
+      const a=positionMap.get(l.source),b=positionMap.get(l.target);
+      const ca=shade(nodeById.get(l.source)),cb=shade(nodeById.get(l.target));
+      linesPosition.push(...a.toArray(),...b.toArray());
+      linesColor.push(...ca.toArray(),...cb.toArray());
+    }
+    const linegeo=new THREE.BufferGeometry();
+    linegeo.setAttribute('position',new THREE.Float32BufferAttribute(linesPosition,3));
+    linegeo.setAttribute('color',new THREE.Float32BufferAttribute(linesColor,3));
+    lines=new THREE.LineSegments(linegeo,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:.41,depthWrite:false,blending:THREE.AdditiveBlending}));
+    lines.renderOrder=8;root.add(lines);
+    // Labels are real stored memories, not invented sector names.
+    nodes.slice(0,Math.min(nodes.length,30)).forEach(n=>{
+      const label=makeLabel(n,positionMap.get(n.id));if(label){labels.push(label);root.add(label);}
+    });
+    status='live';lastUpdated=Date.now();
+    if(selectedId&&!nodeById.has(selectedId))selectedId='';
+    updateSelection();
   }
-  function recolor(){
-    if(!nodesMesh)return;
+  function updateSelection(){
+    if(!shapes)return;
     const related=new Set([selectedId]);
-    for(const link of snapshot.links)if(selectedId){
-      if(link.source===selectedId)related.add(link.target);
-      if(link.target===selectedId)related.add(link.source);
+    if(selectedId)for(const l of data.links){
+      if(l.source===selectedId)related.add(l.target);
+      if(l.target===selectedId)related.add(l.source);
     }
-    snapshot.nodes.forEach((n,i)=>{
-      const c=colorOf(n);
-      if(selectedId&&!related.has(n.id))c.multiplyScalar(.22);
-      if(n.id===selectedId)c.multiplyScalar(1.5);
-      nodesMesh.setColorAt(i,c);
+    data.nodes.forEach((n,i)=>{
+      const c=shade(n);
+      if(selectedId&&!related.has(n.id))c.multiplyScalar(.23);
+      if(n.id===selectedId)c.multiplyScalar(1.4);
+      shapes.setColorAt(i,c);
     });
-    if(nodesMesh.instanceColor)nodesMesh.instanceColor.needsUpdate=true;
+    if(shapes.instanceColor)shapes.instanceColor.needsUpdate=true;
+    if(lines)lines.material.opacity=selectedId?.53:.33;
   }
   function pick(raycaster){
-    if(!root.visible||!hitMesh)return null;
-    const hit=raycaster.intersectObject(hitMesh,false)[0];
-    return hit?.instanceId==null?null:snapshot.nodes[hit.instanceId]||null;
+    if(!root.visible||!hits)return null;
+    const intersection=raycaster.intersectObject(hits,false)[0];
+    if(!intersection||intersection.instanceId==null)return null;
+    return data.nodes[intersection.instanceId]||null;
   }
-  function select(id){
-    selectedId=selectedId===id?'':id;recolor();
-    return selectedId?kinds.get(selectedId)||null:null;
-  }
+  function select(id){selectedId=selectedId===id?'':id;updateSelection();return nodeById.get(id)||null;}
   function offline(){
-    snapshot={nodes:[],links:[]};selectedId='';fingerprint='';status='offline';updatedAt=0;
-    disposeGraph();root.visible=false;
+    data={nodes:[],links:[]};fingerprint='';selectedId='';
+    disposeGraph();status='offline';lastUpdated=0;root.visible=false;
   }
   function update({time=0,core=0,activity=0,projection=0}={}){
     const alpha=clamp(core*(1-projection),0,1);
-    root.visible=alpha>.04&&status==='live'&&snapshot.nodes.length>0;
+    root.visible=alpha>.04&&data.nodes.length>0&&status==='live';
     if(!root.visible)return;
-    root.rotation.y=reducedMotion?0:Math.sin(time*.055)*.1;
-    root.rotation.x=reducedMotion?0:Math.sin(time*.08)*.03;
-    root.scale.setScalar(1+alpha*.04);
-    if(nodesMesh)nodesMesh.material.opacity=alpha*.88;
-    if(edgesMesh)edgesMesh.material.opacity=alpha*(selectedId?.5:.32);
-    for(const label of labels)label.material.opacity=alpha*.68;
-    const recall=clamp(activity,0,1);
-    // Animated packets only travel over edges that exist in the database.
-    if(signals){
-      signals.visible=!reducedMotion&&recall>.1&&edgePairs.length>0;
-      if(signals.visible){
-        const a=signals.geometry.attributes.position;
-        for(let i=0;i<edgePairs.length;i++){
-          const [p,q]=edgePairs[i],t=(time*.24+i*.31)%1;
-          a.setXYZ(i,p.x+(q.x-p.x)*t,p.y+(q.y-p.y)*t,p.z+(q.z-p.z)*t);
-        }
-        a.needsUpdate=true;signals.material.opacity=alpha*recall*.75;
-      }
-    }
+    root.rotation.y=reducedMotion?0:Math.sin(time*.055)*.10;
+    root.rotation.x=reducedMotion?0:Math.sin(time*.08)*.025;
+    root.scale.setScalar(1+.06*alpha);
+    // Signal strength originates in actual memory-region activity; nodes and
+    // relationships are exclusively persisted records, not invented paths.
+    if(light)light.material.opacity=alpha*(.21+Math.min(.2,activity*.15));
+    if(shapes)shapes.material.opacity=alpha*.9;
+    if(lines)lines.material.opacity=alpha*(selectedId?.53:.33);
+    for(const label of labels)label.material.opacity=alpha*.66;
   }
-  const diagnostics=()=>({kind:'persisted-knowledge-graph',source:'local-sqlite',status,
-    nodes:snapshot.nodes.length,connections:snapshot.links.length,updatedAt,selectedId,visible:root.visible});
-  return {root,setData,offline,update,pick,select,diagnostics,dispose:disposeGraph};
+  function diagnostics(){return {kind:'persisted-knowledge-graph',source:'local-sqlite',status,nodes:data.nodes.length,
+    connections:data.links.length,selectedId,updatedAt:lastUpdated,visible:root.visible};}
+  return {root,setData,offline,update,diagnostics,pick,select,dispose:disposeGraph};
 }
