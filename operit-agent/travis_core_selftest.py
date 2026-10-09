@@ -3,6 +3,7 @@ import tempfile,unittest
 from pathlib import Path
 import travis_core as t
 from travis_decision_selftest import DecisionTests
+from travis_speech_response_selftest import SpeechPresentationTests
 from travis_library_selftest import LibraryTests
 
 class Tests(unittest.TestCase):
