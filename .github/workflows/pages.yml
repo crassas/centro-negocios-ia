@@ -32,6 +32,9 @@ jobs:
           node scripts/travis-panel-selftest.mjs
           node --check travis-3d.mjs
           node scripts/travis-hud-selftest.mjs
+          node scripts/travis-audio-sync-selftest.mjs
+          node scripts/travis-vision-selftest.mjs
+          node scripts/travis-projection-selftest.mjs
           node scripts/travis-presence-selftest.mjs
           node --check agent-room.js
           node scripts/agent-room-selftest.mjs
