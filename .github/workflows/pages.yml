@@ -47,6 +47,11 @@ jobs:
           node --check scripts/monitor.mjs
           node -e "JSON.parse(require('fs').readFileSync('data/sites.json','utf8')); JSON.parse(require('fs').readFileSync('manifest.webmanifest','utf8'));"
 
+      - name: Verify continuous particle transformations
+        run: |
+          npm install --prefix "$RUNNER_TEMP/travis-three-test" --ignore-scripts --no-audit --no-fund three@0.180.0
+          node scripts/travis-morph-continuity-selftest.mjs "$RUNNER_TEMP/travis-three-test/node_modules/three/build/three.module.js"
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 

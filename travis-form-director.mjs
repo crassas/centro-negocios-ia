@@ -30,7 +30,8 @@ export function visibleProjectionAmount(amount,sceneState) {
   if(!sceneState?.visible || sceneState?.matter?.active!==true ||
      !Number.isFinite(sceneState?.matter?.opacity) ||
      sceneState.matter.opacity<.018)return 0;
-  return requested;
+  const handoff=sceneState.matter.avatarDissolve;
+  return Number.isFinite(handoff)?Math.max(0,Math.min(1,handoff)):requested;
 }
 
 export function nextFormBlend(value,target,dt,{reducedMotion=false}={}) {

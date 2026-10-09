@@ -118,7 +118,6 @@ function paint(){
   hud.classList.toggle('cards-open',view.visible);
   if(wasVisible&&!view.visible){
     if(deck.contains(document.activeElement))document.getElementById('travis-hud-close')?.focus({preventScroll:true});
-    window.TravisVisual?.commands(false,{automatic:true});
   }
   wasVisible=view.visible;
   if(view.visible)frame=requestAnimationFrame(paint);
@@ -189,6 +188,8 @@ if(deck){
         return rewritten!==text?{handled:false,rewritten}:null;
       }
       if(intent.type==='scene'){
+        if(intent.scene==='planet'&&/\b(?:random|any|aleatorio|aleatória|aleatoria|qualquer)\b/i.test(String(text).normalize('NFD').replace(/[\u0300-\u036f]/g,'')))
+          intent.title=planetSequence[Math.floor(Math.random()*planetSequence.length)];
         render(schematic(intent.scene,intent.title));
         window.TravisVisual?.commands(true,{automatic:true});show();
         return {handled:true,reply:intent.language==='pt'

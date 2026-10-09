@@ -1,4 +1,4 @@
-import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=4';
+import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=continuous-1';
 // Film-inspired schematic projections. Unprovided geographic/CAD/person
 // geometry stays visibly conceptual; real source links are separate.
 export function createConceptProjection(THREE,{reducedMotion=false}={}){
@@ -45,20 +45,11 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   // Saturn receives a distinct, layered ring system. Mars, Earth and the
   // other planets are free of misleading giant circumplanetary rings.
   if(planetName==='saturn'){
-    ring(1.01,1.05);ring(1.18,1.18);ring(1.39,1.27);
-  }else{
-    ring(.91,1.2);
+    ring(1.01,1.17);ring(1.18,1.17);ring(1.39,1.17);
   }
-  const moon=sphere(.065,0xded0ad,1,0,0);
+  const moon=sphere(.025,0xded0ad,1,0,0);
   objects.push({type:'planet',surface,meshWire,moon});
-  const positions=new Float32Array(110*3);
-  for(let i=0;i<110;i++){
-    const y=1-i/109*2,a=i*2.399963,r=Math.sqrt(1-y*y);let j=i*3;
-    positions[j]=Math.cos(a)*r*1.36;positions[j+1]=y*1.03;positions[j+2]=Math.sin(a)*r*1.14;
-  }
-  const geometry=new THREE.BufferGeometry();
-  geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));
-  add(new THREE.Points(geometry,style(0xddc5a6,{points:true,alpha:.55})));
+  // The requested planet defines the silhouette; no generic decorative globe.
  }
  function map(){
   const grid=new THREE.Group();active.add(grid);grid.rotation.x=-.30;grid.rotation.z=.14;
@@ -101,7 +92,14 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
     style(0xc6b599,{lines:true,alpha:.9}));
    windowFrame.position.set(x,-.19,.54);house.add(windowFrame);
   }
-  objects.push({type:'house',house});ring(1.56,1.14);
+  const roof=new THREE.BufferGeometry();
+  const roofVertices=[];
+  for(const tri of [[0,1,2],[5,3,4],[0,5,4],[0,4,1],[1,4,3],[1,3,2]])for(const i of tri)roofVertices.push(...coords[i]);
+  roof.setAttribute('position',new THREE.Float32BufferAttribute(roofVertices,3));roof.computeVertexNormals();
+  house.add(new THREE.Mesh(roof,style(0xc6a47c,{alpha:.3})));
+  const door=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(.24,.55,.025)),style(0xc6b599,{lines:true,alpha:.9}));
+  door.position.set(0,-.50,.54);house.add(door);
+  objects.push({type:'house',house});
  }
  function person(){
   const head=sphere(.32,0xc8b299,0,.73,0);
@@ -229,9 +227,10 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   else if(kind==='person')person();else if(kind==='vehicle')vehicle();
   else if(kind==='landscape')landscape();else if(kind==='diagram')diagram();
   else if(kind==='object')object();else classic(kind);
+  if(kind==='house')active.rotation.y=-.28;
   matter.setSource(typeof sourceProvider==='function'?sourceProvider():sourceProvider);
   matter.setTheme(kind,subject);
-  matter.go(active,now,{label:String(subject||kind).slice(0,100)});
+  matter.go(active,now,{label:String(subject||kind).slice(0,100),camera:typeof cameraProvider==='function'?cameraProvider():cameraProvider});
   // The topology only determines particle destinations; never display solid meshes.
   active.visible=false;
   root.visible=true;
@@ -266,15 +265,15 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
  }
  function update(now,projection,voice=0){
   if(!kind)return;
-  const reveal=limit(projection.panel,0,1)*limit((now-born)/(reducedMotion?.01:.82),0,1);
-  root.visible=reveal>.001;
+  const reveal=limit(projection.amount,0,1);
   active.scale.setScalar((.5+.5*reveal)*zoom);
   active.position.set(dx,dy,0);
   active.rotation.y=spin+(reducedMotion?0:Math.sin(now*.19)*.08);
   matter.update(now,projection,{
     zoom,spin,dx,dy,camera:typeof cameraProvider==='function'?cameraProvider():cameraProvider,
-    pixelRatio:typeof devicePixelRatio==='number'?devicePixelRatio:1
+    pixelRatio:typeof devicePixelRatio==='number'?devicePixelRatio:1,voice
   });
+  root.visible=matter.state().active&&matter.state().opacity>.001;
   for(const m of mats)m.opacity=m.userData.baseOpacity*reveal;
   if(ghost){
    const remaining=1-limit((now-ghost.start)/(reducedMotion?.01:.74),0,1);

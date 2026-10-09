@@ -40,9 +40,9 @@ assert(engine.points.frustumCulled===false,'Dynamic particle bounds must not be 
 const vertex=engine.points.material.vertexShader;
 const fragment=engine.points.material.fragmentShader;
 assert(vertex.includes('gl_PointSize=clamp((2.0+aSeed*2.3)'),'Calibrated GPU points must be visible at phone pixel density.');
-assert(fragment.includes('vec3 copper=vec3(.53,.33,.18)'),'Known visible cinematic color shader must be retained.');
+assert(fragment.includes('vec3 holoCopper=vec3(.53,.33,.18)'),'Known visible cinematic color shader must be retained.');
 const shader=engine.points.material.vertexShader;
 assert(shader.includes('aFrom')&&shader.includes('aTo')&&shader.includes('gl_PointSize'));
 const client=fs.readFileSync('travis-concept-projection.mjs','utf8');
-assert(client.includes("travis-particle-morph.mjs?v=4"));
+assert(client.includes("travis-particle-morph.mjs?v=continuous-1"));
 console.log('PASS PARTICLE_DRAW: Three.js finite render count, attributes, visibility, 2600 GPU points');

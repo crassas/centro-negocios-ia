@@ -28,7 +28,7 @@ assert.equal(reading.ui.kind,'web-page');
 assert.equal(reading.ui.items[0].detail,'Page content');
 const html=fs.readFileSync('index.html','utf8'),scene=fs.readFileSync('travis-3d.mjs','utf8');
 const sw=fs.readFileSync('sw.js','utf8'),app=fs.readFileSync('app.js','utf8');
-assert(html.includes('travis-3d.mjs?v=face-default-1'));
+assert(html.includes('travis-3d.mjs?v=continuous-1'));
 assert(scene.includes('projectWebAnswer(answer)'),'Every tool response must pass through the holographic mapper.');
 assert(sw.includes('./travis-web-projection.mjs?v=agent-1'));
 assert(!scene.includes('location.assign(url)'),'Travis must never auto-leave after opening a website');

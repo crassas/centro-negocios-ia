@@ -1,3 +1,13 @@
+// One warm light palette for the animated face, assembly grains and projections.
+export const HOLOGRAPHIC_LIGHT_GLSL=`
+  const vec3 holoCopper=vec3(.53,.33,.18);
+  const vec3 holoGold=vec3(.95,.78,.53);
+  const vec3 holoIvory=vec3(1.,.89,.69);
+  vec3 holoMatterLight(float key,float edge,float scan,float voice){
+    return vec3(.020,.016,.013)+holoCopper*(.18+key*.52)
+      +holoGold*(edge*.18+scan*.10+voice*.035);
+  }
+`;
 // A projected light field on the animated anatomical mesh; no skin shading.
 export function createHolographicHeadMaterial(THREE,shell=false) {
   const material=new THREE.ShaderMaterial({
@@ -8,6 +18,7 @@ export function createHolographicHeadMaterial(THREE,shell=false) {
       vN=normalize(normalMatrix*normal);vV=normalize(-mv.xyz);gl_Position=projectionMatrix*mv;}`,
     fragmentShader:`
       precision highp float;
+      ${HOLOGRAPHIC_LIGHT_GLSL}
       varying vec3 vP;varying vec3 vN;varying vec3 vV;
       uniform float uTime,uBuild,uDissolve,uState,uOpacity;
       void main(){
@@ -34,15 +45,13 @@ export function createHolographicHeadMaterial(THREE,shell=false) {
         float assembly=exp(-pow(abs(vP.y-front)/.026,2.0))*(1.0-step(.999,uBuild));
         float side=max(0.0,dot(n,normalize(vec3(-.75,.35,.55))));
         ${shell?`
-        vec3 colour=vec3(.74,.48,.24)*(edge*.5+contour*.05+sweep*.1)+vec3(1.0,.81,.56)*(assembly+dissolveEdge*.7);
+        vec3 colour=holoCopper*1.35*(edge*.5+contour*.05+sweep*.1)+holoGold*(assembly+dissolveEdge*.7);
         gl_FragColor=vec4(colour,uOpacity*neck*(edge*.7+assembly*.9+contour*.06+dissolveEdge*.35));
         `:`
         float key=max(0.0,dot(n,normalize(vec3(-.35,.6,1.0))));
-        vec3 dark=vec3(.020,.016,.013);
-        vec3 colour=dark+vec3(.27,.16,.08)*side*.64+vec3(.13,.085,.045)*key;
-        colour+=vec3(.59,.35,.17)*(edge*.46+contour*.095+fine*.018+sweep*.13);
-        colour+=vec3(.98,.78,.54)*assembly*.72;
-        colour+=vec3(.82,.59,.34)*dissolveEdge*.65;
+        vec3 colour=holoMatterLight(side*.6+key*.4,edge,contour*.6+fine*.10+sweep*.8,uState);
+        colour+=holoGold*assembly*.72;
+        colour+=mix(holoCopper,holoGold,.65)*dissolveEdge*.65;
         colour*=neck*(.95+uState*.05);
         if(fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)>neck)discard;
         gl_FragColor=vec4(colour/max(neck,.001),1.0);
@@ -84,8 +93,45 @@ export function createAssemblyParticles(THREE,geometry) {
       float spark=smoothstep(0.0,.025,age)*(1.0-smoothstep(.08,.4,age))*(1.0-smoothstep(.88,1.0,uDissolve));
       vAlpha=max(vAlpha,spark*.75);
       vec4 mv=modelViewMatrix*vec4(p,1.0);gl_Position=projectionMatrix*mv;gl_PointSize=clamp(7.0/-mv.z,1.0,3.0);}`,
-    fragmentShader:`varying float vAlpha;void main(){float d=length(gl_PointCoord-.5);if(d>.5)discard;gl_FragColor=vec4(.48,.9,1.0,vAlpha*(1.0-d*2.0));}`,
+    fragmentShader:`${HOLOGRAPHIC_LIGHT_GLSL} varying float vAlpha;void main(){float d=length(gl_PointCoord-.5);if(d>.5)discard;gl_FragColor=vec4(holoGold,vAlpha*(1.0-d*2.0));}`,
     transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
   });
   const object=new THREE.Points(cloud,material);object.name='TravisLaserAssembly';return object;
+}
+
+export function createHolographicParticleMaterial(THREE){
+ return new THREE.ShaderMaterial({
+  uniforms:{uMorph:{value:0},uTime:{value:0},uOpacity:{value:0},uPixelRatio:{value:1},uVoice:{value:0}},
+  vertexShader:`attribute vec3 aFrom,aTo,aNormalFrom,aNormalTo;attribute float aSeed;
+    uniform float uMorph,uTime,uOpacity,uPixelRatio,uVoice;
+    varying float vSeed,vOpacity,vLight,vHeight;
+    void main(){
+      float t=clamp(uMorph,0.0,1.0);t=t*t*(3.0-2.0*t);
+      vec3 p=mix(aFrom,aTo,t);
+      float rush=sin(t*3.14159265);
+      p+=vec3(sin(uTime*2.1+aSeed*83.0),cos(uTime*1.7+aSeed*47.0),sin(uTime*1.3+aSeed*57.0))*rush*(.055+.08*aSeed);
+      vec3 n=normalize(mix(aNormalFrom,aNormalTo,t)+vec3(.0001));
+      p+=n*sin(uTime*1.2+aSeed*19.0)*(.003+uVoice*.006);
+      vec4 mv=modelViewMatrix*vec4(p,1.0);
+      vec3 viewNormal=normalize(normalMatrix*n),viewDirection=normalize(-mv.xyz);
+      float facing=abs(dot(viewNormal,viewDirection));
+      float key=max(0.,dot(viewNormal,normalize(vec3(-.35,.6,1.))));
+      vLight=.42+key*.40+pow(1.-facing,2.4)*.18;
+      gl_Position=projectionMatrix*mv;
+      gl_PointSize=clamp((2.0+aSeed*2.3)*uPixelRatio*8.0/max(2.0,-mv.z),2.5,5.1)*.72;
+      vSeed=aSeed;vOpacity=uOpacity;vHeight=p.y;
+    }`,
+  fragmentShader:`precision highp float;
+    ${HOLOGRAPHIC_LIGHT_GLSL}
+    uniform float uTime,uVoice;varying float vSeed,vOpacity,vLight,vHeight;
+    void main(){
+      float d=length(gl_PointCoord-.5);if(d>.50)discard;
+      float core=1.-smoothstep(.08,.50,d);
+      float scan=.5+.5*sin(vHeight*390.0-uTime*.65);
+      vec3 colour=holoMatterLight(vLight,.15,scan*.65,uVoice);
+      colour*=.88+vSeed*.24;
+      gl_FragColor=vec4(colour,vOpacity*core*.68);
+    }`,
+  transparent:true,depthWrite:false,depthTest:true,blending:THREE.AdditiveBlending,toneMapped:false
+ });
 }

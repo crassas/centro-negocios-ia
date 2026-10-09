@@ -1,14 +1,14 @@
-import { createConceptProjection } from './travis-concept-projection.mjs?v=matter-5';
-import './travis-action-cards.mjs?v=matter-2';
+import { createConceptProjection } from './travis-concept-projection.mjs?v=continuous-1';
+import './travis-action-cards.mjs?v=continuous-1';
 import { createVoiceInput } from './travis-voice-input.mjs?v=stt-fast-1';
-import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=2';
+import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=continuous-1';
 import { INTERFACE_COPY, interfaceLanguage, applyInterfaceLanguage, languageFromInterfaceCommand } from './travis-interface-language.mjs?v=1';
 import { resolveWakePhrase } from './travis-wake-phrase.mjs?v=pt-1';
 import { createTravisVision } from './travis-vision.mjs?v=scene-1';
 import { buildSpeechEnvelope, speechEnvelopeLevel } from './travis-audio-sync.mjs?v=1';
 import { sceneSignature } from './travis-scene-tracker.mjs?v=1';
 import { cameraCommand } from './travis-vision-policy.mjs?v=scene-1';
-import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=cinema-1';
+import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=continuous-1';
 import { projectWebAnswer } from './travis-web-projection.mjs?v=agent-1';
 import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=3';
 import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
@@ -1737,8 +1737,7 @@ if (!hud || !launcher || !canvas) {
 
     scene=new THREE.Scene();
     conceptProjection=createConceptProjection(THREE,{reducedMotion});
-    conceptProjection.setSource(()=>realFaceHead&&formBlend.face>.42
-      ? realFaceHead : coreRoot||realFaceHead);
+    conceptProjection.setSource(()=>realFaceHead||coreRoot);
     scene.add(conceptProjection.root);
     // No secondary solid overlay: every projected shape uses the shared matter.
     conceptProjection.root.traverse(obj=>{if(obj.isPoints)obj.layers.enable(BLOOM_LAYER);});
@@ -2213,6 +2212,7 @@ if (!hud || !launcher || !canvas) {
     setState,
     diagnostics() {
       return {ready,opened,state,renderedFrames,contextLost:renderer?.getContext().isContextLost(),form:activeForm,faceAsset:hud.dataset.faceAsset,
+        avatar:{visible:Boolean(faceRoot?.visible),dissolve:realFaceBaseMaterial?.uniforms.uDissolve.value??0},
         baseBloom:realFaceHead?.layers.isEnabled(BLOOM_LAYER),lipSync:{engine:hud.dataset.lipSync,audioContext:audioContext?.state,playbackClock:speechClock?{elapsed:speechClock.context.currentTime-speechClock.start,duration:speechClock.envelope.duration}:null},
         neural:neuralField?.diagnostics(),
         presence:{...presencePose},projection:hologramPresentation.sample(performance.now()/1000),
