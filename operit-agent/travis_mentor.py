@@ -438,6 +438,121 @@ def status(store=None, registry=None):
             "TravisExperienceForged":False}
 
 
+def runtime_registry(registry, fetch_snapshot=None):
+    """Prefer the active router's IDs; never infer missing permission metadata.
+
+    A runtime ID only establishes registration in the active process.
+    """
+    if fetch_snapshot is None:
+        def fetch_snapshot():
+            import urllib.request
+            request=urllib.request.Request(
+                "http://127.0.0.1:8770/awareness", data=b"{}",
+                headers={"Origin":"http://localhost:8770",
+                         "Content-Type":"application/json"}, method="POST")
+            with urllib.request.urlopen(request,timeout=4) as response:
+                return json.loads(response.read(65536))
+    try:
+        snapshot=fetch_snapshot()
+        if not isinstance(snapshot,dict) or snapshot.get("ok") is not True or snapshot.get("kind")!="operational-awareness":
+            raise ValueError("Invalid awareness snapshot")
+        ids=snapshot.get("toolIds")
+        if (not isinstance(ids,list) or not ids or len(ids)>256
+            or any(not isinstance(x,str) or not re.fullmatch(r"[a-z0-9_]{2,80}",x) for x in ids)):
+            raise ValueError("Invalid registered tool IDs")
+        unique=sorted(set(ids))
+        # An authoritative runtime list must not be replaced by a static approximation.
+        static={x["id"]:dict(x) for x in registry.get("capabilities",[])
+                if isinstance(x,dict) and isinstance(x.get("id"),str)}
+        merged=[]
+        for identifier in unique:
+            if identifier in static:
+                entry=dict(static[identifier]);entry["_metadataKnown"]=True
+            else:
+                entry={"id":identifier,"owner":"runtime", "action_type":"UNKNOWN",
+                       "mutation":None,"_metadataKnown":False}
+            entry["_runtimeRegistered"]=True
+            merged.append(entry)
+        return {"capabilities":merged}, {"state":"runtime_observed",
+            "registered":len(merged),
+            "metadataIncomplete":sum(not x["_metadataKnown"] for x in merged),
+            "caution":"Runtime registration does not prove any tool works."}
+    except (OSError, ValueError, TimeoutError, TypeError, KeyError) as exc:
+        return registry, {"state":"static_fallback","reason":type(exc).__name__,
+            "caution":"The live registry could not be queried; counts may omit dynamically registered tools."}
+
+
+def live_readonly_probes(state_dir, health_fetch=None, repo_root=None):
+    """Independent, harmless checks of dependencies, NOT actual tool execution."""
+    from contextlib import closing
+    import sqlite3
+    import urllib.request
+    import subprocess
+    state_dir=Path(state_dir)
+    def health(url):
+        if health_fetch is not None:
+            return health_fetch(url)
+        with urllib.request.urlopen(url,timeout=1.25) as response:
+            return json.loads(response.read(4096))
+    def service(name,url):
+        try:
+            result=health(url)
+            ok=isinstance(result,dict) and (result.get("ok") is True or result.get("status")=="ok")
+            return {"state":"observed_now" if ok else "unavailable",
+                    "scope":"local_service_health",
+                    "evidence":"health_ok" if ok else "health_not_ok"}
+        except (OSError, ValueError, TypeError, TimeoutError) as exc:
+            return {"state":"unavailable","scope":"local_service_health",
+                    "evidence":"health_"+type(exc).__name__}
+    def sql(name,filename,query):
+        path=state_dir/filename
+        if not path.is_file():
+            return {"state":"unavailable","scope":"sqlite_readonly",
+                    "evidence":"db_missing"}
+        try:
+            with closing(sqlite3.connect(path.absolute().as_uri()+"?mode=ro",uri=True,timeout=1)) as c:
+                integrity=c.execute("PRAGMA quick_check").fetchone()[0]
+                rows=c.execute(query).fetchone()[0] if integrity=="ok" else None
+            if integrity=="ok":
+                return {"state":"observed_now","scope":"sqlite_readonly",
+                        "evidence":"db_read_and_integrity_ok","recordCount":int(rows)}
+            return {"state":"unavailable","scope":"sqlite_readonly",
+                    "evidence":"db_integrity_failed"}
+        except sqlite3.Error as exc:
+            return {"state":"unavailable","scope":"sqlite_readonly",
+                    "evidence":"sqlite_"+type(exc).__name__}
+    out={
+        "system_status":service("system_status","http://127.0.0.1:8765/health"),
+        "laya_status":service("laya_status","http://127.0.0.1:18790/health"),
+        "neural_status":sql("neural_status","memory.sqlite","SELECT COUNT(*) FROM travis_neurons"),
+        "brain_status":sql("brain_status","brain.sqlite","SELECT COUNT(*) FROM brain_episodes"),
+        "task_list":sql("task_list","memory.sqlite","SELECT COUNT(*) FROM tasks"),
+    }
+    repo=Path(repo_root or (Path.home()/"repos/centro-negocios-ia"))
+    try:
+        result=subprocess.run(["git","-C",str(repo),"rev-parse","--is-inside-work-tree"],
+            capture_output=True,text=True,timeout=2)
+        ok=result.returncode==0 and result.stdout.strip()=="true"
+        out["repo_access"]={"state":"observed_now" if ok else "unavailable",
+              "scope":"read_only_git_checkout",
+              "evidence":"git_checkout_confirmed" if ok else "git_checkout_unconfirmed"}
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        out["repo_access"]={"state":"unavailable","scope":"read_only_git_checkout",
+              "evidence":"git_"+type(exc).__name__}
+    return {
+        "tested":len(out),
+        "observed":sum(x["state"]=="observed_now" for x in out.values()),
+        "scope":"read_only_dependency_preflight_not_tool_postcondition",
+        "tools":out,
+        "notTested":{
+            "web_open":"Requires interactive on-screen projection verification",
+            "web_read":"Requires independently checking fetch and summary",
+            "web_research":"Requires externally checking sources and model answer",
+            "update_task":"Mutation requires explicit permission and a controlled test fixture",
+        },
+    }
+
+
 def capability_inventory(registry, state_dir):
     """Inventory registered tools and observed verifier outcomes, not permissions."""
     entries=(registry or {}).get("capabilities") or []
@@ -468,8 +583,10 @@ def capability_inventory(registry, state_dir):
         capabilities.append({
             "id":identifier, "owner":str(item.get("owner") or "")[:80],
             "actionType":str(item.get("action_type") or "")[:60],
-            "modifiesData":bool(item.get("mutation")),
+            "modifiesData":(bool(item["mutation"]) if item.get("mutation") is not None else None),
             "registration":True,
+            "runtimeRegistered":item.get("_runtimeRegistered"),
+            "metadataKnown":bool(item.get("_metadataKnown",True)),
             "lastObservedState":state,
             "observationScope":scope,
             "observedSuccesses":successes,
@@ -520,7 +637,10 @@ def main():
         result=decision_contract(args.query,args.tool,travis_core.registry_snapshot())
     elif args.action=="abilities":
         import travis_core
-        result=capability_inventory(travis_core.registry_snapshot(),args.state_dir)
+        registry,registry_source=runtime_registry(travis_core.registry_snapshot())
+        result=capability_inventory(registry,args.state_dir)
+        result["registryObservation"]=registry_source
+        result["liveReadOnlyProbes"]=live_readonly_probes(args.state_dir)
     else:
         import travis_core
         store=travis_core.RuntimeStore(args.state_dir/"memory.sqlite")
