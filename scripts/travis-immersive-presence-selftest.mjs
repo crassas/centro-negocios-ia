@@ -86,6 +86,7 @@ const html=fs.readFileSync('index.html','utf8');
 const scene=fs.readFileSync('travis-3d.mjs','utf8');
 const ui=fs.readFileSync('travis-vision.mjs','utf8');
 const brain=fs.readFileSync('travis-brain-view.mjs','utf8');
+const brainPanel=fs.readFileSync('travis-brain-panel.mjs','utf8');
 const css=fs.readFileSync('travis-hud.css','utf8');
 const sw=fs.readFileSync('sw.js','utf8');
 assert(!html.includes('travis-form-selector'),'Manual control must be removed from HTML, not hidden');
@@ -105,6 +106,10 @@ assert(scene.includes("sessionStorage.setItem('travis.language'"),
 assert(!brain.includes('panel.setVisible(core>.52&&projection<.22);'),
   'Automatic interior overlay must not obscure cinematic view');
 assert(brain.includes('selectedDetailsUntil'),'A user can still inspect a real selected memory node');
+assert(brainPanel.includes('monitoring&&!disposed'),
+  'Brain events must remain observable even when no technical panel is shown');
+assert(brainPanel.includes("hud?.classList.contains('is-open')"),
+  'Background polling must stop when the stage closes');
 assert(ui.includes("visionStatusCopy(message,locale())"));
 assert(css.includes('display:none!important')&&css.includes('#travis-hud .travis-form-selector'),
   'Cached selector must remain hidden even during a partial update');
