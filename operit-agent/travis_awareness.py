@@ -118,7 +118,7 @@ def reply(data, language="pt"):
             "O cérebro de partículas e o grafo 3D estão instalados; a apresentação visual requer confirmação no ecrã." if state("particle_brain")=="installed_unverified" else "Não consegui confirmar o cérebro de partículas.",
             "A aprendizagem usa resultados e feedback, mas não altera os pesos do modelo base.",
             "O modelo local está online." if state("local_model")=="verified" else "O modelo local não respondeu à verificação.",
-            "A câmara exige a tua autorização." if state("vision")=="permission_required" else "Não confirmei o módulo da câmara.",
+            "Tenho detecção local de rostos e alguns gestos quando autorizas a câmara; o modelo não recebe a imagem completa." if state("vision")=="permission_required" else "Não confirmei o módulo da câmara.",
             "Tenho consciência operacional das minhas funções, não consciência subjetiva demonstrada."
         ]
     else:
@@ -128,7 +128,7 @@ def reply(data, language="pt"):
             "The particle brain and 3D graph are installed, but their appearance still needs an on-screen check." if state("particle_brain")=="installed_unverified" else "I could not confirm the particle brain.",
             "Outcome-based learning uses results and feedback; it does not retrain the base model.",
             "The local language model is online." if state("local_model")=="verified" else "The local language model did not respond.",
-            "Camera access requires your permission." if state("vision")=="permission_required" else "I could not confirm the camera module.",
+            "With your permission, I have local face and gesture detection; the language model does not receive the complete image." if state("vision")=="permission_required" else "I could not confirm the camera module.",
             "This is operational self-knowledge, not demonstrated subjective consciousness."
         ]
     return " ".join(parts)
