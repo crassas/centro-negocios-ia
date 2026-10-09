@@ -34,6 +34,7 @@ SENSITIVE = re.compile(
     r"envia(?:r|s|m)?|envie|enviou|"
     r"instal\w*|desinstal\w*|altera(?:r|s|m)?|"
     r"modific\w*|edit\w*|execut\w*|escrev\w*|atualiz\w*|"
+    r"mud\w*|guard\w*|grav\w*|substitu\w*|"
     r"cria(?:r|s|m)?|crie|criou|renome\w*|"
     r"delete\w*|eras\w*|destroy\w*|publish\w*|deploy\w*|"
     r"pay|payment|purchas\w*|buy|bought|send|sent|upload\w*|"
@@ -47,6 +48,7 @@ SENSITIVE = re.compile(
 READ_ONLY_INTENT = re.compile(
     r"\b(?:verific\w*|consult\w*|mostr\w*|explic\w*|"
     r"pesquis\w*|procur\w*|encontr\w*|saber|"
+    r"compar\w*|fech\w*|paus\w*|retom\w*|decid\w*|avali\w*|analisa\w*|"
     r"diz|dizer|fala|falar|convers\w*|"
     r"abre|abrir|abro|ler|l[eê]|qual|quais|como|porque|"
     r"o que|quem|quando|onde|ol[aá]|bom dia|boa tarde|"
