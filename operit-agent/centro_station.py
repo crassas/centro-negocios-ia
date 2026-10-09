@@ -60,6 +60,7 @@ TRAVIS_CLIENT_FILES = (
     "travis-audio-sync.mjs",
     "travis-vision.mjs",
     "travis-voice-input.mjs",
+    "travis-wake-phrase.mjs",
     "travis-english-intents.mjs",
     "travis-concept-projection.mjs",
     "travis-action-cards.mjs",
@@ -541,6 +542,12 @@ def sync_travis_client(ref):
             raise RuntimeError("travis-3d.mjs: cinematic geometry missing")
         if "travis-voice-input.mjs?v=stt-fast-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: transcrição rápida não ligada")
+        if "travis-wake-phrase.mjs?v=pt-1" not in fetched["travis-3d.mjs"]:
+            raise RuntimeError("travis-3d.mjs: wake word PT não ligado")
+        if "travis-wake-phrase.mjs?v=pt-1" not in fetched["sw.js"]:
+            raise RuntimeError("sw.js: wake word PT fora da cache")
+        if "resolveWakePhrase" not in fetched["travis-wake-phrase.mjs"]:
+            raise RuntimeError("travis-wake-phrase.mjs: recuperador não encontrado")
         if "timer=setTimeout(()=>submit(epoch),720)" not in fetched["travis-voice-input.mjs"]:
             raise RuntimeError("travis-voice-input.mjs: fim da frase não atualizado")
         if "ObjectDetector.createFromOptions" not in fetched["travis-vision.mjs"]:
