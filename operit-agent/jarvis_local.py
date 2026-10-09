@@ -1108,12 +1108,12 @@ def _route(text,context=None):
  else:reply=result if isinstance(result,str) else json.dumps(result,ensure_ascii=False)
  ui=result_cards(tool,args,result)
  if tool in {'local_llm','expert_query'}:ui=travis_dialogue.illustration(original_text) or ui
- if getattr(DIALOGUE_INFO,'language','en')=='pt' and not (tool=='capabilities_status' and args.get('focus')=='learning'):reply=travis_dialogue.portuguese_reply(tool,result,reply)
+ if getattr(DIALOGUE_INFO,'language','en')=='pt' and tool not in {'library_status','library_search','library_study'} and not (tool=='capabilities_status' and args.get('focus')=='learning'):reply=travis_dialogue.portuguese_reply(tool,result,reply)
  if ui and ui.get("kind")!="youtube":media_session(session,{})
  learning=record_learning(cog_run,verification,used_memories,session,runtime.project_id,str(reply))
  if session:event("conversations",{"session":session,"user":original_text[:1600],"assistant":str(reply)[:1600],"tool":tool,"project":runtime.project_id or context.get("activeProject"),"verification":verification["verdict"],"memoryRun":cog_run if learning['ok'] else None})
  event("tool_events",{"tool":tool,"ok":True,"duration_ms":int((time.monotonic()-start)*1000),"correlation_id":outcome["correlationId"],"completion_status":verified_completion})
- return {"ok":True,"ui":ui,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool in {"local_llm","expert_query"} else {"provider":"local"}),"tool":tool,"result":result,"verification":verification,"reflexion":{"recalledLessons":len(failure_lessons),"usedLessons":len(used_lessons)},"learning":learning,"reply":clean(english_reply(reply) if getattr(DIALOGUE_INFO,"language","en")=="en" else reply)[:3000],"correlationId":outcome["correlationId"],"completionStatus":verified_completion,"durationMs":int((time.monotonic()-start)*1000),"quantum":{"strategy":qstrategy,"phase":qplan.get("phase"),"tier":qplan.get("tier"),"returnStatus":qreturn.get("status")}}
+ return {"ok":True,"ui":ui,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool in {"local_llm","expert_query"} else {"provider":"local"}),"tool":tool,"result":result,"verification":verification,"reflexion":{"recalledLessons":len(failure_lessons),"usedLessons":len(used_lessons)},"learning":learning,"reply":clean(reply if tool in {"library_status","library_search","library_study"} else (english_reply(reply) if getattr(DIALOGUE_INFO,"language","en")=="en" else reply))[:3000],"correlationId":outcome["correlationId"],"completionStatus":verified_completion,"durationMs":int((time.monotonic()-start)*1000),"quantum":{"strategy":qstrategy,"phase":qplan.get("phase"),"tier":qplan.get("tier"),"returnStatus":qreturn.get("status")}}
 
 VOICE_JOBS={}
 VOICE_JOB_LOCK=threading.Lock()

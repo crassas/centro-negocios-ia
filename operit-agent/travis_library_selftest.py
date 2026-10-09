@@ -51,6 +51,8 @@ class LibraryTests(unittest.TestCase):
         jung=self.reader.search("O que Jung quis dizer com sombra?",5)
         self.assertTrue(jung)
         self.assertTrue(any("Jung" in row["author"] for row in jung))
+        self.assertTrue(all("jung" in row["author"].lower() or
+                            "jung" in row["bookId"].lower() for row in jung))
         self.assertTrue(all(row["origin"]=="authored_study_card_not_primary_text"
                             for row in jung))
         self.assertTrue(all(row["sourceUrl"].startswith("https://") for row in jung))
@@ -162,6 +164,8 @@ assert "Fonte:" in first["reply"]
 books=j.route("Travis, mostra a biblioteca",{"language":"pt","session":"library-test-20261009"})
 assert books["tool"]=="library_status",books
 assert books["result"]["authoredStudyCards"]>=30,books
+assert books["reply"].startswith("A minha biblioteca tem"),books["reply"]
+assert "CURRENT DATA" not in books["reply"],books["reply"]
 before=j.reasoning_prompt("Quero compreender Kant e o imperativo categórico",limit=2800)
 assert "Reading library passages" in before,before
 assert "NOTA AUTORAL DE ESTUDO" in before,before

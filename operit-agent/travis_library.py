@@ -247,6 +247,20 @@ class ReadingLibrary:
         if not keywords:return []
         # Quoted safe atoms prevent FTS query-language injection.
         search=" OR ".join('"'+w+'"' for w in keywords)
+        # If one named author was explicitly requested, filter unrelated
+        # content that only coincidentally contains a generic query word.
+        target_authors={
+            "jung":"jung","kant":"kant","freud":"freud","james":"james",
+            "platao":"plat","marco":"marco","laozi":"laozi",
+        }
+        specified=sorted(set(target_authors[word] for word in keywords
+                             if word in target_authors))
+        restriction=""
+        args=[search]
+        if len(specified)==1:
+            restriction=" AND (lower(w.author) LIKE ? OR p.work_id LIKE ?)"
+            args.extend(["%"+specified[0]+"%","%"+specified[0]+"%"])
+        args.append(max(1,min(12,int(limit)*5)))
         with self.db() as db:
             db.row_factory=sqlite3.Row
             records=db.execute("""SELECT p.id,p.work_id,p.position,p.body,p.origin,
@@ -254,8 +268,8 @@ class ReadingLibrary:
                     bm25(passages_fts,0,0,4,6,2,1) AS relevance
                 FROM passages_fts JOIN passages p ON p.id=passages_fts.passage_id
                 JOIN works w ON w.id=p.work_id
-                WHERE passages_fts MATCH ?
-                ORDER BY relevance LIMIT ?""",(search,max(1,min(12,int(limit)*5)))).fetchall()
+                WHERE passages_fts MATCH ?"""+restriction+
+                " ORDER BY relevance LIMIT ?",args).fetchall()
         grouped=[];counts={}
         for row in records:
             # Avoid flooding a response with one book.
