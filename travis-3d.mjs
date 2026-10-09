@@ -1,6 +1,7 @@
 import { createConceptProjection } from './travis-concept-projection.mjs?v=conversation-2';
 import { createVoiceInput } from './travis-voice-input.mjs?v=conversation-2';
-import { createTravisVision } from './travis-vision.mjs?v=2';
+import { createTravisVision } from './travis-vision.mjs?v=3';
+import { buildSpeechEnvelope, speechEnvelopeLevel } from './travis-audio-sync.mjs?v=1';
 import { cameraCommand } from './travis-vision-policy.mjs?v=1';
 import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=cinema-1';
 import { projectWebAnswer } from './travis-web-projection.mjs?v=agent-1';
@@ -67,6 +68,7 @@ if (!hud || !launcher || !canvas) {
   let realFaceHead=null;
   let faceRig=null;
   let speechFace=null,speechFacePromise=null,voiceFinishTimer=0,voiceOutputDelay=null;
+  let speechClock=null,lastVisualPaint=0;
   let realFaceIris=[];
   let realFaceBaseMaterial=null;
   let realFaceReady=false;
@@ -125,14 +127,15 @@ if (!hud || !launcher || !canvas) {
     clearTimeout(voiceFinishTimer);voiceFinishTimer=0;
     if(voiceSource){try{voiceSource.onended=null;voiceSource.stop();voiceSource.disconnect();}catch{}voiceSource=null;}
     if(voicePlaybackRaf)cancelAnimationFrame(voicePlaybackRaf);voicePlaybackRaf=0;
+    speechClock=null;
     try{voiceOutputDelay?.disconnect();}catch{}voiceOutputDelay=null;speechFace?.reset();
     voiceBusy=false;externalVoiceLevel=0;
   }
   async function ensureVoiceInput(){
     if(voicePaused||!opened||voiceInputFailed)return false;
     if(!voiceInput)voiceInput=createVoiceInput({
-      onStart(){if(!opened||voicePaused)return;lastInteraction=performance.now();window.dispatchEvent(new CustomEvent('travis:user-start'));interruptReply();setState('listening',standby?'Say Travis to wake me.':'I’m listening.');},
-      onSpeech(blob,endedAt){if(!opened||voicePaused)return;voiceSpeechEndedAt=endedAt;handleVoiceBlob(blob,'audio/wav',voiceSession);},
+      onStart(){if(!opened||voicePaused||voiceBusy||state==='speaking')return;lastInteraction=performance.now();window.dispatchEvent(new CustomEvent('travis:user-start'));interruptReply();setState('listening',standby?'Say Travis to wake me.':'I’m listening.');},
+      onSpeech(blob,endedAt){if(!opened||voicePaused||voiceBusy||state==='speaking')return;voiceSpeechEndedAt=endedAt;handleVoiceBlob(blob,'audio/wav',voiceSession);},
       onLevel(level){if(state!=='speaking')externalVoiceLevel=level;},
       checkTurn:blob=>localJson('/turn',{body:blob,type:'audio/wav',signal:AbortSignal.timeout(1500)}),
       onError(error){console.warn('Neural voice input unavailable:',error.message);},
@@ -210,6 +213,7 @@ if (!hud || !launcher || !canvas) {
   const clamp = THREE.MathUtils.clamp;
   const lerp = THREE.MathUtils.lerp;
   const vision=createTravisVision({
+    isSpeechCritical:()=>Boolean(voiceSource),
     onGesture(action){
       if(!opened||!ready)return;
       if(action==='show_hologram')toggleCommands(true,{automatic:true});
@@ -701,6 +705,7 @@ if (!hud || !launcher || !canvas) {
     if (voicePlaybackRaf) cancelAnimationFrame(voicePlaybackRaf);
     voicePlaybackRaf=0;
     externalVoiceLevel=null;
+    speechClock=null;
   }
 
   function scheduleListening(session,delay=260) {
@@ -720,76 +725,63 @@ if (!hud || !launcher || !canvas) {
   }
 
   async function playVoiceArrayBuffer(arrayBuffer,session,reply,metrics=null) {
-    if (!opened || session!==voiceSession) return;
+    if(!opened||session!==voiceSession)return;
     const ac=audio();
-    if (!ac) throw new Error('Áudio indisponível.');
-    if (ac.state==='suspended') await Promise.race([ac.resume(),new Promise((_,reject)=>setTimeout(()=>reject(new Error('Toca em ativar conversa por voz.')),4000))]);
-
+    if(!ac)throw new Error('Áudio indisponível.');
+    // Phone speakers can feed the microphone; do not let the VAD interrupt its own voice.
+    voiceInput?.stop();
+    releaseVoiceMic({stopRecorder:true});
+    if(ac.state!=='running'){
+      await Promise.race([ac.resume(),new Promise((_,reject)=>setTimeout(()=>reject(new Error('Toca para ativar o áudio.')),4000))]);
+      if(ac.state!=='running')throw new Error('Audio playback needs a foreground gesture.');
+    }
+    if(!opened||session!==voiceSession)return;
     const decoded=await ac.decodeAudioData(arrayBuffer.slice(0));
-    if (!opened || session!==voiceSession) return;
-
-    await prepareSpeechFace(ac);
-    if (!opened || session!==voiceSession) return;
-    speechFace?.reset();
-    const useVisemes=Boolean(speechFace&&replyLanguage==='en');
-    hud.dataset.lipSync=useVisemes?'english-audio-visemes':'native-voice-envelope';
-    const analyser=ac.createAnalyser();
-    analyser.fftSize=1024;
-    const samples=new Float32Array(analyser.fftSize);
+    if(!opened||session!==voiceSession)return;
+    const envelope=buildSpeechEnvelope(decoded);
     const source=ac.createBufferSource();
     source.buffer=decoded;
-    if(useVisemes){
-      source.connect(speechFace.node);
-      voiceOutputDelay=ac.createDelay(.2);voiceOutputDelay.delayTime.value=.08;
-      source.connect(voiceOutputDelay);voiceOutputDelay.connect(analyser);
-    } else source.connect(analyser);
+    const analyser=ac.createAnalyser();
+    analyser.fftSize=1024;
+    source.connect(analyser);
     analyser.connect(ac.destination);
     voiceSource=source;
+    externalVoiceLevel=0;
+    hud.dataset.lipSync='audio-clock-envelope';
+    const startAt=ac.currentTime+.035;
+    speechClock={source,context:ac,start:startAt,envelope};
 
     window.dispatchEvent(new CustomEvent('travis:transcript',{detail:{role:'assistant',text:reply}}));
     setState('speaking',String(reply||'Responding.').slice(0,96));
     flashPower=.08;
 
-    const meter=()=>{
-      if (!voiceSource || session!==voiceSession || !opened) return;
-      analyser.getFloatTimeDomainData(samples);
-      let energy=0;
-      for (const sample of samples) energy+=sample*sample;
-      const rms=Math.sqrt(energy/samples.length);
-      externalVoiceLevel=clamp((rms-.004)/.10,0,1);
-      voicePlaybackRaf=requestAnimationFrame(meter);
-    };
-
-    source.onended=()=>{voiceFinishTimer=setTimeout(()=>{
-      speechFace?.reset();
-      try {voiceOutputDelay?.disconnect();} catch {}
-      voiceOutputDelay=null;
-      if (voicePlaybackRaf) cancelAnimationFrame(voicePlaybackRaf);
-      voicePlaybackRaf=0;
-      try { analyser.disconnect(); } catch {}
-      try { source.disconnect(); } catch {}
-      if (voiceSource===source) voiceSource=null;
+    source.onended=()=>{
+      if(voiceSource!==source)return;
+      try{analyser.disconnect();source.disconnect();}catch{}
+      voiceSource=null;
+      speechClock=null;
       externalVoiceLevel=0;
-      if (opened && session===voiceSession) {
+      speechFace?.reset();
+      faceRig?.update(0);
+      if(opened&&session===voiceSession){
         voiceBusy=false;
         lastInteraction=performance.now();
         window.dispatchEvent(new CustomEvent('travis:speech-end'));
-        setState(standby||voicePaused?'idle':'ready',standby?'Standing by. Say Travis.':voicePaused?'Microphone off.':'I’m here.');
-        if(!voicePaused)scheduleListening(session,180);
+        setState(standby||voicePaused?'idle':'ready',
+          standby?'Standing by. Say Travis.':voicePaused?'Microphone off.':'I’m here.');
+        if(!voicePaused)scheduleListening(session,220);
       }
-    },useVisemes?85:0);};
+    };
 
-    meter();
-    source.start();
-    if(!voicePaused)void ensureVoiceInput();
-    if(metrics) {
+    source.start(startAt);
+    if(metrics){
       metrics.replyToFirstAudioMs=Math.round(performance.now()-metrics.replyAt);
       metrics.speechEndToFirstAudioMs=Math.round(performance.now()-metrics.speechEndedAt);
+      metrics.audioMode='single-source-clock';
       voiceMetrics.push({...metrics});if(voiceMetrics.length>20)voiceMetrics.shift();
       console.info('Travis voice latency',metrics);
     }
   }
-
 
   function presentToolResult(answer) {
     Object.assign(answer,projectWebAnswer(answer));
@@ -1100,7 +1092,7 @@ if (!hud || !launcher || !canvas) {
     const controller=new AbortController();
     voiceRequestController=controller;
     try {
-      void prepareSpeechFace(audio());
+      hud.dataset.lipSync='audio-clock-envelope';
       setState('booting','Connecting to local Travis…');
       const health=await localHealth(controller.signal);
       if (!opened || session!==voiceSession) return;
@@ -1728,6 +1720,9 @@ if (!hud || !launcher || !canvas) {
     if (!opened || webglLost || renderer.getContext().isContextLost()) { lastFrame=now; return; }
     // Prioritise recognition/inference/TTS on the phone; DOM status remains live.
     // Keep rendering the hologram while reasoning; stopping the frame loop can blank the WebGL layer on Android.
+    // When the camera is open, reserve CPU for uninterrupted speech.
+    if(voiceSource&&vision.diagnostics().active&&now-lastVisualPaint<34)return;
+    lastVisualPaint=now;
     const dt=Math.min(.05,(now-lastFrame)/1000);
     lastFrame=now;
 
@@ -1746,6 +1741,11 @@ if (!hud || !launcher || !canvas) {
     glitchPower*=Math.exp(-dt*18);
     flashPower*=Math.exp(-dt*6.5);
 
+    // Mouth movement follows the exact AudioContext playback position; no timer drift.
+    if(speechClock&&speechClock.source===voiceSource){
+      externalVoiceLevel=speechEnvelopeLevel(speechClock.envelope,
+        speechClock.context.currentTime-speechClock.start);
+    }
     const targetVoice=state==='speaking'?(externalVoiceLevel||0):0;
     speechLevel+=(targetVoice-speechLevel)*(1-Math.exp(-dt*(targetVoice>speechLevel?30:22)));
     presencePose=presenceMotion.update(dt,state,speechLevel,projection.amount);
@@ -1819,8 +1819,7 @@ if (!hud || !launcher || !canvas) {
     const neuralBackdrop=scene.getObjectByName('TravisCinematicBacklight');
     if(neuralBackdrop)neuralBackdrop.visible=formBlend.face>.5;
     cinematicBacklight?.update(reducedMotion?0:t,state==='speaking'?speechLevel:0);
-    if(state==='speaking')speechFace?.update(dt);
-    faceRig?.update(state==='speaking'?speechLevel:0,state==='speaking'&&replyLanguage==='en'?speechFace?.weights:null);
+    faceRig?.update(state==='speaking'?speechLevel:0,null);
     hud.dataset.mouthLevel=speechLevel.toFixed(2);
     if (faceRoot) {
       const faceMix=Math.max(.001,formBlend.face);
@@ -2058,7 +2057,7 @@ if (!hud || !launcher || !canvas) {
     setState,
     diagnostics() {
       return {ready,opened,state,renderedFrames,contextLost:renderer?.getContext().isContextLost(),form:activeForm,faceAsset:hud.dataset.faceAsset,
-        baseBloom:realFaceHead?.layers.isEnabled(BLOOM_LAYER),lipSync:speechFace?.diagnostics()||{engine:hud.dataset.lipSync},
+        baseBloom:realFaceHead?.layers.isEnabled(BLOOM_LAYER),lipSync:{engine:hud.dataset.lipSync,audioContext:audioContext?.state,playbackClock:speechClock?{elapsed:speechClock.context.currentTime-speechClock.start,duration:speechClock.envelope.duration}:null},
         neural:neuralField?.diagnostics(),
         presence:{...presencePose},projection:hologramPresentation.sample(performance.now()/1000),
         media:window.TravisProjection?.media(),
