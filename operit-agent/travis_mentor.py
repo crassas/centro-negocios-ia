@@ -438,6 +438,55 @@ def status(store=None, registry=None):
             "TravisExperienceForged":False}
 
 
+def capability_inventory(registry, state_dir):
+    """Inventory registered tools and observed verifier outcomes, not permissions."""
+    entries=(registry or {}).get("capabilities") or []
+    observation_path=Path(state_dir)/"capabilities-and-limits.json"
+    observed={}
+    if observation_path.is_file():
+        try:
+            payload=json.loads(observation_path.read_text(encoding="utf-8"))
+            if isinstance(payload.get("capabilities"),list):
+                for row in payload["capabilities"]:
+                    if isinstance(row,dict) and isinstance(row.get("task_type"),str):
+                        observed[row["task_type"]]=row
+        except (OSError, ValueError, UnicodeError):
+            pass
+    capabilities=[]
+    for item in sorted((x for x in entries if isinstance(x,dict)
+                        and isinstance(x.get("id"),str)),key=lambda x:x["id"]):
+        identifier=item["id"]
+        record=observed.get(identifier,{})
+        latest=record.get("last_verdict")
+        scope=str(record.get("last_scope") or "")[:60]
+        successes=max(0,int(record.get("successes") or 0))
+        failures=max(0,int(record.get("failures") or 0))
+        unknowns=max(0,int(record.get("unknowns") or 0))
+        state=("observed_tool_success" if latest=="success" and successes>0 else
+               "observed_tool_failure" if latest=="failure" else
+               "registered_only")
+        capabilities.append({
+            "id":identifier, "owner":str(item.get("owner") or "")[:80],
+            "actionType":str(item.get("action_type") or "")[:60],
+            "modifiesData":bool(item.get("mutation")),
+            "registration":True,
+            "lastObservedState":state,
+            "observationScope":scope,
+            "observedSuccesses":successes,
+            "observedFailures":failures,
+            "observedUnknowns":unknowns,
+        })
+    return {
+        "catalogueVersion":VERSION,
+        "source":"current_registry_and_local_verifier_log",
+        "registered":len(capabilities),
+        "observedSuccessTools":sum(x["lastObservedState"]=="observed_tool_success" for x in capabilities),
+        "registeredOnly":sum(x["lastObservedState"]=="registered_only" for x in capabilities),
+        "warning":"Historical success is not current authorization or complete task correctness.",
+        "capabilities":capabilities,
+    }
+
+
 def export(path):
     path=Path(path)
     path.parent.mkdir(parents=True,exist_ok=True)
@@ -457,7 +506,7 @@ def export(path):
 def main():
     import argparse
     parser=argparse.ArgumentParser()
-    parser.add_argument("action",choices=("export","seed","status","context","plan"))
+    parser.add_argument("action",choices=("export","seed","status","context","plan","abilities"))
     parser.add_argument("--state-dir",type=Path,default=Path.home()/".centro-jarvis")
     parser.add_argument("--query",default="")
     parser.add_argument("--tool",default="")
@@ -469,6 +518,9 @@ def main():
     elif args.action=="plan":
         import travis_core
         result=decision_contract(args.query,args.tool,travis_core.registry_snapshot())
+    elif args.action=="abilities":
+        import travis_core
+        result=capability_inventory(travis_core.registry_snapshot(),args.state_dir)
     else:
         import travis_core
         store=travis_core.RuntimeStore(args.state_dir/"memory.sqlite")
