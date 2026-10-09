@@ -60,6 +60,9 @@ TRAVIS_CLIENT_FILES = (
     "travis-audio-sync.mjs",
     "travis-vision.mjs",
     "travis-voice-input.mjs",
+    "travis-interface-language.mjs",
+    "travis-form-director.mjs",
+    "travis-brain-view.mjs",
     "travis-wake-phrase.mjs",
     "travis-english-intents.mjs",
     "travis-concept-projection.mjs",
@@ -527,13 +530,13 @@ def sync_travis_client(ref):
             if not raw or len(raw) > 450000:
                 raise RuntimeError(f"{name}: resposta ausente ou demasiado grande")
             fetched[name] = raw.decode("utf-8")
-        if "travis-3d.mjs?v=draw-1" not in fetched["index.html"]:
+        if "travis-3d.mjs?v=draw-2" not in fetched["index.html"]:
             raise RuntimeError("index.html: versão de voz inesperada")
         if "travis-audio-sync.mjs?v=1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: sincronização de voz ausente")
-        if "travis-vision.mjs?v=4" not in fetched["travis-3d.mjs"]:
+        if "travis-vision.mjs?v=5" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: visão não ligada")
-        if "travis-3d.mjs?v=draw-1" not in fetched["sw.js"]:
+        if "travis-3d.mjs?v=draw-2" not in fetched["sw.js"]:
             raise RuntimeError("sw.js: cache desatualizada")
         if "travis-action-cards.mjs?v=matter-2" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: cinematic action deck not connected")
@@ -553,6 +556,23 @@ def sync_travis_client(ref):
             raise RuntimeError("travis-3d.mjs: cinematic geometry missing")
         if "travis-voice-input.mjs?v=stt-fast-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: transcrição rápida não ligada")
+        if "travis-form-selector" in fetched["index.html"] or "data-travis-form=" in fetched["index.html"]:
+            raise RuntimeError("index.html: o seletor de modos voltou a aparecer")
+        for module,token in (
+            ("travis-interface-language.mjs","travis-interface-language.mjs?v=1"),
+            ("travis-form-director.mjs","travis-form-director.mjs?v=1"),
+            ("travis-brain-view.mjs","travis-brain-view.mjs?v=cinema-2"),
+        ):
+            if token not in fetched["travis-3d.mjs"] or token not in fetched["sw.js"]:
+                raise RuntimeError(module+": modo cinematográfico não ligado")
+        if "automaticTravisForm" not in fetched["travis-form-director.mjs"]:
+            raise RuntimeError("Diretor automático de formas indisponível")
+        if "applyInterfaceLanguage" not in fetched["travis-interface-language.mjs"]:
+            raise RuntimeError("Interface bilingue indisponível")
+        if "selectedDetailsUntil" not in fetched["travis-brain-view.mjs"]:
+            raise RuntimeError("Os detalhes do cérebro não são opcionais")
+        if "travis-hud.css?v=matter-3" not in fetched["index.html"] or "travis-hud.css?v=matter-3" not in fetched["sw.js"]:
+            raise RuntimeError("travis-hud.css: versão da interface incorreta")
         if "travis-wake-phrase.mjs?v=pt-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: wake word PT não ligado")
         if "travis-wake-phrase.mjs?v=pt-1" not in fetched["sw.js"]:
