@@ -43,7 +43,7 @@ const main=fs.readFileSync('travis-3d.mjs','utf8');
 const camera=fs.readFileSync('travis-vision.mjs','utf8');
 const sw=fs.readFileSync('sw.js','utf8');
 assert(page.includes('id="travis-camera-toggle"'));
-assert(page.includes('travis-3d.mjs?v=stt-fast-1'));
+assert(page.includes('travis-3d.mjs?v=holo-1'));
 assert(main.includes('vision.stop();'),'Closing the scene must turn off camera');
 assert(main.includes('cameraCommand(text)'),'Voice/typed instructions must control camera');
 assert(main.includes("inputLanguage='auto'"),'Always understand a language-switching command');
