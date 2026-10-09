@@ -58,7 +58,6 @@ def safe_short_read_transcript(text):
 
 def read_pcm(path):
     """Return float32 samples for a validated 16-kHz mono WAV."""
-    import numpy as np
     p=Path(path).resolve()
     if not (p.is_file() and p.suffix==".wav" and
             p.name=="audio.wav" and p.parent.name.startswith("jarvis-stt-")):
@@ -70,6 +69,7 @@ def read_pcm(path):
         if not 1600<=frames<=MAX_AUDIO_SECONDS*16000:
             raise ValueError("invalid_audio_length")
         data=f.readframes(frames)
+    import numpy as np
     return np.frombuffer(data,dtype=np.int16).astype(np.float32)/32768
 
 def transcribe_audio(recognizer,path):
