@@ -63,6 +63,7 @@ TRAVIS_CLIENT_FILES = (
     "travis-interface-language.mjs",
     "travis-form-director.mjs",
     "travis-brain-view.mjs",
+    "travis-brain-panel.mjs",
     "travis-wake-phrase.mjs",
     "travis-english-intents.mjs",
     "travis-concept-projection.mjs",
@@ -571,6 +572,10 @@ def sync_travis_client(ref):
             raise RuntimeError("Interface bilingue indisponível")
         if "selectedDetailsUntil" not in fetched["travis-brain-view.mjs"]:
             raise RuntimeError("Os detalhes do cérebro não são opcionais")
+        if "travis-brain-panel.mjs?v=4" not in fetched["travis-brain-view.mjs"] or "travis-brain-panel.mjs?v=4" not in fetched["sw.js"]:
+            raise RuntimeError("travis-brain-panel.mjs: versão de telemetria fora da cache")
+        if "monitoring&&!disposed" not in fetched["travis-brain-panel.mjs"]:
+            raise RuntimeError("travis-brain-panel.mjs: estado observado não persistente")
         if "travis-hud.css?v=matter-3" not in fetched["index.html"] or "travis-hud.css?v=matter-3" not in fetched["sw.js"]:
             raise RuntimeError("travis-hud.css: versão da interface incorreta")
         if "travis-wake-phrase.mjs?v=pt-1" not in fetched["travis-3d.mjs"]:
