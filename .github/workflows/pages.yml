@@ -33,6 +33,9 @@ jobs:
           node --check travis-3d.mjs
           node scripts/travis-hud-selftest.mjs
           node scripts/travis-audio-sync-selftest.mjs
+          node --check travis-vision.mjs
+          node --check travis-audio-sync.mjs
+          python3 -m py_compile operit-agent/centro_station.py
           node scripts/travis-vision-selftest.mjs
           node scripts/travis-projection-selftest.mjs
           node scripts/travis-presence-selftest.mjs
