@@ -1,0 +1,203 @@
+/* TRAVIS | CINEMATIC DEPTH v2
+   Visual-only grade on top of the stable gold theme.
+   No remote services, camera access, or audio state are changed. */
+
+/* Quiet layered optics above WebGL, always below controls. */
+.travis-hud .travis-cinema-lightfield{
+  position:absolute;inset:0;z-index:3;
+  pointer-events:none;overflow:hidden;isolation:isolate;
+}
+.travis-hud .travis-cinema-lightfield>span{
+  position:absolute;display:block;pointer-events:none;
+}
+.travis-hud .travis-cinema-lightfield::before{
+  content:"";position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 64% 63% at -7% 35%,rgba(214,128,54,.31),rgba(120,65,29,.13) 57%,transparent 90%),
+    radial-gradient(ellipse 62% 47% at 51% 62%,rgba(174,105,42,.21),transparent 83%);
+  mix-blend-mode:screen;
+}
+.travis-hud .travis-cinema-beam{
+  top:-25%;left:-32%;width:116%;height:115%;
+  transform:rotate(-13deg);transform-origin:top left;
+  background:
+    linear-gradient(111deg,transparent 3%,rgba(255,217,160,.32) 25%,rgba(201,112,50,.12) 42%,transparent 64%),
+    linear-gradient(129deg,rgba(245,198,123,.13),transparent 72%);
+  -webkit-mask-image:radial-gradient(ellipse 95% 88% at 3% 1%,#000 7%,transparent 96%);
+  mask-image:radial-gradient(ellipse 95% 88% at 3% 1%,#000 7%,transparent 96%);
+  opacity:.86;mix-blend-mode:screen;
+}
+.travis-hud .travis-cinema-halo{
+  top:22%;left:50%;width:min(96vw,670px);aspect-ratio:1;
+  transform:translateX(-50%);opacity:.65;
+  background:
+    radial-gradient(circle,transparent 0 63%,rgba(234,160,75,.23) 63.4%,rgba(206,132,58,.06) 64.4%,transparent 65%),
+    radial-gradient(circle,transparent 0 74%,rgba(244,173,90,.16) 74.2%,transparent 74.7%),
+    radial-gradient(ellipse,rgba(177,104,45,.06),transparent 69%);
+}
+.travis-hud .travis-cinema-halo::before{
+  content:"";position:absolute;inset:7%;
+  border-radius:50%;
+  background:conic-gradient(from 55deg,transparent 0 19%,rgba(255,206,131,.20) 24%,transparent 32% 56%,rgba(235,158,81,.17) 62%,transparent 70%);
+  -webkit-mask-image:radial-gradient(circle,transparent 0 83%,#000 84% 85%,transparent 87%);
+  mask-image:radial-gradient(circle,transparent 0 83%,#000 84% 85%,transparent 87%);
+}
+.travis-hud .travis-cinema-floor{
+  bottom:-17%;left:-25%;width:150%;height:41%;opacity:.85;
+  background:
+    radial-gradient(ellipse 54% 35% at 51% 42%,rgba(251,192,110,.34),rgba(185,112,48,.12) 54%,transparent 86%),
+    radial-gradient(ellipse 46% 78% at 52% 111%,rgba(161,107,52,.27),transparent 81%);
+  mix-blend-mode:screen;
+}
+.travis-hud .travis-cinema-floor::after{
+  content:"";position:absolute;top:26%;left:9%;right:9%;height:28%;
+  border-top:1px solid rgba(241,177,96,.37);
+  border-radius:50% 50% 0 0;
+  box-shadow:0 -5px 16px rgba(234,168,85,.18);
+}
+.travis-hud .travis-cinema-reflections{
+  left:0;right:0;bottom:-5%;height:28%;opacity:.5;
+  background:
+    repeating-linear-gradient(180deg,transparent 0 12px,rgba(200,145,78,.025) 13px,transparent 14px 36px),
+    linear-gradient(180deg,rgba(80,50,30,.025),rgba(195,126,60,.13) 54%,transparent);
+  -webkit-mask-image:radial-gradient(ellipse at 51% 100%,#000 1%,transparent 78%);
+  mask-image:radial-gradient(ellipse at 51% 100%,#000 1%,transparent 78%);
+}
+
+/* Grading: espresso, bronze, copper and champagne, with black retaining depth. */
+.travis-hud{
+  background:
+    radial-gradient(ellipse 65% 59% at 0% 33%,rgba(117,67,31,.37),rgba(52,27,16,.14) 60%,transparent 94%),
+    radial-gradient(ellipse 64% 40% at 52% 64%,rgba(137,79,36,.28),transparent 84%),
+    radial-gradient(ellipse 64% 34% at 50% 89%,rgba(141,87,42,.29),transparent 88%),
+    linear-gradient(134deg,#080808 3%,#030405 42%,#0c0907 77%,#020304)!important;
+}
+.travis-hud::before{
+  background:
+    radial-gradient(ellipse 85% 35% at 50% 105%,#030405 0 47%,rgba(238,161,83,.35) 48%,rgba(142,78,29,.12) 49.2%,transparent 51%),
+    radial-gradient(ellipse 64% 30% at 51% 86%,rgba(212,130,54,.15),transparent 77%),
+    radial-gradient(ellipse 90% 75% at 50% 42%,transparent 42%,rgba(0,0,0,.21) 83%,rgba(0,0,0,.39));
+  opacity:.93;
+}
+.travis-hud::after{
+  background:repeating-linear-gradient(180deg,rgba(255,225,186,.011) 0 1px,transparent 1px 7px);
+  opacity:.36;
+}
+.travis-hud .travis-title h1{
+  background:linear-gradient(180deg,#fff2db 2%,#d4b185 54%,#f9e3c5 78%,#b58d66)!important;
+  -webkit-background-clip:text!important;background-clip:text!important;
+  -webkit-text-fill-color:transparent!important;
+  text-shadow:none!important;
+  filter:drop-shadow(0 0 9px rgba(255,185,95,.23))!important;
+}
+.travis-hud .travis-title-signal{
+  width:72px;opacity:.85;height:1px;
+  background:linear-gradient(90deg,transparent,#e2b17c 30%,#ffe2af 50%,#e2b17c 70%,transparent);
+  box-shadow:0 0 12px rgba(241,170,86,.35);
+}
+.travis-hud .travis-title::after{color:#ceb693}
+
+/* Champagne reflections, not flat outlines. */
+.travis-hud .travis-close{
+  border-color:rgba(247,192,125,.75)!important;
+  background:radial-gradient(circle at 38% 15%,rgba(204,143,68,.26),transparent 58%),#090a0b;
+  box-shadow:0 0 24px rgba(210,132,51,.18),inset 0 1px rgba(255,233,198,.22)!important;
+}
+.travis-hud .travis-camera-dock button{
+  background:
+    radial-gradient(ellipse 95% 67% at 16% 0%,rgba(201,142,73,.27),transparent 78%),
+    linear-gradient(150deg,#241b15,#08090b 59%,#231a13)!important;
+  border-color:rgba(226,184,126,.58)!important;
+  box-shadow:0 0 22px rgba(217,144,66,.15),0 13px 28px #0009,
+    inset 0 1px rgba(255,232,188,.21)!important;
+}
+.travis-hud .travis-camera-dock button:hover,
+.travis-hud .travis-camera-dock[data-active="true"] button{
+  background:linear-gradient(145deg,#533923,#15100d 70%,#2c2016)!important;
+}
+.travis-hud .travis-brain-panel{
+  background:
+    radial-gradient(ellipse 90% 60% at 0% 0%,rgba(135,84,45,.27),transparent 82%),
+    linear-gradient(145deg,rgba(28,23,19,.94),rgba(4,5,7,.90) 65%,rgba(20,16,13,.85));
+  border-color:rgba(222,172,110,.37);
+  box-shadow:0 15px 45px #000a,inset 0 1px rgba(255,230,193,.11);
+}
+
+/* The active form is a copper-to-black metallic volume. */
+.travis-hud[data-neural-field] .travis-form-selector{
+  background:
+    radial-gradient(ellipse 70% 130% at 53% -9%,rgba(150,94,45,.21),transparent 77%),
+    linear-gradient(150deg,#17120f,#050608 55%,#271b12)!important;
+  border-color:rgba(228,182,119,.55)!important;
+  box-shadow:0 0 24px rgba(214,133,52,.16),0 16px 38px #000b,
+    inset 0 1px rgba(255,231,192,.17)!important;
+}
+.travis-hud[data-neural-field] .travis-form-selector button.is-active{
+  color:#fff0db!important;
+  background:
+    radial-gradient(ellipse at 45% -8%,rgba(244,194,117,.34),transparent 77%),
+    linear-gradient(150deg,#8c6139,#412b1d 62%,#2d2018)!important;
+  box-shadow:inset 0 1px rgba(255,231,175,.41),0 0 0 1px rgba(247,200,139,.63),
+    0 0 27px rgba(237,165,78,.15)!important;
+}
+.travis-hud[data-neural-field] .travis-form-selector button:not(.is-active){
+  color:#c1b3a3!important;text-shadow:none!important;
+}
+
+/* Voice and input rise out of the horizon light; text stays legible. */
+.travis-hud .travis-status{
+  background:
+    radial-gradient(ellipse 65% 135% at 47% -56%,rgba(239,163,77,.29),transparent 89%),
+    radial-gradient(ellipse 55% 80% at 0% 100%,rgba(113,68,37,.15),transparent 79%),
+    linear-gradient(101deg,#211711 0%,#08090b 42%,#18100c 100%)!important;
+  border-color:rgba(234,183,112,.69)!important;
+  box-shadow:0 0 27px rgba(222,142,55,.16),0 18px 46px #000c,
+    inset 0 1px rgba(255,228,170,.34)!important;
+}
+.travis-hud .travis-status-state{color:#f5c98e}
+.travis-hud .travis-status-message{text-shadow:0 1px 14px #0008}
+.travis-hud .travis-wave i{
+  background:linear-gradient(180deg,#ffecd0,#edb66d 40%,#95602f)!important;
+  box-shadow:0 0 10px rgba(240,167,78,.43)!important;
+}
+.travis-hud .travis-command{
+  background:
+    radial-gradient(ellipse 68% 87% at 2% 0%,rgba(101,75,55,.27),transparent 77%),
+    linear-gradient(118deg,#1c1e20,#090b0e 48%,#1d1610 100%)!important;
+  border-color:rgba(229,200,162,.62)!important;
+  box-shadow:0 0 0 1px rgba(249,226,188,.07),0 15px 46px #000b,
+    0 -7px 20px rgba(201,125,48,.11),
+    inset 0 1px rgba(255,242,220,.23)!important;
+}
+.travis-hud .travis-command button{
+  color:#fff0d5!important;
+  background:
+    radial-gradient(ellipse 95% 77% at 34% -5%,rgba(255,224,159,.39),transparent 84%),
+    linear-gradient(145deg,#8c613c,#51351e 47%,#1b150f 99%)!important;
+  border-color:rgba(249,212,150,.91)!important;
+  box-shadow:0 0 0 1px rgba(255,232,194,.13),0 0 25px rgba(232,150,64,.23),
+    inset 0 1px rgba(255,241,204,.40)!important;
+}
+.travis-hud .travis-command button:hover,
+.travis-hud .travis-command button:focus-visible{
+  background:linear-gradient(145deg,#ac7743,#3b291c 80%,#241913)!important;
+}
+
+/* Keep overlay content the focus and respect phone performance. */
+.travis-hud.is-projecting .travis-cinema-lightfield,
+.travis-hud.room-open .travis-cinema-lightfield{opacity:.23}
+@media(max-width:700px){
+  .travis-hud .travis-cinema-beam{top:-16%;left:-42%;width:125%;height:110%;opacity:.86}
+  .travis-hud .travis-cinema-halo{top:24%;width:114vw;opacity:.52}
+  .travis-hud .travis-cinema-floor{height:35%;bottom:-14%}
+  .travis-hud .travis-status,.travis-hud .travis-command{
+    box-shadow:0 0 23px rgba(214,135,55,.13),0 14px 40px #000b,inset 0 1px rgba(255,225,187,.20)!important;
+  }
+}
+@media(max-height:670px){
+  .travis-hud .travis-cinema-halo{top:18%;width:83vw;opacity:.39}
+  .travis-hud .travis-cinema-floor{height:29%}
+}
+@media(prefers-reduced-motion:reduce){
+  .travis-hud .travis-cinema-lightfield *{animation:none!important}
+}
