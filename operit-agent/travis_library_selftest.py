@@ -136,6 +136,44 @@ class LibraryTests(unittest.TestCase):
                              "do not delete")
         self.assertTrue(self.reader.status()["ok"])
 
+    def test_end_to_end_jarvis_reads_real_seed_without_fake_quote(self):
+        import os
+        import subprocess
+        import sys
+        script = r'''
+import json
+import jarvis_local as j
+class QuantumFixture:
+    def prepare(self, **kwargs):
+        return {"phase":"fixture","strategyRoute":{"primary":"local_read"},"tier":"local"}
+    def ingest(self,*args,**kwargs):
+        return {"status":kwargs.get("status","UNKNOWN")}
+j.TRAVIS_QUANTUM=QuantumFixture()
+assert j.classify("Travis, mostra a biblioteca")[0]=="library_status"
+assert j.classify("Travis, compara Jung e Kant")[0]=="library_search"
+first=j.route("Travis, compara Jung e Kant",{"language":"pt","session":"library-test-20261009"})
+assert first["ok"] is True, first
+assert first["tool"]=="library_search",first
+assert first["result"]["results"],first
+assert any("Jung" in row["author"] or "Kant" in row["author"]
+           for row in first["result"]["results"])
+assert all(row["sourceUrl"].startswith("https://") for row in first["result"]["results"])
+assert "Fonte:" in first["reply"]
+books=j.route("Travis, mostra a biblioteca",{"language":"pt","session":"library-test-20261009"})
+assert books["tool"]=="library_status",books
+assert books["result"]["authoredStudyCards"]>=30,books
+before=j.reasoning_prompt("Quero compreender Kant e o imperativo categórico",limit=2800)
+assert "Reading library passages" in before,before
+assert "NOTA AUTORAL DE ESTUDO" in before,before
+print("LIBRARY_ROUTER_E2E_OK")
+'''
+        with tempfile.TemporaryDirectory() as home:
+            env=dict(os.environ,HOME=home,PYTHONPATH=str(Path(__file__).parent))
+            proc=subprocess.run([sys.executable,"-c",script],cwd=str(Path(__file__).parent),
+                                env=env,capture_output=True,text=True,timeout=30)
+            self.assertEqual(proc.returncode,0,proc.stderr[-1300:])
+            self.assertIn("LIBRARY_ROUTER_E2E_OK",proc.stdout)
+
     def test_input_sanitization_and_size_limits(self):
         self.reader.seed()
         with self.assertRaises(ValueError):
