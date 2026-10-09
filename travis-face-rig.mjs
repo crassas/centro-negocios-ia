@@ -3,7 +3,7 @@ export function createFaceRig(geometry) {
   const position=geometry.attributes.position,rest=Float32Array.from(position.array);
   const jaw=new Float32Array(position.count),lip=new Float32Array(position.count),lid=new Float32Array(position.count);
   const smooth=(a,b,x)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);};
-  let affected=0,last='';
+  let affected=0,last='',lastNormalsAt=-Infinity;
   for(let i=0;i<position.count;i++) {
     const x=rest[i*3],y=rest[i*3+1],z=rest[i*3+2];
     const front=smooth(.26,.47,z);
@@ -30,7 +30,7 @@ export function createFaceRig(geometry) {
       if(gate<.025){open=0;round=0;wide=0;close=0;}
     }
     const stamp=[open,round,wide,close,lidClosing].map(x=>x.toFixed(3)).join(':');if(stamp===last)return;last=stamp;
-    if(open===0&&round===0&&wide===0&&close===0&&lidClosing===0){position.array.set(rest);position.needsUpdate=true;geometry.computeVertexNormals();return;}
+    if(open===0&&round===0&&wide===0&&close===0&&lidClosing===0){position.array.set(rest);position.needsUpdate=true;geometry.computeVertexNormals();lastNormalsAt=performance.now();return;}
     for(let i=0;i<position.count;i++) {
       const j=i*3,x=rest[j],y=rest[j+1],z=rest[j+2],w=jaw[i],l=lip[i];
       const angle=.195*open*w,dy=y-.39,dz=z-.27;
@@ -38,6 +38,10 @@ export function createFaceRig(geometry) {
       const rz=.27+dy*Math.sin(angle)+dz*Math.cos(angle);
       position.setXYZ(i,x*(1+l*(wide*.14-round*.26)),ry+l*close*(.333-y)*.45+l*open*(.333-y)*.22+lid[i]*lidClosing,rz+l*round*.018+Math.abs(lid[i])*lidClosing*.16);
     }
-    position.needsUpdate=true;geometry.computeVertexNormals();
+    position.needsUpdate=true;
+    // Rebuilding normals for a dense 3D bust on every visual frame stalls Android.
+    // Mesh vertices still animate each frame; normals refresh at most ~12 fps.
+    const now=performance.now();
+    if(now-lastNormalsAt>=80){geometry.computeVertexNormals();lastNormalsAt=now;}
   }};
 }
