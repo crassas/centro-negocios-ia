@@ -37,12 +37,9 @@ def transcribe(path,language=None):
  if len(samples)<1600:return {"text":"","languageUsed":"pt"}
  # Preserve Whisper's full acoustic context: shortened windows corrupted compound
  # commands and project names even when the original audio was intelligible.
- used=language if language in {"pt","en"} else None
- if used is None:
-  try:
-   detected,confidence=model.auto_detect_language(samples)[0]
-   used=detected if detected in {"pt","en"} and float(confidence)>=0.40 else "pt"
-  except Exception:used="auto"
+ # Whisper.cpp detects language during decoding when language="auto".
+ # Avoid a separate language-detection pass that repeats the encoder.
+ used=language if language in {"pt","en"} else "auto"
  segments=model.transcribe(
   samples,
   language=used,
