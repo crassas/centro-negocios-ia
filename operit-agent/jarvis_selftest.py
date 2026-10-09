@@ -334,6 +334,28 @@ class Tests(unittest.TestCase):
   with patch.object(Path,"home",return_value=home/"missing"):
    self.assertFalse(j.execute("task_list",{})["businessAvailable"])
   self.assertFalse((home/"missing").exists())
+ def test_screenshot_centro_check_is_tool_not_generic_cloud_answer(self):
+  observed={
+   "centro":{"ok":True},
+   "ram_available_mb":1024,
+  }
+  inputs=[
+   "Olá Travis, verifica o Centro de Negócios.»",
+   "Olá Travis, verifica o Centro de Negócios",
+   "Olá Travis, confirma o Centro de Negócios",
+   "Travis, qual o estado do Centro?",
+   "Como está o Centro de Negócios?",
+  ]
+  with patch.object(j,"infer",side_effect=AssertionError("An operational check must not call LLM")),patch.object(j,"doctor",return_value=observed):
+   for query in inputs:
+    with self.subTest(query=query):
+     answer=j.route(query,{"language":"pt","session":"centro-health-regression"})
+     self.assertEqual(answer["tool"],"system_status")
+     self.assertEqual(answer["reply"],"O Centro está ativo.")
+  for text in ("Verifica o site do Centro de Negócios",
+               "Verifica o repositório do Centro de Negócios",
+               "Explica o Centro de Negócios"):
+   self.assertNotEqual(j.classify(text)[0],"system_status")
  def test_rules_avoid_inference(self):
   cases={"Jarvis, diz-me o estado da estação.":"system_status","O Best Pizza está online?":"site_check","Como está o Git da Pentehouse?":"git_status","Que tarefas tenho?":"task_list","Cria uma tarefa para amanhã":"create_task"}
   for text,tool in cases.items():self.assertEqual(j.classify(text)[0],tool)
