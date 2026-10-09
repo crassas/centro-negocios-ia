@@ -50,7 +50,7 @@ for(const token of [
 
 for(const token of [
   'canvas,alpha:false',
-  'scene.background=new THREE.Color(0x02070b)',
+  'scene.background=new THREE.Color(0x030405)',
   'new THREE.BoxGeometry(1.35,.52,.065)',
   'new THREE.EdgesGeometry',
   'raycaster.intersectObjects'
