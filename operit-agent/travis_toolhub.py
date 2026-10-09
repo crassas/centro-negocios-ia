@@ -116,9 +116,6 @@ def perform(args):
     if name not in TOOLS:
         raise ValueError("Ferramenta desconhecida")
     spec = TOOLS[name]
-    if not spec["executable"].is_file():
-        return {"ok": False, "tool": name, "operation": operation,
-                "output": "Não está instalada ou o executável não foi encontrado."}
     options = {
         ("pi", "sessions"): ["sessions", "list"],
         ("openresearch", "projects"): ["projects"],
@@ -128,6 +125,9 @@ def perform(args):
     extra = options.get((name, operation))
     if extra is None:
         raise ValueError("Comando não autorizado. A execução de agentes, simulações e alterações exige autorização explícita e configuração.")
+    if not spec["executable"].is_file():
+        return {"ok": False, "tool": name, "operation": operation,
+                "output": "Não está instalada ou o executável não foi encontrado."}
     result = _call([spec["executable"], *extra], cwd=HOME)
     return {**result, "tool": name, "operation": operation}
 
