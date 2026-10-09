@@ -1,4 +1,4 @@
-import { createBrainPanel } from './travis-brain-panel.mjs?v=3';
+import { createBrainPanel } from './travis-brain-panel.mjs?v=4';
 import { createKnowledgeGraph } from './travis-knowledge-graph.mjs?v=cinema-1';
 
 // Brain silhouette = particles used as a visual metaphor.
@@ -96,6 +96,7 @@ export function createNeuralField(THREE,{reducedMotion=false,compact=false}={}){
     else graph.offline();
   },events=>{nativeEvents=events;});
   let status=null,clock=0,currentCore=0,currentProjection=0,visible=false;
+  let selectedDetailsUntil=0; // User-selected node, never an automatic overlay.
   function update({time=0,dt=.016,core=0,intro=1,projection=0,portrait=false,pixelRatio=1}={}){
     clock=reducedMotion?0:Math.max(0,time);currentCore=core;currentProjection=projection;
     visible=core>.012&&projection<.999;root.visible=visible;
@@ -122,14 +123,20 @@ export function createNeuralField(THREE,{reducedMotion=false,compact=false}={}){
       activity[i]+=(target-activity[i])*Math.min(1,dt*5);
     });
     graph.update({time:clock,core:Math.min(1,core*intro),activity:activity[1],projection});
-    panel.setVisible(core>.52&&projection<.22);
+    panel.setVisible(core>.52&&projection<.22&&Date.now()<selectedDetailsUntil);
   }
   function pick(raycaster){return currentCore>.5&&currentProjection<.2?graph.pick(raycaster):null;}
-  function select(id){const item=graph.select(id);panel.setSelectedMemory(item);return item;}
+  function select(id){
+    const item=graph.select(id);
+    selectedDetailsUntil=item?Date.now()+15000:0;
+    panel.setSelectedMemory(item);
+    panel.setVisible(Boolean(item)&&currentCore>.5&&currentProjection<.22);
+    return item;
+  }
   function diagnostics(){return{
     kind:'event-linked-particle-brain',source:'brain/state + brain/graph + brain/events',
     nativeEventEngine:nativeEvents?.engine||'unavailable',observedEventCount:nativeEvents?.events?.length||0,
-    backendConnected:!!status,backendPhase:status?.phase,
+    backendConnected:!!status&&Math.abs(Date.now()/1000-status.observedAt)<15,backendPhase:status?.phase,
     silhouetteParticles:vertex.length/3,graph:graph.diagnostics(),
     activeRegions:keys.filter((_,i)=>activity[i]>.1),
     expanded:currentCore>.5,visible,time:clock,anatomyAnalogy:true

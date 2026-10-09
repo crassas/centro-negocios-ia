@@ -1,8 +1,10 @@
 import { createConceptProjection } from './travis-concept-projection.mjs?v=matter-3';
 import './travis-action-cards.mjs?v=matter-2';
 import { createVoiceInput } from './travis-voice-input.mjs?v=stt-fast-1';
+import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS } from './travis-form-director.mjs?v=1';
+import { INTERFACE_COPY, interfaceLanguage, applyInterfaceLanguage, languageFromInterfaceCommand } from './travis-interface-language.mjs?v=1';
 import { resolveWakePhrase } from './travis-wake-phrase.mjs?v=pt-1';
-import { createTravisVision } from './travis-vision.mjs?v=4';
+import { createTravisVision } from './travis-vision.mjs?v=5';
 import { buildSpeechEnvelope, speechEnvelopeLevel } from './travis-audio-sync.mjs?v=1';
 import { cameraCommand } from './travis-vision-policy.mjs?v=2';
 import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=cinema-1';
@@ -12,7 +14,7 @@ import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
 import { createBacklight } from './travis-atmosphere.mjs?v=cinema-1';
 import { createFaceRig } from './travis-face-rig.mjs?v=articulation-2';
 import * as THREE from 'three';
-import { createNeuralField } from './travis-brain-view.mjs?v=cinema-1';
+import { createNeuralField } from './travis-brain-view.mjs?v=cinema-2';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -31,7 +33,6 @@ const statusState = $('#travis-status-state');
 const loadingLabel = $('#travis-loading');
 const clockEl = $('#travis-clock-time');
 const dateEl = $('#travis-clock-date');
-const formButtons=[...document.querySelectorAll('[data-travis-form]')];
 
 if (!hud || !launcher || !canvas) {
   console.warn('Travis 3D: interface missing.');
@@ -85,8 +86,8 @@ if (!hud || !launcher || !canvas) {
   let realFaceBaseMaterial=null;
   let realFaceReady=false;
   let avatarMaterial;
-  let formPolicy='auto';
   let activeForm='core';
+  let manualFormUntil=0,lastAutoFormCheck=0;
   const formBlend={core:1,face:0};
   const formTarget={core:1,face:0};
   let energyMesh;
@@ -134,6 +135,16 @@ if (!hud || !launcher || !canvas) {
   let voiceInput=null,voiceInputFailed=false,voicePaused=false,standby=false,initiativeTimer=0;
   const savedLanguage=(()=>{try{return sessionStorage.getItem('travis.language')||'auto';}catch{return 'auto';}})();
   let replyLanguage=savedLanguage==='pt'?'pt':'en',inputLanguage='auto',preferredLanguage=['pt','en'].includes(savedLanguage)?savedLanguage:'auto',proactive=true,lastInteraction=performance.now();
+  // Display language is independent of the speaking language. Default: English.
+  const savedInterfaceLanguage=(()=>{try{return sessionStorage.getItem('travis.ui.language')||'en';}catch{return 'en';}})();
+  let uiLanguage='en';
+  function setInterfaceLanguage(language,{persist=true}={}){
+    uiLanguage=applyInterfaceLanguage(interfaceLanguage(language));
+    if(persist){try{sessionStorage.setItem('travis.ui.language',uiLanguage);}catch{}}
+    window.dispatchEvent(new CustomEvent('travis:interface-language',{detail:{language:uiLanguage}}));
+    return uiLanguage;
+  }
+  setInterfaceLanguage(savedInterfaceLanguage,{persist:false});
   function interruptReply(){
     voiceSession++;voiceRequestController?.abort();voiceRequestController=null;
     clearTimeout(voiceFinishTimer);voiceFinishTimer=0;
@@ -398,18 +409,14 @@ if (!hud || !launcher || !canvas) {
     });
   }
 
-  function modeForState(next=state) {
-    if (next==='listening' || next==='thinking' || next==='speaking') return 'face';
-    return 'core';
-  }
-
-  function syncFormButtons() {
-    formButtons.forEach(button=>{
-      const value=button.dataset.travisForm;
-      button.classList.toggle('is-active',value===formPolicy || (formPolicy==='auto' && value==='auto'));
+  function modeForState(next=state,now=performance.now()) {
+    return automaticTravisForm({
+      state:next,
+      elapsedMs:Math.max(0,now-stateChangedAt),
+      faceReady:realFaceReady,
+      brainConnected:neuralField?.diagnostics()?.backendConnected===true,
+      projectionActive:Boolean(pendingConcept)||hud.dataset.immersive==='true'
     });
-    hud.dataset.form=activeForm;
-    hud.dataset.formPolicy=formPolicy;
   }
 
   function applyForm(form='core') {
@@ -418,23 +425,26 @@ if (!hud || !launcher || !canvas) {
     formTarget.core=form==='core'?1:0;
     formTarget.face=form==='face'?1:0;
     hud.dataset.form=form;
+    hud.dataset.formPolicy=manualFormUntil>performance.now()?'temporary':'auto';
   }
 
+  // Gestures/API can preview another form; automation takes over again.
   function setForm(mode='auto',{manual=false}={}) {
     if (mode==='auto') {
-      formPolicy='auto';
-      applyForm(modeForState());
+      manualFormUntil=0;
+      syncAutoForm(state);
     } else if (['core','face'].includes(mode)) {
-      formPolicy=manual?mode:formPolicy;
+      if(mode==='face'&&!realFaceReady)return;
+      manualFormUntil=manual?performance.now()+MANUAL_PREVIEW_MS:0;
       applyForm(mode);
     }
-    syncFormButtons();
   }
 
-  function syncAutoForm(next=state) {
-    if (formPolicy!=='auto') return;
-    applyForm(modeForState(next));
-    syncFormButtons();
+  function syncAutoForm(next=state,now=performance.now()) {
+    if(now<manualFormUntil)return;
+    const target=modeForState(next,now);
+    if(target!==activeForm)applyForm(target);
+    else hud.dataset.formPolicy='auto';
   }
 
   function holoLine(points,color=0xcaa373,opacity=.35,closed=false) {
@@ -539,7 +549,7 @@ if (!hud || !launcher || !canvas) {
       hud.dataset.faceAsset='error';
       console.error('Travis anatomical bust failed:',error);
       // Keep the real core available; never display a synthetic substitute head.
-      setLoading('Busto indisponível; núcleo disponível');
+      setLoading('Face unavailable · core online');
       throw error;
     }
     scene.add(faceRoot);
@@ -549,16 +559,8 @@ if (!hud || !launcher || !canvas) {
 
   async function createAdaptiveForms() {
     await createFaceAvatar();
-    formButtons.forEach(button=>{
-      button.addEventListener('click',()=>{
-        const mode=button.dataset.travisForm||'auto';
-        if (mode!=='auto' && formPolicy===mode) setForm('auto');
-        else setForm(mode,{manual:mode!=='auto'});
-        haptic(8);
-        pulseTone(true);
-      });
-    });
-    syncFormButtons();
+    // No mode buttons: start with the face when the real mesh is ready.
+    syncAutoForm();
   }
 
   function updateClock() {
@@ -896,6 +898,21 @@ if (!hud || !launcher || !canvas) {
       }
       if(wakeAddress.corrected)metrics.wakeRecoveryKind=wakeAddress.kind;
       lastInteraction=performance.now();
+      // Bilingual presentation changes do not change voice-language settings.
+      const requestedInterfaceLanguage=languageFromInterfaceCommand(text);
+      if(requestedInterfaceLanguage){
+        setInterfaceLanguage(requestedInterfaceLanguage);
+        const spoken=INTERFACE_COPY[requestedInterfaceLanguage].applied;
+        replyLanguage=requestedInterfaceLanguage;
+        setState('thinking','Updating display language…');
+        const speech=await localFetch('/speak',{
+          body:{text:spoken,language:requestedInterfaceLanguage},
+          signal:controller.signal
+        });
+        if(!speech.ok)throw new Error('Voice unavailable.');
+        await playVoiceArrayBuffer(await speech.arrayBuffer(),session,spoken);
+        return;
+      }
       text=window.TravisProjection?.select(text)||text;
       let interpretation=window.TravisProjection?.interpret?.(text);
       // Unfamiliar colloquial image requests may use the already running
@@ -1182,7 +1199,7 @@ if (!hud || !launcher || !canvas) {
           return;
         }
         if (resumeInfo?.reply) greetingText=String(resumeInfo.reply).slice(0,480);
-        setState('thinking','Starting voice system…');
+        setState('thinking','Bringing voice online…');
         try {
           const speech=await localFetch('/speak',{
             body:{text:greetingText,language:greetingLanguage,mode:'welcome'},
@@ -1706,7 +1723,7 @@ if (!hud || !launcher || !canvas) {
     finalComposer.addPass(finalPass);
     finalComposer.addPass(new OutputPass());
 
-    setLoading('A carregar geometria…');
+    setLoading('Assembling the visual core…');
     const loader=new GLTFLoader();
     const gltf=await loader.loadAsync('./assets/travis/travis-core.glb?v=1');
 
@@ -1741,7 +1758,7 @@ if (!hud || !launcher || !canvas) {
 
     sizeForViewport();
     resize();
-    setLoading('NÚCLEO 3D PRONTO',true);
+    setLoading('VISUAL CORE ONLINE',true);
     ready=true;
   }
 
@@ -1828,8 +1845,14 @@ if (!hud || !launcher || !canvas) {
     presencePose.eyeY-=visionLook.y*.12;
     hud.style.setProperty('--travis-speech',state==='speaking'?speechLevel.toFixed(3):'0');
 
+    // Long-running processing reveals the observed particle network.
+    // Exponential blends are frame-rate-independent on mobile screens.
+    if(now-lastAutoFormCheck>180){
+      lastAutoFormCheck=now;
+      syncAutoForm(state,now);
+    }
     for (const key of ['core','face']) {
-      formBlend[key]+=(formTarget[key]-formBlend[key])*Math.min(1,dt*7.5);
+      formBlend[key]=nextFormBlend(formBlend[key],formTarget[key],dt,{reducedMotion});
     }
 
     if (coreRoot) {
@@ -1906,12 +1929,14 @@ if (!hud || !launcher || !canvas) {
         const build=reducedMotion?1:clamp(t/2.4,0,1);
         for(const mat of [realFaceBaseMaterial,avatarMaterial,...holographicEyeMaterials]){
           mat.uniforms.uTime.value=t;mat.uniforms.uBuild.value=build;
-          mat.uniforms.uDissolve.value=projection.amount;
+          mat.uniforms.uDissolve.value=Math.max(projection.amount,
+            Math.min(1,(1-formBlend.face)*.93));
           mat.uniforms.uState.value=state==='speaking'?speechLevel:0;
         }
         assemblyParticles.material.uniforms.uBuild.value=build;
         assemblyParticles.material.uniforms.uTime.value=t;
-        assemblyParticles.material.uniforms.uDissolve.value=projection.amount;
+        assemblyParticles.material.uniforms.uDissolve.value=Math.max(projection.amount,
+          Math.min(1,(1-formBlend.face)*.93));
         hud.dataset.materialization=build.toFixed(2);
       }
       if (avatarMaterial) {
@@ -2130,12 +2155,15 @@ if (!hud || !launcher || !canvas) {
         presence:{...presencePose},projection:hologramPresentation.sample(performance.now()/1000),
         media:window.TravisProjection?.media(),
         hologram:conceptProjection?.state?.(),projectionControl:window.TravisProjection?.status?.(),
-        meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,voiceInput:voiceInput?.diagnostics(),vision:vision.diagnostics(),replyLanguage,inputLanguage,preferredLanguage,standby,proactive,voicePaused,
+        meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,voiceInput:voiceInput?.diagnostics(),vision:vision.diagnostics(),replyLanguage,inputLanguage,preferredLanguage,uiLanguage,visualModePolicy:'automatic',standby,proactive,voicePaused,
         recording:voiceRecorder?.state,pendingTasks:[...pendingVoiceTasks.keys()],lastTaskResult:lastVoiceTaskResult,voiceMetrics:voiceMetrics.map(m=>({...m}))};
     },
     form(mode='auto') {
       setForm(mode,{manual:mode!=='auto'});
       return activeForm;
+    },
+    interfaceLanguage(language) {
+      return typeof language==='string'?setInterfaceLanguage(language):uiLanguage;
     },
     ready(message='I’m here.') {
       if (!opened) openHud();

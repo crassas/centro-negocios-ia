@@ -30,25 +30,25 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
   <script src="./agent-room.js?v=jarvis-1" defer></script>
   <script src="./app.js?v=travis-panel-2" defer></script>
-  <link rel="stylesheet" href="./travis-hud.css?v=matter-2">
+  <link rel="stylesheet" href="./travis-hud.css?v=matter-3">
   <link rel="stylesheet" href="./travis-brain.css?v=3">
   <link rel="stylesheet" href="./travis-cinema.css?v=cinema-1">
   <link rel="stylesheet" href="./travis-cinema-depth.css?v=depth-2">
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
-  <script type="module" src="./travis-3d.mjs?v=draw-1"></script>
+  <script type="module" src="./travis-3d.mjs?v=draw-2"></script>
 </head>
 <body>
-<section id="travis-hud" class="travis-hud" data-state="idle" aria-hidden="true" aria-label="Travis">
-  <canvas id="travis-three-canvas" aria-label="Núcleo 3D interactivo do Travis"></canvas>
+<section id="travis-hud" class="travis-hud" data-state="idle" data-ui-language="en" lang="en" aria-hidden="true" aria-label="Travis">
+  <canvas id="travis-three-canvas" aria-label="Interactive 3D presence of Travis"></canvas>
   <div class="travis-cinema-lightfield" aria-hidden="true"><span class="travis-cinema-godray"></span><span class="travis-cinema-aura"></span><span class="travis-cinema-horizon"></span><span class="travis-cinema-reflection"></span></div>
 
-  <button id="travis-hud-close" class="travis-close" type="button" aria-label="Fechar Travis">×</button>
+  <button id="travis-hud-close" class="travis-close" type="button" aria-label="Close Travis">×</button>
   <div id="travis-camera-dock" class="travis-camera-dock" data-active="false">
-    <button id="travis-camera-toggle" type="button" aria-pressed="false">Ligar câmara</button>
-    <span id="travis-camera-state" role="status">Câmara desligada</span>
-    <video id="travis-camera-preview" autoplay muted playsinline disablepictureinpicture aria-label="Pré-visualização da câmara local"></video>
+    <button id="travis-camera-toggle" type="button" aria-pressed="false">Enable camera</button>
+    <span id="travis-camera-state" role="status">Camera off</span>
+    <video id="travis-camera-preview" autoplay muted playsinline disablepictureinpicture aria-label="On-device camera preview"></video>
   </div>
   <div id="travis-loading" class="travis-loading">PREPARING 3D CORE…</div>
 
@@ -62,13 +62,8 @@
     <span class="travis-title-signal"></span>
   </div>
 
-  <nav class="travis-form-selector" aria-label="Forma visual do Travis">
-    <button type="button" data-travis-form="core">REDE VIVA</button>
-    <button type="button" data-travis-form="face">ROSTO</button>
-  </nav>
-
-  <div class="travis-hint">TOCA NO TRAVIS</div>
-  <button id="travis-voice-start" class="travis-voice-start" type="button" hidden>Ativar conversa por voz</button>
+  <div class="travis-hint">TOUCH TRAVIS</div>
+  <button id="travis-voice-start" class="travis-voice-start" type="button" hidden>Enable voice</button>
 
   <div class="travis-status" role="status" aria-live="polite">
     <div class="travis-wave" aria-hidden="true">
@@ -108,7 +103,7 @@
     <section><h3>Visão e gestos</h3><p>O Travis só usa a câmara depois da tua autorização. A análise de rosto e mãos ocorre neste dispositivo. A câmara desliga-se ao fechar o Travis ou ao mudar de separador.</p><p>Mão aberta: mostrar holograma. Punho fechado: ocultar. Dois dedos em V: rosto. Polegar para cima: cérebro. Os gestos não autorizam pagamentos, alterações de ficheiros nem envios.</p></section>
     <section><h3>Conversa</h3><ul id="travis-transcript" aria-live="polite"></ul></section>
   </aside>
-  <form id="travis-command" class="travis-command"><label class="sr-only" for="travis-command-text">Pedido ao Travis</label><input id="travis-command-text" placeholder="Fala comigo ou escreve o teu pedido…" maxlength="8000" autocomplete="off"><button type="submit" aria-label="Enviar pedido">↗</button></form>
+  <form id="travis-command" class="travis-command"><label class="sr-only" for="travis-command-text">Your request to Travis</label><input id="travis-command-text" placeholder="Speak to me, or type a request…" maxlength="8000" autocomplete="off"><button type="submit" aria-label="Send request">↗</button></form>
   <div class="travis-version">TRAVIS</div>
 </section>
 <script>
