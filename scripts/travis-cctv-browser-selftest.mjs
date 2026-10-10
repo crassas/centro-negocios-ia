@@ -63,7 +63,7 @@ test('Public CCTV autopilot chooses verified authorised source without manual se
   assert.ok(layers.some(x=>x.id==='cctv'&&x.on===true));
   const before=opened.length;
   a=await ctl.select(cameraIntent('Mostra uma câmara no Porto'));
-  assert.equal(a.verified,undefined);
+  assert.equal(a.verified,false);
   assert.equal(opened.length,before,'A city without registered sources must not fall back elsewhere');
   a=await ctl.select(cameraIntent('Show a live camera in Delaware'));
   assert.equal(a.verified,true);
