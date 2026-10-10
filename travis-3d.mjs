@@ -20,7 +20,7 @@ import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
 import { createBacklight } from './travis-atmosphere.mjs?v=figures-1';
 import { createFaceRig } from './travis-face-rig.mjs?v=articulation-2';
 import * as THREE from 'three';
-import {createTravisNativeEarth} from './travis-world-native.mjs?v=eye-6-camera';
+import {createTravisNativeEarth} from './travis-world-native.mjs?v=eye-7-cctv';
 import { createNeuralField } from './travis-brain-view.mjs?v=motion-1';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';

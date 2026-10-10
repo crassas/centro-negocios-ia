@@ -228,3 +228,47 @@
   .cinema-camera-content{min-height:130px}
   .cinema-camera-placeholder{min-height:132px}
 }
+
+
+/* GOD'S EYE CCTV network — selected public video or real upstream still.
+   No fake monitor footage: if feed fails, the frame remains unavailable. */
+#travis-hud #cinema-camera-cctv-image,
+#travis-hud #cinema-camera-cctv-video{
+  display:block;width:100%;height:auto;
+  aspect-ratio:16/9;
+  max-height:min(34vh,258px);
+  object-fit:contain;
+  background:#050608;
+  border:0;
+}
+#travis-hud #cinema-camera-cctv-image[hidden],
+#travis-hud #cinema-camera-cctv-video[hidden]{
+  display:none!important;
+}
+#travis-hud #cinema-camera-search{
+  display:block;width:100%;
+  min-height:36px;
+  color:#e9dfd2;
+  background:#111419;
+  border:1px solid rgba(194,157,100,.33);
+  border-radius:7px;
+  padding:7px 9px;
+  font:500 12px/1.35 system-ui,sans-serif;
+  box-sizing:border-box;
+}
+#travis-hud #cinema-camera-search::placeholder{color:#9c9285;opacity:1}
+#travis-hud #travis-camera-cinema[data-mode="cctv-image"] .cinema-camera-content,
+#travis-hud #travis-camera-cinema[data-mode="cctv-video"] .cinema-camera-content{
+  min-height:150px;
+}
+#travis-hud #travis-camera-cinema[data-mode="cctv-image"] .cinema-camera-indicator{
+  color:#ebcaa0;
+}
+#travis-hud #travis-camera-cinema[data-mode="cctv-video"] .cinema-camera-indicator{
+  color:#d9c69a;
+}
+@media(max-width:560px){
+  #travis-hud #cinema-camera-search{min-height:32px;font-size:11px}
+  #travis-hud #cinema-camera-cctv-image,
+  #travis-hud #cinema-camera-cctv-video{max-height:28vh}
+}
