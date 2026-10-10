@@ -34,7 +34,7 @@ SENSITIVE = re.compile(
     r"envia(?:r|s|m)?|envie|enviou|"
     r"instal\w*|desinstal\w*|altera(?:r|s|m)?|"
     r"modific\w*|edit\w*|execut\w*|escrev\w*|atualiz\w*|"
-    r"mud\w*|guard\w*|grav\w*|substitu\w*|"
+    r"mud\w*|guard\w*|grav(?:a(?:r|s|m|ndo|d[oa]s?|c(?:ao|oes))?|e(?:m|s)?|ou)|substitu\w*|"
     r"cria(?:r|s|m)?|crie|criou|renome\w*|"
     r"delete\w*|eras\w*|destroy\w*|publish\w*|deploy\w*|"
     r"pay|payment|purchas\w*|buy|bought|send|sent|upload\w*|"

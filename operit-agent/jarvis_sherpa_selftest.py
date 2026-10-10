@@ -31,6 +31,8 @@ class SherpaTests(unittest.TestCase):
     def test_readonly_short_candidate_is_eligible(self):
         self.assertTrue(sherpa.safe_short_read_transcript("Verifica o estado do Centro de Negócios"))
         self.assertTrue(sherpa.safe_short_read_transcript("Please check the local server"))
+        self.assertTrue(sherpa.safe_short_read_transcript("Explain gravity simply"))
+        self.assertTrue(sherpa.safe_short_read_transcript("Explica a gravidade de forma simples"))
     def test_mutations_are_never_fast_approved(self):
         for text in (
             "Apaga todos os ficheiros do Centro",
@@ -47,6 +49,8 @@ class SherpaTests(unittest.TestCase):
             "Travis mostra e muda o preço do serviço",
             "Verifica e guarda os dados pessoais",
             "Travis procura e grava ficheiros",
+            "Travis procura e grave ficheiros",
+            "Mostra como gravar os ficheiros",
             "Por favor substitui o conteúdo do site",
             "Travis envia emails aos clientes",
         ):
