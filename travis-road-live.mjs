@@ -16,7 +16,8 @@ const KNOWN_UNSUPPORTED=Object.freeze({
  porto:/\b(?:porto|campanha|gaia)\b/,
  lisboa:/\b(?:lisboa|lisbon)\b/,
  madrid:/\b(?:madrid)\b/,
- tokyo:/\b(?:tokyo|toquio)\b/
+ tokyo:/\b(?:tokyo|toquio)\b/,
+ portugal:/\b(?:portugal|brasil|brazil|espanha|spain|franca|france|alemanha|germany|paris|berlim|berlin|dubai|dublin|india)\b/
 });
 const normalize=x=>String(x??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
   .toLowerCase().replace(/\s+/g,' ').trim();
@@ -255,6 +256,8 @@ function mount(){
     toolbar.appendChild(button);
   }
   window.addEventListener('travis:close',close);
+  window.addEventListener('travis:gev',event=>{if(open && event.detail?.open===false)close();});
+  window.addEventListener('travis:cctv-player',event=>{if(open && event.detail?.open===true)close();});
   window.addEventListener('pagehide',close);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)close();});
 }
