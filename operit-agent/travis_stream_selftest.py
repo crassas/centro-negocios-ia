@@ -18,6 +18,12 @@ class StreamTests(unittest.TestCase):
  def test_disconnect_propagates_instead_of_generating_fallback_speech(self):
   def stopped(_):raise BrokenPipeError()
   with self.assertRaises(BrokenPipeError):read_sse(io.BytesIO(b'data: {"response":"Hello"}\n'),stopped)
+ def test_first_audio_is_bounded_even_when_a_whole_sentence_arrives(self):
+  emitted=[];chunks=SpeechChunks(emitted.append)
+  source='Gravity is a fundamental force of nature that attracts objects with mass to one another. '
+  chunks.feed(source);chunks.finish()
+  self.assertLessEqual(len(emitted[0]),48)
+  self.assertEqual(' '.join(emitted),source.strip())
  def test_invalid_empty_and_error_streams_fail(self):
   for data in (b'data: [DONE]\n',b'data: {"error":"quota"}\n'):
    with self.assertRaises(RuntimeError):read_sse(io.BytesIO(data))

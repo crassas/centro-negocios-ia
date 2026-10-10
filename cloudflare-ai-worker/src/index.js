@@ -3195,7 +3195,7 @@ export default {
         if(body?.stream===true && body?.mode==='conversation'){
           const stream=await env.AI.run(MODEL,{
             messages:[
-              {role:'system',content:assistSystem(body?.language,body?.mode)+' Start with a short, useful sentence. Continue with detail only as needed.'},
+              {role:'system',content:assistSystem(body?.language,body?.mode)+' This is a live spoken conversation. Start with a complete, useful answer sentence of at most eight words, without filler acknowledgements. For ordinary questions use one to three short sentences, up to 60 words. Give more detail when the user explicitly requests it. Avoid repetition and summary endings.'},
               {role:'user',content:'REQUEST:\n'+question+'\n\nOBSERVED CONTEXT:\n'+JSON.stringify(context).slice(0,30000)}
             ],stream:true,max_tokens:550,temperature:0.2
           });
