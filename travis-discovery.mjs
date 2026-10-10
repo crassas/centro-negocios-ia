@@ -31,6 +31,11 @@ export function discoveryIntent(text){
  const match=patterns.find(([,re])=>re.test(t));if(!match)return null;
  if(!/\b(?:mostra|ver|cria|projeta|imagina|explica|show|see|create|explain|visualise|visualize)\b/.test(t)&&t.split(/\s+/).length>3)return null;
  const id=match[0];
+ // A named element must never be silently replaced with hydrogen.
+ if(id==='atom'){
+  const detail=t.replace(/\b(?:mostra|mostrar|show|me|um|uma|o|a|an|the|of|de|do|atomo|atomos|atom|atoms|hidrogenio|hydrogen|explica|explain|ver|see|cria|create|projeta|project|imagina|imagine|em|in|3d|nuvem|eletronica|electron|cloud|orbital|1s)\b/g,'').replace(/[\s-]/g,'');
+  if(detail)return null;
+ }
  if(/\b(?:explica|explain)\b/.test(t))return {type:'discovery',language,ids:[id]};
  return {type:'scene',scene:'science',title:discoveries[id].title,language,explain:false};
 }

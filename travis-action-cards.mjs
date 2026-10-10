@@ -222,7 +222,7 @@ if(deck){
   window.TravisProjection=Object.freeze({
     media:youtubeState,
     presentDiscoveryChapter(chapter,index,total){
-      if(current?.discovery?.id===chapter.id)return;
+      if(current?.discovery?.id===chapter.id&&current.explaining&&!pinned)return;
       render({...schematic(chapter.scene,chapter.title),sourceName:chapter.sourceName,sourceUrl:chapter.sourceUrl,explaining:true,discovery:{id:chapter.id,index,total}});
       window.TravisVisual?.commands(true,{automatic:true});show();
     },

@@ -8,6 +8,8 @@ for(const text of ['Não mostres um buraco negro','Do not surprise me'])assert.e
 assert.equal(parseVisualIntent('Escreve "surpreende-me"').scene,'text');
 assert.notEqual(parseVisualIntent('Mostra fotografias de uma aurora').scene,'science');
 assert.equal(parseVisualIntent('Explica o ADN').ids[0],'dna');
+for(const text of ['Mostra um átomo de carbono','Show a helium atom','Show an atom of oxygen'])assert.notEqual(parseVisualIntent(text)?.scene,'science',text);
+assert.equal(parseVisualIntent('Mostra o átomo de hidrogénio').title,'Hydrogen');
 const chapters=discoveryChapters(['dna','atom'],'pt'),log=[];
 await playDiscovery(chapters,{prepare:async c=>{log.push('prepare:'+c.id);return c.id;},present:c=>log.push('show:'+c.id),play:async(_a,c)=>{log.push('play:'+c.id);await new Promise(r=>setTimeout(r,1));log.push('end:'+c.id);},valid:()=>true,finish:()=>log.push('done')});
 assert(log.indexOf('show:atom')>log.indexOf('end:dna'),'Next scene must wait for current speech completion');
