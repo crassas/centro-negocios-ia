@@ -10,6 +10,7 @@ import http from 'node:http';
 import {performance} from 'node:perf_hooks';
 import {cctvProxy} from './gods-eye-view/server/providers/cctv.js';
 import {handleRoadLive} from './travis-road-live.mjs';
+import {handlePortugalRoad} from './travis-road-portugal.mjs';
 const PORT=4187;
 const HOST='127.0.0.1';
 const ROOT='/root/.centro-extensions/gods-eye-view';
@@ -43,6 +44,7 @@ const server=http.createServer(async(req,res)=>{
   // Public road observations share this existing local-only, origin-checked gateway.
   // This is a fixed source allowlist, NOT an arbitrary URL proxy.
   if(url.pathname.startsWith('/api/road-live/')){
+    if(await handlePortugalRoad(req,res,url))return;
     await handleRoadLive(req,res,url);
     return;
   }
