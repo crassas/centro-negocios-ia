@@ -25,7 +25,7 @@ Abrir no mesmo dispositivo: **http://127.0.0.1:4173/**.
 
 O instalador fixa o commit upstream `591f299d11f38a612629a274463196d57ae3862e` (10-10-2026), faz `npm ci` usando o lockfile, desactiva o download automático de Chromium via Puppeteer e executa o `doctor`. Não cria ficheiro `.env` nem aceita chaves herdadas das variáveis de ambiente relevantes. O código fica em `~/travis-gev-keyless`; os registos em `~/.local/state/travis-gev/app.log`.
 
-O arranque é idempotente quando a instância existente responde: não encerra processos e recusa ocupar uma porta 4173 já utilizada. Liga apenas ao endereço local, nunca à rede pública. Não cria serviço de arranque automático — primeiro confirmar estabilidade e consumo de memória.
+O arranque usa `setsid` e o processo Node/Vite directamente, de forma independente da sessão Remote Desktop Commander ou do terminal que emitiu o comando. É idempotente quando a instância existente responde: não encerra processos e recusa ocupar uma porta 4173 já utilizada. Liga apenas ao endereço local, nunca à rede pública. **Após reiniciar o Android ou a sessão Ubuntu/Proot, executar novamente `bash scripts/travis-gev-keyless.sh start`.** Não cria serviço de arranque automático — primeiro confirmar estabilidade e consumo de memória.
 
 ### MCP para Claude e Codex (opcional, após o teste HTTP)
 
