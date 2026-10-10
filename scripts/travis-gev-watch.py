@@ -175,6 +175,7 @@ def ensure_travis_bridge() -> bool:
             after = after.replace(anchors[0], anchors[0] + "\n  " + BRIDGE_JS_TAG, 1)
         if after == before:
             ensure_travis_render_pause()
+            ensure_public_camera_auto_route()
             return True
         if not BRIDGE_INDEX_BACKUP.exists():
             BRIDGE_INDEX_BACKUP.write_text(before, encoding="utf-8")
@@ -184,6 +185,7 @@ def ensure_travis_bridge() -> bool:
         temp.replace(UI_INDEX)
         print("[watch] travis-gev · official UI bridge linked to local Travis", flush=True)
         ensure_travis_render_pause()
+        ensure_public_camera_auto_route()
         return True
     except OSError as error:
         print("[watch] travis-gev · UI bridge skipped:", type(error).__name__, flush=True)
@@ -229,4 +231,98 @@ def ensure_travis_render_pause() -> bool:
         return True
     except OSError as error:
         print("[watch] travis-gev · render guard skipped:", type(error).__name__, flush=True)
+        return False
+
+
+# Opt-in user-requested public CCTV selection. Neither the sources nor the
+# media gateway are modified; the on-device viewer keeps validating media.
+PUBLIC_AUTO_POLICY = UI_DIR / "travis-cctv-auto-policy.mjs"
+PUBLIC_AUTO_MODULE = UI_DIR / "travis-cctv-autopilot.mjs"
+PUBLIC_AUTO_TAG = '<script type="module" src="./travis-cctv-autopilot.mjs?v=auto-1"></script>'
+PUBLIC_AUTO_ANCHOR = BRIDGE_JS_TAG
+PUBLIC_AUTO_SOURCE = (
+    "      const cctvIntent=window.TravisCctvPlayer?.routeCommand?.(text);"
+)
+PUBLIC_AUTO_START = (
+    "      const autoPublicCamera=await window.TravisCctvAutopilot?.routeCommand?.(text);"
+)
+PUBLIC_AUTO_BLOCK = """      const autoPublicCamera=await window.TravisCctvAutopilot?.routeCommand?.(text);
+      if(autoPublicCamera?.handled){
+        if(!opened||session!==voiceSession||controller.signal.aborted)return;
+        const spoken=String(autoPublicCamera.reply||'Public camera search complete.');
+        observeLocal(interactionId,text,spoken);
+        const locale=autoPublicCamera.language||'en';
+        replyLanguage=locale;
+        setState('thinking',spoken);
+        const voiceResponse=await localFetch('/speak',{
+          body:{text:spoken,language:locale},signal:controller.signal
+        });
+        if(voiceResponse.ok){
+          await playVoiceArrayBuffer(await voiceResponse.arrayBuffer(),session,spoken);
+        }else{
+          voiceBusy=false;setState('ready',spoken);scheduleListening(session,180);
+        }
+        return;
+      }
+"""
+PUBLIC_AUTO_CORE_BACKUP = HOME / ".centro-extensions" / "travis-3d-before-public-camera-auto.mjs"
+PUBLIC_AUTO_INDEX_BACKUP = HOME / ".centro-extensions" / "travis-index-before-public-camera-auto.html"
+
+
+def ensure_public_camera_auto_route() -> bool:
+    """Expose camera selection through the existing Travis voice path.
+
+    Kept as a surgical additive patch so upstream UI synchronisation can
+    replace the original files without disabling the feature indefinitely.
+    Never patches or starts any camera provider or private network client.
+    """
+    if not FLAG.is_file() or not PUBLIC_AUTO_MODULE.is_file() or not PUBLIC_AUTO_POLICY.is_file():
+        return False
+    try:
+        html = UI_INDEX.read_text(encoding="utf-8")
+        if PUBLIC_AUTO_TAG not in html:
+            if html.count(PUBLIC_AUTO_ANCHOR) != 1:
+                return False
+            if not PUBLIC_AUTO_INDEX_BACKUP.exists():
+                PUBLIC_AUTO_INDEX_BACKUP.write_text(html, encoding="utf-8")
+            patched_html = html.replace(
+                PUBLIC_AUTO_ANCHOR,
+                PUBLIC_AUTO_ANCHOR + "\n  " + PUBLIC_AUTO_TAG,
+                1,
+            )
+            temporary = UI_INDEX.with_name("index.html.public-auto.tmp")
+            temporary.write_text(patched_html, encoding="utf-8")
+            os.chmod(temporary, UI_INDEX.stat().st_mode & 0o777)
+            temporary.replace(UI_INDEX)
+            print("[watch] travis · public camera auto-select UI linked", flush=True)
+
+        source = TRAVIS_3D.read_text(encoding="utf-8")
+        if PUBLIC_AUTO_START in source:
+            return True
+        if source.count(PUBLIC_AUTO_SOURCE) != 1:
+            return False
+        if not PUBLIC_AUTO_CORE_BACKUP.exists():
+            PUBLIC_AUTO_CORE_BACKUP.write_text(source, encoding="utf-8")
+        updated = source.replace(
+            PUBLIC_AUTO_SOURCE,
+            PUBLIC_AUTO_BLOCK + PUBLIC_AUTO_SOURCE,
+            1,
+        )
+        temporary = TRAVIS_3D.with_name("travis-3d.mjs.public-auto.tmp")
+        temporary.write_text(updated, encoding="utf-8")
+        os.chmod(temporary, TRAVIS_3D.stat().st_mode & 0o777)
+        import subprocess
+        try:
+            subprocess.run(
+                ["node", "--check", str(temporary)],
+                check=True, capture_output=True, timeout=12,
+            )
+            temporary.replace(TRAVIS_3D)
+            print("[watch] travis · public camera voice route enabled", flush=True)
+        finally:
+            if temporary.exists():
+                temporary.unlink()
+        return True
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        print("[watch] public camera route skipped:", type(error).__name__, flush=True)
         return False
