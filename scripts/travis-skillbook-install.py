@@ -32,8 +32,14 @@ def once(text,old,new,name):
     return text.replace(old,new,1)
 
 def transform(source):
+    # Preserve a human-facing skills reply: the legacy PT-PT translator
+    # replaces all capabilities_status replies with a generic memory blurb.
+    translator_old = "not (tool=='capabilities_status' and args.get('focus')=='learning')"
+    translator_new = "not (tool=='capabilities_status' and args.get('focus') in {'learning','skills'})"
     if MARKER in source:
-        return source
+        if translator_new in source:
+            return source
+        return once(source, translator_old, translator_new, "spoken skills translation fence")
     if not SKILLBOOK.is_file() or not REGISTRY.is_file():
         die("local skillbook and registry must be installed first")
     source=once(source,
@@ -95,6 +101,7 @@ def transform(source):
     source=source[:start]+"".join(" "+line if line.strip() else line for line in body.splitlines(keepends=True))+source[stop:]
     # The associated else is now the outer if/elif/else; indentation stays
     # at two spaces for elif and else. The explicit branch body is 3 spaces.
+    source=once(source,translator_old,translator_new,"spoken skills translation fence")
     return source
 
 def syntax(source):
