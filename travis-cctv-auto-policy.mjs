@@ -34,7 +34,7 @@ const NEXT=/\b(?:outra|outro|proxima|proximo|seguinte|next|another|different)\b/
 const TOUR=/\b(?:explora|explorar|passeia|passear|tour|roda|rotacao|ciclo|circular|automatica|automatico|cycle)\b/;
 const LIVE=/\b(?:ao vivo|em direto|direto|directo|live|stream|streaming|video)\b/;
 const QUESTION=/^(?:qual|quais|quantas|quantos|porque|como funciona|o que e|how many|how does|what is|where are)\b/;
-const NOAREA=/\b(?:qualquer lugar|qualquer sitio|no mundo|pelo mundo|aleatoria|aleatorio|random|anywhere|worldwide|global|em qualquer pais)\b/;
+const NOAREA=/\b(?:qualquer lugar|qualquer sitio|qualquer camara|qualquer camera|any camera|any webcam|no mundo|pelo mundo|aleatoria|aleatorio|random|anywhere|worldwide|global|em qualquer pais)\b/;
 const ENGLISH=/\b(?:show|please|open|watch|find|choose|pick|select|connect|next|another|different|live|stream|tour|camera|cameras|anywhere|worldwide|stop)\b/;
 
 function remainingArea(s){
@@ -103,5 +103,18 @@ export function rankPublicCameras(cameras,{scope=null,preferVideo=false,exclude=
   scored.sort((a,b)=>b.score-a.score
     || ((a.distanceKm??Infinity)-(b.distanceKm??Infinity))
     || a.camera.id.localeCompare(b.camera.id));
-  return scored.slice(0,Math.max(1,Math.min(30,Math.trunc(limit)))).map(x=>x.camera);
+  // A global request should not try three cameras from one failing operator.
+  // Spread the first candidates across registered public-source providers.
+  const diversified=!explicit
+    ? (()=>{const seen=new Set(),front=[],rest=[];
+        for(const item of scored){
+          const pack=item.camera.pack||item.camera.provider||'unknown';
+          if(!seen.has(pack)){seen.add(pack);front.push(item);}
+          else rest.push(item);
+        }
+        return [...front,...rest];
+      })()
+    : scored;
+  return diversified.slice(0,Math.max(1,Math.min(30,Math.trunc(limit))))
+    .map(x=>x.camera);
 }
