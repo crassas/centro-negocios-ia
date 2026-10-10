@@ -174,6 +174,7 @@ def ensure_travis_bridge() -> bool:
                 return False
             after = after.replace(anchors[0], anchors[0] + "\n  " + BRIDGE_JS_TAG, 1)
         if after == before:
+            ensure_travis_render_pause()
             return True
         if not BRIDGE_INDEX_BACKUP.exists():
             BRIDGE_INDEX_BACKUP.write_text(before, encoding="utf-8")
@@ -182,7 +183,50 @@ def ensure_travis_bridge() -> bool:
         os.chmod(temp, UI_INDEX.stat().st_mode & 0o777)
         temp.replace(UI_INDEX)
         print("[watch] travis-gev · official UI bridge linked to local Travis", flush=True)
+        ensure_travis_render_pause()
         return True
     except OSError as error:
         print("[watch] travis-gev · UI bridge skipped:", type(error).__name__, flush=True)
+        return False
+
+
+
+TRAVIS_3D = UI_DIR / "travis-3d.mjs"
+TRAVIS_3D_GUARD = "    if (hud.dataset.worldEngine==='official') {lastFrame=now;return;}"
+TRAVIS_3D_BEFORE = (
+    "    if (!renderer || !opened || webglLost || renderer.getContext().isContextLost()) "
+    "{lastFrame=now;return;}"
+)
+TRAVIS_3D_BACKUP = HOME / ".centro-extensions" / "travis-3d-before-official-gev.mjs"
+
+
+def ensure_travis_render_pause() -> bool:
+    """Pause only the hidden 3D drawing loop while Cesium owns the viewport.
+
+    The Travis microphone/ASR/LLM/TTS loops are outside animate(); they
+    continue normally. The guard is a no-op when the official globe is closed.
+    """
+    if not FLAG.is_file():
+        return False
+    try:
+        source = TRAVIS_3D.read_text(encoding="utf-8")
+        if TRAVIS_3D_GUARD in source:
+            return True
+        if source.count(TRAVIS_3D_BEFORE) != 1:
+            return False
+        if not TRAVIS_3D_BACKUP.is_file():
+            TRAVIS_3D_BACKUP.write_text(source, encoding="utf-8")
+        updated = source.replace(
+            TRAVIS_3D_BEFORE,
+            TRAVIS_3D_BEFORE + "\n" + TRAVIS_3D_GUARD,
+            1,
+        )
+        temp = TRAVIS_3D.with_name("travis-3d.mjs.travis-gev.tmp")
+        temp.write_text(updated, encoding="utf-8")
+        os.chmod(temp, TRAVIS_3D.stat().st_mode & 0o777)
+        temp.replace(TRAVIS_3D)
+        print("[watch] travis-gev · hidden Travis GPU loop paused in official mode", flush=True)
+        return True
+    except OSError as error:
+        print("[watch] travis-gev · render guard skipped:", type(error).__name__, flush=True)
         return False
