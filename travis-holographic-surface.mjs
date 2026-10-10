@@ -1,4 +1,4 @@
-import {HOLOGRAPHIC_LIGHT_GLSL} from './travis-holographic-head.mjs?v=motion-1';
+import {HOLOGRAPHIC_LIGHT_GLSL} from './travis-holographic-head.mjs?v=sand-1';
 
 // Fine, depth-writing light cells carry surface detail; travelling particles
 // carry the same material between forms. The head retains its facial rig.
@@ -27,6 +27,9 @@ export function createHolographicSurfaceMaterial(THREE,{map=null,mask=false,gain
     vec3 colour=holoMatterLight(key,edge,contour*.65+fine*.08,uVoice);
     colour=mix(colour,holoMatterLight(.72,edge,.02,uVoice),uPhoto);
     colour*=mix(mix(.32,1.95,value),mix(.055,2.05,pow(value,1.08)),uPhoto)*uGain;
+    // Slow, spatially coherent light through the grains; keep the geometry exact.
+    float tide=sin(vP.y*3.1+vP.x*1.8-uTime*.72)*sin(vP.z*2.2+uTime*.43);
+    colour*=1.+tide*(.025+uVoice*.045);
     colour+=holoGold*contour*.055;
     // A narrow reconstruction front, not a full-screen glow.
     colour+=holoGold*(1.-smoothstep(0.,.07,uBuild-front))*.18*(1.-step(.999,uBuild));

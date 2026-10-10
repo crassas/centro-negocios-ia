@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=motion-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=sand-1';
 
 // A sourced mesh, not an image plane. Only embedded static geometry reaches
 // GLTFLoader; neither materials nor external resources execute on the client.

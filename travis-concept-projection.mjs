@@ -1,14 +1,14 @@
-import {createMechanical} from './travis-mechanical.mjs?v=motion-1';
-import {createArchitecture} from './travis-architecture.mjs?v=motion-1';
-import {createDetailedSubject,identifyVisualSubject} from './travis-visual-subjects.mjs?v=motion-1';
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=motion-1';
-import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=motion-1';
+import {createMechanical} from './travis-mechanical.mjs?v=sand-1';
+import {createArchitecture} from './travis-architecture.mjs?v=sand-1';
+import {createDetailedSubject,identifyVisualSubject} from './travis-visual-subjects.mjs?v=sand-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=sand-1';
+import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=sand-1';
 // Film-inspired schematic projections. Unprovided geographic/CAD/person
 // geometry stays visibly conceptual; real source links are separate.
 export function createConceptProjection(THREE,{reducedMotion=false}={}){
  const root=new THREE.Group();root.name='TravisConceptProjection';root.position.y=.34;
  const matter=createTravisParticleMorph(THREE,{count:12000,reducedMotion});
- let sourceProvider=null,cameraProvider=null;
+ let sourceProvider=null,cameraProvider=null,flowVoice=0,flowTime=null;
  root.add(matter.root);
  let active=new THREE.Group(),activeFrame=new THREE.Group(),ghost=null,kind='',objects=[],mats=[],textures=[],born=0,variant='';
  let zoom=1,dx=0,dy=0,spin=0,planetName='',label='';
@@ -206,7 +206,7 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   root.visible=true;
  }
  function hide(){
-  kind='';root.visible=false;
+  kind='';root.visible=false;flowVoice=0;flowTime=null;
   if(ghost){dispose(ghost.group,ghost.mats,ghost.textures);ghost=null;}
   dispose(activeFrame,mats,textures);active=new THREE.Group();activeFrame=new THREE.Group();activeFrame.add(active);root.add(activeFrame);objects=[];mats=[];textures=[];matter.hide();
   zoom=1;dx=dy=spin=0;
@@ -237,6 +237,11 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
  function update(now,projection,voice=0){
   if(!kind)return;
   const reveal=limit(projection.amount,0,1);
+  // A short attack and a longer release follow speech without rigid audio jolts.
+  const dt=flowTime===null?1/60:Math.max(0,Math.min(.1,now-flowTime));flowTime=now;
+  const targetVoice=limit(Number(voice)||0,0,1);
+  flowVoice+=(targetVoice-flowVoice)*(1-Math.exp(-dt/(targetVoice>flowVoice?.09:.24)));
+  voice=reducedMotion?0:flowVoice;
 
   matter.update(now,projection,{
     zoom,spin,dx,dy,camera:typeof cameraProvider==='function'?cameraProvider():cameraProvider,
@@ -247,7 +252,7 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   if(frame){activeFrame.position.set(...frame.position);activeFrame.scale.setScalar(frame.scale);activeFrame.rotation.y=frame.rotation;}
   const build=state.returning?1-limit(state.morphProgress/.40,0,1):limit((state.morphProgress-.42)/.48,0,1);
   active.visible=state.active&&build>.001;
-  for(const m of mats){if(m.uniforms?.uBuild){m.uniforms.uBuild.value=build;m.uniforms.uTime.value=now;m.uniforms.uVoice.value=voice;}else m.opacity=(m.userData.baseOpacity||.5)*build;}
+  for(const m of mats){if(m.uniforms?.uBuild){m.uniforms.uBuild.value=build;m.uniforms.uTime.value=reducedMotion?0:now;m.uniforms.uVoice.value=voice;}else m.opacity=(m.userData.baseOpacity||.5)*build;}
   if(ghost){
    const remaining=1-limit((now-ghost.start)/(reducedMotion?.01:.74),0,1);
    for(const m of ghost.mats){if(m.uniforms?.uBuild)m.uniforms.uBuild.value=Math.min(m.uniforms.uBuild.value,remaining);else m.opacity=(m.userData.baseOpacity||.5)*remaining;}

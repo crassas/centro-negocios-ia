@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {pathToFileURL} from 'node:url';
 import {createTravisParticleMorph,morphVisibility} from '../travis-particle-morph.mjs';
+import {sandProgress,sandOffset} from '../travis-sand-flow.mjs';
+import {createConceptProjection} from '../travis-concept-projection.mjs';
 import {visibleProjectionAmount} from '../travis-form-director.mjs';
 const threePath=process.argv[2];
 if(!threePath)throw new Error('Pass the pinned Three.js module path');
@@ -30,7 +32,19 @@ const planet=new THREE.Mesh(new THREE.SphereGeometry(.66,22,14));stage.add(plane
 engine.go(planet,2.3,{camera,label:'planet'});
 near(array('aFrom'),house,.006,'Changing shape preserves displayed positions');
 engine.update(2.7,full,view);
+const at=engine.state(),expected=new Float32Array(array('aFrom').length);
+for(let i=0;i<array('aSeed').length;i++){
+ const j=i*3,seed=array('aSeed')[i],t=sandProgress(at.morphProgress,seed);
+ const p=[0,1,2].map(k=>array('aFrom')[j+k]*(1-t)+array('aTo')[j+k]*t);
+ const n=[0,1,2].map(k=>array('aNormalFrom')[j+k]*(1-t)+array('aNormalTo')[j+k]*t),length=Math.max(Math.hypot(...n),.000001);
+ for(let k=0;k<3;k++)n[k]/=length;
+ const offset=sandOffset(p,n,seed,2.7,at.voice,at.morphProgress);
+ expected.set(p.map((v,k)=>v+offset[k]),j);
+}
+
 engine.go(target,2.7,{camera,label:'interrupted'});
+near(array('aFrom'),expected,.000002,'Interrupted currents restart at the last visible grains');
+assert.deepEqual(sandOffset([1,2,3],[0,1,0],.3,2.7,.9,0),[0,0,0],'First frame does not apply organic displacement twice');
 assert([...array('aFrom')].every(Number.isFinite));
 engine.update(4.1,full,{...view,voice:.72});
 assert.equal(engine.state().voice,.72,'Actual audio level reaches the projected material');
@@ -57,5 +71,12 @@ assert.equal(visibleProjectionAmount(1,{visible:true,matter:{active:true,opacity
 const main=fs.readFileSync('travis-3d.mjs','utf8'),cockpit=fs.readFileSync('travis-cockpit.mjs','utf8');
 const cardImport=s=>s.match(/import ['"]([^'"]*travis-action-cards\.mjs[^'"]*)['"]/)[1];
 assert.equal(cardImport(main),cardImport(cockpit),'A second module URL creates a second controller and erases the first scene');
+const quiet=createTravisParticleMorph(THREE,{count:128,reducedMotion:true});
+quiet.go(target,10,{camera});quiet.update(10,full,{...view,voice:1});
+assert.equal(quiet.points.material.uniforms.uFlow.value,0,'Reduced motion disables ongoing currents');quiet.dispose();
+const live=createConceptProjection(THREE);scene.add(live.root);live.setSource(()=>face);live.setCamera(()=>camera);
+live.show('mechanical',10,'Motor elétrico');live.update(10,full,1);const attack=live.state().matter.voice;
+assert(attack>0&&attack<.3,'Speech attacks smoothly');live.update(10.1,full,1);const peak=live.state().matter.voice;assert(peak>attack&&peak<1);
+live.update(10.12,full,0);assert(live.state().matter.voice<peak&&live.state().matter.voice>peak*.8,'Speech releases smoothly');live.hide();
 engine.dispose();
 console.log('PASS CONTINUOUS_MORPH: real Three.js transforms, first-scene singleton, interrupted morph, controls, voice, exact face return and no empty handoff');

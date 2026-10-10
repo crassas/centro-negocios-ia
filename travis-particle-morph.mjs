@@ -1,6 +1,7 @@
+import {sandProgress,sandOffset} from './travis-sand-flow.mjs?v=sand-1';
 import {MOTION} from './travis-motion.mjs?v=motion-1';
 import {particleBounds,fitParticleToViewport} from './travis-projection-framing.mjs?v=1';
-import {createHolographicParticleMaterial} from './travis-holographic-head.mjs?v=motion-1';
+import {createHolographicParticleMaterial} from './travis-holographic-head.mjs?v=sand-1';
 
 export const morphEase=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
 export function morphVisibility(progress,returning,alphaStart=0,avatarStart=0){
@@ -35,6 +36,7 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
  geometry.setAttribute('aNormalFrom',new THREE.BufferAttribute(normalFrom,3));
  geometry.setAttribute('aNormalTo',new THREE.BufferAttribute(normalTo,3));
  const material=createHolographicParticleMaterial(THREE);
+ material.uniforms.uFlow.value=reducedMotion?0:1;
  const points=new THREE.Points(geometry,material);points.name='TravisMorphParticles';
  points.frustumCulled=false;root.add(points);
  let started=0,duration=MOTION.enter,toCore=false,active=false,sourceObject=null;
@@ -46,18 +48,15 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
  function setTheme(scene){fitMargin=scene==='person'?.88:.98;}
  function advance(now){return reducedMotion?1:Math.max(0,Math.min(1,(now-started)/duration));}
  function current(now){
-   const t=morphEase(advance(now)),rush=Math.sin(t*Math.PI);
+   const progress=advance(now);
    const out=new Float32Array(n*3),normals=new Float32Array(n*3);
    for(let i=0;i<n;i++){
-     const j=i*3,seedValue=seed[i];let length=0;
-     for(let k=0;k<3;k++){normals[j+k]=normalFrom[j+k]*(1-t)+normalTo[j+k]*t;length+=normals[j+k]**2;}
-     length=Math.sqrt(length)||1;
-     const drift=[Math.sin(now*2.1+seedValue*83),Math.cos(now*1.7+seedValue*47),Math.sin(now*1.3+seedValue*57)];
-     const breath=Math.sin(now*1.2+seedValue*19)*(.003+lastVoice*.006);
-     for(let k=0;k<3;k++){
-       normals[j+k]/=length;
-       out[j+k]=from[j+k]*(1-t)+to[j+k]*t+drift[k]*rush*(.055+.08*seedValue)+normals[j+k]*breath;
-     }
+     const j=i*3,t=sandProgress(progress,seed[i]);let length=0;
+     for(let k=0;k<3;k++){normals[j+k]=normalFrom[j+k]*(1-t)+normalTo[j+k]*t;length+=normals[j+k]**2;out[j+k]=from[j+k]*(1-t)+to[j+k]*t;}
+     length=Math.max(Math.sqrt(length),.000001);
+     for(let k=0;k<3;k++)normals[j+k]/=length;
+     const offset=sandOffset(out.subarray(j,j+3),normals.subarray(j,j+3),seed[i],now,lastVoice,progress,reducedMotion?0:1);
+     for(let k=0;k<3;k++)out[j+k]+=offset[k];
    }
    return {positions:out,normals};
  }

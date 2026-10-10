@@ -1,3 +1,4 @@
+import {SAND_MOTION_GLSL} from './travis-sand-flow.mjs?v=sand-1';
 // One warm light palette for the animated face, assembly grains and projections.
 export const HOLOGRAPHIC_LIGHT_GLSL=`
   const vec3 holoCopper=vec3(.53,.33,.18);
@@ -101,17 +102,18 @@ export function createAssemblyParticles(THREE,geometry) {
 
 export function createHolographicParticleMaterial(THREE){
  return new THREE.ShaderMaterial({
-  uniforms:{uMorph:{value:0},uTime:{value:0},uOpacity:{value:0},uPixelRatio:{value:1},uVoice:{value:0}},
+  uniforms:{uMorph:{value:0},uTime:{value:0},uOpacity:{value:0},uPixelRatio:{value:1},uVoice:{value:0},uFlow:{value:1}},
   vertexShader:`attribute vec3 aFrom,aTo,aNormalFrom,aNormalTo;attribute float aSeed;
-    uniform float uMorph,uTime,uOpacity,uPixelRatio,uVoice;
+    uniform float uMorph,uTime,uOpacity,uPixelRatio,uVoice,uFlow;
+    ${SAND_MOTION_GLSL}
     varying float vSeed,vOpacity,vLight,vHeight;
     void main(){
-      float t=clamp(uMorph,0.0,1.0);t=t*t*(3.0-2.0*t);
+      float t=sandProgress(uMorph,aSeed);
       vec3 p=mix(aFrom,aTo,t);
-      float rush=sin(t*3.14159265);
-      p+=vec3(sin(uTime*2.1+aSeed*83.0),cos(uTime*1.7+aSeed*47.0),sin(uTime*1.3+aSeed*57.0))*rush*(.055+.08*aSeed);
-      vec3 n=normalize(mix(aNormalFrom,aNormalTo,t)+vec3(.0001));
-      p+=n*sin(uTime*1.2+aSeed*19.0)*(.003+uVoice*.006);
+      float rush=sin(t*3.141592653589793);
+      vec3 rawNormal=mix(aNormalFrom,aNormalTo,t);
+      vec3 n=rawNormal/max(length(rawNormal),.000001);
+      p+=sandOffset(p,n,aSeed,uTime,uVoice,uMorph,uFlow);
       vec4 mv=modelViewMatrix*vec4(p,1.0);
       vec3 viewNormal=normalize(normalMatrix*n),viewDirection=normalize(-mv.xyz);
       float facing=abs(dot(viewNormal,viewDirection));

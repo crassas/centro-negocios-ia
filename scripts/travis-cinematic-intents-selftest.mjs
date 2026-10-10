@@ -61,7 +61,7 @@ const ui=fs.readFileSync('travis-3d.mjs','utf8'),
  visual=fs.readFileSync('travis-concept-projection.mjs','utf8'),
  sw=fs.readFileSync('sw.js','utf8'),
  html=fs.readFileSync('index.html','utf8');
-assert(ui.includes("import './travis-action-cards.mjs?v=real-3d-1'"));
+assert(ui.includes("import './travis-action-cards.mjs?v=sand-1'"));
 assert(ui.includes('TravisProjection?.interpret?.(text)'));
 assert(deck.includes('scheduleReturn(')&&deck.includes('pinned=true'));
 assert(deck.includes('youtubeState().playing'));
@@ -69,7 +69,7 @@ assert(deck.includes('travis:speech-end')&&deck.includes('travis:visual-control'
 for(const scene of ['planet','map','house','person','object'])
  assert(visual.includes("kind==='"+scene+"'"),'Missing '+scene+' 3D builder');
 assert(visual.includes('ghost')&&visual.includes('show(scene,now,subject'));
-assert(html.includes('travis-3d.mjs?v=real-3d-1'));
+assert(html.includes('travis-3d.mjs?v=sand-1'));
 assert(sw.includes('travis-english-intents.mjs?v=motion-routing-1'));
 console.log('TRAVIS_CINEMATIC_INTENTS_PASS',JSON.stringify({
  scenarios:scenarios.length,controls:controlCases.length,synonyms:synonyms.length,

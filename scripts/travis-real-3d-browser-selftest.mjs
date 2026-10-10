@@ -51,7 +51,17 @@ try{
   await submit(text);await page.waitForFunction(name=>TravisVisual.diagnostics().hologram?.variant==='sourced-3d'&&(name==='chair'?TravisProjection.status().title.includes('Cadeira'):name==='camera'?/camara/i.test(TravisProjection.status().title):TravisProjection.status().title==='Futebol'),name,{timeout:20000});await settled();
   await page.screenshot({path:path.join(out,name+'.png')});console.log('rendered',name);
   assert.equal(await page.evaluate(()=>TravisProjection.status().scene),'model');
-  assert((await page.locator('.travis-visual-caption').textContent()).includes('Poly Haven'));
+  assert(!(await page.locator('.travis-visual-caption').textContent()).includes('Poly Haven'),'Credits stay off the hologram');
+  await page.getByRole('button',{name:'Fontes',exact:true}).click();
+  await page.locator('#travis-sources').waitFor({state:'visible'});
+  assert((await page.locator('#travis-sources').textContent()).includes('Poly Haven'));
+  assert((await page.locator('#travis-sources').textContent()).includes('CC0'));
+  assert(await page.locator('#travis-sources a').first().getAttribute('href'));
+  if(name==='chair')await page.screenshot({path:path.join(out,'sources-panel.png')});
+  await page.keyboard.press('Escape');
+  await page.locator('#travis-sources').waitFor({state:'hidden'});
+  assert.equal(await page.evaluate(()=>TravisProjection.status().scene),'model','Escape closes sources, not Travis');
+  assert.equal(await page.evaluate(()=>document.activeElement?.className),'travis-sources-toggle');
   assert.equal(await page.locator('.travis-visual-caption button[aria-label="Roda para a direita"]').count(),1);
   await page.screenshot({path:path.join(out,name+'.png')});
   states.push({name,state:await page.evaluate(()=>TravisVisual.diagnostics().hologram)});
@@ -60,7 +70,11 @@ try{
   await page.screenshot({path:path.join(out,name+'-rotated.png')});
  }
  await submit('Mostra fotografias de Júpiter');await page.waitForFunction(()=>TravisProjection.status().scene==='reference',{},{timeout:15000});await settled();
- assert((await page.locator('.travis-visual-caption').textContent()).includes('NASA'));
+ assert(!(await page.locator('.travis-visual-caption').textContent()).includes('NASA'));
+ await page.getByRole('button',{name:'Fontes',exact:true}).click();
+ assert((await page.locator('#travis-sources').textContent()).includes('NASA'));
+ assert((await page.locator('#travis-sources').textContent()).includes('Poly Haven'),'Sources from previous narrated scenes stay available');
+ await page.getByRole('button',{name:'Fechar fontes'}).click();
  assert((await page.locator('.travis-visual-caption').textContent()).includes('FOTOGRAFIA'));
  assert.equal(await page.getByRole('button',{name:'Procurar objeto 3D'}).count(),1);
  await page.screenshot({path:path.join(out,'nasa-photo.png')});
@@ -72,7 +86,7 @@ try{
  assert.equal(await page.evaluate(()=>TravisVisual.diagnostics().hologram.variant),'jupiter');
  // Real provider geometry must have depth, one draw call and the shared material.
  const meshEvidence=await page.evaluate(async payload=>{
-  const {decodeReferenceModel,disposeReferenceModel,validateModelDocument}=await import('./travis-model-library.mjs?v=1');
+  const {decodeReferenceModel,disposeReferenceModel,validateModelDocument}=await import('./travis-model-library.mjs?v=sand-1');
   const model=await decodeReferenceModel(payload),evidence={triangles:model.triangles,bounds:model.bounds,children:model.group.children.length,holographic:model.materials[0].userData.holographicSurface};disposeReferenceModel(model);
   let blocked=0;for(const edit of [d=>d.buffers[0].uri='https://localhost/private',d=>d.images=[{uri:'https://evil.test/a.png'}],d=>d.nodes[0].children=[0],d=>d.accessors[0].count=99999999]){const d=structuredClone(payload.gltf);edit(d);try{validateModelDocument(d);}catch{blocked++;}}
   return {...evidence,blocked};

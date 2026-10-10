@@ -1,6 +1,7 @@
+import {createVisualSources} from './travis-visual-sources.mjs?v=sand-1';
 // Front workspace driven by actual host tool results. Text is always inert.
 import {MOTION,revealCaption,readingHold} from './travis-motion.mjs?v=motion-1';
-import {decodeReferenceModel,disposeReferenceModel} from './travis-model-library.mjs?v=1';
+import {decodeReferenceModel,disposeReferenceModel} from './travis-model-library.mjs?v=sand-1';
 import {hologramPresentation as projection} from './travis-presence.mjs?v=motion-1';
 import {mountYouTube,closeYouTube,controlYouTube,youtubeState} from './travis-youtube.mjs?v=3';
 import {parseVisualIntent,rewriteEnglishToolRequest,mayNeedVisualModel} from './travis-english-intents.mjs?v=motion-routing-1';
@@ -12,6 +13,7 @@ const items=document.getElementById('travis-action-items');
 let current=null,selected=null,frame=0,wasVisible=false,returnTimer=0,pinned=false,highlighted=0,renderVersion=0;
 let narration=null,storyEpoch=0;
 const caption=document.createElement('div');caption.className='travis-visual-caption';caption.hidden=true;hud?.append(caption);
+const sources=createVisualSources(hud,{onInteract:touchProjection});
 function cancelNarration(){narration=null;storyEpoch++;}
 function awaitReference(){cancelNarration();clearTimeout(returnTimer);returnTimer=0;renderVersion++;}
 const planetSequence=['Mercury','Venus','Earth','Mars','Jupiter','Saturn','Uranus','Neptune'];
@@ -81,17 +83,15 @@ function render(data,{story=false}={}){
   }}));
   if(!matchMedia('(prefers-reduced-motion: reduce)').matches)deck.animate?.([{opacity:0,filter:'blur(9px)',transform:'translate(-50%, 16px) scale(.97)'},{opacity:1,filter:'blur(0px)',transform:'translate(-50%, 0) scale(1)'}],{duration:MOTION.caption*1000,easing:MOTION.entrance});
   heading.textContent=String(data.title||'Your workspace');
-  caption.replaceChildren();
+  caption.replaceChildren();sources.remember(data);
   if(data.kind==='illustration'){const title=document.createElement('span');title.className='travis-motion-title';caption.append(title);revealCaption(title,data.title||'',{reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches});}
   if(data.scene==='mechanical'){
     const note=document.createElement('small');note.textContent='MODELO DIDÁTICO · CORTE';caption.append(note);
     const controls=document.createElement('div');controls.className='travis-reference-navigation travis-mechanical-controls';
     for(const [request,label] of [['Separa as peças','Separar'],['Junta as peças','Montar']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.addEventListener('click',()=>window.TravisVisual?.ask(request));controls.append(button);}caption.append(controls);
   }
-  if(data.sourceUrl){const link=document.createElement('a');link.href=data.sourceUrl;link.target='_blank';link.rel='noopener noreferrer';link.textContent=' · '+String(data.sourceName||'Source');caption.append(link);}
-  if(data.creditUrl){const link=document.createElement('a');link.href=data.creditUrl;link.target='_blank';link.rel='noopener noreferrer';link.textContent=' · Image credit';caption.append(link);}
   if(data.scene==='model'){
-    const note=document.createElement('small');note.textContent='OBJETO 3D · '+String(data.modelName||'');caption.append(note);
+    const note=document.createElement('small');note.textContent='OBJETO 3D';caption.append(note);
     const controls=document.createElement('div');controls.className='travis-reference-navigation';
     for(const [request,label] of [['Roda para a esquerda','↶'],['Roda para a direita','↷']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.setAttribute('aria-label',request);button.addEventListener('click',()=>window.TravisVisual?.ask(request));controls.append(button);}caption.append(controls);
   }
@@ -114,7 +114,6 @@ function render(data,{story=false}={}){
     const photos=document.createElement('button');photos.type='button';photos.className='travis-reference-photos';photos.textContent='Photos';
     photos.addEventListener('click',()=>window.TravisVisual?.ask('Show photos of '+data.title));caption.append(photos);
   }
-  if(data.imageAuthor||data.imageLicense){const credit=document.createElement('small');credit.className='travis-reference-credit';credit.textContent=[data.imageAuthor,data.imageLicense].filter(Boolean).join(' · ');caption.append(credit);}
   items.dataset.kind=String(data.kind||'result');
   const rows=Array.isArray(data.items)?data.items.slice(0,30):[];
   items.replaceChildren();
@@ -193,7 +192,7 @@ if(deck){
     const data=e.detail?.ui;if(!data)return;
     if(current?.explaining&&['web-search','web-page'].includes(data.kind)){
       const source=data.items?.find(item=>item.url)?.url||data.url;
-      if(source){current.sourceUrl=source;current.sourceName='Source';}
+      if(source){current.sourceUrl=source;current.sourceName='Source';sources.remember(current);}
       return;
     }
     if(data.project)selected=data.project;
@@ -210,7 +209,7 @@ if(deck){
   for(const event of ['pointerdown','touchstart','scroll','focusin','keydown']){
     deck.addEventListener(event,touchProjection,{passive:true});
   }
-  window.addEventListener('travis:close',()=>{cancelNarration();caption.hidden=true;clearTimeout(returnTimer);renderVersion++;
+  window.addEventListener('travis:close',()=>{sources.close();cancelNarration();caption.hidden=true;clearTimeout(returnTimer);renderVersion++;
     closeYouTube();cancelAnimationFrame(frame);frame=0;projection.reset();wasVisible=false;current=null;pinned=false;paint();
   });
   window.TravisProjection=Object.freeze({
@@ -238,7 +237,7 @@ if(deck){
     async applyReference(result,intent){
       if(intent?.visualVersion!==storyEpoch)return null;
       if(!result?.ok)return intent.language==='pt'?'Não encontrei uma referência visual fiável para esse pedido.':'I could not find a reliable visual reference for that request.';
-      if(!intent.needsReference){current.sourceUrl=result.url;current.sourceName=result.source;const link=document.createElement('a');link.href=result.url;link.target='_blank';link.rel='noopener noreferrer';link.textContent=' · '+String(result.source||'Source');caption.append(link);return null;}
+      if(!intent.needsReference){current.sourceUrl=result.url;current.sourceName=result.source;sources.remember(current);return null;}
       if(result.representation==='model-3d'&&result.model){
         let model;
         try{model=await decodeReferenceModel(result.model);}catch{return intent.language==='pt'?'Não consegui abrir este modelo 3D. Podes pedir fotografias do objeto.':'I could not open this 3D model. You can request photos of the object.';}

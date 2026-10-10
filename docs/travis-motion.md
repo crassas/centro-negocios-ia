@@ -60,3 +60,29 @@ A exportação é uma ferramenta do projeto, não um comando de voz que já prod
 ## Proveniência
 
 `tools/travis-motion/vendor/synth.py` conserva os geradores de `claude-motion/sfx/synth.py`. O gerador pseudoaleatório vem de `sims/kit/util.js`; os restantes módulos são adaptações novas dos quatro fluxos de trabalho e da vista com peças separadas. Não foram copiados os anúncios, marcas, dossiers fictícios ou media de demonstração. O Travis não precisa de Remotion/React para o seu renderizador Three existente.
+
+## Organic sand and unobtrusive attribution
+
+The shared 12,000-grain field now follows coherent curved currents with a small
+vertical settling bias. Seeded arrival times break up uniform interpolation.
+`travis-sand-flow.mjs` supplies the CPU snapshot equations and GLSL functions;
+interruption starts exactly at the previous visible positions. The first frame
+adds no displacement, so repeated requests do not accumulate a jump. The fine
+surface keeps its actual geometry and adds only a slow, low-amplitude light tide.
+Speech amplitude has a 90 ms attack and 240 ms release. Reduced-motion mode turns
+off the currents, breathing and surface tide. No extra animation library, API,
+particle draw call or generative video service is required.
+
+Provider names, asset names, authors and licences are no longer overlaid on the
+object. The discreet **Fontes** button opens a keyboard-accessible native dialog
+with original source links and credits, including Poly Haven service attribution.
+The last 24 references remain available across narration cues and return to the
+face. Escape closes only the sources dialog and restores focus. Photos still
+carry the short **FOTOGRAFIA · RELEVO** label: this change does not reconstruct
+3D geometry from arbitrary photographs.
+
+Verification extends the real Three.js continuity test with interrupted currents,
+voice smoothing and reduced-motion checks. The real-provider browser test checks
+three meshes, clean captions, preserved attribution, dialog focus/Escape, source
+history and NASA photo labelling. The narrated browser flow still advances from
+the actual audio clock and returns to the original head.
