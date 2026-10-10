@@ -9,6 +9,7 @@ import re
 import sqlite3
 import time
 import unicodedata
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -25,6 +26,27 @@ STOP = set('the this that with what when where your you for and how about tell r
 def terms(text):
     return set(w for w in re.findall(r'[a-z0-9]+', normalized(text))
                if len(w) > 2 and w not in STOP)
+
+
+def scene_snapshot(value):
+    """Browser observations are context, never evidence of a real-world action."""
+    if not isinstance(value, dict):
+        return None
+    result = {'active': value.get('active') is True, 'source': 'browser_report'}
+    for key in ('scene', 'title', 'focus', 'place'):
+        if isinstance(value.get(key), str):
+            result[key] = re.sub(r'[\x00-\x1f]', ' ', value[key])[:100]
+    return result
+
+
+def json_lines(rows, budget):
+    """Pack whole records; never leave an unterminated JSON excerpt in a prompt."""
+    lines = []
+    for row in rows:
+        line = json.dumps(row, ensure_ascii=False, separators=(',', ':'))
+        if len('\n'.join([*lines, line])) <= budget:
+            lines.append(line)
+    return '\n'.join(lines)
 
 
 class Continuity:
@@ -44,10 +66,83 @@ class Continuity:
             CREATE VIRTUAL TABLE IF NOT EXISTS continuity_search USING fts5(
                 session UNINDEXED,body,tokenize='unicode61 remove_diacritics 2');
             CREATE TABLE IF NOT EXISTS continuity_meta(key TEXT PRIMARY KEY,value INTEGER);
+            CREATE TABLE IF NOT EXISTS continuity_turns(
+                session TEXT,id TEXT,user TEXT,reply TEXT,phase TEXT,scene TEXT,
+                created REAL,updated REAL,PRIMARY KEY(session,id));
+            CREATE INDEX IF NOT EXISTS continuity_turn_time ON continuity_turns(session,created DESC);
             ''')
 
+    @contextmanager
     def db(self):
-        return sqlite3.connect(self.path, timeout=10)
+        db = sqlite3.connect(self.path, timeout=10)
+        try:
+            with db:
+                yield db
+        finally:
+            db.close()
+
+    def start(self, session, turn_id, user, scene=None):
+        if not re.fullmatch(r'[a-zA-Z0-9-]{8,80}', session or ''):
+            return False
+        if not re.fullmatch(r'[a-zA-Z0-9-]{8,80}', turn_id or ''):
+            raise ValueError('Invalid interaction id')
+        now = self.clock()
+        with self.db() as db:
+            return bool(db.execute('INSERT OR IGNORE INTO continuity_turns VALUES(?,?,?,?,?,?,?,?)',
+                (session, turn_id, str(user)[:1600], '', 'processing',
+                 json.dumps(scene_snapshot(scene), ensure_ascii=False), now, now)).rowcount)
+
+    def finish(self, session, turn_id, phase, reply=None):
+        if phase not in {'generated', 'interrupted', 'delivered'}:
+            raise ValueError('Invalid interaction phase')
+        with self.db() as db:
+            # A late server completion must not undo a browser delivery receipt.
+            return bool(db.execute('''UPDATE continuity_turns SET phase=?,
+                reply=COALESCE(?,reply),updated=? WHERE session=? AND id=?
+                AND phase!='delivered' AND (?!='generated' OR phase='processing') ''',
+                (phase, str(reply)[:2400] if reply is not None else None,
+                 self.clock(), session, turn_id, phase)).rowcount)
+
+    def observe_local(self, session, turn_id, user, reply, scene):
+        """Atomic, idempotent observation of a local visual command, not a tool grant."""
+        if not re.fullmatch(r'[a-zA-Z0-9-]{8,80}', session or '') or not re.fullmatch(r'[a-zA-Z0-9-]{8,80}', turn_id or ''):
+            raise ValueError('Invalid interaction scope')
+        user, reply = str(user).strip()[:1600], str(reply).strip()[:1600]
+        if not user:
+            raise ValueError('Missing observed request')
+        now, scene = self.clock(), scene_snapshot(scene)
+        with self.db() as db:
+            added = db.execute('INSERT OR IGNORE INTO continuity_turns VALUES(?,?,?,?,?,?,?,?)',
+                (session, turn_id, user, reply, 'browser_reported', json.dumps(scene, ensure_ascii=False), now, now)).rowcount
+            if added:
+                body = dict(session=session, user=user, assistant=reply, tool='visual_observation',
+                            verification='browser_report', scene=scene, interactionId=turn_id)
+                db.execute('INSERT INTO conversations(created,data) VALUES(?,?)', (now, json.dumps(body, ensure_ascii=False)))
+        return bool(added)
+
+    def working(self, session, scene=None, exclude='', budget=650):
+        scopes = self.scopes(session)
+        if not scopes:
+            return ''
+        with self.db() as db:
+            previous = db.execute('SELECT user,reply,phase,scene,updated FROM continuity_turns WHERE session IN ('+
+                ','.join('?' for _ in scopes)+') AND id!=? ORDER BY created DESC LIMIT 1', (*scopes, exclude)).fetchone()
+        rows = []
+        current = scene_snapshot(scene)
+        if current is not None:
+            rows.append({'currentDisplay': current})
+        elif previous and json.loads(previous[3]):
+            rows.append({'previousDisplay': json.loads(previous[3]), 'observedAt': previous[4], 'live': False})
+        if previous and previous[2] in {'processing', 'interrupted'}:
+            rows.append({'unfinishedRequest': previous[0][:180], 'partialReply': previous[1][-220:],
+                         'state': previous[2], 'resumeOnlyOnUserRequest': True})
+        return json_lines(rows, budget)
+
+    def status(self, session):
+        with self.db() as db:
+            phases = dict(db.execute('SELECT phase,count(*) FROM continuity_turns WHERE session=? GROUP BY phase', (session,)))
+        return {'algorithm': 'observe-context-act-verify-learn-v2', 'interactions': phases,
+                'modelWeightsUpdated': False, 'automaticToolReplay': False}
 
     def scopes(self, session):
         if not session:
@@ -80,7 +175,10 @@ class Continuity:
         name = re.fullmatch(r"(?:my name is|call me|o meu nome é|chama-me|podes chamar-me)\s+([\w .'-]{1,60})[.!]?", text, re.I)
         explicit = re.fullmatch(r'(?:remember(?: that)?|lembra-te(?: de)? que|lembra que|recorda que|memoriza que|guarda que)\s+(.{1,600})', text, re.I)
         preference = re.fullmatch(r'(?:I prefer|prefiro)\s+(.{1,250})', text, re.I)
-        if name:
+        meaning = re.fullmatch(r'(?:quando (?:eu )?(?:digo|peço)|when I (?:say|ask for))\s+[“"\']?(.{1,80}?)[”"\']?\s*,?\s+(?:refiro-me a|quero dizer|I mean)\s+(.{1,250})', text, re.I)
+        if meaning:
+            slot, value = 'meaning:'+normalized(meaning.group(1).strip(' ,\"“”\'')), text
+        elif name:
             slot, value = 'address', name.group(1).strip(' .!')
         elif explicit or preference:
             slot, value = 'note', text
@@ -92,7 +190,7 @@ class Continuity:
         key = hashlib.sha256((session+'\0'+slot+'\0'+normalized(value)).encode()).hexdigest()[:24]
         now = self.clock()
         with self.db() as db:
-            if slot == 'address':
+            if slot == 'address' or slot.startswith('meaning:'):
                 db.execute('UPDATE continuity_notes SET active=0 WHERE session=? AND slot=? AND id!=?', (session, slot, key))
             db.execute('''INSERT INTO continuity_notes VALUES(?,?,?,?,?,?,?,0,1)
                 ON CONFLICT(id) DO UPDATE SET updated=excluded.updated,active=1''',

@@ -1,6 +1,68 @@
 """Bounded SSE decoding and incremental speech; no tool execution or permissions."""
 import json
 import re
+import queue
+import threading
+import time
+
+
+class SpeechQueue:
+    """Bounded producer/consumer: receiving model tokens never waits for each WAV.
+
+    One ordered consumer owns synthesis. Cancellation drops queued speech; it
+    never retries a model request or executes a tool.
+    """
+    def __init__(self, emit, cancelled=lambda: False, capacity=12):
+        self.emit, self.cancelled = emit, cancelled
+        self.queue = queue.Queue(maxsize=capacity)
+        self.stopped = threading.Event()
+        self.error = None
+        self.thread = threading.Thread(target=self._run, daemon=True, name='travis-speech-queue')
+        self.thread.start()
+
+    def check(self):
+        if self.error:
+            raise self.error
+        if self.cancelled() or self.stopped.is_set():
+            raise BrokenPipeError('Speech delivery cancelled')
+
+    def put(self, item):
+        while True:
+            self.check()
+            try:
+                self.queue.put(item, timeout=.1)
+                return
+            except queue.Full:
+                continue
+
+    def _run(self):
+        try:
+            while not self.stopped.is_set():
+                self.check()
+                try:
+                    item = self.queue.get(timeout=.1)
+                except queue.Empty:
+                    continue
+                if item is None:
+                    return
+                self.emit(item)
+        except Exception as exc:
+            self.error = exc
+
+    def finish(self, timeout=90):
+        self.put(None)
+        deadline = time.monotonic()+timeout
+        while self.thread.is_alive():
+            self.check()
+            if time.monotonic() >= deadline:
+                self.stop()
+                raise TimeoutError('Speech delivery deadline exceeded')
+            self.thread.join(.1)
+        if self.error:
+            raise self.error
+
+    def stop(self):
+        self.stopped.set()
 
 
 def read_sse(response, on_delta=None, limit=3000, require_done=False):

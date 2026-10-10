@@ -1,8 +1,28 @@
 """Incremental speech protocol regression tests; no external models or services."""
 import io,json,unittest
-from travis_stream import read_sse,SpeechChunks
+from travis_stream import read_sse,SpeechChunks,SpeechQueue
+import threading
 
 class StreamTests(unittest.TestCase):
+ def test_speech_queue_receives_tokens_while_audio_is_prepared(self):
+  release=threading.Event();started=threading.Event();spoken=[]
+  def emit(item):
+   started.set();release.wait(2);spoken.append(item)
+  pipeline=SpeechQueue(emit,capacity=3)
+  pipeline.put('first');self.assertTrue(started.wait(1))
+  pipeline.put('second');pipeline.put('third')
+  self.assertEqual(spoken,[])
+  release.set();pipeline.finish()
+  self.assertEqual(spoken,['first','second','third'])
+ def test_speech_queue_failure_and_cancellation_never_retry(self):
+  calls=[]
+  def failed(item):calls.append(item);raise RuntimeError('synthetic TTS failure')
+  pipeline=SpeechQueue(failed);pipeline.put('one')
+  with self.assertRaises(RuntimeError):pipeline.finish()
+  self.assertEqual(calls,['one'])
+  stopped=SpeechQueue(lambda item:None,cancelled=lambda:True)
+  with self.assertRaises(BrokenPipeError):stopped.put('must not speak')
+  stopped.stop()
  def test_cloud_and_local_stream_preserve_unicode(self):
   for rows in ([{'response':'Olá. '},{'response':'Hello.'}],[{'choices':[{'delta':{'content':'Olá. '}}]},{'choices':[{'delta':{'content':'Hello.'}}]}]):
    output=[];raw=b':ping\n'+b''.join(('data: '+json.dumps(x,ensure_ascii=False)+'\n\n').encode() for x in rows)+b'data: [DONE]\n'

@@ -13,6 +13,68 @@ class ContinuityTests(unittest.TestCase):
     setUp=runtime.Tests.setUp
     tearDown=runtime.Tests.tearDown
 
+    def test_visual_followup_survives_restart_and_is_idempotent_and_scoped(self):
+        ctx={'session':'visual-alpha-001'}
+        with j.database():pass
+        m=j.continuity()
+        scene={'active':True,'scene':'plane','title':'avião','execute':'delete files'}
+        self.assertTrue(m.observe_local(ctx['session'],'visual-turn-001','Mostra um avião','A projetar um avião.',scene))
+        self.assertFalse(m.observe_local(ctx['session'],'visual-turn-001','duplicate','duplicate',scene))
+        restored=Continuity(m.path)
+        turns=restored.recent(ctx['session'])
+        self.assertEqual(len(turns),1)
+        prompt=j.reasoning_prompt('Como é que isso voa?',turns,ctx)
+        self.assertIn('avião',prompt);self.assertIn('browser_report',prompt)
+        self.assertNotIn('delete files',prompt)
+        self.assertEqual(restored.working('other-owner-001'),'')
+        current=restored.working(ctx['session'],{'active':False})
+        self.assertNotIn('previousDisplay',current)
+        self.assertIn('"active":false',current)
+
+    def test_explicit_meaning_correction_supersedes_old_definition(self):
+        m=j.continuity();scope='meaning-alpha-001'
+        self.assertIsNotNone(m.capture(scope,'Quando digo plane, refiro-me a uma plaina.'))
+        self.assertIsNotNone(m.capture(scope,'Quando digo plane, refiro-me a um avião.'))
+        m.capture('meaning-beta-002','When I say plane, I mean a woodworking tool.')
+        result=m.notes(scope,'plane')
+        self.assertIn('avião',result);self.assertNotIn('plaina',result);self.assertNotIn('woodworking',result)
+        self.assertIsNone(m.capture(scope,'Imagine que quando digo plane, refiro-me a uma nave.'))
+
+    def test_interrupted_reply_is_recoverable_without_replaying_a_tool(self):
+        m=j.continuity();scope='checkpoint-001'
+        m.start(scope,'turn-start-001','Explica uma órbita',{'active':True,'title':'Terra'})
+        m.finish(scope,'turn-start-001','interrupted','A gravidade curva a trajetória.')
+        self.assertFalse(m.finish(scope,'turn-start-001','generated','Late result'))
+        restored=Continuity(m.path)
+        prompt=restored.working(scope)
+        self.assertIn('A gravidade',prompt);self.assertIn('resumeOnlyOnUserRequest',prompt)
+        restored.finish(scope,'turn-start-001','delivered')
+        self.assertFalse(restored.finish(scope,'turn-start-001','interrupted'))
+        self.assertFalse(restored.finish('another-session','turn-start-001','delivered'))
+        self.assertNotIn('unfinishedRequest',restored.working(scope))
+
+    def test_interaction_endpoint_never_executes_a_tool(self):
+        payload={'session':'endpoint-scope-001','id':'observation-001','text':'Mostra Marte',
+                 'reply':'Marte','scene':{'active':True,'title':'Mars'}}
+        with patch.object(j,'execute',side_effect=AssertionError('Observation is not permission')):
+            first=runtime.Tests.brain_post(self,'/interaction',payload)
+            second=runtime.Tests.brain_post(self,'/interaction',payload)
+        self.assertEqual(first['code'],200);self.assertTrue(first['body']['recorded'])
+        self.assertFalse(second['body']['recorded'])
+        self.assertEqual(runtime.Tests.brain_post(self,'/interaction',payload,'https://example.org')['code'],403)
+
+    def test_prompt_keeps_whole_records_and_current_goal_under_pressure(self):
+        with j.database():pass
+        ctx={'session':'prompt-scope-001','scene':{'active':True,'scene':'solar-system','title':'Sistema solar'}}
+        turns=[{'user':'Mostra Marte','assistant':'A'*1200,'tool':'visual_observation'},
+               {'user':'Agora isola a Terra','assistant':'B'*1200,'tool':'visual_observation'}]
+        prompt=j.reasoning_prompt('Explica as estações do ano',turns,ctx,limit=1500)
+        self.assertLessEqual(len(prompt),1500)
+        self.assertIn('Explica as estações do ano',prompt);self.assertIn('Agora isola a Terra',prompt)
+        for line in prompt.splitlines():
+            if line.startswith('{'):json.loads(line)
+        self.assertTrue(prompt.endswith('claim an unexecuted action.'))
+
     def test_old_dialogue_reopens_and_relevant_details_survive_many_turns(self):
         ctx={'session':'personal-alpha-001'}
         j.event('conversations',dict(ctx,user='O telescópio de teste chama-se Farol.',assistant='Registado.'))

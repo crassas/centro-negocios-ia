@@ -6,6 +6,36 @@ from unittest.mock import patch,Mock
 spec=importlib.util.spec_from_file_location("jarvis",Path(__file__).with_name("jarvis_local.py"))
 j=importlib.util.module_from_spec(spec);spec.loader.exec_module(j)
 class Tests(unittest.TestCase):
+ def test_disconnected_speech_request_never_starts_worker(self):
+  worker=j.VoiceWorker('stt-fast')
+  j.INFERENCE_INFO.cancelled=lambda:True
+  try:
+   with patch.object(worker,'start',side_effect=AssertionError('Cancelled audio must not start a model')):
+    with self.assertRaises(BrokenPipeError):worker.request({'path':'synthetic.wav'})
+  finally:j.INFERENCE_INFO.cancelled=lambda:False
+ def test_http_stream_does_not_block_model_reception_on_tts(self):
+  handler=object.__new__(j.Handler);handler.wfile=io.BytesIO()
+  handler.send_response=lambda *a:None;handler.send_header=lambda *a:None
+  handler.end_headers=lambda:None;handler.send_cors=lambda:None
+  started=threading.Event();release=threading.Event();spoken=[]
+  def voice(text,language):
+   started.set()
+   if not release.wait(2):raise AssertionError('Model reception blocked behind TTS')
+   spoken.append(text);return b'RIFF-synthetic'
+  def answer(text,context):
+   j.INFERENCE_INFO.on_delta('First sentence. ')
+   self.assertTrue(started.wait(1))
+   j.INFERENCE_INFO.on_delta('Second sentence. ')
+   release.set();return {'ok':True,'reply':'First sentence. Second sentence.','language':'en'}
+  with patch.object(j,'route',side_effect=answer),patch.object(j,'speak',side_effect=voice):
+   handler.stream_reply('synthetic',{'language':'en'},'local_llm')
+  frames=[json.loads(line) for line in handler.wfile.getvalue().splitlines()]
+  self.assertEqual(spoken,['First sentence.','Second sentence.'])
+  self.assertEqual([x['type'] for x in frames],['audio','audio','result','done'])
+ def test_live_recognition_is_explicit_and_does_not_start_second_model_by_default(self):
+  with patch.dict(j.os.environ,{'TRAVIS_LIVE_STT':'0'}),patch.object(j.SHERPA_STT_WORKER,'request',side_effect=AssertionError('Disabled recognizer')):
+   result=self.brain_post('/transcribe-live',{'id':'stream-fixture-001','seq':0,'pcm':''})
+  self.assertEqual(result['code'],200);self.assertFalse(result['body']['available'])
  def test_scene_rolling_update_and_fresh_selected_target(self):
   import time
   now=int(time.time()*1000)

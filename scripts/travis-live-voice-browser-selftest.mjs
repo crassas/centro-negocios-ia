@@ -6,12 +6,18 @@ if(!playwrightPath||!chromiumPath||!three)throw new Error('Pass Playwright modul
 const {chromium}=await import(pathToFileURL(playwrightPath));
 const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const wav=Buffer.alloc(44+16000*2);wav.write('RIFF');wav.writeUInt32LE(wav.length-8,4);wav.write('WAVEfmt ',8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(16000,24);wav.writeUInt32LE(32000,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(wav.length-44,40);
-let requests=0,finalSent=false;
+let requests=0,finalSent=false;const observations=[],conversationBodies=[];
 const server=http.createServer(async(req,res)=>{try{
  const name=new URL(req.url,'http://localhost').pathname;
  if(name==='/travis-voice-input.mjs'){res.setHeader('content-type','text/javascript');return res.end(`export function createVoiceInput(callbacks){window.voiceTest=callbacks;let active=false;return {async start(){active=true},stop(){active=false},diagnostics(){return {active,speaking:false}}}}`);}
+ if(req.method==='POST'&&name==='/interaction'){
+  let body='';for await(const part of req)body+=part;observations.push(JSON.parse(body));
+  res.setHeader('content-type','application/json');return res.end(JSON.stringify({ok:true,recorded:true}));
+ }
+ if(req.method==='POST'&&name==='/speak'){res.setHeader('content-type','audio/wav');return res.end(wav);}
  if(req.method==='POST'&&name==='/jarvis-stream'){
   requests++;let body='';for await(const part of req)body+=part;
+  conversationBodies.push(JSON.parse(body));
   if(JSON.parse(body).text==='stop'){res.setHeader('content-type','application/json');return res.end(JSON.stringify({ok:true,reply:'Stopped.',language:'en',tool:'stop'}));}
   res.setHeader('content-type','application/x-ndjson');
   res.write(JSON.stringify({type:'audio',audio:wav.toString('base64'),text:'First useful sentence.',language:'en'})+'\n');
@@ -62,6 +68,18 @@ try{
  assert.equal(await page.evaluate(()=>Boolean(TravisVisual.diagnostics().lipSync.playbackClock)),true,'Received audio must finish after stream failure');
  await page.waitForFunction(()=>document.querySelector('#travis-status-message').textContent.includes('connection interrupted'));
  assert.equal(requests,4,'A failed request must never be redispatched');
+ await page.locator('#travis-command-text').fill('Mostra um avião');
+ await page.locator('#travis-command button[type=submit]').click();
+ await page.waitForFunction(()=>TravisVisual.diagnostics().hologram?.variant==='airplane');
+ await page.waitForFunction(()=>!TravisVisual.diagnostics().lipSync.playbackClock&&['ready','listening'].includes(TravisVisual.diagnostics().state));
+ assert.equal(requests,4,'Local visual commands need no model round trip');
+ assert(observations.some(x=>x.text==='Mostra um avião'&&x.scene.scene==='vehicle'),'The local scene must enter conversation memory');
+ await page.locator('#travis-command-text').fill('Porque é que as asas têm esta forma?');
+ await page.locator('#travis-command button[type=submit]').click();
+ await page.waitForFunction(()=>TravisVisual.diagnostics().lipSync.playbackClock);
+ assert.equal(conversationBodies.at(-1).scene.scene,'vehicle','A follow-up carries its visual referent');
+ assert(conversationBodies.at(-1).interactionId);
+ assert.equal(await page.evaluate(()=>window.voiceTest.liveSTT()),null,'Unverified second recognizer stays disabled');
  assert.deepEqual(errors,[]);
- console.log(JSON.stringify({pass:true,firstAudioBeforeFinalReply:true,echoIgnored:true,interruptionMs,noStalePlayback:true,partialAudioPreserved:true,requests,errors}));
+ console.log(JSON.stringify({pass:true,firstAudioBeforeFinalReply:true,echoIgnored:true,interruptionMs,noStalePlayback:true,partialAudioPreserved:true,visualFollowup:true,requests,errors}));
 }finally{await browser.close();server.closeAllConnections();server.close();}

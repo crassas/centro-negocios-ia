@@ -1,5 +1,5 @@
 import {conversationIdentity,saveConversationIdentity,isPlaybackEcho} from './travis-continuity.mjs?v=continuity-1';
-import { createLiveSTT } from './travis-live-stt.mjs?v=live-1';
+import { createLiveSTT } from './travis-live-stt.mjs?v=continuous-2';
 import { readVoiceReply } from './travis-voice-stream.mjs?v=continuity-1';
 import {createMotionAudio} from './travis-motion-audio.mjs?v=motion-1';
 import {playDiscovery} from './travis-discovery.mjs?v=figures-1';
@@ -167,6 +167,7 @@ if (!hud || !launcher || !canvas) {
   }
   setInterfaceLanguage(savedInterfaceLanguage,{persist:false});
   function interruptReply(){
+    if(deliveryTurn){reportDelivery(deliveryTurn,false);deliveryTurn=null;}
     voicePlaybackResolve?.();voicePlaybackResolve=null;
     window.dispatchEvent(new CustomEvent('travis:speech-cancel'));
     if(discoveryJourney?.status==='playing'||discoveryJourney?.status==='preparing')discoveryJourney.status='paused';
@@ -189,7 +190,7 @@ if (!hud || !launcher || !canvas) {
         interruptionCandidate=false;interruptionEpoch++;
         lastInteraction=performance.now();window.dispatchEvent(new CustomEvent('travis:user-start'));interruptReply();setState('listening',standby?'Say Travis to wake me.':'I’m listening.');
       },
-      liveSTT:()=>createLiveSTT((body,signal)=>localJson('/transcribe-live',{body,signal:AbortSignal.any([signal,AbortSignal.timeout(5000)])})),
+      liveSTT:()=>liveSttEnabled?createLiveSTT((body,signal)=>localJson('/transcribe-live',{body,signal:AbortSignal.any([signal,AbortSignal.timeout(5000)])})):null,
       onSpeech:acceptSpokenTurn,
       onLevel(level){if(state!=='speaking')externalVoiceLevel=level;},
       isPlayback:()=>Boolean(voiceSource),
@@ -221,6 +222,22 @@ if (!hud || !launcher || !canvas) {
   }
 
   let dialogueSession=conversationIdentity(localStorage,sessionStorage);
+  let liveSttEnabled=false,observationTail=Promise.resolve(),deliveryTurn=null;
+  function displayContext(){
+    const projection=window.TravisProjection?.status?.(),world=window.TravisWorld?.status?.();
+    if(world?.open)return {active:true,scene:'world',title:world.place,place:world.place};
+    return {active:Boolean(pendingConcept),scene:projection?.scene||'',title:projection?.title||'',focus:String(projection?.highlighted||'')};
+  }
+  function observeLocal(id,text,reply){
+    const body={id,session:dialogueSession,text,reply,scene:displayContext()};
+    observationTail=observationTail.catch(()=>{}).then(()=>localJson('/interaction',{body,signal:AbortSignal.timeout(2000)})).catch(error=>{
+      console.debug('Travis context receipt:',error.message);
+    });
+  }
+  function reportDelivery(id,complete){
+    if(deliveryTurn===id)deliveryTurn=null;
+    void localJson('/interaction',{body:{kind:'delivery',id,session:dialogueSession,complete},signal:AbortSignal.timeout(2000)}).catch(()=>{});
+  }
   let playbackTranscript='',lastPlaybackAt=0,interruptionCandidate=false,interruptionEpoch=0;
   async function acceptSpokenTurn(blob,endedAt,transcript){
     if(!opened||voicePaused)return;
@@ -958,6 +975,8 @@ if (!hud || !launcher || !canvas) {
     voiceRequestController?.abort();
     const controller=new AbortController();
     voiceRequestController=controller;
+    const interactionId=crypto.randomUUID();let serverTurn=false;
+    controller.signal.addEventListener('abort',()=>{if(serverTurn)reportDelivery(interactionId,false);},{once:true});
 
     try {
       setState('thinking','Listening to your request…');
@@ -997,11 +1016,14 @@ if (!hud || !launcher || !canvas) {
       }
       if(wakeAddress.corrected)metrics.wakeRecoveryKind=wakeAddress.kind;
       lastInteraction=performance.now();
+      await restoreConversation(controller.signal);
+      if(!opened||session!==voiceSession||controller.signal.aborted)return;
       // Local geographical commands use the official God's Eye View embed.
       // The general language model remains available for every other request.
       const worldIntent=window.TravisWorld?.routeCommand?.(text);
       if(worldIntent?.handled){
         const spoken=String(worldIntent.reply||'The globe is ready.');
+        observeLocal(interactionId,text,spoken);
         const locale=/\b(?:show|open|back|return|close|go|take|earth|world|planet)\b/i.test(text)?'en':'pt';
         replyLanguage=locale;
         setState('thinking',spoken);
@@ -1129,7 +1151,10 @@ if (!hud || !launcher || !canvas) {
             },
             checkpoint:(index,status)=>{journey.next=index;journey.status=status;},
             retrying:()=>{journey.retries++;},
-            present:(chapter,index,total)=>window.TravisProjection.presentDiscoveryChapter(chapter,index,total),
+            present:(chapter,index,total)=>{
+              window.TravisProjection.presentDiscoveryChapter(chapter,index,total);
+              observeLocal(interactionId+'-'+index,text,chapter.text);
+            },
             play:async(wav,chapter)=>{
               try{await playVoiceArrayBuffer(wav,session,chapter.text,null,true);}catch(error){
                 const key=journey.language+':'+chapter.text,cached=discoveryAudio.get(key);
@@ -1148,6 +1173,7 @@ if (!hud || !launcher || !canvas) {
         return;
       }
       if(interpretation?.handled){
+        observeLocal(interactionId,text,interpretation.reply||'');
         if(!interpretation.reply){
           voiceBusy=false;setState('ready','I’m here.');scheduleListening(session,180);
           return;
@@ -1164,10 +1190,12 @@ if (!hud || !launcher || !canvas) {
         await playVoiceArrayBuffer(wav,session,interpretation.reply);
         return;
       }
-      await restoreConversation(controller.signal);
+      await observationTail;
       setState('thinking','Handling your request…');
       let audioChain=Promise.resolve(),streamHasAudio=false,playbackError=null;
-      const response=await localFetch('/jarvis-stream',{body:{text,session:dialogueSession,project:activeProject,language:recognitionLanguage,wake:wokeFromStandby,vision:vision.snapshot()},signal:controller.signal});
+      serverTurn=true;
+      deliveryTurn=interactionId;
+      const response=await localFetch('/jarvis-stream',{body:{text,session:dialogueSession,project:activeProject,language:recognitionLanguage,wake:wokeFromStandby,vision:vision.snapshot(),scene:displayContext(),interactionId},signal:controller.signal});
       const streamed=await readVoiceReply(response,(wav,part,language)=>{
         const first=!streamHasAudio;streamHasAudio=true;
         if(first){metrics.replyAt=performance.now();metrics.transcriptToReplyMs=Math.round(metrics.replyAt-metrics.transcriptAt);}
@@ -1178,6 +1206,7 @@ if (!hud || !launcher || !canvas) {
         }).catch(error=>{if(session!==voiceSession)return;playbackError=error;controller.abort();interruptReply();setState('ready',error.message);scheduleListening(voiceSession,250);});
       });
       if(streamed.interrupted){
+        reportDelivery(interactionId,false);
         await audioChain;
         if(!opened||session!==voiceSession||playbackError)return;
         voiceBusy=false;lastInteraction=performance.now();
@@ -1189,6 +1218,7 @@ if (!hud || !launcher || !canvas) {
       if(streamed.spoken){
         void audioChain.then(()=>{
           if(!opened||session!==voiceSession||playbackError)return;
+          reportDelivery(interactionId,true);
           voiceBusy=false;lastInteraction=performance.now();
           window.dispatchEvent(new CustomEvent('travis:speech-end'));
           setState(standby||voicePaused?'idle':'ready',standby?'Standing by. Say Travis.':'I’m here.');
@@ -1230,6 +1260,7 @@ if (!hud || !launcher || !canvas) {
       if (!opened || session!==voiceSession) return;
 
       await playVoiceArrayBuffer(wav,session,reply,metrics);
+      if(opened&&session===voiceSession&&!controller.signal.aborted)reportDelivery(interactionId,true);
 
       if (answer.result?.action==='open_url' && answer.result?.url && answer.ui?.kind!=='youtube') {
         const url=String(answer.result.url);
@@ -1401,6 +1432,7 @@ if (!hud || !launcher || !canvas) {
       const health=await localHealth(controller.signal);
       if (!opened || session!==voiceSession) return;
       if (!health?.ok) throw new Error('Travis local indisponível.');
+      liveSttEnabled=health.liveStt===true;
       if (loadingLabel) {
         loadingLabel.textContent='TRAVIS LOCAL · VOICE ONLINE';
         loadingLabel.classList.add('is-done');

@@ -13,4 +13,12 @@ uncertain.push(new Float32Array(2000));assert.equal(await uncertain.finish(),nul
 const unavailable=createLiveSTT(async()=>{throw Error('model unavailable');});
 unavailable.push(new Float32Array(8192));assert.equal(await unavailable.finish(),null);
 const cancellations=[];const cancelled=createLiveSTT(async x=>{cancellations.push(x);return null;});cancelled.cancel();await Promise.resolve();assert.equal(cancellations[0].cancel,true);
+let attempts=0,release;
+const slow=createLiveSTT(async()=>{attempts++;return new Promise(resolve=>{release=resolve;});});
+slow.push(new Float32Array(8192));await Promise.resolve();
+for(let i=0;i<12;i++)slow.push(new Float32Array(8192));
+assert.equal(await slow.finish(),null,'A slow stream falls back instead of queuing an entire utterance');
+release?.(null);await Promise.resolve();assert.equal(attempts,1,'Stale queued fragments are dropped');
+const disabled=createLiveSTT(async()=>({available:false}));disabled.push(new Float32Array(8192));
+await Promise.resolve();assert.equal(await disabled.finish(),null);
 console.log('PASS live STT: ordered PCM, no sample loss, one final, uncertainty/offline fallback, cancellation');

@@ -636,13 +636,13 @@ def sync_travis_client(ref):
         for asset, consumer in (("travis-figures.mjs", "travis-action-cards.mjs"), ("travis-figure-catalog.mjs", "travis-figures.mjs"), ("travis-scene-focus.mjs", "travis-concept-projection.mjs"), ("travis-anatomy.mjs", "travis-action-cards.mjs"), ("travis-anatomy-catalog.mjs", "travis-anatomy.mjs"), ("travis-scene-blueprint.mjs", "travis-scene-planner.mjs"), ("travis-scene-composer.mjs", "travis-concept-projection.mjs"), ("travis-atmosphere.mjs", "travis-3d.mjs"), ("travis-cinema-depth.css", "index.html")):
             if asset+"?v=figures-1" not in fetched[consumer] or asset+"?v=figures-1" not in fetched["sw.js"]:
                 raise RuntimeError("Inconsistent constructed-scene asset: "+asset)
-        if "travis-3d.mjs?v=continuity-1" not in fetched["index.html"]:
+        if "travis-3d.mjs?v=continuous-2" not in fetched["index.html"]:
             raise RuntimeError("index.html: versão de voz inesperada")
         if "travis-audio-sync.mjs?v=1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: sincronização de voz ausente")
         if "travis-vision.mjs?v=scene-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: visão não ligada")
-        if "travis-3d.mjs?v=continuity-1" not in fetched["sw.js"]:
+        if "travis-3d.mjs?v=continuous-2" not in fetched["sw.js"]:
             raise RuntimeError("sw.js: cache desatualizada")
         if "travis-action-cards.mjs?v=figures-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: cinematic action deck not connected")
