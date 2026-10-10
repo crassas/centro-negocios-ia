@@ -27,6 +27,16 @@ O instalador fixa o commit upstream `591f299d11f38a612629a274463196d57ae3862e` (
 
 O arranque usa `setsid` e o processo Node/Vite directamente, de forma independente da sessão Remote Desktop Commander ou do terminal que emitiu o comando. É idempotente quando a instância existente responde: não encerra processos e recusa ocupar uma porta 4173 já utilizada. Liga apenas ao endereço local, nunca à rede pública. **Após reiniciar o Android ou a sessão Ubuntu/Proot, executar novamente `bash scripts/travis-gev-keyless.sh start`.** Não cria serviço de arranque automático — primeiro confirmar estabilidade e consumo de memória.
 
+### Recuperação automática após queda do serviço
+
+A extensão opcional `scripts/travis-gev-watch.py` foi instalada em `/root/.centro-extensions/travis_gev_watch.py`. O watcher já existente `/root/.centro-extensions/travis-world-watch.py` importa `ensure_keyless_sidecar` e chama-a antes de verificar as reparações CCTV. Não é criado outro supervisor permanente.
+
+A recuperação fica **desactivada por defeito** até existir `/root/.centro-extensions/travis-gev-keyless.enabled`. Sem este ficheiro, o watcher não inicia o Cesium. Com o ficheiro presente, verifica o HTML local a cada 25 segundos (aproximadamente) e, se necessário, pede novo arranque com pelo menos 1024 MiB de memória disponível. Limita novas tentativas a 110 segundos. Se a porta 4173 estiver ocupada por outro serviço, não termina nem substitui esse processo.
+
+O estado pode ser consultado em `/root/.local/state/travis-gev/watch-status.json`, e o registo de arranques em `/root/.local/state/travis-gev/watch.log`. Para impedir futuros arranques automáticos, remover apenas o ficheiro de activação; isso não termina nenhum serviço em curso.
+
+**Teste real de recuperação (10-10-2026):** paragem controlada do processo Vite com PID verificado; o watcher pediu novo arranque, a aplicação voltou a responder com HTTP 200, e o gateway CCTV manteve HTTP 200. Não foi executado um ensaio de reinício completo do Android/PRoot.
+
 ### MCP para Claude e Codex (opcional, após o teste HTTP)
 
 ```bash
