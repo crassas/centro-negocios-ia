@@ -76,7 +76,7 @@ const NAMED=/\b(?:gods?\s+(?:eye|eyes|ai)(?:\s+view)?|eye of god|godseye|globo|m
 const COMMAND=/\b(?:activate|deactivate|engage|start|open|show|take|fly|go|navigate|turn|switch|enable|disable|close|hide|stop|mostra|mostrar|abre|abrir|ativa|ativar|activa|activar|liga|ligar|ir|vai|voa|voar|leva|navega|desliga|desligar|fecha|fechar|oculta|esconde|mete|poe|poer)\b/;
 const NEGATIVE=/\b(?:hide|disable|deactivate|remove|off|desliga|desligar|esconde|oculta|ocultar|retira|retirar|tira)\b/;
 const EXIT=/\b(?:back to travis|return to travis|voltar ao travis|regressa ao travis|fecha o mapa|fechar o globo|close the globe|exit gods eye|sair do globo)\b/;
-const ENGLISH=/\b(?:please|show|fly|take|open|close|enable|disable|earth|globe|flight|flights|satellite|satellites|weather|back|return|switch|map|show me|on|off|to)\b/;
+const ENGLISH=/\b(?:please|activate|deactivate|engage|show|fly|take|open|close|enable|disable|earth|globe|flight|flights|satellite|satellites|weather|back|return|switch|map|show me|on|off|to)\b/;
 
 export function interpretGeoRequest(raw,{active=false}={}){
   const text=normalizeGeoText(raw);
@@ -101,7 +101,7 @@ export function interpretGeoRequest(raw,{active=false}={}){
   if(active && /\b(?:osm|openstreetmap|esri|satellite imagery|imagem satelite)\b/.test(text)){
     return {type:'map',map:/\b(?:osm|openstreetmap)\b/.test(text)?'osm':'esri-imagery',language};
   }
-  if((active||named) && layers.length && (active||action)){
+  if(layers.length && (active||action||named)){
     return {type:'layers',layers:layers.map(layer=>layer.key),enable:!NEGATIVE.test(text),place,coordinates,language};
   }
   if((place||coordinates) && (active||action||named)){
