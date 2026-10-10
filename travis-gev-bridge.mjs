@@ -82,7 +82,7 @@ function queue(){
 function fallback(reason){
   if(!active())return;
   state.error=reason;
-  const place=state.place in (original?.locations||{})?state.place:'earth';
+  const place=Array.isArray(original?.locations)&&original.locations.includes(state.place)?state.place:'earth';
   teardown(false);
   if(original?.open) {
     original.open(place);
