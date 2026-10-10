@@ -48,7 +48,7 @@ function remainingArea(s){
 export function cameraIntent(raw){
   const s=normalizeCctvText(raw);
   if(!s||DEVICE.test(s)||!CAMERA.test(s)||QUESTION.test(s))return null;
-  const lang=ENGLISH.test(s)?'en':'pt';
+  const lang=/\b(?:mostra|abre|liga|seleciona|escolhe|procura|encontra|quero|camara|camaras|publicas|qualquer|proxima|outra|podes)\b/.test(s)?'pt':ENGLISH.test(s)?'en':'pt';
   const location=AREA_REFERENCES.find(x=>x.match.test(s))||null;
   const unknown=NOAREA.test(s)?null:location?null:remainingArea(s);
   const scope=location||unknown?{...location||{},...(unknown?{name:unknown,city:unknown}:{}),explicit:true}:null;
