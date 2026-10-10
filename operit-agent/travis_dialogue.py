@@ -18,6 +18,11 @@ def control(text):
         (r'(?:toma a iniciativa|podes tomar a iniciativa|ativa a iniciativa|be proactive|take initiative)', 'proactive', True),
         (r'(?:nao tomes a iniciativa|desativa a iniciativa|sem interrupcoes|stop being proactive|quiet mode)', 'proactive', False),
     ]
+    # Preserve explicit language overrides already installed on the phone.
+    if re.fullmatch(r'(?:fala|responde|conversa|speak|answer|talk)(?: comigo| to me)? (?:so |apenas |only )?(?:em |in )?(?:ingles|english)(?: only)?', t):
+        return {'setting':'language','value':'en'}
+    if re.fullmatch(r'(?:fala|responde|conversa|speak|answer|talk)(?: comigo| to me)? (?:so |apenas |only )?(?:em |in )?(?:portugues(?: de portugal)?|portuguese)(?: only)?', t):
+        return {'setting':'language','value':'pt'}
     for pattern, setting, value in choices:
         if re.fullmatch(pattern, t): return {'setting': setting, 'value': value}
     return None
@@ -69,6 +74,15 @@ def portuguese_reply(tool, result, fallback):
         if result.get('videos'): return 'Aqui estão os vídeos. Podes escolher o primeiro, o segundo ou outro resultado.'
         return 'Não tenho um vídeo confirmado para abrir. Diz-me o que queres procurar.'
     if tool == 'create_task': return 'Tarefa criada: ' + result['title']
+    if tool == 'agent_workflow':
+        names={'Tasks':'Tarefas','Agents':'Agentes','Published sites':'Sites publicados','Repositories':'Repositórios','Memory':'Memória','Search visibility':'Visibilidade nas pesquisas','Gmail':'Gmail','Centro':'Centro'}
+        return 'Verifiquei ' + str(result['completed']) + ' de ' + str(result['total']) + ' áreas pedidas. ' + '; '.join(names.get(x['title'],x['title']) + ': ' + x['detail'].replace('Agent confirmed active','Agente ativo').replace('tasks returned','tarefas encontradas').replace('Centro online','Centro ativo').replace('published sites confirmed online','sites publicados online') for x in result['steps'])
+    if tool == 'web_search': return 'Encontrei ' + str(len(result['results'])) + ' resultados públicos. Escolhe um no holograma e posso ler a página.'
+    if tool == 'site_check':
+        return '; '.join(key + ': ' + ('online' if value.get('online') else 'não foi possível confirmar') for key,value in result.items())
+    if tool == 'agent_sessions': return 'O agente de execução está ' + ('ativo.' if result.get('agent') else 'sem confirmação de atividade.')
+    if tool == 'gmail_inbox': return 'Consegui consultar o Gmail. Encontrei ' + str(len(result.get('messages', []))) + ' mensagens recentes.'
+    if tool == 'neural_status': return 'Memória local: ' + str(result.get('neurons',0)) + ' nós e ' + str(result.get('synapses',0)) + ' ligações.'
     if tool == 'task_list':
         rows = result['tasks']; return ('Tens ' + str(len(rows)) + ' tarefas pendentes. ' + '. '.join(r['title'] for r in rows[:3])) if rows else 'Não tens tarefas pendentes no Travis.'
     if tool == 'note_fact': return 'Guardei essa informação na memória.'
