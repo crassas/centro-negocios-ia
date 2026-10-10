@@ -2,6 +2,8 @@
 // phoneme alignment. Source audio completion remains authoritative.
 const fold=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const topics=[
+ ['science','Black hole',/\b(?:black hole|buraco negro)\b/g],
+ ['science','Aurora',/\b(?:aurora|northern lights)\b/g],
  ['weather','rain',/\b(?:chuva|chover|rain|rainfall)\b/g],
  ['weather','snow',/\b(?:neve|snow)\b/g],
  ['weather','fire',/\b(?:fogo|chama|fire|flames)\b/g],
@@ -10,8 +12,8 @@ const topics=[
  ['space','Space',/\b(?:space|espaco|galaxy|galaxia|universe|universo)\b/g],
  ['planet','Solar system',/\b(?:solar system|sistema solar)\b/g],
  ...Object.entries({Mercury:'mercury|mercurio',Venus:'venus',Earth:'earth|terra',Mars:'mars|marte',Jupiter:'jupiter',Saturn:'saturn|saturno',Uranus:'uranus|urano',Neptune:'neptune|neptuno',Moon:'moon|lua',Sun:'sun|sol'}).map(([name,terms])=>['planet',name,new RegExp('\\b(?:'+terms+')\\b','g')]),
- ['diagram','DNA',/\b(?:dna|adn|double helix|dupla helice)\b/g],
- ['diagram','Atom',/\b(?:atom|atoms|atomo|atomos)\b/g],
+ ['science','DNA',/\b(?:dna|adn|double helix|dupla helice)\b/g],
+ ['science','Hydrogen',/\b(?:atom|atoms|atomo|atomos)\b/g],
  ['house','House',/\b(?:house|houses|casa|casas)\b/g],
  ['vehicle','Car',/\b(?:car|cars|carro|carros)\b/g]
 ];
@@ -38,6 +40,7 @@ export function cueAtTime(cues,elapsed,duration){
 }
 export function hasLocalVisual(scene,title){
  const t=fold(title).replace(/[.!?]/g,'').trim();
+ if(scene==='science')return /^(?:black hole|aurora|dna|hydrogen)$/.test(t);
  if(scene==='text')return true;
  if(scene==='journey')return /^(?:earth to mars|earth to moon)$/.test(t);
  if(scene==='weather')return /^(?:rain|storm|snow|fire|ocean|clouds|drop)$/.test(t);

@@ -4,7 +4,7 @@ import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
 import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
 import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
 import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
-import {createConceptProjection} from '../../travis-concept-projection.mjs?v=cinematic-1';
+import {createConceptProjection} from '../../travis-concept-projection.mjs?v=discovery-1';
 import {createHolographicHeadMaterial} from '../../travis-holographic-head.mjs?v=sand-1';
 import {createHologramPresentation} from '../../travis-presence.mjs?v=motion-1';
 import {MOTION,clamp01} from '../../travis-motion.mjs?v=motion-1';

@@ -137,3 +137,41 @@ a duração final é desconhecida, a cena reserva a chegada para uma indicação
 chegada na fala ou para o evento de fim da resposta. É uma aproximação por secções,
 não alinhamento fonético ou interpretação arbitrária de todas as ações narradas.
 «Isola uma gota» abre uma forma local e «Mostra tudo» recupera a cena anterior.
+
+## Discovery — viagens pessoais narradas
+
+«Surpreende-me», «Leva-me ao futuro» e «Surprise me» abrem uma viagem local de
+seis capítulos: galáxia, buraco negro, Terra, aurora, ADN e hidrogénio. «Explora o
+invisível» percorre os dois últimos. Cada capítulo tem um pequeno texto PT/EN
+revisto, uma cena e a fonte conceptual disponível em **Fontes**. Não há pesquisa
+fingida, serviço pago adicional nem acesso automático à câmara.
+
+O capítulo só muda quando o seu áudio está pronto e o anterior terminou.
+`playDiscovery` prepara, no máximo, um capítulo adiantado. Uma interrupção invalida
+a sessão e os áudios preparados; não há temporizadores a abrir cenas antigas.
+No fim, a projeção regressa ao rosto. Arrastar a cena roda o objeto; dois dedos
+ou a roda do rato alteram a ampliação. Uma manipulação fixa a cena atual e, numa
+viagem narrada, interrompe a viagem. «Volta ao Travis» fecha-a; «Surpreende-me»
+inicia uma nova viagem. A rotação livre é horizontal, sem controlo de inclinação.
+
+Novas formas locais, com material dourado e transição pela mesma nuvem:
+- ADN: dupla hélice esquemática, 42 pares de bases; todas as peças numa única malha.
+- Hidrogénio: 6 200 amostras da distribuição 1s (`r ~ Gamma(3, 1/2)` em unidades
+  de Bohr), cauda limitada para o enquadramento. Os pontos representam a
+  probabilidade de encontrar **um** eletrão; o núcleo está exagerado.
+- Aurora: cortinas de partículas e filamentos ondulantes; dourado artístico.
+- Buraco negro: sombra central, disco luminoso, partículas em rotação e arco
+  sugestivo da lente gravitacional. Não calcula geodésicas nem física relativista.
+
+Fontes: [NASA — Black holes](https://science.nasa.gov/universe/black-holes/),
+[NASA — Auroras](https://science.nasa.gov/sun/auroras/),
+[NHGRI — Double helix](https://www.genome.gov/genetics-glossary/Double-Helix),
+[DOE — Electrons](https://www.energy.gov/science/doe-explainselectrons).
+As geometrias são originais e procedurais. As fontes documentam os conceitos;
+não são fornecedores de modelos nem de fotografias destas cenas.
+
+`travis-discovery-selftest` cobre intenções e cancelamento. O teste de browser
+com o mesmo nome usa o Three real e áudio de teste para verificar quatro cenas,
+pausa, arrasto, ampliação, correspondência exata entre capítulo e fala,
+interrupção, regresso ao rosto e reabertura. O desempenho no GPU do telemóvel
+continua sujeito ao dispositivo; o teste de browser utiliza Chromium em software.

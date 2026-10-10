@@ -1,8 +1,9 @@
 import { createLiveSTT } from './travis-live-stt.mjs?v=live-1';
 import { readVoiceReply } from './travis-voice-stream.mjs?v=live-1';
 import {createMotionAudio} from './travis-motion-audio.mjs?v=motion-1';
-import { createConceptProjection } from './travis-concept-projection.mjs?v=cinematic-1';
-import './travis-action-cards.mjs?v=cinematic-1';
+import {playDiscovery} from './travis-discovery.mjs?v=discovery-1';
+import { createConceptProjection } from './travis-concept-projection.mjs?v=discovery-1';
+import './travis-action-cards.mjs?v=discovery-1';
 import { createVoiceInput } from './travis-voice-input.mjs?v=live-1';
 import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=motion-1';
 import { INTERFACE_COPY, interfaceLanguage, applyInterfaceLanguage, languageFromInterfaceCommand } from './travis-interface-language.mjs?v=1';
@@ -126,6 +127,7 @@ if (!hud || !launcher || !canvas) {
   let commandTarget = 0;
   let hoverNode = null;
   let pointerDown = null;
+  const inspectionPointers=new Map();let inspecting=false;
   let audioContext = null;
   let resizeTimer = 0;
   let externalVoiceLevel = null;
@@ -1041,6 +1043,18 @@ if (!hud || !launcher || !canvas) {
         }
       }
       if(interpretation?.rewritten)text=interpretation.rewritten;
+      if(interpretation?.chapters?.length){
+        replyLanguage=interpretation.language==='pt'?'pt':'en';
+        setState('thinking',replyLanguage==='pt'?'A abrir a viagem…':'Opening the journey…');
+        await playDiscovery(interpretation.chapters,{
+          valid:()=>opened&&session===voiceSession&&!controller.signal.aborted,
+          prepare:async chapter=>{const speech=await localFetch('/speak',{body:{text:chapter.text,language:replyLanguage},signal:controller.signal});if(!speech.ok)throw new Error(replyLanguage==='pt'?'A voz não está disponível agora.':'Voice is unavailable right now.');return speech.arrayBuffer();},
+          present:(chapter,index,total)=>window.TravisProjection.presentDiscoveryChapter(chapter,index,total),
+          play:(wav,chapter)=>playVoiceArrayBuffer(wav,session,chapter.text,null,true),
+          finish:()=>{voiceBusy=false;lastInteraction=performance.now();window.dispatchEvent(new CustomEvent('travis:speech-end'));setState(voicePaused?'idle':'ready',replyLanguage==='pt'?'Estou aqui.':'I’m here.');scheduleListening(session,100);}
+        });
+        return;
+      }
       if(interpretation?.handled){
         if(!interpretation.reply){
           voiceBusy=false;setState('ready','I’m here.');scheduleListening(session,180);
@@ -2136,8 +2150,23 @@ if (!hud || !launcher || !canvas) {
     return [coreHit,faceHit].filter(Boolean);
   }
 
+  function canInspect(){const state=conceptProjection?.state();return Boolean(state?.visible&&!['text','reference'].includes(state.kind));}
+  function startInspect(){
+    if(inspecting)return;inspecting=true;pointerDown=null;
+    if(window.TravisProjection?.status().discovery&&voiceBusy){interruptReply();setState('ready','Explore.');scheduleListening(voiceSession,250);}
+    window.dispatchEvent(new Event('travis:visual-inspect'));
+  }
   function onPointerMove(event) {
     if (!opened || !ready) return;
+    if(inspectionPointers.has(event.pointerId)&&canInspect()){
+      const old=inspectionPointers.get(event.pointerId),other=[...inspectionPointers.entries()].find(([id])=>id!==event.pointerId)?.[1];
+      inspectionPointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
+      if(other){
+        const before=Math.hypot(old.x-other.x,old.y-other.y),after=Math.hypot(event.clientX-other.x,event.clientY-other.y);
+        if(before>8&&after>8){startInspect();conceptProjection.inspect({scale:after/before});}
+      }else if(inspecting||pointerDown&&Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y)>8){startInspect();conceptProjection.inspect({turn:(event.clientX-old.x)*.009});}
+      return;
+    }
     rayFromEvent(event);
     const hit=raycaster.intersectObjects(interactiveObjects(),true)[0];
     const next=hit?.object?.userData?.node || null;
@@ -2146,10 +2175,14 @@ if (!hud || !launcher || !canvas) {
   }
 
   function onPointerDown(event) {
+    if(!opened||!ready||event.button>0)return;
+    if(canInspect()){if(!inspectionPointers.size)inspecting=false;inspectionPointers.set(event.pointerId,{x:event.clientX,y:event.clientY});try{canvas.setPointerCapture?.(event.pointerId);}catch{}}
     pointerDown={x:event.clientX,y:event.clientY,time:performance.now()};
   }
 
   function onPointerUp(event) {
+    inspectionPointers.delete(event.pointerId);
+    if(inspecting){pointerDown=null;if(!inspectionPointers.size)inspecting=false;return;}
     if (!opened || !ready || !pointerDown) return;
     const moved=Math.hypot(event.clientX-pointerDown.x,event.clientY-pointerDown.y);
     const elapsed=performance.now()-pointerDown.time;
@@ -2249,7 +2282,9 @@ if (!hud || !launcher || !canvas) {
   canvas.addEventListener('pointermove',onPointerMove,{passive:true});
   canvas.addEventListener('pointerdown',onPointerDown,{passive:true});
   canvas.addEventListener('pointerup',onPointerUp,{passive:true});
-  canvas.addEventListener('pointercancel',()=>{pointerDown=null},{passive:true});
+  canvas.addEventListener('pointercancel',event=>{inspectionPointers.delete(event.pointerId);pointerDown=null;if(!inspectionPointers.size)inspecting=false;},{passive:true});
+  canvas.addEventListener('wheel',event=>{if(!canInspect())return;event.preventDefault();startInspect();conceptProjection.inspect({scale:Math.exp(-event.deltaY*.0015)});inspecting=false;},{passive:false});
+  window.addEventListener('travis:close',()=>{inspectionPointers.clear();pointerDown=null;inspecting=false;});
   addEventListener('resize',()=>{
     clearTimeout(resizeTimer);
     resizeTimer=setTimeout(resize,80);

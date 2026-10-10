@@ -5,8 +5,9 @@ import {buildNarrationCues,cueAtTime,hasLocalVisual} from '../travis-visual-stor
 for(const [text,scene,variant] of [
  ['Mostra Júpiter','planet','jupiter'],['Mostra Marte','planet','mars'],['Mostra a Terra','planet','earth'],
  ['Mostra o Sol','planet','sun'],['Mostra o espaço','space','galaxy'],['Mostra o sistema solar','planet','solar-system'],
- ['Mostra-me ADN','diagram','dna'],['Mostra-me um átomo','diagram','atom'],['Mostra-me um cubo','object','cube']
+ ['Mostra-me um cubo','object','cube']
 ]){const intent=parseVisualIntent(text);assert.equal(intent.scene,scene,text);assert.equal(identifyVisualSubject(scene,intent.title),variant,text);assert(hasLocalVisual(scene,intent.title));}
+for(const [text,title] of [['Mostra-me ADN','DNA'],['Mostra-me um átomo','Hydrogen']]){const i=parseVisualIntent(text);assert.equal(i.scene,'science');assert.equal(i.title,title);assert(hasLocalVisual(i.scene,i.title));}
 for(const [text,result] of [['Escreve OLÁ','OLÁ'],['Mostra as letras "TRAVIS"','TRAVIS'],['Show the word "Earth"','Earth'],['Mostra letras','ABC']]){const intent=parseVisualIntent(text);assert.equal(intent.scene,'text',text);assert.equal(intent.title,result,text);}
 assert(parseVisualIntent('Explica-me o sistema solar').explain);
 assert.equal(parseVisualIntent('Não mostres Júpiter'),null);

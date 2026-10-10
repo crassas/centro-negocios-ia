@@ -49,7 +49,7 @@ try{
  for(const [request,variant] of [
   ['Mostra-me Júpiter','jupiter'],['Mostra-me Marte','mars'],['Mostra-me a Terra','earth'],
   ['Mostra-me o Sol','sun'],['Mostra-me o espaço','galaxy'],['Mostra as letras "TRAVIS"','text'],
-  ['Mostra-me ADN','dna'],['Mostra-me uma casa','detailed-house'],['Mostra uma casa moderna','modern-house'],['Show a building','apartment-building'],['Mostra um motor elétrico','motor-cutaway']
+  ['Mostra-me ADN','dna-double-helix'],['Mostra-me uma casa','detailed-house'],['Mostra uma casa moderna','modern-house'],['Show a building','apartment-building'],['Mostra um motor elétrico','motor-cutaway']
  ]){
   const receipt=await page.evaluate(request=>TravisProjection.interpret(request),request);
   assert(receipt?.handled,request);await page.waitForTimeout(1600);

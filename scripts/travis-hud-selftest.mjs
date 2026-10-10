@@ -22,8 +22,8 @@ for(const text of ['id="travis-three-canvas"','id="travis-camera-toggle"','id="t
 for(const file of ['travis-cinema.css','travis-cinema-depth.css','travis-vision.mjs','travis-vision-policy.mjs']){
   assert(fs.statSync(file).size>100,'Missing cinematic/vision asset: '+file);
 }
-assert(html.includes('travis-3d.mjs?v=cinematic-1'),'Main scene version must match release.');
-assert(sw.includes('travis-3d.mjs?v=cinematic-1'),'PWA cache must use the released scene.');
+assert(html.includes('travis-3d.mjs?v=discovery-1'),'Main scene version must match release.');
+assert(sw.includes('travis-3d.mjs?v=discovery-1'),'PWA cache must use the released scene.');
 assert(sw.includes('travis-vision.mjs?v=scene-1'),'PWA cache must use current camera script.');
 assert(cinema.length>1000 && cinemaDepth.length>1000,'Cinematic layers must be present.');
 assert(css.includes('#travis-three-canvas'),'Full-screen scene styling required.');
@@ -45,11 +45,11 @@ assert(ui.includes("import { buildSpeechEnvelope, speechEnvelopeLevel }"),'Playb
 assert(ui.includes('isPlayback:()=>Boolean(voiceSource)'),'Microphone must distinguish playback for guarded interruptions.');
 assert(ui.includes('speechClock={source,context:ac,start:startAt,envelope};'),'Lip movement must be tied to audio clock.');
 assert(sw.includes('travis-audio-sync.mjs?v=1'),'PWA must cache the audio synchronization module.');
-assert(ui.includes("import './travis-action-cards.mjs?v=cinematic-1'"),'3D client must initialize the projection deck');
+assert(ui.includes("import './travis-action-cards.mjs?v=discovery-1'"),'3D client must initialize the projection deck');
 assert(ui.includes('TravisProjection?.interpret?.(text)'),'Voice/keyboard must share the visual interpreter');
-assert(sw.includes('travis-concept-projection.mjs?v=cinematic-1'),'PWA must cache 3D projections');
-assert(sw.includes('travis-english-intents.mjs?v=cinematic-1'),'PWA must cache English grammar');
-assert(sw.includes('travis-action-cards.mjs?v=cinematic-1'),'PWA must cache auto-return action deck');
+assert(sw.includes('travis-concept-projection.mjs?v=discovery-1'),'PWA must cache 3D projections');
+assert(sw.includes('travis-english-intents.mjs?v=discovery-1'),'PWA must cache English grammar');
+assert(sw.includes('travis-action-cards.mjs?v=discovery-1'),'PWA must cache auto-return action deck');
 
 assert(vision.includes('navigator.mediaDevices.getUserMedia'),'Browser camera permission must remain explicit.');
 assert(vision.includes('audio: false'),'Camera start must not open the microphone.');

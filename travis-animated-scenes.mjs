@@ -1,6 +1,6 @@
-import {createDetailedSubject} from './travis-visual-subjects.mjs?v=cinematic-1';
+import {createDetailedSubject} from './travis-visual-subjects.mjs?v=discovery-1';
 import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=sand-1';
-import {transferState} from './travis-scene-planner.mjs?v=cinematic-1';
+import {transferState} from './travis-scene-planner.mjs?v=discovery-1';
 const clamp=t=>Math.max(0,Math.min(1,t));
 export function createAnimatedScene(THREE,kind,subject){
  const group=new THREE.Group(),materials=[],textures=[];let last={};

@@ -1,12 +1,13 @@
-import {bodyNames} from './travis-scene-planner.mjs?v=cinematic-1';
+import {discoveryChapters,scienceReference} from './travis-discovery.mjs?v=discovery-1';
+import {bodyNames} from './travis-scene-planner.mjs?v=discovery-1';
 import {createVisualSources} from './travis-visual-sources.mjs?v=sand-1';
 // Front workspace driven by actual host tool results. Text is always inert.
 import {MOTION,revealCaption,readingHold} from './travis-motion.mjs?v=motion-1';
 import {decodeReferenceModel,disposeReferenceModel} from './travis-model-library.mjs?v=sand-1';
 import {hologramPresentation as projection} from './travis-presence.mjs?v=motion-1';
 import {mountYouTube,closeYouTube,controlYouTube,youtubeState} from './travis-youtube.mjs?v=3';
-import {parseVisualIntent,rewriteEnglishToolRequest,mayNeedVisualModel} from './travis-english-intents.mjs?v=cinematic-1';
-import {buildNarrationCues,cueAtTime,hasLocalVisual} from './travis-visual-story.mjs?v=cinematic-1';
+import {parseVisualIntent,rewriteEnglishToolRequest,mayNeedVisualModel} from './travis-english-intents.mjs?v=discovery-1';
+import {buildNarrationCues,cueAtTime,hasLocalVisual} from './travis-visual-story.mjs?v=discovery-1';
 const hud=document.getElementById('travis-hud');
 const deck=document.getElementById('travis-action-deck');
 const heading=document.getElementById('travis-action-heading');
@@ -39,10 +40,10 @@ function updatePin(){
   heading.title=pinned?'Pinned until you dismiss it':'Returns to Travis automatically';
 }
 const schematic=(scene,title)=>{
-  const names={weather:'WEATHER',journey:'SPACE JOURNEY',model:'3D MODEL',mechanical:'ELECTRIC MOTOR · CUTAWAY',text:'TEXT',space:'SPACE',reference:'VISUAL REFERENCE',planet:'PLANETARY CONCEPT',map:'SCHEMATIC MAP',house:'ARCHITECTURAL WIREFRAME',
+  const names={science:'DISCOVERY',weather:'WEATHER',journey:'SPACE JOURNEY',model:'3D MODEL',mechanical:'ELECTRIC MOTOR · CUTAWAY',text:'TEXT',space:'SPACE',reference:'VISUAL REFERENCE',planet:'PLANETARY CONCEPT',map:'SCHEMATIC MAP',house:'ARCHITECTURAL WIREFRAME',
     person:'HUMAN FIGURE CONCEPT',vehicle:'VEHICLE CONCEPT',landscape:'NATURE CONCEPT',
     diagram:'CONCEPT DIAGRAM',object:'OBJECT WIREFRAME'};
-  const summaries={weather:'Procedural animated illustration of a natural phenomenon.',journey:'Illustrative orbital transfer; sizes and time are compressed. No launch dynamics, ephemerides or gravity assists are calculated.',model:'Sourced three-dimensional geometry with Travis holographic material.',mechanical:'Generic educational electric motor cutaway; not measured CAD.',text:'Letterforms made of holographic light.',space:'Illustrative star field, not a live sky chart.',reference:'Holographic relief from a sourced image; not a recovered 3D model.',planet:'Illustrative orbital model, not NASA imagery.',
+  const summaries={science:'Educational illustration; scale, colour and motion are simplified.',weather:'Procedural animated illustration of a natural phenomenon.',journey:'Illustrative orbital transfer; sizes and time are compressed. No launch dynamics, ephemerides or gravity assists are calculated.',model:'Sourced three-dimensional geometry with Travis holographic material.',mechanical:'Generic educational electric motor cutaway; not measured CAD.',text:'Letterforms made of holographic light.',space:'Illustrative star field, not a live sky chart.',reference:'Holographic relief from a sourced image; not a recovered 3D model.',planet:'Illustrative orbital model, not NASA imagery.',
     map:'Illustrative route grid, not live geography or verified coordinates.',
     house:'Conceptual building geometry, not a survey or architectural plan.',
     person:'Generic holographic figure, not a reconstruction of a real person.',
@@ -59,10 +60,12 @@ const schematic=(scene,title)=>{
       url:'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(query.slice(0,120))
     });
   }
+  if(scene==='science'){const ref=scienceReference(title);if(ref){result.sourceName=ref.sourceName;result.sourceUrl=ref.sourceUrl;}}
   return result;
 };
 const clock=()=>performance.now()/1000;
 const menu={kind:'capabilities',title:'Your workspace',items:[
+  {title:'Discovery',detail:'Uma viagem, do cosmos ao invisível',request:'Surpreende-me'},
   {title:'Estúdio visual',detail:'Percorrer as transformações do Travis',url:new URL('./tools/travis-motion/studio.html',location.href).href},
   {title:'Repositories',detail:'Inspect your projects',request:'Mostra os meus repositórios'},
   {title:'Tasks',detail:'Read your real task list',request:'Mostra as minhas tarefas'},
@@ -112,7 +115,7 @@ function render(data,{story=false}={}){
       if(command==='Previous image'){const count=document.createElement('span');count.textContent=(data.gallery.index+1)+' / '+data.gallery.count;navigation.append(count);}
     }
     caption.append(navigation);
-  }else if(data.kind==='illustration'&&!['text','reference','journey','weather'].includes(data.scene)){
+  }else if(data.kind==='illustration'&&!data.discovery&&!['text','reference','journey','weather','science'].includes(data.scene)){
     const photos=document.createElement('button');photos.type='button';photos.className='travis-reference-photos';photos.textContent='Photos';
     photos.addEventListener('click',()=>window.TravisVisual?.ask('Show photos of '+data.title));caption.append(photos);
   }
@@ -201,8 +204,9 @@ if(deck){
     render(data);window.TravisVisual?.commands(true,{automatic:true});
     show(true);
   });
+  window.addEventListener('travis:visual-inspect',()=>{cancelNarration();if(current){current.explaining=false;pinned=true;clearTimeout(returnTimer);updatePin();}});
   window.addEventListener('travis:visual-select',event=>{selectedVisual=event.detail?.target||null;if(selectedVisual)touchProjection();});
-  window.addEventListener('travis:speech-end',()=>{const explained=Boolean(narration);cancelNarration();if(explained&&current?.scene==='journey')window.dispatchEvent(new CustomEvent('travis:visual-timeline',{detail:{finish:true}}));scheduleReturn(explained?Math.max(2800,readingHold(current?.title||'')*1000):current?.scene==='journey'?26000:current?.kind==='illustration'?10500:13500);});
+  window.addEventListener('travis:speech-end',()=>{const explained=Boolean(narration);cancelNarration();if(explained&&current?.scene==='journey')window.dispatchEvent(new CustomEvent('travis:visual-timeline',{detail:{finish:true}}));scheduleReturn(current?.discovery?4200:explained?Math.max(2800,readingHold(current?.title||'')*1000):current?.scene==='journey'?26000:current?.kind==='illustration'?10500:13500);});
   window.addEventListener('travis:speech-cancel',()=>{cancelNarration();if(current)scheduleReturn(2800);});
   window.addEventListener('travis:user-start',()=>{cancelNarration();clearTimeout(returnTimer);returnTimer=0;});
   window.addEventListener('travis:state',event=>{
@@ -217,6 +221,11 @@ if(deck){
   });
   window.TravisProjection=Object.freeze({
     media:youtubeState,
+    presentDiscoveryChapter(chapter,index,total){
+      if(current?.discovery?.id===chapter.id)return;
+      render({...schematic(chapter.scene,chapter.title),sourceName:chapter.sourceName,sourceUrl:chapter.sourceUrl,explaining:true,discovery:{id:chapter.id,index,total}});
+      window.TravisVisual?.commands(true,{automatic:true});show();
+    },
     mayNeedModel:mayNeedVisualModel,
     applyModelIntent(result,text=''){
       const valid=['planet','map','house','person','vehicle','landscape','diagram','object','text','space','mechanical'];
@@ -230,12 +239,12 @@ if(deck){
         kind:'scene',source:'local-language-model',title:result.title,needsReference,researchQuery:needsReference?result.title:null,visualVersion:storyEpoch};
     },
     status:()=>({kind:current?.kind||null,scene:current?.scene||null,pinned,
-      autoReturn:current?.autoReturn!==false,highlighted,title:current?.title||'',gallery:current?.gallery?{index:current.gallery.index,count:current.gallery.count,query:current.gallery.query}:null,narration:narration?{index:narration.index,cues:narration.cues}:null,sourceUrl:current?.sourceUrl||null}),
+      autoReturn:current?.autoReturn!==false,discovery:current?.discovery||null,highlighted,title:current?.title||'',gallery:current?.gallery?{index:current.gallery.index,count:current.gallery.count,query:current.gallery.query}:null,narration:narration?{index:narration.index,cues:narration.cues}:null,sourceUrl:current?.sourceUrl||null}),
     beginNarration({text,context,start,duration,continuous=false}){
       if(!current?.explaining||pinned||!context)return;
       clearTimeout(returnTimer);returnTimer=0;
       const initial={scene:current.scene,title:current.title};
-      const cues=current.scene==='journey'?[{...initial,at:0}]:buildNarrationCues(text,initial);
+      const cues=current.scene==='journey'||current.discovery?[{...initial,at:0}]:buildNarrationCues(text,initial);
       if(current.scene==='journey')window.dispatchEvent(new CustomEvent('travis:visual-timeline',{detail:{context,start,duration,continuous,text}}));
       narration={cues,context,start,duration,index:0,epoch:storyEpoch};refresh();
     },
@@ -276,6 +285,11 @@ if(deck){
       if(!intent){
         const rewritten=rewriteEnglishToolRequest(text);
         return rewritten!==text?{handled:false,rewritten}:null;
+      }
+      if(intent.type==='discovery'){
+        const chapters=discoveryChapters(intent.ids,intent.language);wideScene=null;selectedVisual=null;
+        window.TravisProjection.presentDiscoveryChapter(chapters[0],0,chapters.length);
+        return {handled:true,kind:'discovery',language:intent.language,chapters,reply:chapters[0].text};
       }
       if(intent.type==='sound'){window.dispatchEvent(new CustomEvent('travis:motion-sound',{detail:{enabled:intent.enabled}}));return {handled:true,language:intent.language,kind:'control',reply:intent.language==='pt'?(intent.enabled?'Sons de movimento ligados.':'Sons de movimento desligados.'):(intent.enabled?'Motion sounds enabled.':'Motion sounds disabled.')};}
       if(intent.type==='focus'){

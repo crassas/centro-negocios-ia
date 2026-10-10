@@ -1,10 +1,11 @@
-import {journeyCueTarget} from './travis-scene-planner.mjs?v=cinematic-1';
-import {createAnimatedScene} from './travis-animated-scenes.mjs?v=cinematic-1';
+import {createScienceScene} from './travis-science-scenes.mjs?v=discovery-1';
+import {journeyCueTarget} from './travis-scene-planner.mjs?v=discovery-1';
+import {createAnimatedScene} from './travis-animated-scenes.mjs?v=discovery-1';
 import {createMechanical} from './travis-mechanical.mjs?v=sand-1';
 import {createArchitecture} from './travis-architecture.mjs?v=sand-1';
-import {createDetailedSubject,identifyVisualSubject} from './travis-visual-subjects.mjs?v=cinematic-1';
+import {createDetailedSubject,identifyVisualSubject} from './travis-visual-subjects.mjs?v=discovery-1';
 import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=sand-1';
-import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=cinematic-1';
+import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=discovery-1';
 // Film-inspired schematic projections. Unprovided geographic/CAD/person
 // geometry stays visibly conceptual; real source links are separate.
 export function createConceptProjection(THREE,{reducedMotion=false}={}){
@@ -188,11 +189,12 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   if(active.children.length)ghost={group:activeFrame,mats,textures,start:now};
   else dispose(activeFrame,mats,textures);
   active=new THREE.Group();activeFrame=new THREE.Group();activeFrame.add(active);root.add(activeFrame);mats=[];objects=[];textures=[];animated=null;motionTime=0;motionPaused=false;motionSpeed=1;narrationClock=null;journeyProgress=null;
-  kind=['orbit','atom','network','wave','planet','map','house','person','vehicle','landscape','diagram','object','text','space','reference','mechanical','model','weather','journey'].includes(scene)?scene:'network';
+  kind=['orbit','atom','network','wave','planet','map','house','person','vehicle','landscape','diagram','object','text','space','reference','mechanical','model','weather','journey','science'].includes(scene)?scene:'network';
   planetName=['earth','mars','venus','saturn','jupiter','uranus','neptune','mercury','moon','sun'].find(x=>
    new RegExp('\\b'+x+'\\b').test(String(subject).toLowerCase()))||'';
   born=now;zoom=1;dx=dy=spin=0;label=subject;variant=identifyVisualSubject(kind,subject);
-  if(['weather','journey'].includes(kind)||kind==='vehicle'&&/rocket|foguetao/i.test(subject)){animated=createAnimatedScene(THREE,kind,subject);active.add(animated.group);mats.push(...animated.materials);textures.push(...animated.textures);variant=animated.variant;}
+  if(kind==='science'){animated=createScienceScene(THREE,subject);if(animated){active.add(animated.group);mats.push(...animated.materials);textures.push(...animated.textures);variant=animated.variant;}}
+  else if(['weather','journey'].includes(kind)||kind==='vehicle'&&/rocket|foguetao/i.test(subject)){animated=createAnimatedScene(THREE,kind,subject);active.add(animated.group);mats.push(...animated.materials);textures.push(...animated.textures);variant=animated.variant;}
   else if(kind==='model'&&options.reference?.model){const built=options.reference.model;active.add(built.group);mats.push(...built.materials);textures.push(...built.textures);variant=built.variant;}
   else if(['text','space','reference'].includes(kind)||['dna','atom','cube','sphere','pyramid'].includes(variant)){const detailed=createDetailedSubject(THREE,kind,subject,options);if(detailed){active.add(detailed.group);mats.push(...detailed.materials);textures.push(...detailed.textures);variant=detailed.variant;animated=detailed.update?detailed:null;}}
   else if(kind==='mechanical'){const built=createMechanical(THREE,{exploded:options.exploded===true});active.add(built.group);mats.push(...built.materials);variant=built.variant;}
@@ -272,7 +274,7 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   }
   if(animated&&state.morphProgress>=1&&!state.returning){animated.update(reducedMotion?0:motionTime,reducedMotion?0:journeyProgress);if(animated.group)animated.group.userData.animationTime=motionTime;matter.points.visible=false;}
   if(reducedMotion||motionPaused)return;
-  if(state.morphProgress>=1&&!state.returning&&!['reference','text','weather','journey','planet'].includes(kind))active.rotation.y=turnBase+motionTime*.055;
+  if(state.morphProgress>=1&&!state.returning&&!['reference','text','weather','journey','planet','science'].includes(kind))active.rotation.y=turnBase+motionTime*.055;
   for(const o of objects){
    if(o.type==='planet'){o.surface.rotation.y=now*.22;o.meshWire.rotation.y=-now*.10;
     o.moon.position.set(Math.cos(now*.6)*1.03,Math.sin(now*.6)*.3,Math.sin(now*.6)*.77);}
@@ -289,6 +291,7 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
    }else if(o.type==='node')o.node.scale.setScalar(.95+Math.sin(now*1.3)*.12+voice*.22);
   }
  }
+ function inspect({turn=0,scale=1}={}){if(!kind||kind==='text'||kind==='reference')return false;if(Number.isFinite(turn))spin+=Math.max(-.5,Math.min(.5,turn));if(Number.isFinite(scale)&&scale>0)zoom=limit(zoom*Math.max(.8,Math.min(1.2,scale)),.5,2.5);return true;}
  function pick(raycaster){if(!root.visible)return null;for(const hit of raycaster.intersectObject(active,true)){let object=hit.object;while(object&&object!==active){if(object.userData.visualBody)return object.userData.visualBody;object=object.parent;}}return null;}
  function narrate(clock){
   if(clock?.finish&&kind==='journey'){narrationClock={context:{get currentTime(){return performance.now()/1000;}},start:performance.now()/1000,duration:1.2,from:journeyProgress??0,to:1};return;}
@@ -296,7 +299,7 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   const from=clock.continuous?Math.max(journeyProgress??animated?.state?.().progress??0,narrationClock?.to??0):0;
   narrationClock={...clock,from,to:clock.continuous?journeyCueTarget(clock.text,from,clock.duration):1};
  }
- return {root,show,hide,update,control,setSource,setCamera,returnToCore,pick,narrate,
+ return {root,show,hide,update,control,inspect,setSource,setCamera,returnToCore,pick,narrate,
   state:()=>({kind,variant,label,quality:'fine-surface-and-particles',zoom,dx,dy,rotation:spin,morphing:Boolean(ghost)||matter.state().morphProgress<1,
    visible:root.visible,textLayout:active.children.find(child=>child.userData.textLayout)?.userData.textLayout||null,animation:{time:motionTime,paused:motionPaused,speed:motionSpeed,...animated?.state?.()},matter:matter.state()})};
 }

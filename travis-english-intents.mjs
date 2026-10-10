@@ -1,4 +1,5 @@
-import {cinematicIntent} from './travis-scene-planner.mjs?v=cinematic-1';
+import {discoveryIntent} from './travis-discovery.mjs?v=discovery-1';
+import {cinematicIntent} from './travis-scene-planner.mjs?v=discovery-1';
 // Universal conversational projection intent for PT-PT and English.
 // Explicitly requested conceptual imagery is routed to local particle shapes;
 // unrecognised real-world facts and private data stay with the normal tools.
@@ -96,6 +97,7 @@ export function parseVisualIntent(text,{active=false,kind=''}={}){
    return {type:action==='pin'||action==='unpin'||action==='dismiss'?action:'control',action};
  if(/^(?:show (?:me )?(?:you|yourself)|mostra(?:-me)? (?:a ti|quem es)|volta a ti)$/.test(raw))return {type:'dismiss',action:'dismiss'};
  if(!literalRequest&&excludes.test(raw))return null;
+ if(!literalRequest){const discovery=discoveryIntent(raw);if(discovery)return discovery;}
  if(!literalRequest){const cinematic=cinematicIntent(raw,{active});if(cinematic)return {...cinematic,referenceRequested:false,research:false,query:String(text)};}
  const request=cues=>cues.test(raw);
  const known=categories.find(([,re])=>re.test(raw));
