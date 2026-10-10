@@ -23,11 +23,12 @@ assert.equal(speechEnvelopeLevel(buildSpeechEnvelope(silence),.5),0);
 assert.throws(()=>buildSpeechEnvelope({}),TypeError);
 const ui=fs.readFileSync('travis-3d.mjs','utf8');
 const camera=fs.readFileSync('travis-vision.mjs','utf8');
-assert(ui.includes("voiceInput?.stop();\n    releaseVoiceMic({stopRecorder:true});"));
-assert(!ui.includes("if(!voicePaused)void ensureVoiceInput();"),'Mic must not reopen during speaker playback.');
+assert(ui.includes("releaseVoiceMic({stopRecorder:true});\n    void ensureVoiceInput();"));
+assert(ui.includes("isPlayback:()=>Boolean(voiceSource)"), "Duplex input must distinguish its own playback");
+assert(ui.includes("isPlayback:()=>Boolean(voiceSource)"),'Continuous microphone capture needs the echo guard.');
 assert(ui.includes('source.start(startAt);') && ui.includes('speechEnvelopeLevel(speechClock.envelope'));
 assert(camera.includes('isSpeechCritical()'),'Visual inference must yield CPU to speech.');
 console.log('TRAVIS_AUDIO_SYNC_TESTS_OK',JSON.stringify({
-  audioClock:true,quietBreak:true,secondPhrase:true,backgroundMic:false,
+  audioClock:true,quietBreak:true,secondPhrase:true,echoGuardedDuplex:true,
   cameraPausesInference:true
 }));

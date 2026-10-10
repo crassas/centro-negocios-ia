@@ -10,11 +10,11 @@ const fixtureRequests=[];
 function voiceFixture(){const rate=16000,seconds=.3,samples=rate*seconds,b=Buffer.alloc(44+samples*2);b.write('RIFF');b.writeUInt32LE(b.length-8,4);b.write('WAVEfmt ',8);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(rate,24);b.writeUInt32LE(rate*2,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(samples*2,40);for(let i=0;i<samples;i++)b.writeInt16LE(Math.round(Math.sin(i/rate*2*Math.PI*180)*500),44+i*2);return b;}
 const server=http.createServer(async(req,res)=>{try{
  const url=new URL(req.url,'http://localhost');let name=url.pathname;
- if(req.method==='POST'&&['/jarvis','/speak','/visual-research','/visual-intent'].includes(name)){
+ if(req.method==='POST'&&['/jarvis','/jarvis-stream','/speak','/visual-research','/visual-intent'].includes(name)){
   let body='';for await(const chunk of req)body+=chunk;fixtureRequests.push({name,body:JSON.parse(body)});const request=JSON.parse(body);
   if(name==='/speak'){res.setHeader('Content-Type','audio/wav');return res.end(voiceFixture());}
   res.setHeader('Content-Type','application/json');
-  if(name==='/jarvis')return res.end(JSON.stringify({ok:true,reply:replyFixture,language:'pt',preferences:{proactive:false}}));
+  if(name==='/jarvis'||name==='/jarvis-stream')return res.end(JSON.stringify({ok:true,reply:replyFixture,language:'pt',preferences:{proactive:false}}));
   if(name==='/visual-research'){const file=request.preferModel?(/camara|câmara/i.test(request.query)?'camara.json':/futebol/i.test(request.query)?'futebol.json':'cadeira.json'):'nasa.json';return res.end(await fs.readFile(path.join(fixtures,file)));}
   return res.end(JSON.stringify({ok:false}));
  }

@@ -16,7 +16,7 @@ const cues=buildNarrationCues('O Sol fica no centro. A Terra orbita o Sol. Júpi
 assert(cues.some(c=>c.title==='Earth'));assert(cues.some(c=>c.title==='Jupiter'));
 assert.equal(cueAtTime(cues,-1,24),-1);assert.equal(cues[cueAtTime(cues,23,24)].title,'Jupiter');
 assert(cues.every((c,i)=>i===0||c.at>=cues[i-1].at));
-assert(buildNarrationCues('A fotossíntese utiliza luz. A planta transforma energia luminosa. Os açúcares armazenam energia.',{scene:'reference',title:'Fotossíntese'}).some(c=>c.scene==='text'&&c.title.includes('energia')));
+assert.deepEqual(buildNarrationCues('A fotossíntese utiliza luz. A planta transforma energia luminosa. Os açúcares armazenam energia.',{scene:'reference',title:'Fotossíntese'}),[{scene:'reference',title:'Fotossíntese',at:0}], 'Keep the visual instead of replacing it with sentence fragments');
 console.log('PASS VISUAL_CONTENT: named planets, sun, space, literal text, DNA, atom, geometry, research fallback and narration cues');
 
 for(const text of ['Show photos of Earth','Mostra imagens de uma casa','Find images of a butterfly']){

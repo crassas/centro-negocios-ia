@@ -2,6 +2,10 @@
 // phoneme alignment. Source audio completion remains authoritative.
 const fold=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const topics=[
+ ['weather','rain',/\b(?:chuva|chover|rain|rainfall)\b/g],
+ ['weather','snow',/\b(?:neve|snow)\b/g],
+ ['weather','fire',/\b(?:fogo|chama|fire|flames)\b/g],
+ ['weather','ocean',/\b(?:oceano|ondas|ocean|waves)\b/g],
  ['mechanical','Electric motor',/\b(?:electric motor|motor eletrico|rotor|estator|stator)\b/g],
  ['space','Space',/\b(?:space|espaco|galaxy|galaxia|universe|universo)\b/g],
  ['planet','Solar system',/\b(?:solar system|sistema solar)\b/g],
@@ -23,17 +27,8 @@ export function buildNarrationCues(text,initial=null){
   if(cues.length&&at-cues.at(-1).at<.08){if(at<.10&&cues.length===1&&initial?.scene==='planet')continue;}
   cues.push({scene:hit.scene,title:hit.title,at});if(cues.length>=6)break;
  }
- // For unfamiliar explanations, form short excerpts of the actual spoken
- // sentences. This is readable content, never an invented generic 3D object.
- if(cues.length<3&&initial){
-  const sentences=[...String(text||'').matchAll(/[^.!?]+[.!?]*/g)].filter(m=>m[0].trim().length>12);
-  for(const sentence of sentences.slice(1,4)){
-   const title=sentence[0].trim().replace(/[.!?]+$/,'').slice(0,72);
-   if(!title)continue;
-   cues.push({scene:'text',title,at:Math.min(.88,sentence.index/Math.max(raw.length,1))});
-  }
-  cues.sort((a,b)=>a.at-b.at);
- }
+ // Keep the illustrated subject when no visual topic is recognised. Never
+ // replace an explanation with arbitrary fragments of the spoken sentences.
  return cues.slice(0,6);
 }
 export function cueAtTime(cues,elapsed,duration){
@@ -44,6 +39,8 @@ export function cueAtTime(cues,elapsed,duration){
 export function hasLocalVisual(scene,title){
  const t=fold(title).replace(/[.!?]/g,'').trim();
  if(scene==='text')return true;
+ if(scene==='journey')return /^(?:earth to mars|earth to moon)$/.test(t);
+ if(scene==='weather')return /^(?:rain|storm|snow|fire|ocean|clouds|drop)$/.test(t);
  if(scene==='planet')return /\b(?:mercury|mercurio|venus|earth|terra|mars|marte|jupiter|saturn|saturno|uranus|urano|neptune|neptuno|pluto|plutao|moon|lua|sun|sol)\b/.test(t)||/^(?:planet|planeta|planets|planetas|planetary system|sistema solar|solar system)$/.test(t);
  if(scene==='space')return /^(?:space|espaco|universe|universo|galaxy|galaxia|cosmos|via lactea|milky way|stars|estrelas)$/.test(t);
  const known={mechanical:/^(?:electric motor|motor elec?trico|motor|engine|rotor|estator|stator)$/,house:/^(?:house|casa|uma casa|architecture|arquitetura|moradia|modern house|casa moderna|moradia moderna|building|buildings|edificio|edificios|apartment building|predio)$/,person:/^(?:human|human figure|human body|corpo humano|pessoa|person|figura humana)$/,

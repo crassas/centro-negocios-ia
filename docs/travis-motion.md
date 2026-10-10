@@ -86,3 +86,54 @@ voice smoothing and reduced-motion checks. The real-provider browser test checks
 three meshes, clean captions, preserved attribution, dialog focus/Escape, source
 history and NASA photo labelling. The narrated browser flow still advances from
 the actual audio clock and returns to the original head.
+
+## Cenas animadas e controlo por objeto
+
+`travis-scene-planner.mjs` resolve pedidos PT/EN para fenómenos locais e viagens.
+`travis-animated-scenes.mjs` desenha chuva, tempestade, neve, fogo, nuvens e ondas
+com partículas e movimento procedural, sem pesquisa de modelos. Os planetas
+rodam lentamente; o sistema solar tem órbitas animadas, com escalas ilustrativas.
+Objetos tridimensionais também têm rotação suave. Fotografias e texto permanecem
+frontais para conservar a leitura. O modo de movimento reduzido mantém as formas
+visíveis sem animação contínua.
+
+- «Mostra o sistema solar», «Isola a Terra», «Aproxima», «Mostra tudo».
+- Tocar num planeta seleciona-o para «Isola esse planeta». Sem seleção ou nome,
+  o Travis pede o objeto em vez de escolher um planeta arbitrário.
+- «Pausa a animação», «Continua a animação», «Mais devagar», «Velocidade normal».
+- «Mostra chuva», «Mostra neve», «Mostra fogo», «Mostra as ondas do oceano».
+- «Como é que um foguetão chegaria a Marte?» ou «… à Lua?» mantém a composição
+  com os corpos, o veículo e o trajeto durante toda a narração. O progresso segue
+  o relógio do áudio; a conclusão da voz permite o regresso ao rosto.
+
+As viagens incluem uma partida esquemática, transferência e chegada. A curva
+usa a parametrização de Kepler de meia elipse entre órbitas circulares coplanares,
+com fase do destino alinhada à chegada. A cena Terra–Marte ilustra uma transferência
+heliocêntrica; a cena lunar é um esquema geocêntrico. Dimensões, distâncias e tempo
+estão comprimidos. Não há efemérides, propulsão calculada, reentrada, assistências
+gravitacionais nem garantia de janela de lançamento. Referência conceptual:
+[NASA — Trajectories and Orbits](https://science.nasa.gov/learn/basics-of-space-flight/chapter4-1/).
+
+As explicações sem novo objeto reconhecido conservam a imagem existente em vez
+de a trocar por fragmentos de frases. Texto só aparece como forma quando pedido
+explicitamente; ajusta a fonte e todas as linhas ao painel (pedido máximo de 650
+caracteres), sem repetir o título pequeno por cima. Referências sem imagem já não
+criam uma placa de texto no lugar de um objeto.
+
+Estes mecanismos são extensíveis, mas não constituem geração 3D universal. Temas
+sem cena local continuam a procurar referências e modelos compatíveis. Uma foto
+continua a ser um relevo identificado como tal.
+
+Verificação: `scripts/travis-cinematic-scenes-selftest.mjs` cobre intenções,
+controlos, continuidade narrativa e extremos da transferência. O teste de browser
+com o mesmo nome verifica WebGL, texto completo, isolamento, pausa, fenómenos,
+relógio de áudio e regresso ao rosto. O teste `travis-render-recovery-browser-selftest`
+exercita perda e recuperação de contexto; não atribui uma causa à captura de ecrã
+vazio do utilizador.
+
+A integração conserva a voz em streaming `live-1`: cada segmento recebe o seu
+relógio de áudio e a viagem mantém progresso monotónico entre segmentos. Enquanto
+a duração final é desconhecida, a cena reserva a chegada para uma indicação de
+chegada na fala ou para o evento de fim da resposta. É uma aproximação por secções,
+não alinhamento fonético ou interpretação arbitrária de todas as ações narradas.
+«Isola uma gota» abre uma forma local e «Mostra tudo» recupera a cena anterior.

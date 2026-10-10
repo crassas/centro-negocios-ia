@@ -39,6 +39,7 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
  material.uniforms.uFlow.value=reducedMotion?0:1;
  const points=new THREE.Points(geometry,material);points.name='TravisMorphParticles';
  points.frustumCulled=false;root.add(points);
+ let liveShape=null;
  let started=0,duration=MOTION.enter,toCore=false,active=false,sourceObject=null;
  let currentAlpha=0,lastProgress=0,sourceSummary='fallback-core',targetSummary='core';
  let currentBounds=particleBounds(to),lastFit=null,rawTarget=null,rawNormals=null;
@@ -144,7 +145,7 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
  function dirty(){for(const key of ['aFrom','aTo','aNormalFrom','aNormalTo'])geometry.attributes[key].needsUpdate=true;}
  function go(target,now,{source=null,label='concept',camera=null}={}){
    const wasActive=active;
-   const previous=wasActive?current(lastTime||now):collect(source||sourceObject);
+   const previous=wasActive?(liveShape&&!toCore&&advance(lastTime||now)>=1?collect(liveShape):current(lastTime||now)):collect(source||sourceObject);
    if(previous){from.set(previous.positions);normalFrom.set(previous.normals);sourceSummary=wasActive?'previous-form':'face';}
    else{for(let i=0;i<n;i++)from.set(sourceCore(i),i*3);sourceSummary='core';}
    const next=collect(target||source||sourceObject)||{positions:from.slice(),normals:normalFrom.slice()};
@@ -161,7 +162,19 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
    if(!toCore&&key!==viewKey){
      // Fit only the destination. Preserve the last displayed point positions
      // when controls or viewport change, including during an interrupted morph.
-     if(viewKey){const visible=current(lastTime||now);from.set(visible.positions);normalFrom.set(visible.normals);started=now;duration=reducedMotion?.001:MOTION.control;alphaStart=currentAlpha;avatarStart=avatarDissolve;}
+     if(viewKey){
+       const settled=liveShape&&advance(lastTime||now)>=1;
+       const visible=settled?collect(liveShape):current(lastTime||now);
+       if(settled&&presentation){
+         // Animated bodies have moved since their initial sample. Remove only
+         // the old presentation transform before fitting their current pose.
+         const inverse=new THREE.Matrix4().compose(new THREE.Vector3(...presentation.position),new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),presentation.rotation),new THREE.Vector3().setScalar(presentation.scale)).invert();
+         const normalInverse=new THREE.Matrix3().getNormalMatrix(inverse),v=new THREE.Vector3();
+         rawTarget=visible.positions.slice();rawNormals=visible.normals.slice();
+         for(let i=0;i<n;i++){v.fromArray(rawTarget,i*3).applyMatrix4(inverse).toArray(rawTarget,i*3);v.fromArray(rawNormals,i*3).applyMatrix3(normalInverse).normalize().toArray(rawNormals,i*3);}
+       }
+       from.set(visible.positions);normalFrom.set(visible.normals);started=now;duration=reducedMotion?.001:MOTION.control;alphaStart=currentAlpha;avatarStart=avatarDissolve;
+     }
      fitTarget(view);dirty();viewKey=key;
    }
    const progress=advance(now),visibility=morphVisibility(progress,toCore,alphaStart,avatarStart);
@@ -175,7 +188,7 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
  }
  function hide(){active=false;points.visible=false;currentAlpha=avatarDissolve=0;material.uniforms.uOpacity.value=0;}
  function dispose(){root.remove(points);geometry.dispose();material.dispose();}
- return {root,points,presentation:()=>presentation,setSource,go,returnToSource,update,hide,dispose,setTheme,
+ return {root,points,presentation:()=>presentation,follow:object=>{liveShape=object;},setSource,go,returnToSource,update,hide,dispose,setTheme,
   state:()=>({active,points:n,morphProgress:lastProgress,source:sourceSummary,target:targetSummary,
    returning:toCore,avatarDissolve,voice:lastVoice,opacity:currentAlpha,fit:lastFit,
    coordinateSpace:'projection-root',from:from.slice(0,9),to:to.slice(0,9)})};

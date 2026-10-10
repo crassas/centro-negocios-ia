@@ -1,7 +1,7 @@
 import { readVoiceReply } from './travis-voice-stream.mjs?v=live-1';
 import {createMotionAudio} from './travis-motion-audio.mjs?v=motion-1';
-import { createConceptProjection } from './travis-concept-projection.mjs?v=sand-1';
-import './travis-action-cards.mjs?v=sand-1';
+import { createConceptProjection } from './travis-concept-projection.mjs?v=cinematic-1';
+import './travis-action-cards.mjs?v=cinematic-1';
 import { createVoiceInput } from './travis-voice-input.mjs?v=live-1';
 import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=motion-1';
 import { INTERFACE_COPY, interfaceLanguage, applyInterfaceLanguage, languageFromInterfaceCommand } from './travis-interface-language.mjs?v=1';
@@ -72,6 +72,7 @@ if (!hud || !launcher || !canvas) {
     else conceptProjection?.hide();
     if(pendingConcept)motionAudio.play('morph');
   });
+  window.addEventListener('travis:visual-timeline',event=>conceptProjection?.narrate(event.detail));
   window.addEventListener('travis:visual-control',event=>{
     if(conceptProjection?.control?.(event.detail?.action))motionAudio.play('control');
   });
@@ -814,7 +815,7 @@ if (!hud || !launcher || !canvas) {
       }
     };
 
-    window.TravisProjection?.beginNarration?.({text:reply,context:ac,start:startAt,duration:decoded.duration});
+    window.TravisProjection?.beginNarration?.({text:reply,context:ac,start:startAt,duration:decoded.duration,continuous});
     source.start(startAt);
     if(metrics){
       metrics.replyToFirstAudioMs=Math.round(performance.now()-metrics.replyAt);
@@ -2151,6 +2152,8 @@ if (!hud || !launcher || !canvas) {
     if (moved>18 || elapsed>700) return;
 
     rayFromEvent(event);
+    const target=conceptProjection?.pick(raycaster);
+    if(target){window.dispatchEvent(new CustomEvent('travis:visual-select',{detail:{target}}));haptic(10);return;}
     // A memória selecionada corresponde a um nó SQLite real.
     const memory=neuralField?.pick(raycaster);
     if(memory){neuralField.select(memory.id);haptic(10);return;}

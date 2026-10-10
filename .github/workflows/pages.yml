@@ -45,6 +45,7 @@ jobs:
           python3 operit-agent/travis_scene_selftest.py
           node scripts/travis-projection-selftest.mjs
           node scripts/travis-presence-selftest.mjs
+          node scripts/travis-cinematic-scenes-selftest.mjs
           node --check agent-room.js
           node scripts/agent-room-selftest.mjs
           node scripts/execution-poll-selftest.mjs

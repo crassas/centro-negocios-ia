@@ -10,11 +10,11 @@ const fixtureRequests=[];
 function voiceFixture(){const rate=16000,seconds=12,samples=rate*seconds,b=Buffer.alloc(44+samples*2);b.write('RIFF');b.writeUInt32LE(b.length-8,4);b.write('WAVEfmt ',8);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(rate,24);b.writeUInt32LE(rate*2,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(samples*2,40);for(let i=0;i<samples;i++)b.writeInt16LE(Math.round(Math.sin(i/rate*2*Math.PI*180)*500),44+i*2);return b;}
 const server=http.createServer(async(req,res)=>{try{
  const url=new URL(req.url,'http://localhost');let name=url.pathname;
- if(req.method==='POST'&&['/jarvis','/speak','/visual-research'].includes(name)){
+ if(req.method==='POST'&&['/jarvis','/jarvis-stream','/speak','/visual-research'].includes(name)){
   let body='';for await(const chunk of req)body+=chunk;fixtureRequests.push({name,body:JSON.parse(body)});
   if(name==='/speak'){res.setHeader('Content-Type','audio/wav');return res.end(voiceFixture());}
   res.setHeader('Content-Type','application/json');
-  if(name==='/jarvis')return res.end(JSON.stringify({ok:true,reply:replyFixture,language:'pt',preferences:{proactive:false}}));
+  if(name==='/jarvis'||name==='/jarvis-stream')return res.end(JSON.stringify({ok:true,reply:replyFixture,language:'pt',preferences:{proactive:false}}));
   const selected=JSON.parse(body).imageIndex;const fixture=selected?process.argv[6].replace(/\.json$/, '-next.json'):process.argv[6];
   return res.end(await fs.readFile(fixture,'utf8'));
  }
@@ -101,7 +101,7 @@ try{
  await record('actual-audio-clock');
  await page.waitForFunction(()=>!TravisVisual.diagnostics().lipSync.playbackClock,{},{timeout:16000});
  await page.waitForFunction(()=>!TravisVisual.diagnostics().hologram.matter.active,{},{timeout:10000});
- assert(fixtureRequests.some(r=>r.name==='/jarvis'&&r.body.text==='Explica-me o sistema solar'));
+ assert(fixtureRequests.some(r=>r.name==='/jarvis-stream'&&r.body.text==='Explica-me o sistema solar'));
  assert(fixtureRequests.some(r=>r.name==='/speak'&&r.body.text===replyFixture));
  await page.evaluate(()=>{TravisVisual.pause();TravisVisual.ready();});
  await page.evaluate(()=>TravisProjection.interpret('Volta ao Travis'));

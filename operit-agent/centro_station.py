@@ -85,6 +85,8 @@ TRAVIS_CLIENT_FILES = (
     "travis-holographic-head.mjs",
     "travis-holographic-surface.mjs",
     "travis-visual-subjects.mjs",
+    "travis-scene-planner.mjs",
+    "travis-animated-scenes.mjs",
     "travis-visual-story.mjs",
     "travis-earth-land.mjs",
     "travis-architecture.mjs",
@@ -557,17 +559,17 @@ def sync_travis_client(ref):
             if not raw or len(raw) > 450000:
                 raise RuntimeError(f"{name}: resposta ausente ou demasiado grande")
             fetched[name] = raw.decode("utf-8")
-        if "travis-3d.mjs?v=sand-1" not in fetched["index.html"]:
+        if "travis-3d.mjs?v=cinematic-1" not in fetched["index.html"]:
             raise RuntimeError("index.html: versão de voz inesperada")
         if "travis-audio-sync.mjs?v=1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: sincronização de voz ausente")
         if "travis-vision.mjs?v=scene-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: visão não ligada")
-        if "travis-3d.mjs?v=sand-1" not in fetched["sw.js"]:
+        if "travis-3d.mjs?v=cinematic-1" not in fetched["sw.js"]:
             raise RuntimeError("sw.js: cache desatualizada")
-        if "travis-action-cards.mjs?v=sand-1" not in fetched["travis-3d.mjs"]:
+        if "travis-action-cards.mjs?v=cinematic-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: cinematic action deck not connected")
-        if "travis-action-cards.mjs?v=sand-1" not in fetched["travis-cockpit.mjs"]:
+        if "travis-action-cards.mjs?v=cinematic-1" not in fetched["travis-cockpit.mjs"]:
             raise RuntimeError("travis-cockpit.mjs: duplicate projection controller")
         if "travis-model-library.mjs?v=sand-1" not in fetched["travis-action-cards.mjs"] or "travis-model-library.mjs?v=sand-1" not in fetched["sw.js"]:
             raise RuntimeError("Travis sourced 3D library disconnected")
@@ -576,17 +578,20 @@ def sync_travis_client(ref):
         for name,consumer in (("travis-sand-flow.mjs","travis-holographic-head.mjs"),("travis-sand-flow.mjs","travis-particle-morph.mjs"),("travis-visual-sources.mjs","travis-action-cards.mjs")):
             if name+"?v=sand-1" not in fetched[consumer] or name+"?v=sand-1" not in fetched["sw.js"]:
                 raise RuntimeError(name+": organic motion or attribution disconnected")
+        for name, consumer in (("travis-scene-planner.mjs", "travis-english-intents.mjs"), ("travis-animated-scenes.mjs", "travis-concept-projection.mjs")):
+            if name+"?v=cinematic-1" not in fetched[consumer] or name+"?v=cinematic-1" not in fetched["sw.js"]:
+                raise RuntimeError("Incomplete cinematic scene bundle: " + name)
         if "createDetailedSubject" not in fetched["travis-visual-subjects.mjs"] or "earthLand" not in fetched["travis-earth-land.mjs"]:
             raise RuntimeError("Travis detailed visual content missing")
-        if "travis-visual-story.mjs?v=motion-routing-1" not in fetched["travis-action-cards.mjs"]:
+        if "travis-visual-story.mjs?v=cinematic-1" not in fetched["travis-action-cards.mjs"]:
             raise RuntimeError("Travis narration cues disconnected")
         if "createArchitecture" not in fetched["travis-architecture.mjs"]:
             raise ValueError("Travis architecture module missing")
         if "travis-holographic-surface.mjs?v=sand-1" not in fetched["travis-concept-projection.mjs"]:
             raise RuntimeError("Travis fine light surfaces disconnected")
-        if "travis-english-intents.mjs?v=motion-routing-1" not in fetched["travis-action-cards.mjs"]:
+        if "travis-english-intents.mjs?v=cinematic-1" not in fetched["travis-action-cards.mjs"]:
             raise RuntimeError("travis-action-cards.mjs: English intent router missing")
-        if "travis-particle-morph.mjs?v=sand-1" not in fetched["travis-concept-projection.mjs"]:
+        if "travis-particle-morph.mjs?v=cinematic-1" not in fetched["travis-concept-projection.mjs"]:
             raise RuntimeError("travis-concept-projection.mjs: unified particle material missing")
         if "travis-projection-framing.mjs?v=1" not in fetched["travis-particle-morph.mjs"]:
             raise RuntimeError("travis-particle-morph.mjs: smartphone auto-framing disconnected")
@@ -604,9 +609,9 @@ def sync_travis_client(ref):
             raise RuntimeError("travis-hud.css: immersive overlay fix unavailable")
         if "autoReturn" not in fetched["travis-action-cards.mjs"]:
             raise RuntimeError("travis-action-cards.mjs: auto return missing")
-        if "travis-concept-projection.mjs?v=sand-1" not in fetched["travis-3d.mjs"]:
+        if "travis-concept-projection.mjs?v=cinematic-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: cinematic geometry missing")
-        if "travis-voice-input.mjs?v=stt-fast-1" not in fetched["travis-3d.mjs"]:
+        if "travis-voice-input.mjs?v=live-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: transcrição rápida não ligada")
         if "travis-form-selector" in fetched["index.html"] or "data-travis-form=" in fetched["index.html"]:
             raise RuntimeError("index.html: o seletor de modos voltou a aparecer")
@@ -639,7 +644,7 @@ def sync_travis_client(ref):
             raise RuntimeError("sw.js: wake word PT fora da cache")
         if "resolveWakePhrase" not in fetched["travis-wake-phrase.mjs"]:
             raise RuntimeError("travis-wake-phrase.mjs: recuperador não encontrado")
-        if "timer=setTimeout(()=>submit(epoch),720)" not in fetched["travis-voice-input.mjs"]:
+        if "timer=setTimeout(()=>submit(epoch),100)" not in fetched["travis-voice-input.mjs"]:
             raise RuntimeError("travis-voice-input.mjs: fim da frase não atualizado")
         if "travis-scene-tracker.mjs?v=1" not in fetched["travis-vision.mjs"] or "travis-scene-tracker.mjs?v=1" not in fetched["sw.js"]:
             raise RuntimeError("travis-scene-tracker.mjs: associação visual não ligada")

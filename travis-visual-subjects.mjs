@@ -64,12 +64,14 @@ function planetMap(THREE,name){
 }
 export function createDetailedSubject(THREE,scene,subject,{reference=null}={}){
  const variant=identifyVisualSubject(scene,subject),group=new THREE.Group(),materials=[],textures=[];
+ let animate=null;
  group.name='TravisSubject:'+variant;
  const surface=(geometry,{map=null,mask=false,gain=1,photo=false}={})=>{const mat=createHolographicSurfaceMaterial(THREE,{map,mask,gain,photo});materials.push(mat);const mesh=new THREE.Mesh(geometry,mat);group.add(mesh);return mesh;};
  const line=(points,opacity=.5)=>{const mat=new THREE.LineBasicMaterial({color:0xc8a876,transparent:true,opacity,depthWrite:false});mat.userData.baseOpacity=opacity;materials.push(mat);const o=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points.map(p=>new THREE.Vector3(...p))),mat);group.add(o);return o;};
  const body=(name,r=.82)=>{const map=planetMap(THREE,name);textures.push(map);const mesh=surface(new THREE.SphereGeometry(r,96,64),{map,gain:name==='sun'?1.5:1.12});mesh.userData.visualBody=name;return mesh;};
  if(celestialNames[variant]){
   const mesh=body(variant);mesh.rotation.y=variant==='earth'?-.55:0;
+  const baseRotation=mesh.rotation.y;animate=time=>{mesh.rotation.y=baseRotation+time*.11;};
   if(variant==='jupiter'||variant==='saturn')mesh.scale.y=.93;
   if(variant==='saturn'){
    for(const [inner,outer] of [[1.02,1.21],[1.25,1.48]]){
@@ -80,12 +82,16 @@ export function createDetailedSubject(THREE,scene,subject,{reference=null}={}){
    const a=i*2.39996,points=[];for(let j=0;j<=48;j++){const t=j/48*Math.PI;const r=.80+Math.sin(t)*(.06+.06*noise(i,31));const angle=a+t*(.045+noise(i,32)*.07);points.push([Math.cos(angle)*r,Math.sin(angle)*r,Math.sin(t)*.12]);}line(points,.4);
   }
  }else if(variant==='solar-system'){
-  body('sun',.23).position.set(-1.43,0,0);
-  const names=['mercury','venus','earth','mars','jupiter','saturn','uranus','neptune'];
-  names.forEach((name,i)=>{const r=[.05,.08,.085,.062,.20,.17,.12,.115][i],x=-.93+i*.33;const m=body(name,r);m.position.set(x,Math.sin(i*1.7)*.30,0);
-   if(name==='saturn'){const ring=surface(new THREE.RingGeometry(r*1.3,r*1.8,64),{gain:1.1});ring.position.copy(m.position);ring.rotation.x=1.03;}
-   line([[x,-.48,0],[x,.48,0]],.12);
+  body('sun',.18);
+  const names=['mercury','venus','earth','mars','jupiter','saturn','uranus','neptune'],orbits=[];
+  names.forEach((name,i)=>{
+   const radius=.38+i*.16,r=[.029,.044,.047,.035,.105,.09,.064,.062][i],mesh=body(name,r),phase=i*2.39996;
+   let rings=null;if(name==='saturn'){rings=surface(new THREE.RingGeometry(r*1.3,r*1.8,64),{gain:1.1});rings.rotation.x=1.03;}
+   line(Array.from({length:97},(_,j)=>[Math.cos(j/96*Math.PI*2)*radius,Math.sin(j/96*Math.PI*2)*radius,0]),.18);
+   orbits.push({mesh,rings,radius,phase,speed:.11/Math.pow(radius,1.5)});
   });
+  animate=time=>{for(const o of orbits){const a=o.phase+time*o.speed;o.mesh.position.set(Math.cos(a)*o.radius,Math.sin(a)*o.radius,0);o.mesh.rotation.y=time*.17;if(o.rings)o.rings.position.copy(o.mesh.position);}};
+  animate(0);group.rotation.x=-.58;
  }else if(variant==='galaxy'){
   const positions=[],tones=[];
   for(let i=0;i<6500;i++){
@@ -108,12 +114,25 @@ export function createDetailedSubject(THREE,scene,subject,{reference=null}={}){
   for(let i=0;i<9;i++){const a=i*2.39996;const node=surface(new THREE.SphereGeometry(.105,16,12),{gain:1.25});node.position.set(Math.cos(a)*.18,Math.sin(a)*.18,(i%3-1)*.10);}
   for(let j=0;j<3;j++){const points=[];for(let i=0;i<=100;i++){const a=i/100*Math.PI*2,x=Math.cos(a)*1.05,y=Math.sin(a)*.4;points.push([x*Math.cos(j*Math.PI/3)-y*Math.sin(j*Math.PI/3),x*Math.sin(j*Math.PI/3)+y*Math.cos(j*Math.PI/3),Math.sin(a)*.16]);}line(points,.85);const electron=surface(new THREE.SphereGeometry(.045,14,10),{gain:1.8});electron.position.set(...points[20+j*19]);}
  }else if(variant==='text'){
-  const words=String(subject||'ABC').slice(0,90),c=canvas(1200,640),ctx=c.getContext('2d');
-  ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='600 170px sans-serif';
-  const lines=[];let row='';
-  for(const word of words.split(/\s+/)){if(ctx.measureText((row+' '+word).trim()).width>1080&&row){lines.push(row);row=word;}else row=(row+' '+word).trim();}if(row)lines.push(row);
-  const shown=lines.slice(0,3),font=Math.min(170,Math.floor(570/shown.length));ctx.font=`600 ${font}px sans-serif`;
-  shown.forEach((line,i)=>{const width=ctx.measureText(line).width;ctx.save();ctx.translate(600,320+(i-(shown.length-1)/2)*font*1.12);ctx.scale(Math.min(1,1080/width),1);ctx.fillText(line,0,0);ctx.restore();});
+  const words=String(subject||'ABC'),c=canvas(1200,640),ctx=c.getContext('2d');
+  ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
+  let lines=[],font=170;
+  function wrap(){
+   const rows=[];let row='';
+   for(const paragraph of words.split('\n')){
+    for(const word of paragraph.split(/\s+/).filter(Boolean)){
+     if(ctx.measureText(word).width>1080){
+      if(row){rows.push(row);row='';}
+      for(const letter of [...word]){if(ctx.measureText(row+letter).width>1080){rows.push(row);row='';}row+=letter;}
+     }else if(ctx.measureText((row+' '+word).trim()).width>1080&&row){rows.push(row);row=word;}else row=(row+' '+word).trim();
+    }
+    if(row){rows.push(row);row='';}
+   }
+   return rows.length?rows:[''];
+  }
+  for(;font>=16;font-=2){ctx.font=`600 ${font}px sans-serif`;lines=wrap();if(lines.length*font*1.12<=570)break;}
+  lines.forEach((line,i)=>ctx.fillText(line,600,320+(i-(lines.length-1)/2)*font*1.12));
+  group.userData.textLayout={text:words,lines,font};
   const map=new THREE.CanvasTexture(c);textures.push(map);
   const plane=surface(new THREE.PlaneGeometry(2.7,1.44,32,16),{map,mask:true,gain:1.35});plane.userData.skipMorph=true;
   const data=ctx.getImageData(0,0,c.width,c.height).data,positions=[];
@@ -132,5 +151,6 @@ export function createDetailedSubject(THREE,scene,subject,{reference=null}={}){
   geo.computeVertexNormals();const map=new THREE.CanvasTexture(c);textures.push(map);surface(geo,{map,gain:1.05,photo:true});
  }else return null;
  group.userData.visualVariant=variant;
- return {group,materials,textures,variant};
+ group.userData.dynamic=Boolean(animate);
+ return {group,materials,textures,variant,update:animate,state:()=>({type:variant,time:group.userData.animationTime||0,textLayout:group.userData.textLayout})};
 }
