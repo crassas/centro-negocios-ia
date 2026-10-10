@@ -1,11 +1,13 @@
-import {createScienceScene} from './travis-science-scenes.mjs?v=spectrum-1';
-import {journeyCueTarget} from './travis-scene-planner.mjs?v=spectrum-1';
-import {createAnimatedScene} from './travis-animated-scenes.mjs?v=spectrum-1';
-import {createMechanical} from './travis-mechanical.mjs?v=spectrum-1';
-import {createArchitecture} from './travis-architecture.mjs?v=spectrum-1';
-import {createDetailedSubject,identifyVisualSubject} from './travis-visual-subjects.mjs?v=spectrum-1';
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=spectrum-1';
-import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=spectrum-1';
+import {validateScenePlan} from './travis-scene-blueprint.mjs?v=worlds-1';
+import {createComposedScene} from './travis-scene-composer.mjs?v=worlds-1';
+import {createScienceScene} from './travis-science-scenes.mjs?v=worlds-1';
+import {journeyCueTarget} from './travis-scene-planner.mjs?v=worlds-1';
+import {createAnimatedScene} from './travis-animated-scenes.mjs?v=worlds-1';
+import {createMechanical} from './travis-mechanical.mjs?v=worlds-1';
+import {createArchitecture} from './travis-architecture.mjs?v=worlds-1';
+import {createDetailedSubject,identifyVisualSubject} from './travis-visual-subjects.mjs?v=worlds-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=worlds-1';
+import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=worlds-1';
 // Film-inspired schematic projections. Unprovided geographic/CAD/person
 // geometry stays visibly conceptual; real source links are separate.
 export function createConceptProjection(THREE,{reducedMotion=false}={}){
@@ -186,15 +188,18 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   }
  }
  function show(scene,now,subject='',options={}){
+  if(scene==='composition'&&!validateScenePlan(options.plan))return false;
+  const savedTime=options.keepTime?motionTime:0,savedPause=options.keepTime&&motionPaused,savedSpeed=options.keepTime?motionSpeed:1;
   if(ghost){dispose(ghost.group,ghost.mats,ghost.textures);ghost=null;}
   if(active.children.length)ghost={group:activeFrame,mats,textures,start:now};
   else dispose(activeFrame,mats,textures);
   active=new THREE.Group();activeFrame=new THREE.Group();activeFrame.add(active);root.add(activeFrame);mats=[];objects=[];textures=[];animated=null;motionTime=0;motionPaused=false;motionSpeed=1;narrationClock=null;journeyProgress=null;
-  kind=['orbit','atom','network','wave','planet','map','house','person','vehicle','landscape','diagram','object','text','space','reference','mechanical','model','weather','journey','science'].includes(scene)?scene:'network';
+  kind=['orbit','atom','network','wave','planet','map','house','person','vehicle','landscape','diagram','object','text','space','reference','mechanical','model','weather','journey','science','composition'].includes(scene)?scene:'network';
   planetName=['earth','mars','venus','saturn','jupiter','uranus','neptune','mercury','moon','sun'].find(x=>
    new RegExp('\\b'+x+'\\b').test(String(subject).toLowerCase()))||'';
   born=now;zoom=1;dx=dy=spin=0;label=subject;variant=identifyVisualSubject(kind,subject);
-  if(kind==='science'){animated=createScienceScene(THREE,subject);if(animated){active.add(animated.group);mats.push(...animated.materials);textures.push(...animated.textures);variant=animated.variant;}}
+  if(kind==='composition'){animated=createComposedScene(THREE,options.plan,{reducedMotion});active.add(animated.group);mats.push(...animated.materials);textures.push(...animated.textures);variant=animated.variant;}
+  else if(kind==='science'){animated=createScienceScene(THREE,subject);if(animated){active.add(animated.group);mats.push(...animated.materials);textures.push(...animated.textures);variant=animated.variant;}}
   else if(['weather','journey'].includes(kind)||kind==='vehicle'&&/rocket|foguetao/i.test(subject)){animated=createAnimatedScene(THREE,kind,subject);active.add(animated.group);mats.push(...animated.materials);textures.push(...animated.textures);variant=animated.variant;}
   else if(kind==='model'&&options.reference?.model){const built=options.reference.model;active.add(built.group);mats.push(...built.materials);textures.push(...built.textures);variant=built.variant;}
   else if(['text','space','reference'].includes(kind)||['dna','atom','cube','sphere','pyramid'].includes(variant)){const detailed=createDetailedSubject(THREE,kind,subject,options);if(detailed){active.add(detailed.group);mats.push(...detailed.materials);textures.push(...detailed.textures);variant=detailed.variant;animated=detailed.update?detailed:null;}}
@@ -204,6 +209,7 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   else if(kind==='landscape')landscape();else if(kind==='diagram')diagram();
   else if(kind==='object')object();else classic(kind);
   if(kind==='house')active.rotation.y=-.50;
+  motionTime=savedTime;motionPaused=savedPause;motionSpeed=savedSpeed;animated?.update?.(reducedMotion?0:motionTime);
   turnBase=active.rotation.y;
   matter.setSource(typeof sourceProvider==='function'?sourceProvider():sourceProvider);
   matter.setTheme(kind,subject);
@@ -238,8 +244,10 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   matter.setSource(typeof sourceProvider==='function'?sourceProvider():sourceProvider);
   matter.returnToSource(now);
  }
- function control(action,now=performance.now()/1000){
+ function control(action,now=performance.now()/1000,options={}){
   if(!kind)return false;
+  if(action==='focus-object')return animated?.focus?.(options.target)??false;
+  if(action==='wide-view'){animated?.focus?.(null);zoom=1;dx=dy=spin=0;return true;}
   if(action==='pause-motion'){motionPaused=true;pausedAt=narrationClock?.context.currentTime??null;return true;}
   if(action==='resume-motion'){motionPaused=false;if(narrationClock&&pausedAt!==null)narrationClock.start+=narrationClock.context.currentTime-pausedAt;pausedAt=null;return true;}
   if(action==='slow-motion'){motionSpeed=.3;return true;}
@@ -288,7 +296,7 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   }
   if(animated&&!state.returning){animated.update(reducedMotion?0:motionTime,reducedMotion?0:journeyProgress);if(animated.group)animated.group.userData.animationTime=motionTime;}
   if(reducedMotion||motionPaused)return;
-  if(state.morphProgress>=1&&!state.returning&&!['reference','text','weather','journey','planet','science'].includes(kind))active.rotation.y=turnBase+motionTime*.055;
+  if(state.morphProgress>=1&&!state.returning&&!['reference','text','weather','journey','planet','science','composition'].includes(kind))active.rotation.y=turnBase+motionTime*.055;
   for(const o of objects){
    if(o.type==='planet'){o.surface.rotation.y=now*.22;o.meshWire.rotation.y=-now*.10;
     o.moon.position.set(Math.cos(now*.6)*1.03,Math.sin(now*.6)*.3,Math.sin(now*.6)*.77);}

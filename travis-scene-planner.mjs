@@ -1,3 +1,4 @@
+import {compositionIntent,sceneAsset} from './travis-scene-blueprint.mjs?v=worlds-1';
 // Explicit, bounded procedural scenes. Unknown assets still use the research path.
 const fold=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 export const bodyNames={mercury:'Mercury',mercurio:'Mercury',venus:'Venus',terra:'Earth',earth:'Earth',mars:'Mars',marte:'Mars',jupiter:'Jupiter',saturn:'Saturn',saturno:'Saturn',uranus:'Uranus',urano:'Uranus',neptune:'Neptune',neptuno:'Neptune',moon:'Moon',lua:'Moon',sun:'Sun',sol:'Sun'};
@@ -8,10 +9,11 @@ export function cinematicIntent(text,{active=false}={}){
  if(active){
   for(const [action,re] of [['pause-motion',/^(?:pausa|para|congela)(?: a animacao| o movimento| isso)?$|^(?:pause|freeze)(?: the animation| animation| it)?$/],['resume-motion',/^(?:continua|retoma|anima)(?: a animacao| o movimento| isso)?$|^(?:resume|animate)(?: the animation| animation| it)?$/],['slow-motion',/^(?:mais devagar|abranda|slow(?:er| down)|slow motion)$/],['normal-motion',/^(?:velocidade normal|normal speed)$/],['wide-view',/^(?:mostra tudo|mostra todos|vista geral|volta a vista geral|show all|show everything|wide view)$/]])if(re.test(t))return {type:'control',action,language};
   if(/\b(?:isola|isolar|isole|isolate|focus on|foca|foca-te|aproxima.*planeta)\b/.test(t)){
-   const target=Object.entries(bodyNames).find(([key])=>new RegExp('\\b'+key+'\\b').test(t))?.[1]||(/foguetao|rocket/.test(t)?'Rocket':/gota|drop/.test(t)?'Drop':null);
+   const target=Object.entries(bodyNames).find(([key])=>new RegExp('\\b'+key+'\\b').test(t))?.[1]||sceneAsset(t)||(/gota|drop/.test(t)?'Drop':null);
    return {type:'focus',target,language};
   }
  }
+ const composed=compositionIntent(text);if(composed)return composed;
  const explicit=/\b(?:mostra|ver|cria|faz|projeta|imagina|simula|explica|aconteceria|chegaria|viajaria|show|create|imagine|simulate|explain|what if|would happen|would .*reach|how.*(?:get|travel|reach))\b/.test(t);
  const photo=/\b(?:fotos?|fotografias?|photos?|photographs?|imagens? reais|real images?)\b/.test(t);
  const bare=/^(?:chuva|neve|fogo|ondas|oceano|nuvens|tempestade|rain|snow|fire|waves|ocean|clouds|storm)$/.test(t);

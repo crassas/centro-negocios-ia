@@ -1,9 +1,9 @@
 import { createLiveSTT } from './travis-live-stt.mjs?v=live-1';
 import { readVoiceReply } from './travis-voice-stream.mjs?v=live-1';
 import {createMotionAudio} from './travis-motion-audio.mjs?v=motion-1';
-import {playDiscovery} from './travis-discovery.mjs?v=spectrum-1';
-import { createConceptProjection } from './travis-concept-projection.mjs?v=spectrum-1';
-import './travis-action-cards.mjs?v=spectrum-1';
+import {playDiscovery} from './travis-discovery.mjs?v=worlds-1';
+import { createConceptProjection } from './travis-concept-projection.mjs?v=worlds-1';
+import './travis-action-cards.mjs?v=worlds-1';
 import { createVoiceInput } from './travis-voice-input.mjs?v=live-1';
 import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=motion-1';
 import { INTERFACE_COPY, interfaceLanguage, applyInterfaceLanguage, languageFromInterfaceCommand } from './travis-interface-language.mjs?v=1';
@@ -16,7 +16,7 @@ import { createHolographicHeadMaterial, createAssemblyParticles } from './travis
 import { projectWebAnswer } from './travis-web-projection.mjs?v=agent-1';
 import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=motion-1';
 import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
-import { createBacklight } from './travis-atmosphere.mjs?v=cinema-1';
+import { createBacklight } from './travis-atmosphere.mjs?v=worlds-1';
 import { createFaceRig } from './travis-face-rig.mjs?v=articulation-2';
 import * as THREE from 'three';
 import { createNeuralField } from './travis-brain-view.mjs?v=motion-1';
@@ -67,16 +67,16 @@ if (!hud || !launcher || !canvas) {
   let coreRoot;
   let faceRoot;
   let assemblyParticles=null;
-  let neuralField=null,conceptProjection=null,pendingConcept=null,pendingSubject='';
+  let neuralField=null,conceptProjection=null,pendingConcept=null,pendingSubject='',pendingOptions={};
   window.addEventListener('travis:illustration',event=>{
-    pendingConcept=event.detail?.scene||null;pendingSubject=event.detail?.subject||'';
-    if(pendingConcept)conceptProjection?.show(pendingConcept,performance.now()/1000,pendingSubject,{reference:event.detail?.reference});
+    pendingConcept=event.detail?.scene||null;pendingSubject=event.detail?.subject||'';pendingOptions={reference:event.detail?.reference,plan:event.detail?.plan,keepTime:event.detail?.keepTime};
+    if(pendingConcept)conceptProjection?.show(pendingConcept,performance.now()/1000,pendingSubject,pendingOptions);
     else conceptProjection?.hide();
     if(pendingConcept)motionAudio.play('morph');
   });
   window.addEventListener('travis:visual-timeline',event=>conceptProjection?.narrate(event.detail));
   window.addEventListener('travis:visual-control',event=>{
-    if(conceptProjection?.control?.(event.detail?.action))motionAudio.play('control');
+    if(conceptProjection?.control?.(event.detail?.action,performance.now()/1000,event.detail))motionAudio.play('control');
   });
   window.addEventListener('travis:commands',event=>{
     if(event.detail?.open===false){conceptProjection?.returnToCore?.(performance.now()/1000);motionAudio.play('return');}
@@ -1487,12 +1487,12 @@ if (!hud || !launcher || !canvas) {
     });
     beamTop=new THREE.Mesh(new THREE.ConeGeometry(1.7,8.2,48,1,true),beamMat.clone());
     beamTop.position.set(0,4.4,-1.6);
-    scene.add(beamTop);
+    beamTop.visible=false;scene.add(beamTop);
 
     beamBottom=new THREE.Mesh(new THREE.ConeGeometry(1.45,6.8,48,1,true),beamMat.clone());
     beamBottom.rotation.z=Math.PI;
     beamBottom.position.set(0,-4.3,-1.8);
-    scene.add(beamBottom);
+    beamBottom.visible=false;scene.add(beamBottom);
 
     const haloMat=new THREE.MeshBasicMaterial({
       color:0xac7d50,transparent:true,opacity:.055,
@@ -1503,14 +1503,6 @@ if (!hud || !launcher || !canvas) {
     floorHalo.position.set(0,-2.35,-1.15);
     floorHalo.visible=false;
     scene.add(floorHalo);
-
-    const glow=markBloom(new THREE.Sprite(new THREE.SpriteMaterial({
-      map:radialTexture(),transparent:true,opacity:.09,
-      blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false
-    })));
-    glow.scale.set(7.5,7.5,1);
-    glow.position.set(0,.2,-1.8);
-    scene.add(glow);
 
     gridFloor=null; /* V8: generic floor grid removed */
     /*
@@ -1849,7 +1841,7 @@ if (!hud || !launcher || !canvas) {
     scene.add(conceptProjection.root);
     // No secondary solid overlay: every projected shape uses the shared matter.
     conceptProjection.root.traverse(obj=>{if(obj.isPoints)obj.layers.enable(BLOOM_LAYER);});
-    if(pendingConcept)conceptProjection.show(pendingConcept,performance.now()/1000,pendingSubject);
+    if(pendingConcept)conceptProjection.show(pendingConcept,performance.now()/1000,pendingSubject,pendingOptions);
     scene.background=new THREE.Color(0x030405);
     scene.fog=new THREE.FogExp2(0x030405,.045);
 
@@ -1866,7 +1858,7 @@ if (!hud || !launcher || !canvas) {
     createLights();
     createAtmosphere();
     cinematicBacklight=createBacklight(THREE,scene);
-    hud.dataset.backlight="cinematic";
+    hud.dataset.backlight="open-space";
 
     bloomComposer=new EffectComposer(renderer);
     bloomComposer.renderToScreen=false;
@@ -2070,9 +2062,7 @@ if (!hud || !launcher || !canvas) {
       if (emblem) emblem.position.z=Math.sin(t*1.7)*.015+flashPower*.025;
     }
 
-    const neuralBackdrop=scene.getObjectByName('TravisCinematicBacklight');
-    if(neuralBackdrop)neuralBackdrop.visible=formBlend.face>.5;
-    cinematicBacklight?.update(reducedMotion?0:t,state==='speaking'?speechLevel:0);
+    cinematicBacklight?.update(reducedMotion?0:t,state==='speaking'?speechLevel:0,conceptProjection?.state());
     faceRig?.update(state==='speaking'?speechLevel:0,null);
     hud.dataset.mouthLevel=speechLevel.toFixed(2);
     if (faceRoot) {
@@ -2134,7 +2124,7 @@ if (!hud || !launcher || !canvas) {
     updateCommandLines();
 
     if (dust) {
-      dust.visible=formBlend.face<.02;
+      dust.visible=false;
       dust.rotation.z=t*.006;
       dust.position.y=Math.sin(t*.18)*.08;
     }

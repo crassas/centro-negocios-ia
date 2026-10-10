@@ -1,4 +1,4 @@
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=spectrum-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=worlds-1';
 // Educational electric motor cutaway. Generic proportions, never measured CAD.
 // Inspired by the exploded-view choreography in claude-motion/sims/engine.
 export function createMechanical(THREE,{exploded=false}={}){
