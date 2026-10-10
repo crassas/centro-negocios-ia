@@ -110,7 +110,13 @@ start_app() {
     local old_pid
     old_pid="$(cat "$PID_FILE")"
     if [[ "$old_pid" =~ ^[0-9]+$ ]] && kill -0 "$old_pid" 2>/dev/null; then
-      die "Stored PID $old_pid is alive but HTTP is not healthy. Inspect $LOG_FILE."
+      # A reboot may reuse this numeric PID for an unrelated process.
+      # Never kill or block on a PID unless its working directory and command match.
+      if [[ "$(readlink "/proc/$old_pid/cwd" 2>/dev/null || true)" == "$APP_DIR" ]] \
+         && [[ "$(tr '\0' ' ' < "/proc/$old_pid/cmdline" 2>/dev/null || true)" == *"node_modules/vite/bin/vite.js"* ]]; then
+        die "Owned PID $old_pid is alive but HTTP is not healthy. Inspect $LOG_FILE."
+      fi
+      info "Ignoring stale/recycled PID $old_pid from an earlier Android session."
     fi
   fi
   port_free || die "Port $PORT occupied by another service; refusing to change it."
