@@ -87,8 +87,8 @@ async function select(intent){
       const name=camera.name+', '+(camera.city||camera.pack);
       return {handled:true,language:lang,verified:true,
         reply:kind==='video'
-          ?tr(lang,'Encontrei vídeo público em directo de '+name+'.',
-            'I found verified public live video from '+name+'.')
+          ?tr(lang,'A câmara pública '+name+' está a reproduzir vídeo. A actualidade das imagens depende do operador.',
+            'The public camera '+name+' is playing video. The operator controls how current the images are.')
           :tr(lang,'Encontrei uma imagem da câmara pública '+name+
             '. É uma fotografia, não vídeo em directo.',
             'I found a real public camera image from '+name+
