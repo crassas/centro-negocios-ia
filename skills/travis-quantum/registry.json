@@ -58,7 +58,16 @@
         "meteorologia",
         "weather",
         "mapa",
-        "map"
+        "map",
+        "transito real",
+        "trânsito",
+        "trafego",
+        "traffic",
+        "velocidade",
+        "traffic live",
+        "road live",
+        "fintraffic",
+        "tfl"
       ],
       "requires": [
         "/root/.centro-ui/travis-gev-bridge.mjs",
@@ -85,7 +94,11 @@
         "camera publica",
         "camera em direto",
         "live camera",
-        "video em direto"
+        "video em direto",
+        "hls",
+        "live video",
+        "transmissão",
+        "vídeo em directo"
       ],
       "requires": [
         "/root/.centro-ui/travis-cctv-autopilot.mjs",
