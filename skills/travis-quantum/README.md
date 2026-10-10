@@ -47,3 +47,13 @@ O Travis carrega os documentos **a partir do índice local** `~/.centro-jarvis/s
 Criar um sincronizador Drive → staging local com permissões e comparação de versões, sem executar automaticamente conteúdo descarregado ou permitir que uma descrição se faça passar por uma capacidade.
 
 **Estado:** Skills V1 instaladas localmente, resposta do Travis testada, documentos de referência gravados e verificados na Drive. A integração de sincronização automática a partir da Drive não foi feita.
+
+
+## Verificação final e persistência — 10-Out-2026
+- Google Drive canónica: https://drive.google.com/drive/folders/14NC80jFV7VxumocEGmXAnj2kFinlwlkg
+- Pasta auditada: 8 documentos (00 índice, 01 manifesto, 6 skills), todos sob QUANTUM UNIFIED AGENT; conteúdo das skills e índice confirmado por leitura de volta.
+- `travis-skillbook-guard.py` executa-se pelo watcher existente, sem criar outro agente. O gancho em `jarvisctl start` volta a aplicar a integração local se o Centro substituir o ficheiro do servidor; a rotina não reinicia Jarvis automaticamente nem executa skills a partir da Drive.
+- `python3 /root/travis_skillbook.py probe`: 6 skills; GEV, CCTV, memória e microsites com serviço local confirmado; voz/visão exige permissão da câmara; governo Quantum instalado.
+- `QuantumTravisBridge.health()`: `ok: true`, V10.73. `jarvisctl ask "Travis, que skills tens?"` devolveu as 6 skills e foi processado pelo Quantum.
+- Os testes não provam que cada feed CCTV ou mapa está visível no browser, só o funcionamento do registo, os serviços e o encaminhamento da pergunta.
+- O assistente não tem sincronização automática Drive → runtime. Actualizações passam por controlo de versões, comparação, testes e aprovação.
