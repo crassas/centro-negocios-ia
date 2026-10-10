@@ -5,9 +5,9 @@
 Preparação para o serviço geoespacial oficial:
 https://github.com/bilawalsidhu/gods-eye-view
 
-O Travis tem actualmente um globo 3D leve próprio. Esta integração **não o substitui**, não modifica as rotinas de voz nem reinicia Centro Server/Agent/Station. O motor oficial corre à parte, em `127.0.0.1:4173`, e só será ligado visualmente ao Travis após teste no equipamento Android.
+O Travis mantém o globo 3D leve como alternativa de segurança. O motor oficial corre à parte em `127.0.0.1:4173`, e a integração local em `127.0.0.1:8770/?travis=1` incorpora-o quando o utilizador pede GOD'S EYE. Não reinicia o Centro Server, o Agent, o Laya nem o sistema de voz. Ao fechar o globo oficial, o iframe é descarregado e a visualização normal do Travis regressa.
 
-O servidor oficial envia `X-Frame-Options: DENY` e `frame-ancestors 'none'`. Assim, o antigo protótipo `travis-world.mjs`, que usa `iframe`, **não é uma solução de incorporação válida** sem um trabalho específico de integração com o projecto upstream. Não remover estas protecções apenas para o fazer aparecer dentro da página.
+O servidor oficial continua a enviar `X-Frame-Options: DENY` e `frame-ancestors 'none'` nas páginas normais. Apenas o documento `/?embed=1` aceita as origens exactas `http://127.0.0.1:8770` e `http://localhost:8770`, com `GEV_EMBED_FRAME_ANCESTORS`. O Travis usa o protocolo oficial `gev:ready` / `gev:view` / `gev:view-applied` por `postMessage`, com validação da origem e do frame. Não se usa `*` para autorizar incorporações.
 
 ## Instalação isolada no Ubuntu/Proot (aarch64)
 
@@ -44,6 +44,18 @@ bash scripts/travis-gev-keyless.sh mcp
 ```
 
 Compila o painel MCP e regista `gods-eye-view` nos clientes disponíveis, se ainda não estiver registado. O Travis não ganha comandos de voz automaticamente com este passo: a aplicação tem o seu próprio controlador de voz e a ligação bidireccional aos comandos do Travis é uma fase distinta.
+
+## Integração com o Travis local
+
+Abrir **http://127.0.0.1:8770/?travis=1** no Chrome do mesmo telemóvel e clicar em **GOD'S EYE**. O globo oficial é aberto no palco cinematográfico do Travis, que mantém o seu próprio microfone, transcrição e voz PT/EN. A API OpenAI Realtime interna ao GEV não é necessária para os comandos integrados.
+
+Os ficheiros `travis-gev-intents.mjs`, `travis-gev-bridge.mjs` e `travis-gev-bridge.css` são adicionados à UI local. A ponte oferece EARTH, PORTO, FLIGHTS, SATELLITES, QUAKES, LAYERS 17, ESRI/OSM e modos de cor. As 17 categorias estão *disponíveis*: só as camadas escolhidas são activadas para reduzir a carga do telemóvel.
+
+Exemplos PT/EN: **«Travis, mostra os aviões no Porto»**, **«Show satellites over New York»**, **«mostra os sismos»**, **«turn on wind»**, **«voltar ao Travis»**. Os comandos geográficos explícitos são encaminhados localmente sem atribuir ao Travis acesso a APIs pagas. Comandos desconhecidos continuam no percurso conversacional existente.
+
+A integração guarda o motor oficial atrás de um `iframe` de origem exacta. Se não houver mensagem `gev:ready` no prazo de 28 segundos, regressa ao globo nativo, sem bloquear a voz. Ao abrir o motor oficial, o ciclo WebGL oculto do Travis é suspenso por uma única guarda em `travis-3d.mjs`; ao regressar, é retomado. O watcher existente repõe de forma aditiva a ligação HTML, CSS e a guarda após sincronizações da UI; ficam cópias de segurança locais.
+
+**Verificações em 10-10-2026:** serviços 8770 e 4173 HTTP 200; documento de incorporação com `frame-ancestors` limitado aos dois endereços locais, página normal continua com `X-Frame-Options: DENY`; `node --check` válido; `node --test scripts/travis-gev-selftest.mjs` com 4 testes aprovados, incluindo `postMessage` com origem correcta, comandos e limpeza do frame. Falta uma captura real do Chrome com o iframe aberto dentro do Travis para validar o aspecto e o desempenho final em WebGL.
 
 ## 17 caminhos sem chave de API
 
