@@ -1,6 +1,6 @@
 {
   "schema": "travis-quantum-skills/v1",
-  "version": "2026-10-10.1",
+  "version": "2026-10-10.2",
   "parent": {
     "name": "QUANTUM UNIFIED AGENT",
     "runtime": "10.73",
@@ -198,6 +198,36 @@
       "scope": "explicit_approval_for_mutation",
       "authority_granted": false,
       "source": "skills/travis-quantum/microsites-operations/SKILL.md"
+    },
+    {
+      "id": "public-road-intelligence",
+      "title": "Trânsito real — ocorrências e medições públicas",
+      "description": "Trânsito reportado: Porto, Lisboa, Londres. Velocidades medidas: Finlândia, NYC se recentes; com origem e hora.",
+      "triggers": [
+        "transito real",
+        "trânsito real",
+        "traffic",
+        "transito",
+        "trafego",
+        "roadworks",
+        "incidentes rodoviarios",
+        "velocidade media",
+        "congestionamento",
+        "Porto transito",
+        "Fintraffic",
+        "TfL"
+      ],
+      "requires": [
+        "/root/.centro-extensions/travis-road-live.mjs",
+        "/root/.centro-extensions/travis-road-portugal.mjs",
+        "/root/.centro-ui/travis-road-live.mjs",
+        "/root/.centro-extensions/travis_road_guard.py"
+      ],
+      "provider": "http://127.0.0.1:4187/healthz",
+      "category": "roads",
+      "scope": "user_requested",
+      "authority_granted": false,
+      "source": "skills/travis-quantum/public-road-intelligence/SKILL.md"
     }
   ]
 }
