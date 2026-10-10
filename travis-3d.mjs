@@ -650,7 +650,7 @@ if (!hud || !launcher || !canvas) {
   }
 
   function localFetch(path,{body=null,type='application/json',method='POST',signal=null}={}) {
-    const endpoint=path.split('?')[0],timeout=endpoint==='/jarvis'?120000:endpoint==='/transcribe'?30000:30000;
+    const endpoint=path.split('?')[0],timeout=endpoint==='/jarvis'?120000:endpoint==='/visual-research'?35000:30000;
     const headers={};
     if (body!=null && type) headers['Content-Type']=type;
     const init={
