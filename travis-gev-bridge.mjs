@@ -15,7 +15,7 @@ const originalToggle=document.getElementById('travis-world-toggle');
 const groups=new Map(GEO_LAYERS.map(x=>[x.key,x]));
 const state={
   mode:'closed',ready:false,place:'earth',coordinates:null,
-  layers:new Set(['earthquakes']),style:'normal',map:'esri-imagery',
+  layers:new Set(['earthquakes']),annotations:[],style:'normal',map:'esri-imagery', 
   changed:0,sent:0,ack:0,inFlight:false,pending:false,
   frame:null,panel:null,drawer:null,status:null,placeName:null,more:null,
   bootTimer:0,queueTimer:0,openedAt:0,error:null,lastOk:null
@@ -54,7 +54,7 @@ function view(){
       lat:loc.lat,lon:loc.lon,altitude_m:loc.alt,
       heading_deg:0,pitch_deg:-90
     },
-    layers:activeIds(),style:state.style,map:state.map,annotations:[]
+    layers:activeIds(),style:state.style,map:state.map,annotations:state.annotations.slice(0,20)
   };
 }
 function sendView(){
@@ -101,7 +101,7 @@ function teardown(closeNative=true){
     state.frame.src='about:blank';
   }
   state.ready=false;state.inFlight=false;state.pending=false;
-  state.sent=0;state.ack=0;
+  state.sent=0;state.ack=0;state.annotations=[];
   if(state.panel)state.panel.hidden=true;
   if(hud?.dataset.worldEngine==='official'){
     hud.dataset.world='closed';hud.dataset.worldEngine='none';
@@ -182,12 +182,29 @@ function setStyle(style){
   if(active())queue();
   sync();return true;
 }
+/** Sources are verified by the gateway, never granted authority by annotations. */
+function setExternalAnnotations(rows=[]){
+  const accepted=[];
+  if(Array.isArray(rows)){
+    for(const item of rows.slice(0,20)){
+      const latitude=Number(item?.latitude),longitude=Number(item?.longitude);
+      if(!within(latitude,-90,90)||!within(longitude,-180,180))continue;
+      const type=['pin','label','highlight'].includes(item?.type)?item.type:'pin';
+      const color=['primary','amber','cyan','green','red'].includes(item?.color)?item.color:'amber';
+      accepted.push({type,latitude,longitude,
+        label:String(item?.label||'Public road data').slice(0,115),color});
+    }
+  }
+  state.annotations=accepted;
+  if(active())queue();
+  emit();return accepted.length;
+}
 function status(){
   if(state.mode==='native')return {...(original?.status?.()||{}),engine:'native-fallback',officialError:state.error};
   return {open:active(),ready:state.ready,engine:'gods-eye-official',
     place:state.place,coordinates:state.coordinates,layers:activeIds(),
     keylessCategories:17,available:local,mode:state.mode,error:state.error,
-    lastApplied:state.lastOk,origin:targetOrigin};
+    lastApplied:state.lastOk,externalAnnotationCount:state.annotations.length,origin:targetOrigin};
 }
 function routeCommand(raw){
   const intent=interpretGeoRequest(raw,{active:active()});
@@ -359,7 +376,7 @@ if(original&&local){
     refresh:()=>active()?queue():original.refresh?.()
   });
   window.TravisGevBridge=Object.freeze({
-    open,close,navigate,toggleLayer,setMap,setStyle,status,routeCommand
+    open,close,navigate,toggleLayer,setMap,setStyle,setExternalAnnotations,status,routeCommand
   });
 } else if(original){
   window.TravisGevBridge=Object.freeze({
