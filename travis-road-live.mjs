@@ -121,10 +121,20 @@ function renderItems(payload,zone,{applyToGlobe=true}={}){
     window.TravisGevBridge?.setExternalAnnotations?.(annotate(rows,zone));
   }
 }
+function focusArea(region){
+  const bridge=window.TravisGevBridge;
+  if(!bridge?.navigate||!region)return;
+  if(region===AREA.london){bridge.navigate('london');return;}
+  if(region===AREA.nyc){bridge.navigate('nyc');return;}
+  if(region===AREA.helsinki){bridge.navigate('helsinki');return;}
+  bridge.navigate(null,{label:'Finlândia · postos TMS',
+    lat:region.lat,lon:region.lon,alt:670000});
+}
 async function loadArea(area,{refresh=false,applyToGlobe=true}={}){
   const region=AREA[area];
   if(!region||!open)return false;
   const token=++epoch;activeArea=area;busy=true;
+  if(!refresh)focusArea(region);
   if(button)button.setAttribute('aria-busy','true');
   showStatus('A consultar dados oficiais · '+region.source);
   pending?.abort?.();
