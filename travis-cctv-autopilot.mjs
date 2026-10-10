@@ -106,6 +106,9 @@ async function select(intent){
             '. This is a still frame, not live video.')};
     }
     lastResult={verified:false,requested:intent.live?'video':'any',at:Date.now()};
+    // A request specifically for moving video must not leave a JPEG fallback
+    // onscreen after failing to verify an HLS stream.
+    if(intent.live)player.close?.();
     return {handled:true,language:lang,verified:false,
       reply:tr(lang,
         intent.live?'As fontes públicas HLS testadas não deram vídeo verificável. Não substituí por fotografias.':
