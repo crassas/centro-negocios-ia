@@ -130,3 +130,59 @@ def ensure_keyless_sidecar(now: float | None = None) -> bool:
     except (OSError, ValueError) as exc:
         _report(False, f"não foi possível iniciar: {type(exc).__name__}")
     return False
+
+
+# HTML entry bridge registration. The existing Travis UI synchronizer may replace
+# index.html; reapply only the two additive references after its repair pass.
+UI_DIR = HOME / ".centro-ui"
+UI_INDEX = UI_DIR / "index.html"
+BRIDGE_MODULE = UI_DIR / "travis-gev-bridge.mjs"
+BRIDGE_INTENTS = UI_DIR / "travis-gev-intents.mjs"
+BRIDGE_STYLE = UI_DIR / "travis-gev-bridge.css"
+BRIDGE_JS_TAG = '<script type="module" src="./travis-gev-bridge.mjs?v=gev-17b"></script>'
+BRIDGE_CSS_TAG = '<link rel="stylesheet" href="./travis-gev-bridge.css?v=gev-17b">'
+BRIDGE_INDEX_BACKUP = HOME / ".centro-extensions" / "travis-gev-index-before-bridge.html"
+
+
+def ensure_travis_bridge() -> bool:
+    """Keep official globe controls in local Travis without changing its core."""
+    if not FLAG.is_file():
+        return False
+    if not all(p.is_file() for p in (UI_INDEX, BRIDGE_MODULE, BRIDGE_INTENTS, BRIDGE_STYLE)):
+        return False
+    try:
+        before = UI_INDEX.read_text(encoding="utf-8")
+        after = before
+        if BRIDGE_CSS_TAG not in after:
+            import re
+            anchors = re.findall(
+                r'<link rel="stylesheet" href="\./travis-cctv-gods-eye\.css[^"]*">',
+                after,
+            )
+            if len(anchors) != 1:
+                _report(False, "bridge CSS anchor unavailable; Travis untouched")
+                return False
+            after = after.replace(anchors[0], anchors[0] + "\n  " + BRIDGE_CSS_TAG, 1)
+        if BRIDGE_JS_TAG not in after:
+            import re
+            anchors = re.findall(
+                r'<script type="module" src="\./travis-cctv-player\.mjs[^"]*"></script>',
+                after,
+            )
+            if len(anchors) != 1:
+                _report(False, "bridge JS anchor unavailable; Travis untouched")
+                return False
+            after = after.replace(anchors[0], anchors[0] + "\n  " + BRIDGE_JS_TAG, 1)
+        if after == before:
+            return True
+        if not BRIDGE_INDEX_BACKUP.exists():
+            BRIDGE_INDEX_BACKUP.write_text(before, encoding="utf-8")
+        temp = UI_INDEX.with_name("index.html.travis-gev.tmp")
+        temp.write_text(after, encoding="utf-8")
+        os.chmod(temp, UI_INDEX.stat().st_mode & 0o777)
+        temp.replace(UI_INDEX)
+        print("[watch] travis-gev · official UI bridge linked to local Travis", flush=True)
+        return True
+    except OSError as error:
+        print("[watch] travis-gev · UI bridge skipped:", type(error).__name__, flush=True)
+        return False
