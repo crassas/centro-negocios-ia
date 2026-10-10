@@ -1,6 +1,6 @@
-import {createDetailedSubject} from './travis-visual-subjects.mjs?v=worlds-1';
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=worlds-1';
-import {transferState} from './travis-scene-planner.mjs?v=worlds-1';
+import {createDetailedSubject} from './travis-visual-subjects.mjs?v=context-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=context-1';
+import {transferState} from './travis-scene-planner.mjs?v=context-1';
 const clamp=t=>Math.max(0,Math.min(1,t));
 export function createAnimatedScene(THREE,kind,subject){
  const group=new THREE.Group(),materials=[],textures=[];let last={};
@@ -8,7 +8,7 @@ export function createAnimatedScene(THREE,kind,subject){
  const surface=(geo,parent=group)=>{const m=createHolographicSurfaceMaterial(THREE,{gain:1.2});materials.push(m);const mesh=new THREE.Mesh(geo,m);parent.add(mesh);return mesh;};
  const line=(points,opacity=.35)=>{const m=new THREE.LineBasicMaterial({color:0xd9b77f,transparent:true,opacity,depthWrite:false});m.userData.baseOpacity=opacity;materials.push(m);const o=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points.map(p=>new THREE.Vector3(...p))),m);group.add(o);return o;};
  const ring=(r,opacity=.2)=>line(Array.from({length:129},(_,i)=>[Math.cos(i/128*Math.PI*2)*r,Math.sin(i/128*Math.PI*2)*r,0]),opacity);
- const planet=(name,r)=>{const built=createDetailedSubject(THREE,'planet',name);materials.push(...built.materials);textures.push(...built.textures);built.group.scale.setScalar(r/.82);group.add(built.group);return built.group;};
+ const planet=(name,r)=>{const built=createDetailedSubject(THREE,'planet',name);materials.push(...built.materials);textures.push(...built.textures);built.group.scale.setScalar(r/.82);built.group.userData.visualBody=name;group.add(built.group);return built.group;};
  function rocket(){
   const vessel=new THREE.Group();vessel.userData.visualBody='rocket';group.add(vessel);
   surface(new THREE.CylinderGeometry(.06,.075,.40,24),vessel);

@@ -60,6 +60,7 @@ jobs:
           node scripts/travis-motion-selftest.mjs "$RUNNER_TEMP/travis-three-test/node_modules/three/build/three.module.js"
           node scripts/travis-spectrum-selftest.mjs "$RUNNER_TEMP/travis-three-test/node_modules/three/build/three.module.js"
           node scripts/travis-worlds-selftest.mjs "$RUNNER_TEMP/travis-three-test/node_modules/three/build/three.module.js"
+          node scripts/travis-context-selftest.mjs "$RUNNER_TEMP/travis-three-test/node_modules/three/build/three.module.js"
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

@@ -107,3 +107,13 @@
   font:500 10px/1.2 system-ui,sans-serif;letter-spacing:.02em;white-space:nowrap;
   background:rgba(3,6,12,.74);border-color:rgba(213,185,147,.32);
 }
+
+/* Quiet command affordance. Keep a 44px touch target without the large tile. */
+#travis-hud .travis-command button[type="submit"]{
+ flex:0 0 44px;width:44px;height:44px;min-height:44px;max-height:44px;
+ align-self:center;border-radius:50%;font-size:23px;padding:0;
+ border:1px solid rgba(214,184,140,.42);
+ background:rgba(214,184,140,.08)!important;box-shadow:none!important;border-color:rgba(214,184,140,.42)!important;
+}
+#travis-hud .travis-command button[type="submit"]:hover{background:rgba(214,184,140,.16)!important}
+#travis-hud .travis-command button[type="submit"]:focus-visible{outline:2px solid #e1c79e;outline-offset:3px}

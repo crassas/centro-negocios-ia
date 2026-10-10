@@ -16,7 +16,7 @@ assert.equal(parseVisualIntent('Desliga os sons').enabled,false);
 const bounds=[];
 for(const exploded of [false,true]){
  const model=createMechanical(THREE,{exploded});bounds.push(new THREE.Box3().setFromObject(model.group).getSize(new THREE.Vector3()));
- assert.equal(model.group.children.length,3,'Coils and bearings must be batched into three draws');assert.equal(model.parts.length,5);
+ let draws=0;model.group.traverse(o=>{if(o.isMesh)draws++;});assert(draws<=15,'Batch within named parts to preserve focus with bounded draw calls');assert.equal(model.parts.length,5);
  model.group.traverse(node=>{if(!node.geometry)return;for(const n of node.geometry.attributes.position.array)assert(Number.isFinite(n));node.geometry.dispose();});model.materials.forEach(m=>m.dispose());
 }
 assert(bounds[1].x>bounds[0].x*1.3,'Exploded form must actually separate the assemblies');
@@ -31,4 +31,4 @@ assert(audio.play());assert.equal(started,1);assert(!audio.play(),'Rate limit');
 context.currentTime=2;status.listening=true;assert(!audio.play(),'No sound while listening');status.listening=false;
 context.state='suspended';assert(!audio.play(),'Must not unlock audio');context.state='running';
 audio.setEnabled(false);assert(!audio.play());assert.equal(audio.status().active,0);assert(disconnected>=2&&stopped>=1);
-console.log('PASS MOTION: PT/EN routing, honest model fallback, three batched motor draws, separate/assemble, deterministic timing and audio consent/listening/mute guards');
+console.log('PASS MOTION: PT/EN routing, honest model fallback, batched selectable motor parts, separate/assemble, deterministic timing and audio consent/listening/mute guards');

@@ -1,6 +1,6 @@
 # Travis: espaço e construção de cenas
 
-A versão `worlds-1` retira a cortina, os anéis e os reflexos dourados do fundo. O rosto mantém o seu material. Um campo de estrelas com profundidade acompanha as projeções astronómicas; nas restantes cenas, a luz do fundo diminui.
+A versão `context-1` retira a cortina, os anéis e os reflexos dourados do fundo. O rosto mantém o seu material. Um campo de estrelas com profundidade acompanha as projeções astronómicas; nas restantes cenas, a luz do fundo diminui.
 
 ## Pedidos que funcionam
 

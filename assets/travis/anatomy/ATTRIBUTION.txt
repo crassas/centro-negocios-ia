@@ -1,0 +1,5 @@
+BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International.
+https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html
+https://creativecommons.org/licenses/by/4.0/
+Source: BodyParts3D 4.0 PART-OF OBJ, official LATEST archive. Current licence verified 2026-10-10 (licensor update 2025-02-27); original OBJ comments still mention the older licence.
+Adaptations for Travis: selected anatomical groups, mesh simplification, common coordinate transform, quantisation, colours and holographic rendering. Source FMA concepts and element IDs are in travis-anatomy-catalog.mjs. Adult male reference anatomy, simplified for educational visualisation; not an individual scan.

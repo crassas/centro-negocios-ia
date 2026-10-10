@@ -1,7 +1,8 @@
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=worlds-1';
+import {createSceneFocus} from './travis-scene-focus.mjs?v=context-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=context-1';
 // Educational electric motor cutaway. Generic proportions, never measured CAD.
 // Inspired by the exploded-view choreography in claude-motion/sims/engine.
-export function createMechanical(THREE,{exploded=false}={}){
+export function createMechanical(THREE,{exploded=false,reducedMotion=false}={}){
  const group=new THREE.Group(),materials=[];group.name='TravisMotorCutaway';
  const surface=gain=>{const m=createHolographicSurfaceMaterial(THREE,{gain});materials.push(m);return m;};
  const gold=surface(1),copper=surface(.78),bright=surface(1.15);
@@ -28,17 +29,24 @@ export function createMechanical(THREE,{exploded=false}={}){
  }
  const fan=part('Ventoinha',-.95,-1.05);ring(fan,.16,.035,0,bright);
  for(let i=0;i<8;i++){const a=i*Math.PI/4;const blade=mesh(fan,new THREE.BoxGeometry(.07,.25,.09),gold,0,Math.cos(a)*.27,Math.sin(a)*.27);blade.rotation.x=a+.28;}
- // Bake all small coils/balls into three draws, not a draw per component.
- group.updateMatrixWorld(true);const batches=new Map();
- group.traverse(node=>{if(!node.isMesh)return;const geometry=node.geometry.index?node.geometry.toNonIndexed():node.geometry.clone();geometry.applyMatrix4(node.matrixWorld);
-  const batch=batches.get(node.material)||{position:[],normal:[],uv:[]};
-  for(const key of Object.keys(batch))for(const value of geometry.attributes[key].array)batch[key].push(value);
-  batches.set(node.material,batch);geometry.dispose();node.geometry.dispose();
- });
- group.clear();for(const [material,attributes] of batches){const geometry=new THREE.BufferGeometry();
-  for(const [key,values] of Object.entries(attributes))geometry.setAttribute(key,new THREE.Float32BufferAttribute(values,key==='uv'?2:3));
-  group.add(new THREE.Mesh(geometry,material));
+ // Batch within each named part, preserving part identity for contextual focus.
+ group.updateMatrixWorld(true);const entries=[];
+ const ids=['rotor','stator','front-bearing','rear-bearing','fan'];
+ const aliases=[['eixo','shaft','rotor'],['estator','bobinas','stator','windings'],['rolamento dianteiro','front bearing'],['rolamento traseiro','rear bearing'],['ventoinha','fan']];
+ for(const [index,part] of parts.entries()){
+  const batches=new Map();part.traverse(node=>{if(!node.isMesh)return;const geometry=node.geometry.index?node.geometry.toNonIndexed():node.geometry.clone();geometry.applyMatrix4(node.matrixWorld);
+   const batch=batches.get(node.material)||{position:[],normal:[],uv:[]};
+   for(const key of Object.keys(batch))for(const value of geometry.attributes[key].array)batch[key].push(value);
+   batches.set(node.material,batch);geometry.dispose();node.geometry.dispose();
+  });
+  part.clear();part.position.set(0,0,0);
+  for(const [original,attributes] of batches){const geometry=new THREE.BufferGeometry();
+   for(const [key,values] of Object.entries(attributes))geometry.setAttribute(key,new THREE.Float32BufferAttribute(values,key==='uv'?2:3));
+   const material=original.clone();materials.push(material);part.add(new THREE.Mesh(geometry,material));
+  }
+  part.userData.visualBody=ids[index];entries.push({id:ids[index],label:part.name,aliases:aliases[index],object:part});
  }
  group.rotation.set(.12,-.48,-.18);group.updateMatrixWorld(true);
- return {group,materials,textures:[],variant:exploded?'motor-exploded':'motor-cutaway',parts:parts.map(p=>p.name)};
+ const selection=createSceneFocus(THREE,entries,{reducedMotion});
+ return {group,materials,textures:[],variant:exploded?'motor-exploded':'motor-cutaway',parts:parts.map(p=>p.name),focus:selection.focus,update(time,_progress,now=time){selection.update(now);},state:selection.state};
 }

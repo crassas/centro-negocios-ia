@@ -1,10 +1,11 @@
-import {validateScenePlan,flybyPosition,SPACE_ASSETS} from './travis-scene-blueprint.mjs?v=worlds-1';
-import {createDetailedSubject} from './travis-visual-subjects.mjs?v=worlds-1';
-import {createAnimatedScene} from './travis-animated-scenes.mjs?v=worlds-1';
-import {createScienceScene} from './travis-science-scenes.mjs?v=worlds-1';
-import {createArchitecture} from './travis-architecture.mjs?v=worlds-1';
-import {createMechanical} from './travis-mechanical.mjs?v=worlds-1';
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=worlds-1';
+import {createSceneFocus} from './travis-scene-focus.mjs?v=context-1';
+import {validateScenePlan,flybyPosition,SPACE_ASSETS} from './travis-scene-blueprint.mjs?v=context-1';
+import {createDetailedSubject} from './travis-visual-subjects.mjs?v=context-1';
+import {createAnimatedScene} from './travis-animated-scenes.mjs?v=context-1';
+import {createScienceScene} from './travis-science-scenes.mjs?v=context-1';
+import {createArchitecture} from './travis-architecture.mjs?v=context-1';
+import {createMechanical} from './travis-mechanical.mjs?v=context-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=context-1';
 
 // Independent objects share the existing surface/morph renderer. Construction
 // happens once per command; animation updates transforms and small trail buffers.
@@ -12,7 +13,7 @@ export function createComposedScene(THREE,input,{reducedMotion=false}={}){
  const plan=validateScenePlan(input);if(!plan)throw new Error('Invalid scene blueprint');
  const group=new THREE.Group(),view=new THREE.Group(),guides=new THREE.Group(),materials=[],textures=[],actors=[];
  group.name='TravisComposedWorld';group.userData.dynamic=true;group.add(view);view.add(guides);
- let focused=null,lastTime=0,viewScale=1,last={};
+ let last={};
  const centre=new THREE.Vector3(),wanted=new THREE.Vector3(),vector=new THREE.Vector3(),zero=new THREE.Vector3();
  const random=(i,s=1)=>{const x=Math.sin(i*127.1+s*311.7)*43758.5453;return x-Math.floor(x);};
  function surface(geometry,parent,tint=0xbdb7aa,gain=1.2){
@@ -106,28 +107,20 @@ export function createComposedScene(THREE,input,{reducedMotion=false}={}){
   const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(colours,3));
   const mat=new THREE.PointsMaterial({vertexColors:true,size:.008,transparent:true,opacity:.55,depthWrite:false,blending:THREE.AdditiveBlending});mat.userData.baseOpacity=.55;materials.push(mat);actor.tail=new THREE.Points(geo,mat);actor.tail.userData.skipMorph=true;view.add(actor.tail);
  }
- function update(time){
-  const dt=Math.max(0,Math.min(.1,time-lastTime));lastTime=time;
+ const selection=createSceneFocus(THREE,actors.map(a=>({id:a.id,label:a.asset,aliases:[a.asset],object:a.holder,radius:a.radius})),{reducedMotion,guides:[guides]});
+ function update(time,_progress,now=time){
   for(const a of actors){
    a.built.update?.(time);
    if(a.orbit){const angle=a.orbit.phase+time*.075/Math.sqrt(a.orbit.r);a.holder.position.set(Math.cos(angle)*a.orbit.r,Math.sin(angle)*a.orbit.r*.58,Math.sin(angle)*a.orbit.r*.46);}
    if(tracks.has(a.id)){const {trail,index}=tracks.get(a.id),p=Math.min(1,time/plan.duration),pos=flybyPosition(p,clearance);a.holder.position.set(pos[0],pos[1]+index*.24,pos[2]);trail.geometry.setDrawRange(0,Math.max(2,Math.floor(p*160)+1));}
-   if(a.tail){a.tail.position.copy(a.holder.position);a.tail.visible=!focused||focused===a.id;}
+   if(a.tail){a.tail.position.copy(a.holder.position);a.tail.visible=true;}
   }
-  const focus=actors.find(a=>a.id===focused),scale=focus?Math.min(5,1.15/focus.scale):1;
-  wanted.copy(focus?.holder.position||zero);
-  const ease=reducedMotion?1:1-Math.exp(-(dt||1/60)*7);centre.lerp(wanted,ease);viewScale+=(scale-viewScale)*ease;
-  view.scale.setScalar(viewScale);view.position.copy(centre).multiplyScalar(-viewScale);
+  selection.update(now);
   const p=Math.min(1,time/plan.duration);
-  last={type:'constructed-scene',environment:plan.environment,layout:plan.layout,progress:flyers.length?p:null,phase:flyers.length?(p<.35?'approach':p<.65?'closest-approach':p<1?'departure':'complete'):null,focused:focus?.asset||null,schematic:true,
-   objects:actors.map(a=>({id:a.id,asset:a.asset,position:a.holder.position.toArray(),visible:a.holder.visible,scale:a.scale}))};
+  last={type:'constructed-scene',environment:plan.environment,layout:plan.layout,progress:flyers.length?p:null,phase:flyers.length?(p<.35?'approach':p<.65?'closest-approach':p<1?'departure':'complete'):null,...selection.state(),focused:actors.find(a=>a.id===selection.state().focused)?.asset||null,schematic:true,
+   objects:actors.map(a=>({id:a.id,asset:a.asset,position:a.holder.position.toArray(),visible:a.holder.visible,scale:a.scale,...selection.state().objects.find(o=>o.id===a.id)}))};
  }
- function focus(target){
-  const actor=actors.find(a=>a.id===target||a.asset.toLowerCase()===String(target).toLowerCase());if(target&&!actor)return false;
-  focused=actor?.id||null;guides.visible=!focused;guides.traverse(o=>{if(o.geometry)o.userData.skipMorph=Boolean(focused);});
-  for(const a of actors){a.holder.visible=!focused||focused===a.id;a.holder.traverse(o=>{if(o.geometry)o.userData.skipMorph=!a.holder.visible||Boolean(o.userData.originalSkipMorph??(o.userData.originalSkipMorph=o.userData.skipMorph));});}
-  return true;
- }
+ const focus=selection.focus;
  update(0);
  return {group,materials,textures,variant:'constructed-scene',update,focus,state:()=>last,plan};
 }

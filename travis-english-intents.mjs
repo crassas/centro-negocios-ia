@@ -1,5 +1,5 @@
-import {discoveryIntent} from './travis-discovery.mjs?v=worlds-1';
-import {cinematicIntent} from './travis-scene-planner.mjs?v=worlds-1';
+import {discoveryIntent} from './travis-discovery.mjs?v=context-1';
+import {cinematicIntent} from './travis-scene-planner.mjs?v=context-1';
 // Universal conversational projection intent for PT-PT and English.
 // Explicitly requested conceptual imagery is routed to local particle shapes;
 // unrecognised real-world facts and private data stay with the normal tools.

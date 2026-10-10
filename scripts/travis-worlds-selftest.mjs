@@ -31,7 +31,7 @@ for(const assets of [['Meteor'],['Satellite'],['Tree','Mountain'],['Cube','Spher
  built.group.traverse(o=>{if(o.geometry)snapshot.push({o,version:o.geometry.attributes.position.version});});
  assert(snapshot.length>0);const box=new THREE.Box3().setFromObject(built.group),size=box.getSize(new THREE.Vector3());assert(size.x>.1&&size.y>.1&&size.z>.1);
  for(let i=0;i<120;i++)built.update(i/60);
- assert(built.focus(assets.at(-1)));built.update(3);assert.equal(built.state().objects.filter(o=>o.visible).length,1);assert(!built.focus('Unknown'));
+ assert(built.focus(assets.at(-1)));built.update(3);assert.equal(built.state().objects.filter(o=>o.visible).length,assets.length);assert(!built.focus('Unknown'));
  assert(built.focus(null));built.update(4);assert.equal(built.state().objects.filter(o=>o.visible).length,assets.length);
  for(const {o,version} of snapshot)assert.equal(o.geometry.attributes.position.version,version);
  built.group.traverse(o=>o.geometry?.dispose());built.materials.forEach(m=>m.dispose());built.textures.forEach(t=>t.dispose());

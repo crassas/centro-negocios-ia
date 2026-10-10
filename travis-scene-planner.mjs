@@ -1,18 +1,26 @@
-import {compositionIntent,sceneAsset} from './travis-scene-blueprint.mjs?v=worlds-1';
+import {anatomySubject} from './travis-anatomy.mjs?v=context-1';
+import {compositionIntent,sceneAsset} from './travis-scene-blueprint.mjs?v=context-1';
 // Explicit, bounded procedural scenes. Unknown assets still use the research path.
 const fold=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 export const bodyNames={mercury:'Mercury',mercurio:'Mercury',venus:'Venus',terra:'Earth',earth:'Earth',mars:'Mars',marte:'Mars',jupiter:'Jupiter',saturn:'Saturn',saturno:'Saturn',uranus:'Uranus',urano:'Uranus',neptune:'Neptune',neptuno:'Neptune',moon:'Moon',lua:'Moon',sun:'Sun',sol:'Sun'};
 export function cinematicIntent(text,{active=false}={}){
  const t=fold(text).trim();
  if(/^(?:nao|nunca|don't|do not)\b/.test(t)||/^(?:escreve|write)\b/.test(t))return null;
- const language=/\b(?:mostra|chuva|foguetao|terra|lua|marte|aconteceria|como|isola|gota|neve|fogo|pausa|continua)\b/.test(t)?'pt':'en';
+ const language=/\b(?:mostra|explica|esqueleto|corpo|pulmoes|coracao|cerebro|chuva|foguetao|terra|lua|marte|aconteceria|como|isola|gota|neve|fogo|pausa|continua)\b/.test(t)?'pt':'en';
  if(active){
   for(const [action,re] of [['pause-motion',/^(?:pausa|para|congela)(?: a animacao| o movimento| isso)?$|^(?:pause|freeze)(?: the animation| animation| it)?$/],['resume-motion',/^(?:continua|retoma|anima)(?: a animacao| o movimento| isso)?$|^(?:resume|animate)(?: the animation| animation| it)?$/],['slow-motion',/^(?:mais devagar|abranda|slow(?:er| down)|slow motion)$/],['normal-motion',/^(?:velocidade normal|normal speed)$/],['wide-view',/^(?:mostra tudo|mostra todos|vista geral|volta a vista geral|show all|show everything|wide view)$/]])if(re.test(t))return {type:'control',action,language};
-  if(/\b(?:isola|isolar|isole|isolate|focus on|foca|foca-te|aproxima.*planeta)\b/.test(t)){
-   const target=Object.entries(bodyNames).find(([key])=>new RegExp('\\b'+key+'\\b').test(t))?.[1]||sceneAsset(t)||(/gota|drop/.test(t)?'Drop':null);
-   return {type:'focus',target,language};
+  if(/\b(?:isola|isolar|isole|isolate|focus on|foca|foca-te|aproxima.*planeta)\b/.test(t)&&!/\b(?:apenas|so|somente|only|alone)\b/.test(t)){
+   const target=Object.entries(bodyNames).find(([key])=>new RegExp('\\b'+key+'\\b').test(t))?.[1]||anatomySubject(t)||(/\b(?:rotor|eixo|estator|stator|bobinas|ventoinha|fan)\b/.exec(t)?.[0])||sceneAsset(t)||(/gota|drop/.test(t)?'Drop':t.replace(/^.*?(?:isola(?:r|-me)?|isole|isolate|focus on|foca(?:-te)?)\s*/,'').replace(/^(?:(?:me|ai|o|a|os|as|the|planeta|planet)\s+)*/,''));
+   return {type:'focus',target:/^(?:esse|este|aquele|this|that|it)(?: (?:planeta|objeto|planet|object))?$/.test(target||'')?null:target,language};
   }
  }
+ const only=/\b(?:mostra(?:-me)?|show(?: me)?|isola|isolate)\b.*\b(?:apenas|so|somente|only|alone)\b/.test(t);
+ if(only){
+  const target=Object.entries(bodyNames).find(([key])=>new RegExp('\\b'+key+'\\b').test(t))?.[1]||anatomySubject(t)||sceneAsset(t);
+  if(target)return {type:'solo',target,language};
+ }
+ const anatomy=anatomySubject(t);
+ if(anatomy&&!/\b(?:fotos?|fotografias?|photos?|pictures?|images?|imagens?)\b/.test(t)&&(/\b(?:mostra|ver|cria|projeta|explica|show|explain|display)\b/.test(t)||anatomySubject(t)===t))return {type:'scene',scene:'anatomy',title:anatomy,explain:/\b(?:explica|explain)\b/.test(t),language};
  const composed=compositionIntent(text);if(composed)return composed;
  const explicit=/\b(?:mostra|ver|cria|faz|projeta|imagina|simula|explica|aconteceria|chegaria|viajaria|show|create|imagine|simulate|explain|what if|would happen|would .*reach|how.*(?:get|travel|reach))\b/.test(t);
  const photo=/\b(?:fotos?|fotografias?|photos?|photographs?|imagens? reais|real images?)\b/.test(t);

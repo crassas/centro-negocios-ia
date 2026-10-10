@@ -1,14 +1,15 @@
-import {compositionIntent,sceneAsset,makeScenePlan,sceneLabel} from './travis-scene-blueprint.mjs?v=worlds-1';
-import {discoveryChapters,scienceReference} from './travis-discovery.mjs?v=worlds-1';
-import {bodyNames} from './travis-scene-planner.mjs?v=worlds-1';
+import {loadAnatomy,anatomyLabel,anatomyPart} from './travis-anatomy.mjs?v=context-1';
+import {compositionIntent,sceneAsset,makeScenePlan,sceneLabel} from './travis-scene-blueprint.mjs?v=context-1';
+import {discoveryChapters,scienceReference} from './travis-discovery.mjs?v=context-1';
+import {bodyNames} from './travis-scene-planner.mjs?v=context-1';
 import {createVisualSources} from './travis-visual-sources.mjs?v=sand-1';
 // Front workspace driven by actual host tool results. Text is always inert.
 import {MOTION,revealCaption,readingHold} from './travis-motion.mjs?v=motion-1';
-import {decodeReferenceModel,disposeReferenceModel} from './travis-model-library.mjs?v=worlds-1';
+import {decodeReferenceModel,disposeReferenceModel} from './travis-model-library.mjs?v=context-1';
 import {hologramPresentation as projection} from './travis-presence.mjs?v=motion-1';
 import {mountYouTube,closeYouTube,controlYouTube,youtubeState} from './travis-youtube.mjs?v=3';
-import {parseVisualIntent,rewriteEnglishToolRequest,mayNeedVisualModel} from './travis-english-intents.mjs?v=worlds-1';
-import {buildNarrationCues,cueAtTime,hasLocalVisual} from './travis-visual-story.mjs?v=worlds-1';
+import {parseVisualIntent,rewriteEnglishToolRequest,mayNeedVisualModel} from './travis-english-intents.mjs?v=context-1';
+import {buildNarrationCues,cueAtTime,hasLocalVisual} from './travis-visual-story.mjs?v=context-1';
 const hud=document.getElementById('travis-hud');
 const deck=document.getElementById('travis-action-deck');
 const heading=document.getElementById('travis-action-heading');
@@ -42,10 +43,10 @@ function updatePin(){
   heading.title=pinned?'Pinned until you dismiss it':'Returns to Travis automatically';
 }
 const schematic=(scene,title)=>{
-  const names={composition:'CENA 3D',science:'DISCOVERY',weather:'WEATHER',journey:'SPACE JOURNEY',model:'3D MODEL',mechanical:'ELECTRIC MOTOR · CUTAWAY',text:'TEXT',space:'SPACE',reference:'VISUAL REFERENCE',planet:'PLANETARY CONCEPT',map:'SCHEMATIC MAP',house:'ARCHITECTURAL WIREFRAME',
+  const names={anatomy:'ANATOMIA 3D',composition:'CENA 3D',science:'DISCOVERY',weather:'WEATHER',journey:'SPACE JOURNEY',model:'3D MODEL',mechanical:'ELECTRIC MOTOR · CUTAWAY',text:'TEXT',space:'SPACE',reference:'VISUAL REFERENCE',planet:'PLANETARY CONCEPT',map:'SCHEMATIC MAP',house:'ARCHITECTURAL WIREFRAME',
     person:'HUMAN FIGURE CONCEPT',vehicle:'VEHICLE CONCEPT',landscape:'NATURE CONCEPT',
     diagram:'CONCEPT DIAGRAM',object:'OBJECT WIREFRAME'};
-  const summaries={composition:'Cena construída com objetos 3D e animação procedural. Dimensões e trajetos ilustrativos, sem escala física.',science:'Educational illustration; scale, colour and motion are simplified.',weather:'Procedural animated illustration of a natural phenomenon.',journey:'Illustrative orbital transfer; sizes and time are compressed. No launch dynamics, ephemerides or gravity assists are calculated.',model:'Sourced three-dimensional geometry with Travis holographic material.',mechanical:'Generic educational electric motor cutaway; not measured CAD.',text:'Letterforms made of holographic light.',space:'Illustrative star field, not a live sky chart.',reference:'Holographic relief from a sourced image; not a recovered 3D model.',planet:'Illustrative orbital model, not NASA imagery.',
+  const summaries={anatomy:'Anatomia humana de referência, derivada de BodyParts3D. Geometria simplificada para visualização educativa.',composition:'Cena construída com objetos 3D e animação procedural. Dimensões e trajetos ilustrativos, sem escala física.',science:'Educational illustration; scale, colour and motion are simplified.',weather:'Procedural animated illustration of a natural phenomenon.',journey:'Illustrative orbital transfer; sizes and time are compressed. No launch dynamics, ephemerides or gravity assists are calculated.',model:'Sourced three-dimensional geometry with Travis holographic material.',mechanical:'Generic educational electric motor cutaway; not measured CAD.',text:'Letterforms made of holographic light.',space:'Illustrative star field, not a live sky chart.',reference:'Holographic relief from a sourced image; not a recovered 3D model.',planet:'Illustrative orbital model, not NASA imagery.',
     map:'Illustrative route grid, not live geography or verified coordinates.',
     house:'Conceptual building geometry, not a survey or architectural plan.',
     person:'Generic holographic figure, not a reconstruction of a real person.',
@@ -85,27 +86,12 @@ function render(data,{story=false}={}){
   clearTimeout(returnTimer);updatePin();
   hud.dataset.projectionKind=String(data.kind||'result');hud.dataset.scene=String(data.scene||'');
   window.dispatchEvent(new CustomEvent('travis:illustration',{detail:{
-    scene:data.kind==='illustration'?data.scene:null,subject:data.title||'',reference:data.reference||null,plan:data.plan||null,keepTime:Boolean(data.keepTime)
+    scene:data.kind==='illustration'?data.scene:null,subject:data.title||'',reference:data.reference||null,plan:data.plan||null,anatomy:data.anatomy||null,keepTime:Boolean(data.keepTime)
   }}));
   if(!matchMedia('(prefers-reduced-motion: reduce)').matches)deck.animate?.([{opacity:0,filter:'blur(9px)',transform:'translate(-50%, 16px) scale(.97)'},{opacity:1,filter:'blur(0px)',transform:'translate(-50%, 0) scale(1)'}],{duration:MOTION.caption*1000,easing:MOTION.entrance});
   heading.textContent=String(data.title||'Your workspace');
   caption.replaceChildren();sources.remember(data);
   if(data.kind==='illustration'&&data.scene!=='text'){const title=document.createElement('span');title.className='travis-motion-title';caption.append(title);revealCaption(title,data.title||'',{reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches});}
-  if(data.scene==='composition'){
-    const controls=document.createElement('div');controls.className='travis-reference-navigation travis-scene-controls';
-    for(const [request,label] of [['Pausa a animação','Pausa'],['Continua a animação','Animar'],['Mostra tudo','Vista geral']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.addEventListener('click',()=>window.TravisVisual?.ask(request));controls.append(button);}caption.append(controls);
-  }
-  if(data.scene==='journey'){const note=document.createElement('small');note.textContent='TRAJETO ILUSTRATIVO · SEM ESCALA';caption.append(note);}
-  if(data.scene==='mechanical'){
-    const note=document.createElement('small');note.textContent='MODELO DIDÁTICO · CORTE';caption.append(note);
-    const controls=document.createElement('div');controls.className='travis-reference-navigation travis-mechanical-controls';
-    for(const [request,label] of [['Separa as peças','Separar'],['Junta as peças','Montar']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.addEventListener('click',()=>window.TravisVisual?.ask(request));controls.append(button);}caption.append(controls);
-  }
-  if(data.scene==='model'){
-    const note=document.createElement('small');note.textContent='OBJETO 3D';caption.append(note);
-    const controls=document.createElement('div');controls.className='travis-reference-navigation';
-    for(const [request,label] of [['Roda para a esquerda','↶'],['Roda para a direita','↷']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.setAttribute('aria-label',request);button.addEventListener('click',()=>window.TravisVisual?.ask(request));controls.append(button);}caption.append(controls);
-  }
   if(data.scene==='reference'){
     const note=document.createElement('small');note.textContent='FOTOGRAFIA · RELEVO';caption.append(note);
     const model=document.createElement('button');model.type='button';model.className='travis-reference-photos';model.textContent='Procurar objeto 3D';
@@ -121,9 +107,6 @@ function render(data,{story=false}={}){
       if(command==='Previous image'){const count=document.createElement('span');count.textContent=(data.gallery.index+1)+' / '+data.gallery.count;navigation.append(count);}
     }
     caption.append(navigation);
-  }else if(data.kind==='illustration'&&!data.discovery&&!['text','reference','journey','weather','science','composition'].includes(data.scene)){
-    const photos=document.createElement('button');photos.type='button';photos.className='travis-reference-photos';photos.textContent='Photos';
-    photos.addEventListener('click',()=>window.TravisVisual?.ask('Show photos of '+data.title));caption.append(photos);
   }
   items.dataset.kind=String(data.kind||'result');
   const rows=Array.isArray(data.items)?data.items.slice(0,30):[];
@@ -251,9 +234,26 @@ if(deck){
       if(!current?.explaining||pinned||!context)return;
       clearTimeout(returnTimer);returnTimer=0;
       const initial={scene:current.scene,title:current.title};
-      const cues=current.scene==='journey'||current.scene==='composition'||current.discovery?[{...initial,at:0}]:buildNarrationCues(text,initial);
+      const cues=current.scene==='journey'||current.scene==='composition'||current.scene==='anatomy'||current.discovery?[{...initial,at:0}]:buildNarrationCues(text,initial);
       if(current.scene==='journey')window.dispatchEvent(new CustomEvent('travis:visual-timeline',{detail:{context,start,duration,continuous,text}}));
       narration={cues,context,start,duration,index:0,epoch:storyEpoch};refresh();
+    },
+    async prepareAnatomy(intent,{signal}={}){
+      try{
+        const data=await loadAnatomy(intent.pendingAnatomy,{signal});
+        if(signal?.aborted||intent.visualVersion!==storyEpoch)return false;
+        render({...schematic('anatomy',anatomyLabel(intent.pendingAnatomy,intent.language)),anatomy:data,explaining:Boolean(intent.explain),
+          sourceName:'BodyParts3D · DBCLS',sourceUrl:'https://dbarchive.biosciencedbc.jp/en/bodyparts3d/desc.html',
+          creditUrl:'https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html',
+          imageAuthor:'BodyParts3D, © The Database Center for Life Science',imageLicense:'CC Attribution 4.0 International · Geometria simplificada, reagrupada e colorida para Travis.'});
+        if(intent.wideScene)wideScene=intent.wideScene;
+        window.TravisVisual?.commands(true,{automatic:true});show();
+        intent.reply=intent.language==='pt'?'Aqui está '+anatomyLabel(intent.pendingAnatomy,'pt')+'.':'Here is '+anatomyLabel(intent.pendingAnatomy,'en')+'.';
+        return true;
+      }catch(error){
+        if(intent.visualVersion!==storyEpoch||signal?.aborted&&signal.reason?.name!=='TimeoutError')return false;
+        intent.handled=true;intent.reply=intent.language==='pt'?'Não consegui carregar a anatomia 3D. Tenta novamente.':'I could not load the 3D anatomy. Please try again.';return false;
+      }
     },
     async applyReference(result,intent){
       if(intent?.visualVersion!==storyEpoch)return null;
@@ -307,23 +307,29 @@ if(deck){
       }
       if(intent.type==='sound'){window.dispatchEvent(new CustomEvent('travis:motion-sound',{detail:{enabled:intent.enabled}}));return {handled:true,language:intent.language,kind:'control',reply:intent.language==='pt'?(intent.enabled?'Sons de movimento ligados.':'Sons de movimento desligados.'):(intent.enabled?'Motion sounds enabled.':'Motion sounds disabled.')};}
       if(intent.type==='focus'){
-        if(current?.plan){
-          const target=sceneAsset(intent.target||selectedVisual||'');
-          if(!target||!current.plan.nodes.some(n=>n.asset===target))return {handled:true,kind:'control',language:intent.language,reply:intent.language==='pt'?'Diz o nome de um objeto desta cena.':'Name an object in this scene.'};
-          cancelNarration();pinned=true;updatePin();clearTimeout(returnTimer);
-          window.dispatchEvent(new CustomEvent('travis:visual-control',{detail:{action:'focus-object',target}}));
-          return {handled:true,kind:'control',language:intent.language,reply:intent.language==='pt'?sceneLabel(target)+' em destaque.':target+' in focus.'};
+        const target=intent.target||selectedVisual;
+        const ok=target&&window.TravisVisual?.focusObject?.(target);
+        if(!ok)return {handled:true,kind:'control',language:intent.language,reply:intent.language==='pt'?'Esse elemento não está disponível separadamente nesta cena. Diz o nome de um dos objetos visíveis.':'That part is not separately available in this scene. Name one of the visible objects.'};
+        cancelNarration();selectedVisual=target;pinned=true;updatePin();clearTimeout(returnTimer);
+        return {handled:true,kind:'control',language:intent.language,reply:intent.language==='pt'?'Em destaque.':'In focus.'};
+      }
+      if(intent.type==='solo'){
+        const target=intent.target;
+        const previous=current;
+        if(anatomyPart(target)||['Skeleton','Human body'].includes(target)){
+          awaitReference();return {handled:true,kind:'scene',language:intent.language,title:target,pendingAnatomy:target,visualVersion:storyEpoch,reply:'',wideScene:previous};
         }
-        const raw=intent.target||selectedVisual||(current?.scene==='planet'&&!/system/i.test(current.title)?current.title:null);
-        const target=bodyNames[String(raw||'').toLowerCase()]||(/rocket/i.test(raw||'')?'Rocket':/drop/i.test(raw||'')?'Drop':null);
-        if(!target)return {handled:true,kind:'control',language:intent.language,reply:intent.language==='pt'?'Qual objeto queres isolar? Diz o nome ou toca num planeta.':'Which object should I isolate? Say its name or tap a planet.'};
-        if(!wideScene)wideScene=current;
-        render(schematic(target==='Rocket'?'vehicle':target==='Drop'?'weather':'planet',target));
-        selectedVisual=target;window.TravisVisual?.commands(true,{automatic:true});show();
-        return {handled:true,kind:'control',language:intent.language,reply:intent.language==='pt'?'Objeto isolado. Podes aproximar ou pedir a vista geral.':'Object isolated. You can zoom in or return to the wide view.'};
+        const asset=sceneAsset(target),planet=Object.values(bodyNames).includes(target);
+        if(!planet&&!asset)return {handled:true,kind:'control',language:intent.language,reply:intent.language==='pt'?'Ainda não tenho uma vista individual desse elemento.':'A separate view is not available for that element yet.'};
+        render({...schematic(planet?'planet':'composition',target),plan:planet?null:makeScenePlan([asset])});wideScene=previous;selectedVisual=target;
+        window.TravisVisual?.commands(true,{automatic:true});show();
+        return {handled:true,kind:'scene',language:intent.language,reply:intent.language==='pt'?'Só '+sceneLabel(target)+'.':'Only '+target+'.'};
       }
       if(intent.type==='scene'){
         wideScene=null;selectedVisual=null;
+        if(intent.scene==='anatomy'){
+          awaitReference();return {...intent,handled:!intent.explain,kind:'scene',pendingAnatomy:intent.title,visualVersion:storyEpoch,reply:''};
+        }
         if(intent.scene==='planet'&&/\b(?:random|any|aleatorio|aleatória|aleatoria|qualquer)\b/i.test(String(text).normalize('NFD').replace(/[\u0300-\u036f]/g,'')))
           intent.title=planetSequence[Math.floor(Math.random()*planetSequence.length)];
         const needsReference=Boolean(intent.referenceRequested)||!(intent.scene==='composition'&&intent.plan)&&!hasLocalVisual(intent.scene,intent.title);
@@ -351,9 +357,9 @@ if(deck){
         if(current?.plan&&action==='resume-motion'){pinned=false;updatePin();}
 
         if(action==='wide-view'){
-          if(current?.plan){window.dispatchEvent(new CustomEvent('travis:visual-control',{detail:{action:'wide-view'}}));touchProjection();return {handled:true,kind:'control',language:intent.language,reply:''};}
           if(wideScene){const original=wideScene;wideScene=null;selectedVisual=null;render({...original,explaining:false});window.TravisVisual?.commands(true,{automatic:true});show();}
-          else window.dispatchEvent(new CustomEvent('travis:visual-control',{detail:{action:'reset-view'}}));
+          else window.dispatchEvent(new CustomEvent('travis:visual-control',{detail:{action:'wide-view'}}));
+          selectedVisual=null;pinned=false;updatePin();touchProjection();
           return {handled:true,kind:'control',language:intent.language,reply:''};
         }
         if(['explode','assemble'].includes(action)&&current?.scene!=='mechanical')return {handled:true,reply:'Este controlo está disponível no modelo de motor elétrico.',language:'pt',kind:'control'};

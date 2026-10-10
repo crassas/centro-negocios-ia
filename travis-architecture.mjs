@@ -1,4 +1,4 @@
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=worlds-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=context-1';
 
 // Static detail is batched by material: thousands of small architectural parts
 // remain a handful of draw calls on a phone, including during the particle fit.
