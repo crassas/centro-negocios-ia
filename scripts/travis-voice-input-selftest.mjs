@@ -72,3 +72,13 @@ console.log('TRAVIS_FAST_VOICE_TEST_OK',JSON.stringify({
   interruptions,submissions:submitted.length,semanticCalls,
   shortenedVAD:true,naturalContinuation:true,noDoubleSubmission:true
 }));
+
+let outputPlaying=true,bargeIns=0;
+const duplex=context.api.createVoiceInput({isPlayback:()=>outputPlaying,onStart:()=>{bargeIns++;outputPlaying=false;},onSpeech:()=>{},onLevel:()=>{}});
+await duplex.start();options.onSpeechStart();options.onSpeechRealStart();
+assert.equal(bargeIns,0,'Playback requires stronger evidence than a normal speech start');
+for(let i=0;i<12;i++)options.onFrameProcessed({isSpeech:.94},new Float32Array(512).fill(.001));
+assert.equal(bargeIns,0,'Quiet residual speaker echo must not interrupt');
+for(let i=0;i<8;i++)options.onFrameProcessed({isSpeech:.98},new Float32Array(512).fill(.04));
+assert.equal(bargeIns,1,'Sustained near-end speech must interrupt once');
+duplex.stop();console.log('PASS duplex: low residual echo ignored; sustained speech interrupts');

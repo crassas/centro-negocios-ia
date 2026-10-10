@@ -43,6 +43,7 @@ def transcribe(path,language=None):
  segments=model.transcribe(
   samples,
   language=used,
+  translate=False,
   audio_ctx=1500,
  )
  text=" ".join(segment.text.strip() for segment in segments).strip()

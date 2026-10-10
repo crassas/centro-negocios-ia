@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {readVoiceReply} from '../travis-voice-stream.mjs';
+const audio=Buffer.from('RIFF-test').toString('base64');
+const rows=[{type:'audio',audio,text:'Olá.',language:'pt'},{type:'result',answer:{ok:true,reply:'Olá.'}},{type:'done'}];
+const wire=new TextEncoder().encode(rows.map(x=>JSON.stringify(x)).join('\n')+'\n');
+let at=0;const received=[];
+const stream=new ReadableStream({pull(c){if(at>=wire.length){c.close();return;}c.enqueue(wire.slice(at,at+=3));}});
+const result=await readVoiceReply(new Response(stream,{headers:{'content-type':'application/x-ndjson'}}),(bytes,text,lang)=>received.push([new TextDecoder().decode(bytes),text,lang]));
+assert.equal(result.answer.reply,'Olá.');assert.equal(result.spoken,true);assert.deepEqual(received,[['RIFF-test','Olá.','pt']]);
+await assert.rejects(readVoiceReply(new Response(JSON.stringify({type:'audio',audio,text:'one'})+'\n',{headers:{'content-type':'application/x-ndjson'}}),()=>{}),/interrupted/);
+assert.equal((await readVoiceReply(new Response('{"ok":true,"reply":"tool complete"}',{headers:{'content-type':'application/json'}}),()=>{throw Error('unexpected audio');})).spoken,false);
+console.log('PASS streaming audio: fragmented UTF-8, ordered chunks, EOF failure, existing tool JSON');

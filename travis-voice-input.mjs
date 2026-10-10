@@ -24,8 +24,8 @@ export function pcmWave(samples){
   for(let i=0;i<samples.length;i++)v.setInt16(44+i*2,Math.max(-1,Math.min(1,samples[i]))*32767,true);
   return new Blob([buffer],{type:'audio/wav'});
 }
-export function createVoiceInput({onStart,onSpeech,onLevel,checkTurn,onError}){
-  let detector,starting,active=false,generation=0,pending=null,timer=0,speaking=false,lastVoice=0,turnEngine='silero';
+export function createVoiceInput({onStart,onSpeech,onLevel,checkTurn,onError,isPlayback=()=>false}){
+  let detector,starting,active=false,generation=0,pending=null,timer=0,speaking=false,lastVoice=0,turnEngine='silero',realStarted=false,playbackVoiceMs=0;
   const append=(a,b)=>{if(!a)return b;const gap=4000,c=new Float32Array(a.length+gap+b.length);c.set(a);c.set(b,a.length+gap);return c;};
   function submit(epoch){
     if(!active||generation!==epoch||speaking||!pending)return;
@@ -33,10 +33,10 @@ export function createVoiceInput({onStart,onSpeech,onLevel,checkTurn,onError}){
   }
   async function ended(audio){
     if(!active)return;
-    speaking=false;pending=append(pending,audio);const epoch=++generation;
+    speaking=false;if(isPlayback()&&!realStarted){pending=null;return;}pending=append(pending,audio);const epoch=++generation;
     clearTimeout(timer);
     // Never wait indefinitely for the semantic detector. A natural silence remains a fallback.
-    timer=setTimeout(()=>submit(epoch),720);
+    timer=setTimeout(()=>submit(epoch),100);
     // Avoid running a second neural model alongside Whisper for normal commands.
     if(!checkTurn || pending.length<160000)return;
     try{
@@ -54,14 +54,22 @@ export function createVoiceInput({onStart,onSpeech,onLevel,checkTurn,onError}){
         if(!detector)detector=await window.vad.MicVAD.new({
           startOnLoad:false,
           model:'v5',baseAssetPath:'/assets/voice/vad/',onnxWASMBasePath:'/assets/voice/ort/',
-          positiveSpeechThreshold:.57,negativeSpeechThreshold:.33,minSpeechMs:210,preSpeechPadMs:500,redemptionMs:570,
-          onSpeechStart(){if(!active)return;speaking=true;generation++;clearTimeout(timer);},
-          onSpeechRealStart(){if(active)onStart();},
-          onVADMisfire(){if(!active)return;speaking=false;if(pending){const epoch=++generation;timer=setTimeout(()=>submit(epoch),600);}},
+          positiveSpeechThreshold:.57,negativeSpeechThreshold:.33,minSpeechMs:210,preSpeechPadMs:500,redemptionMs:320,
+          getStream:()=>navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}}),
+          onSpeechStart(){if(!active)return;speaking=true;realStarted=false;playbackVoiceMs=0;generation++;clearTimeout(timer);},
+          onSpeechRealStart(){if(active&&!isPlayback()){realStarted=true;onStart();}},
+          onVADMisfire(){if(!active)return;speaking=false;if(pending){const epoch=++generation;timer=setTimeout(()=>submit(epoch),100);}},
           onFrameProcessed(p,frame){
             if(!active)return;if(p.isSpeech>.65)lastVoice=performance.now();
             let energy=0;for(const x of frame)energy+=x*x;
-            onLevel(Math.min(1,Math.sqrt(energy/frame.length)/.08),p.isSpeech);
+            const rms=Math.sqrt(energy/frame.length);
+            // Strong, sustained residual speech after browser echo cancellation.
+            // A noise spike or a few leaked speaker frames must not cancel a turn.
+            if(speaking&&!realStarted&&isPlayback()){
+              playbackVoiceMs=p.isSpeech>.88&&rms>.018?playbackVoiceMs+frame.length/16:0;
+              if(playbackVoiceMs>=240){realStarted=true;onStart();}
+            }
+            onLevel(Math.min(1,rms/.08),p.isSpeech);
           },
           onSpeechEnd:audio=>void ended(audio),
         });

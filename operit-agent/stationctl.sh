@@ -25,11 +25,41 @@ LAYA_CTL="$(pick_ctl layactl)"
 
 mkdir -p "$STATE_DIR"
 
+# Serialize start/stop, but never pass the control lock into long-lived children.
+case "${1:-status}" in
+  start|stop|restart)
+    if [ "${CENTRO_CTL_LOCKED:-0}" != 1 ] && command -v flock >/dev/null 2>&1; then
+      exec env CENTRO_CTL_LOCKED=1 flock -w 30 -o "$STATE_DIR/control.lock" "$0" "$@"
+    fi
+    ;;
+esac
+
 is_running() {
-  [ -f "$PID_FILE" ] || return 1
-  PID="$(cat "$PID_FILE" 2>/dev/null || true)"
-  [ -n "$PID" ] || return 1
-  kill -0 "$PID" 2>/dev/null
+  # A PID file can be missing, stale or refer to a recycled, unrelated PID.
+  python3 - "$PID_FILE" "$SUPERVISOR" <<'PYOWNER'
+import os,sys
+from pathlib import Path
+pidfile,script=map(Path,sys.argv[1:])
+def matches(pid):
+    try:
+        cmd=Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
+        return len(cmd)>1 and Path(os.fsdecode(cmd[0])).name.startswith('python') and Path(os.fsdecode(cmd[1])).resolve()==script.resolve()
+    except (OSError,ValueError):return False
+try:
+    pid=int(pidfile.read_text())
+    if matches(pid):sys.exit(0)
+except (OSError,ValueError):pass
+for proc in Path('/proc').iterdir():
+    if proc.name.isdigit() and matches(int(proc.name)):
+        tmp=pidfile.with_name(pidfile.name+f'.adopt.{os.getpid()}')
+        # Respect PID namespaces when /proc is mounted from the host.
+        pid=proc.name
+        for line in (proc/'status').read_text().splitlines():
+            if line.startswith('NSpid:'):pid=line.split()[-1]
+        tmp.write_text(pid);tmp.replace(pidfile)
+        sys.exit(0)
+sys.exit(1)
+PYOWNER
 }
 
 heartbeat_fresh() {
@@ -68,16 +98,15 @@ start_station() {
   fi
 
   nohup python3 "$SUPERVISOR" >>"$LOG_FILE" 2>&1 </dev/null &
-  PID=$!
-  echo "$PID" > "$PID_FILE"
+  STARTED_PID=$!
   sleep 1
 
-  if kill -0 "$PID" 2>/dev/null; then
-    echo "Centro Station ACTIVA · PID $PID"
+  if is_running; then
+    echo "Centro Station ACTIVA · PID $(cat "$PID_FILE")"
   else
     echo "Falha ao arrancar o supervisor."
     tail -n 30 "$LOG_FILE" 2>/dev/null || true
-    rm -f "$PID_FILE"
+    # A losing start must never erase the actual owner’s PID.
     exit 1
   fi
 }

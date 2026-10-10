@@ -8,6 +8,8 @@ import shutil
 import subprocess
 import sys
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor
 import urllib.request
 from pathlib import Path
 
@@ -72,6 +74,7 @@ TRAVIS_CLIENT_FILES = (
     "travis-scene-tracker.mjs",
     "travis-vision.mjs",
     "travis-voice-input.mjs",
+    "travis-voice-stream.mjs",
     "travis-interface-language.mjs",
     "travis-form-director.mjs",
     "travis-brain-view.mjs",
@@ -119,6 +122,7 @@ RUNTIME_FILES = {
     "travis_gmail.py": HOME / "travis_gmail.py",
     "travis_web_tools.py": HOME / "travis_web_tools.py",
     "business_db.py": HOME / "business_db.py",
+    "travis_stream.py": HOME / "travis_stream.py",
     "jarvis_local.py": HOME / "jarvis_local.py",
     "jarvis_whisper.py": HOME / "jarvis_whisper.py",
     "jarvis_voice.html": HOME / "jarvis_voice.html",
@@ -679,6 +683,9 @@ def write_heartbeat():
         tmp = HEARTBEAT_FILE.with_name(HEARTBEAT_FILE.name + f".tmp.{os.getpid()}")
         tmp.write_text(str(int(time.time())), encoding="utf-8")
         tmp.replace(HEARTBEAT_FILE)
+        owner=SUPERVISOR_PID_FILE.with_name(f"supervisor.pid.tmp.{os.getpid()}")
+        owner.write_text(str(os.getpid()), encoding="utf-8")
+        owner.replace(SUPERVISOR_PID_FILE)
         return True
     except OSError as exc:
         print(f"[auto] heartbeat · FALHA TRANSITÓRIA · {exc}", flush=True)
@@ -753,6 +760,28 @@ def ensure_soak_monitor():
         print(f"[auto] soak · {type(exc).__name__}", flush=True)
 
 
+def fetch_runtime_update():
+    # Network downloads must not block health checks, heartbeat or recovery.
+    try:
+        candidate_sha = fetch_main_sha()
+    except Exception:
+        candidate_sha = ""
+    changed, errors = sync_runtime(candidate_sha)
+    ui_changed = []
+    if candidate_sha:
+        ui_changed, ui_errors = sync_travis_client(candidate_sha)
+        errors.extend(ui_errors)
+    return candidate_sha, changed, errors, ui_changed
+
+
+def heartbeat_loop(progress):
+    while True:
+        # Stop masking a genuinely stuck supervision loop after three minutes.
+        if time.monotonic() - progress[0] < 180:
+            write_heartbeat()
+        time.sleep(10)
+
+
 def main():
     safe_mkdir(STATE_DIR)
     singleton_lock = acquire_singleton_lock()
@@ -780,267 +809,270 @@ def main():
     pending_agent_restart = False
     pending_jarvis_restart = False
 
+    update_pool=ThreadPoolExecutor(max_workers=1,thread_name_prefix="station-update")
+    update_future=None
+    progress=[time.monotonic()]
+    threading.Thread(target=heartbeat_loop,args=(progress,),daemon=True).start()
+
     while True:
-        now = int(time.time())
-        write_heartbeat()
-        actions = []
-        ensure_soak_monitor()
-        reexec_station = False
-        busy = server_busy()
-        if busy:
-            last_busy_seen = now
+        try:
+            now = int(time.time())
+            progress[0]=time.monotonic()
+            actions = []
+            ensure_soak_monitor()
+            reexec_station = False
+            busy = server_busy()
+            if busy:
+                last_busy_seen = now
 
-        if AUTOUPDATE_ENABLED and not (STATE_DIR / "maintenance").exists() and not busy and now - last_update_attempt >= AUTOUPDATE_INTERVAL_SECONDS:
-            last_update_attempt = now
-            try:
-                candidate_sha = fetch_main_sha()
-            except Exception:
-                candidate_sha = ""
-            changed, update_errors = sync_runtime(candidate_sha)
-            if candidate_sha:
-                ui_changed, ui_errors = sync_travis_client(candidate_sha)
-                update_errors.extend(ui_errors)
+            if AUTOUPDATE_ENABLED and update_future is None and not (STATE_DIR / "maintenance").exists() and not busy and now - last_update_attempt >= AUTOUPDATE_INTERVAL_SECONDS:
+                last_update_attempt = now
+                update_future=update_pool.submit(fetch_runtime_update)
+            if update_future is not None and update_future.done():
+                try:
+                    candidate_sha, changed, update_errors, ui_changed = update_future.result()
+                except Exception as exc:
+                    candidate_sha, changed, update_errors, ui_changed = "", [], [type(exc).__name__+": "+str(exc)[:200]], []
+                update_future=None
                 if ui_changed:
-                    actions.append({
-                        "service": "autoupdate/travis-client",
-                        "ok": not ui_errors,
-                        "output": "módulos atualizados: " + ", ".join(ui_changed),
-                    })
-            if changed:
-                if any(name in changed for name in ("jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh", "travis_brain.py", "travis_scene.py", "travis_visual_research.py")):
-                    pending_jarvis_restart = True
-                if any(name in changed for name in ("centro_server.py", "business_db.py", "travis_core.py")):
-                    pending_server_restart = True
-                    actions.append({"service": "autoupdate/server", "ok": True, "output": "actualização validada e preparada"})
-                if "centro_agent.py" in changed:
-                    pending_agent_restart = True
-                    actions.append({"service": "autoupdate/agent", "ok": True, "output": "actualização validada e preparada"})
-                if "centro_station.py" in changed:
-                    actions.append({"service": "autoupdate/station", "ok": True, "output": "nova versão validada"})
-                    reexec_station = True
-            if update_errors:
-                last_update_error = " | ".join(update_errors)[-1000:]
-            else:
-                last_update_ok = now
-                last_update_error = ""
-                if candidate_sha:
-                    last_update_sha = candidate_sha
+                    actions.append({"service":"autoupdate/travis-client","ok":not update_errors,"output":"módulos atualizados: "+", ".join(ui_changed)})
+                if changed:
+                    if any(name in changed for name in ("travis_stream.py", "jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh", "travis_brain.py", "travis_scene.py", "travis_visual_research.py")):
+                        pending_jarvis_restart = True
+                    if any(name in changed for name in ("centro_server.py", "business_db.py", "travis_core.py")):
+                        pending_server_restart = True
+                        actions.append({"service": "autoupdate/server", "ok": True, "output": "actualização validada e preparada"})
+                    if "centro_agent.py" in changed:
+                        pending_agent_restart = True
+                        actions.append({"service": "autoupdate/agent", "ok": True, "output": "actualização validada e preparada"})
+                    if "centro_station.py" in changed:
+                        actions.append({"service": "autoupdate/station", "ok": True, "output": "nova versão validada"})
+                        reexec_station = True
+                if update_errors:
+                    last_update_error = " | ".join(update_errors)[-1000:]
+                else:
+                    last_update_ok = now
+                    last_update_error = ""
+                    if candidate_sha:
+                        last_update_sha = candidate_sha
 
-        # Nunca reinicia Server/Agent a meio de uma execução. Depois de o lock
-        # desaparecer, dá alguns segundos ao Agent para publicar o resultado.
-        busy = server_busy()
-        if busy:
-            last_busy_seen = now
-        idle_after_task = (now - last_busy_seen) if last_busy_seen else 999999
-        if not busy and idle_after_task >= 12:
-            if pending_server_restart:
-                ok, output = run_ctl(SERVER_CTL, "restart")
-                actions.append({"service": "autoupdate/server-restart", "ok": ok, "output": output})
-                if ok:
-                    pending_server_restart = False
-                    time.sleep(2)
-            if pending_agent_restart:
-                ok, output = run_ctl(AGENT_CTL, "restart")
-                actions.append({"service": "autoupdate/agent-restart", "ok": ok, "output": output})
-                if ok:
-                    pending_agent_restart = False
-                    time.sleep(1)
+            # Nunca reinicia Server/Agent a meio de uma execução. Depois de o lock
+            # desaparecer, dá alguns segundos ao Agent para publicar o resultado.
+            busy = server_busy()
+            if busy:
+                last_busy_seen = now
+            idle_after_task = (now - last_busy_seen) if last_busy_seen else 999999
+            if not busy and idle_after_task >= 12:
+                if pending_server_restart:
+                    ok, output = run_ctl(SERVER_CTL, "restart")
+                    actions.append({"service": "autoupdate/server-restart", "ok": ok, "output": output})
+                    if ok:
+                        pending_server_restart = False
+                        time.sleep(2)
+                if pending_agent_restart:
+                    ok, output = run_ctl(AGENT_CTL, "restart")
+                    actions.append({"service": "autoupdate/agent-restart", "ok": ok, "output": output})
+                    if ok:
+                        pending_agent_restart = False
+                        time.sleep(1)
 
-        server_active, server_pid = pid_running(SERVER_PID_FILE)
-        healthy = server_active and server_healthy() and not server_stale()
-        # Uma resposta health lenta não autoriza interromper uma tarefa válida.
-        # Execuções expiradas continuam abrangidas pela recuperação aos 960 s.
-        if not healthy and not (server_active and server_busy() and not server_stale()):
-            ok, output = run_ctl(SERVER_CTL, "restart" if server_active else "start")
-            actions.append({"service": "server", "ok": ok, "output": output})
-            time.sleep(2)
             server_active, server_pid = pid_running(SERVER_PID_FILE)
             healthy = server_active and server_healthy() and not server_stale()
-
-        agent_active, agent_pid = pid_running(AGENT_PID_FILE)
-        if not agent_active and healthy:
-            ok, output = run_ctl(AGENT_CTL, "start")
-            actions.append({"service": "agent", "ok": ok, "output": output})
-            time.sleep(1)
-            agent_active, agent_pid = pid_running(AGENT_PID_FILE)
-
-        openclaw_ok = openclaw_healthy()
-        if (
-            OPENCLAW_AUTOSTART
-            and not openclaw_ok
-            and OPENCLAW_CTL.exists()
-            and now - last_openclaw_attempt >= OPTIONAL_RETRY_SECONDS
-        ):
-            last_openclaw_attempt = now
-            ok, output = run_ctl(OPENCLAW_CTL, "start")
-            actions.append({"service": "openclaw", "ok": ok, "output": output})
-            if ok:
+            # Uma resposta health lenta não autoriza interromper uma tarefa válida.
+            # Execuções expiradas continuam abrangidas pela recuperação aos 960 s.
+            if not healthy and not (server_active and server_busy() and not server_stale()):
+                ok, output = run_ctl(SERVER_CTL, "restart" if server_active else "start")
+                actions.append({"service": "server", "ok": ok, "output": output})
                 time.sleep(2)
-                openclaw_ok = openclaw_healthy()
+                server_active, server_pid = pid_running(SERVER_PID_FILE)
+                healthy = server_active and server_healthy() and not server_stale()
 
-        laya_ok = laya_healthy()
-        if (
-            LAYA_AUTOSTART
-            and not laya_ok
-            and LAYA_CTL.exists()
-            and now - last_laya_attempt >= OPTIONAL_RETRY_SECONDS
-        ):
-            last_laya_attempt = now
-            try:
-                subprocess.Popen(
-                    [str(LAYA_CTL), "start"],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    start_new_session=True,
-                )
-                actions.append({"service": "laya", "ok": True, "output": "arranque solicitado"})
-            except Exception as exc:
-                actions.append({"service": "laya", "ok": False, "output": str(exc)})
+            agent_active, agent_pid = pid_running(AGENT_PID_FILE)
+            if not agent_active and healthy:
+                ok, output = run_ctl(AGENT_CTL, "start")
+                actions.append({"service": "agent", "ok": ok, "output": output})
+                time.sleep(1)
+                agent_active, agent_pid = pid_running(AGENT_PID_FILE)
 
-        jarvis_ok = False
-        jarvis_busy = True
-        jarvis_ctl = locate_ctl("jarvisctl")
-        jarvis_enabled = (HOME / ".centro-jarvis/enabled").exists()
-        if jarvis_enabled:
-            try:
-                with urllib.request.urlopen("http://127.0.0.1:8770/health", timeout=2) as response:
-                    jarvis_state = json.loads(response.read())
-                    jarvis_ok = jarvis_state.get("ok") is True
-                    jarvis_busy = bool(jarvis_state.get("busy", False))
-            except Exception:
-                pass
-            if pending_jarvis_restart and jarvis_ok and not jarvis_busy and not busy:
-                ok, output = run_ctl(jarvis_ctl, "reload")
-                actions.append({"service":"autoupdate/jarvis", "ok":ok, "output":output})
-                if ok:pending_jarvis_restart = False
-            if not jarvis_ok and jarvis_ctl.exists() and now-last_jarvis_attempt >= 45:
-                last_jarvis_attempt = now
-                ok, output = run_ctl(jarvis_ctl, "start")
-                actions.append({"service":"jarvis", "ok":ok, "output":output})
-
-        remote_ok, remote_pid, remote_executor, remote_detail = remote_desktop_healthy()
-        remote_managed = remote_managed_state()
-        if REMOTE_DESKTOP_AUTOSTART and REMOTE_DEVICE_FILE.exists() and not busy:
-            # Se o utilizador arrancou manualmente um Remote que já está
-            # saudável, adopta-o sem o matar. A versão anterior fazia um
-            # "takeover" destrutivo: terminava exactamente o canal que acabara
-            # de ficar ONLINE e só depois tentava criar outro em background.
-            # Em Android/PRoot isso criava a sequência "connected -> Terminated".
-            takeover = bool(remote_pid and (not remote_managed or remote_managed.get("pid") != remote_pid))
-            if takeover and remote_ok:
-                try:
-                    safe_mkdir(REMOTE_STATE_DIR)
-                    REMOTE_PID_FILE.write_text(str(remote_pid), encoding="utf-8")
-                    REMOTE_MANAGED_FILE.write_text(
-                        json.dumps({
-                            "pid": remote_pid,
-                            "startedAt": now,
-                            "adopted": True,
-                        }),
-                        encoding="utf-8",
-                    )
-                    remote_managed = remote_managed_state()
-                    actions.append({
-                        "service": "remote-desktop/adopção",
-                        "ok": True,
-                        "output": f"canal manual saudável adoptado sem reinício · PID {remote_pid}",
-                    })
-                except Exception as exc:
-                    actions.append({
-                        "service": "remote-desktop/adopção",
-                        "ok": False,
-                        "output": str(exc),
-                    })
-
-            managed_age = now - int(remote_managed.get("startedAt") or now)
-            broken_managed = bool(
-                remote_pid
-                and remote_managed
-                and managed_age >= 60
-                and not remote_ok
-            )
-            missing = not remote_pid
-            needs_takeover_repair = bool(takeover and not remote_ok)
+            openclaw_ok = openclaw_healthy()
             if (
-                (needs_takeover_repair or broken_managed or missing)
-                and now - last_remote_attempt >= OPTIONAL_RETRY_SECONDS
+                OPENCLAW_AUTOSTART
+                and not openclaw_ok
+                and OPENCLAW_CTL.exists()
+                and now - last_openclaw_attempt >= OPTIONAL_RETRY_SECONDS
             ):
-                last_remote_attempt = now
-                ok, output = start_remote_desktop(force=bool(remote_pid))
-                reason = (
-                    "takeover-repair"
-                    if needs_takeover_repair
-                    else ("recuperação" if broken_managed else "arranque")
-                )
-                actions.append({
-                    "service": "remote-desktop/" + reason,
-                    "ok": ok,
-                    "output": output + (" · " + remote_detail if remote_detail else ""),
-                })
+                last_openclaw_attempt = now
+                ok, output = run_ctl(OPENCLAW_CTL, "start")
+                actions.append({"service": "openclaw", "ok": ok, "output": output})
                 if ok:
-                    time.sleep(4)
-                    remote_ok, remote_pid, remote_executor, remote_detail = remote_desktop_healthy()
-                    remote_managed = remote_managed_state()
+                    time.sleep(2)
+                    openclaw_ok = openclaw_healthy()
 
-        write_status({
-            "ok": bool(healthy and agent_active),
-            "timestamp": now,
-            "server": {
-                "active": server_active,
-                "healthy": healthy,
-                "pid": server_pid,
-            },
-            "agent": {
-                "active": agent_active,
-                "pid": agent_pid,
-            },
-            "openclaw": {
-                "enabled": False,
-                "state": "disabled-by-operator",
-                "healthy": openclaw_ok,
-                "autostart": OPENCLAW_AUTOSTART,
-                "endpoint": "127.0.0.1:18789",
-            },
-            "laya": {
-                "healthy": laya_ok,
-                "autostart": LAYA_AUTOSTART,
-                "endpoint": "127.0.0.1:18790",
-            },
-            "remoteDesktop": {
-                "healthy": remote_ok,
-                "autostart": REMOTE_DESKTOP_AUTOSTART,
-                "configured": REMOTE_DEVICE_FILE.exists(),
-                "managed": bool(remote_managed),
-                "pid": remote_pid,
-                "executorPid": remote_executor,
-                "detail": remote_detail,
-            },
-            "jarvis": {"enabled": jarvis_enabled, "healthy": jarvis_ok, "endpoint":"127.0.0.1:8770", "cloudFallback":False},
-            "autoupdate": {
-                "enabled": AUTOUPDATE_ENABLED,
-                "intervalSeconds": AUTOUPDATE_INTERVAL_SECONDS,
-                "lastAttempt": last_update_attempt,
-                "lastOk": last_update_ok,
-                "lastError": last_update_error,
-                "mainSha": last_update_sha,
-                "serverBusy": busy,
-                "pendingServerRestart": pending_server_restart,
-                "pendingAgentRestart": pending_agent_restart,
-            },
-            "actions": actions,
-        })
+            laya_ok = laya_healthy()
+            if (
+                LAYA_AUTOSTART
+                and not laya_ok
+                and LAYA_CTL.exists()
+                and now - last_laya_attempt >= OPTIONAL_RETRY_SECONDS
+            ):
+                last_laya_attempt = now
+                try:
+                    subprocess.Popen(
+                        [str(LAYA_CTL), "start"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        start_new_session=True,
+                    )
+                    actions.append({"service": "laya", "ok": True, "output": "arranque solicitado"})
+                except Exception as exc:
+                    actions.append({"service": "laya", "ok": False, "output": str(exc)})
 
-        if actions:
-            for action in actions:
-                print(
-                    f"[auto] {action['service']} · "
-                    f"{'OK' if action['ok'] else 'FALHA'} · {action['output']}",
-                    flush=True,
+            jarvis_ok = False
+            jarvis_busy = True
+            jarvis_ctl = locate_ctl("jarvisctl")
+            jarvis_enabled = (HOME / ".centro-jarvis/enabled").exists()
+            if jarvis_enabled:
+                try:
+                    with urllib.request.urlopen("http://127.0.0.1:8770/health", timeout=2) as response:
+                        jarvis_state = json.loads(response.read())
+                        jarvis_ok = jarvis_state.get("ok") is True
+                        jarvis_busy = bool(jarvis_state.get("busy", False))
+                except Exception:
+                    pass
+                if pending_jarvis_restart and jarvis_ok and not jarvis_busy and not busy:
+                    ok, output = run_ctl(jarvis_ctl, "reload")
+                    actions.append({"service":"autoupdate/jarvis", "ok":ok, "output":output})
+                    if ok:pending_jarvis_restart = False
+                if not jarvis_ok and jarvis_ctl.exists() and now-last_jarvis_attempt >= 45:
+                    last_jarvis_attempt = now
+                    ok, output = run_ctl(jarvis_ctl, "start")
+                    actions.append({"service":"jarvis", "ok":ok, "output":output})
+
+            remote_ok, remote_pid, remote_executor, remote_detail = remote_desktop_healthy()
+            remote_managed = remote_managed_state()
+            if REMOTE_DESKTOP_AUTOSTART and REMOTE_DEVICE_FILE.exists() and not busy:
+                # Se o utilizador arrancou manualmente um Remote que já está
+                # saudável, adopta-o sem o matar. A versão anterior fazia um
+                # "takeover" destrutivo: terminava exactamente o canal que acabara
+                # de ficar ONLINE e só depois tentava criar outro em background.
+                # Em Android/PRoot isso criava a sequência "connected -> Terminated".
+                takeover = bool(remote_pid and (not remote_managed or remote_managed.get("pid") != remote_pid))
+                if takeover and remote_ok:
+                    try:
+                        safe_mkdir(REMOTE_STATE_DIR)
+                        REMOTE_PID_FILE.write_text(str(remote_pid), encoding="utf-8")
+                        REMOTE_MANAGED_FILE.write_text(
+                            json.dumps({
+                                "pid": remote_pid,
+                                "startedAt": now,
+                                "adopted": True,
+                            }),
+                            encoding="utf-8",
+                        )
+                        remote_managed = remote_managed_state()
+                        actions.append({
+                            "service": "remote-desktop/adopção",
+                            "ok": True,
+                            "output": f"canal manual saudável adoptado sem reinício · PID {remote_pid}",
+                        })
+                    except Exception as exc:
+                        actions.append({
+                            "service": "remote-desktop/adopção",
+                            "ok": False,
+                            "output": str(exc),
+                        })
+
+                managed_age = now - int(remote_managed.get("startedAt") or now)
+                broken_managed = bool(
+                    remote_pid
+                    and remote_managed
+                    and managed_age >= 60
+                    and not remote_ok
                 )
+                missing = not remote_pid
+                needs_takeover_repair = bool(takeover and not remote_ok)
+                if (
+                    (needs_takeover_repair or broken_managed or missing)
+                    and now - last_remote_attempt >= OPTIONAL_RETRY_SECONDS
+                ):
+                    last_remote_attempt = now
+                    ok, output = start_remote_desktop(force=bool(remote_pid))
+                    reason = (
+                        "takeover-repair"
+                        if needs_takeover_repair
+                        else ("recuperação" if broken_managed else "arranque")
+                    )
+                    actions.append({
+                        "service": "remote-desktop/" + reason,
+                        "ok": ok,
+                        "output": output + (" · " + remote_detail if remote_detail else ""),
+                    })
+                    if ok:
+                        time.sleep(4)
+                        remote_ok, remote_pid, remote_executor, remote_detail = remote_desktop_healthy()
+                        remote_managed = remote_managed_state()
 
-        if reexec_station:
-            print("[auto] station · REEXEC · supervisor actualizado", flush=True)
-            os.execv(sys.executable, [sys.executable, str(SUPERVISOR_PATH)])
+            write_status({
+                "ok": bool(healthy and agent_active),
+                "timestamp": now,
+                "server": {
+                    "active": server_active,
+                    "healthy": healthy,
+                    "pid": server_pid,
+                },
+                "agent": {
+                    "active": agent_active,
+                    "pid": agent_pid,
+                },
+                "openclaw": {
+                    "enabled": False,
+                    "state": "disabled-by-operator",
+                    "healthy": openclaw_ok,
+                    "autostart": OPENCLAW_AUTOSTART,
+                    "endpoint": "127.0.0.1:18789",
+                },
+                "laya": {
+                    "healthy": laya_ok,
+                    "autostart": LAYA_AUTOSTART,
+                    "endpoint": "127.0.0.1:18790",
+                },
+                "remoteDesktop": {
+                    "healthy": remote_ok,
+                    "autostart": REMOTE_DESKTOP_AUTOSTART,
+                    "configured": REMOTE_DEVICE_FILE.exists(),
+                    "managed": bool(remote_managed),
+                    "pid": remote_pid,
+                    "executorPid": remote_executor,
+                    "detail": remote_detail,
+                },
+                "jarvis": {"enabled": jarvis_enabled, "healthy": jarvis_ok, "endpoint":"127.0.0.1:8770", "cloudFallback":False},
+                "autoupdate": {
+                    "enabled": AUTOUPDATE_ENABLED,
+                    "intervalSeconds": AUTOUPDATE_INTERVAL_SECONDS,
+                    "lastAttempt": last_update_attempt,
+                    "lastOk": last_update_ok,
+                    "lastError": last_update_error,
+                    "mainSha": last_update_sha,
+                    "serverBusy": busy,
+                    "pendingServerRestart": pending_server_restart,
+                    "pendingAgentRestart": pending_agent_restart,
+                },
+                "actions": actions,
+            })
+
+            if actions:
+                for action in actions:
+                    print(
+                        f"[auto] {action['service']} · "
+                        f"{'OK' if action['ok'] else 'FALHA'} · {action['output']}",
+                        flush=True,
+                    )
+
+            if reexec_station:
+                print("[auto] station · REEXEC · supervisor actualizado", flush=True)
+                os.execv(sys.executable, [sys.executable, str(SUPERVISOR_PATH)])
+        except Exception as exc:
+            print(f"[auto] cycle · RETRY · {type(exc).__name__}: {str(exc)[:200]}", flush=True)
 
         time.sleep(INTERVAL)
 

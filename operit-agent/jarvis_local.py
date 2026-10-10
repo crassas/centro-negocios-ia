@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Local-first voice and deterministic tools. No mandatory cloud provider."""
+import base64
+import travis_stream
 import argparse, datetime, fcntl, json, os, re, secrets, select, shutil, signal, mimetypes, io
 import sqlite3, subprocess, tempfile, threading, time, unicodedata, urllib.request, urllib.parse, wave
 from pathlib import Path
@@ -501,11 +503,19 @@ def conversation_cloud(text,system="",mode="conversation"):
  if len(content)>2800:
   # Preserve the current question and the most recent observations at the end.
   content=content[:2050]+"\n[Context excerpt shortened]\n"+content[-650:]
+ stream_callback=getattr(INFERENCE_INFO,"on_delta",None) if mode=="conversation" else None
  payload={"question":"TASK INSTRUCTIONS:\n"+instructions+"\n\n"+content,"context":{},"language":getattr(DIALOGUE_INFO,'language','en'),"mode":mode}
+ if stream_callback:payload["stream"]=True
  if mode=="translation":payload["question"]=clean(text)[:4000]
  request=urllib.request.Request("https://centro-negocios-ai.travisthejarvis.workers.dev/api/assist",data=json.dumps(payload,ensure_ascii=False).encode(),headers={"Content-Type":"application/json","User-Agent":"Centro-Server/1.0"})
  start=time.monotonic()
- with urllib.request.urlopen(request,timeout=20) as response:result=json.load(response)
+ with urllib.request.urlopen(request,timeout=20) as response:
+  if stream_callback and 'text/event-stream' in response.headers.get('Content-Type',''):
+   answer=travis_stream.read_sse(response,stream_callback,2400)
+   result={"ok":True,"answer":answer,"model":response.headers.get('X-Travis-Model','@cf/stream')}
+  else:
+   result=json.load(response)
+   if stream_callback and result.get('ok') and result.get('answer'):stream_callback(result['answer'])
  answer=str(result.get("answer") or "").strip();model=str(result.get("model") or "")
  if not result.get("ok") or not answer or not model.startswith("@cf/"):raise RuntimeError("Modelo remoto indisponível")
  INFERENCE_INFO.value={"provider":"workers-ai","model":model}
@@ -518,7 +528,9 @@ def infer(text,system="You are Travis, the Centro de Negócios AI assistant. Und
  mode=ROOT/"conversation-mode"
  if not json_mode and mode.is_file() and mode.read_text().strip()=="hybrid":
   try:return conversation_cloud(text,system,cloud_mode)
+  except (BrokenPipeError,ConnectionResetError):raise
   except Exception as exc:
+   if getattr(INFERENCE_INFO,"stream_emitted",False):raise
    fallback_reason=type(exc).__name__
    event("executions",{"conversation_fallback":"local","reason":fallback_reason})
  policy=TRAVIS_GENOME.inference_policy(json_mode)
@@ -533,7 +545,14 @@ def infer(text,system="You are Travis, the Centro de Negócios AI assistant. Und
   if json_mode:data["response_format"]={"type":"json_object"}
   if schema:data["response_format"]={"type":"json_object","schema":schema}
   start=time.monotonic()
-  try:r=http("http://127.0.0.1:8771/v1/chat/completions",data,timeout=240 if json_mode else 45)
+  try:
+   callback=getattr(INFERENCE_INFO,"on_delta",None) if not json_mode and cloud_mode=="conversation" else None
+   if callback:
+    data["stream"]=True
+    req=urllib.request.Request("http://127.0.0.1:8771/v1/chat/completions",data=json.dumps(data).encode(),headers={"Content-Type":"application/json"})
+    with urllib.request.urlopen(req,timeout=45) as response:content=travis_stream.read_sse(response,callback,2400)
+    r={"choices":[{"message":{"content":content}}],"model":"local-stream"}
+   else:r=http("http://127.0.0.1:8771/v1/chat/completions",data,timeout=240 if json_mode else 45)
   except Exception:
    if not json_mode:raise RuntimeError("The model did not respond in time. You can ask for the Centro status or try again.")
    if not (ROOT/"llm.model").exists() or (ROOT/"llm.model").read_text()=="fallback":raise
@@ -959,7 +978,7 @@ def execute(tool,args):
   answer=infer(args["text"],system)
   query=args.get("original_text") or args["text"]
   public_question=re.match(r"(?i)^(?:quem|who|o que|what)\b",query.strip()) and not re.search(r"(?i)\b(?:meu|minha|my|your|tu|travis|repositorios?|repositories|tarefas?|tasks?)\b",query)
-  if public_question and re.search(r"(?i)\b(?:i don't (?:have|know)|i do not (?:have|know)|no information|not confirmed|cannot confirm|insufficient information)\b",answer):
+  if not getattr(INFERENCE_INFO,"on_delta",None) and public_question and re.search(r"(?i)\b(?:i don't (?:have|know)|i do not (?:have|know)|no information|not confirmed|cannot confirm|insufficient information)\b",answer):
    try:return web_research_answer(query)["answer"]
    except Exception as exc:event("executions",{"web_fallback_error":type(exc).__name__})
   return answer
@@ -1204,7 +1223,7 @@ def _route(text,context=None):
  learning=record_learning(cog_run,verification,used_memories,session,runtime.project_id,str(reply))
  if session:event("conversations",{"session":session,"user":original_text[:1600],"assistant":str(reply)[:1600],"tool":tool,"project":runtime.project_id or context.get("activeProject"),"verification":verification["verdict"],"memoryRun":cog_run if learning['ok'] else None})
  event("tool_events",{"tool":tool,"ok":True,"duration_ms":int((time.monotonic()-start)*1000),"correlation_id":outcome["correlationId"],"completion_status":verified_completion})
- return {"ok":True,"ui":ui,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool in {"local_llm","expert_query"} else {"provider":"local"}),"tool":tool,"result":result,"verification":verification,"reflexion":{"recalledLessons":len(failure_lessons),"usedLessons":len(used_lessons)},"learning":learning,"reply":clean(reply if tool in {"library_status","library_search","library_study"} else (english_reply(reply) if getattr(DIALOGUE_INFO,"language","en")=="en" else reply))[:3000],"correlationId":outcome["correlationId"],"completionStatus":verified_completion,"durationMs":int((time.monotonic()-start)*1000),"quantum":{"strategy":qstrategy,"phase":qplan.get("phase"),"tier":qplan.get("tier"),"returnStatus":qreturn.get("status")}}
+ return {"ok":True,"ui":ui,**(getattr(INFERENCE_INFO,"value",{"provider":"local"}) if tool in {"local_llm","expert_query"} else {"provider":"local"}),"tool":tool,"result":result,"verification":verification,"reflexion":{"recalledLessons":len(failure_lessons),"usedLessons":len(used_lessons)},"learning":learning,"reply":clean(reply if tool in {"library_status","library_search","library_study","local_llm","expert_query"} else (english_reply(reply) if getattr(DIALOGUE_INFO,"language","en")=="en" else reply))[:3000],"correlationId":outcome["correlationId"],"completionStatus":verified_completion,"durationMs":int((time.monotonic()-start)*1000),"quantum":{"strategy":qstrategy,"phase":qplan.get("phase"),"tier":qplan.get("tier"),"returnStatus":qreturn.get("status")}}
 
 VOICE_JOBS={}
 VOICE_JOB_LOCK=threading.Lock()
@@ -1367,7 +1386,8 @@ def _merge_wavs(paths,out):
    wav.writeframes(chunk)
 def warm_voice():
  # Prioritise the fast STT worker; semantic turn is deferred until explicitly used.
- workers=[FAST_STT_WORKER,TTS_WORKER,TTS_EN_WORKER,SHERPA_STT_WORKER,PT_STT_WORKER]
+ workers=[FAST_STT_WORKER,TTS_EN_WORKER,TTS_WORKER,PT_STT_WORKER]
+ if os.environ.get("TRAVIS_STT_BACKEND","whisper")=="sherpa":workers.append(SHERPA_STT_WORKER)
  for worker in workers:
   try:
    with worker.lock:worker.start()
@@ -1547,7 +1567,7 @@ def transcribe(audio,language="auto"):
   engine="base"
   if (ROOT/"venv/bin/python").is_file():
    precise_requested=os.environ.get("TRAVIS_STT_MODE","fast").strip().lower()=="precise"
-   sherpa_opt_in=os.environ.get("TRAVIS_STT_BACKEND","sherpa").strip().lower()=="sherpa"
+   sherpa_opt_in=os.environ.get("TRAVIS_STT_BACKEND","whisper").strip().lower()=="sherpa"
    fast_verified=False
    if sherpa_opt_in and not precise_requested:
     try:
@@ -1631,7 +1651,7 @@ def centro_activity():
  with urllib.request.urlopen(request,timeout=5) as response:return json.load(response)
 TRUSTED_WEB_ORIGINS={"https://crassas.github.io"}
 LOCAL_ORIGINS={"http://127.0.0.1:8770","http://localhost:8770"}
-WEB_VOICE_ENDPOINTS={"/health","/transcribe","/listen","/jarvis","/speak","/voice-task","/turn","/initiative","/resume","/visual-intent","/visual-research"}
+WEB_VOICE_ENDPOINTS={"/jarvis-stream","/health","/transcribe","/listen","/jarvis","/speak","/voice-task","/turn","/initiative","/resume","/visual-intent","/visual-research"}
 
 LOCAL_COCKPIT_ENDPOINTS={"/awareness","/brain/state","/brain/graph","/brain/events","/brain/control","/brain/feedback","/connections","/cockpit","/gmail/configure","/gmail/start","/gmail/inbox","/gmail/disconnect"}
 
@@ -1682,9 +1702,39 @@ class Handler(BaseHTTPRequestHandler):
     page='<meta charset="utf-8"><title>Travis · Gmail</title><p>Conta autorizada. Volta ao Travis e abre o Gmail para confirmar a leitura.</p><a href="/?travis=1">Voltar ao Travis</a>'
    except Exception:page='<meta charset="utf-8"><p>A autorização não foi concluída. Volta ao Travis e tenta novamente.</p><a href="/?travis=1">Voltar ao Travis</a>'
    return self.send(page.encode(),"text/html; charset=utf-8")
-  if path=="/health":return self.send({"ok":True,"service":"jarvis","cloud":False,"busy":ACTIVE_REQUESTS>0,"ui":CENTRO_UI.is_dir(),"memoryLearning":"episodic-utility-v1"})
+  if path=="/health":return self.send({"ok":True,"service":"jarvis","cloud":False,"busy":ACTIVE_REQUESTS>0,"ui":CENTRO_UI.is_dir(),"memoryLearning":"episodic-utility-v1","voiceProtocol":"ndjson-audio-v1","pid":os.getpid()})
   if path=="/voice":return self.send(Path(__file__).with_name("jarvis_voice.html").read_text().replace("__KEY__","").encode(),"text/html; charset=utf-8")
   return self.serve_ui_file(self.path)
+ def stream_reply(self,text,context,tool):
+  self.send_response(200)
+  self.send_header("Content-Type","application/x-ndjson")
+  self.send_header("Cache-Control","no-store")
+  self.send_header("X-Content-Type-Options","nosniff")
+  self.send_cors();self.end_headers()
+  self.close_connection=True
+  start=time.monotonic()
+  def emit(item):
+   self.wfile.write((json.dumps(item,ensure_ascii=False)+"\n").encode());self.wfile.flush()
+  stream_language=[context.get("language","en")]
+  def audio_chunk(part):
+   INFERENCE_INFO.stream_emitted=True
+   language=getattr(DIALOGUE_INFO,"language",stream_language[0])
+   audio=speak(part,language)
+   emit({"type":"audio","language":language,"text":part,"audio":base64.b64encode(audio).decode(),"atMs":int((time.monotonic()-start)*1000)})
+  chunks=travis_stream.SpeechChunks(audio_chunk)
+  INFERENCE_INFO.stream_emitted=False
+  INFERENCE_INFO.on_delta=chunks.feed if tool=="local_llm" else None
+  try:
+   answer=route(text,context)
+   DIALOGUE_INFO.language=answer.get("language","en")
+   chunks.finish()
+   emit({"type":"result","answer":answer,"spoken":chunks.count>0})
+   emit({"type":"done"})
+  except (BrokenPipeError,ConnectionResetError):pass
+  except Exception as exc:
+   emit({"type":"error","error":clean(str(exc))[:200]})
+  finally:
+   INFERENCE_INFO.on_delta=None;INFERENCE_INFO.stream_emitted=False
  def do_POST(self):
   global ACTIVE_REQUESTS
   origin=self.headers.get("Origin","")
@@ -1729,7 +1779,7 @@ class Handler(BaseHTTPRequestHandler):
    if self.path=="/connect-gsc":return self.send(connect_gsc(obj.get("token")))
    if self.path=="/activity":return self.send(centro_activity())
    if self.path=="/voice-task":return self.send(voice_job_status(str(obj.get("taskId",""))))
-   if self.path=="/jarvis":
+   if self.path in {"/jarvis","/jarvis-stream"}:
     text=obj.get("text","")
     if not isinstance(text,str) or not text.strip() or len(text)>8000:raise ValueError("Pedido inválido")
     context={"activeProject":obj.get("project") if obj.get("project") in PROJECTS else None,"session":obj.get("session"),"language":obj.get("language","auto"),"wake":obj.get("wake") is True,"vision":clean_vision(obj.get("vision"))}
@@ -1741,6 +1791,7 @@ class Handler(BaseHTTPRequestHandler):
      if session:event("conversations",{"session":session,"user":text,"assistant":"Which project should I work on?","tool":"select_project","pendingRequest":text})
      return self.send({"ok":True,"tool":"select_project","reply":"Which project should I work on? I have brought your repositories forward.","ui":result_cards("repo_access",{},snapshot)})
     if tool in {"expert_query","repo_review","repo_change","agent_workflow"}:return self.send(start_voice_job(text,context))
+    if self.path=="/jarvis-stream":return self.stream_reply(text,context,tool)
     return self.send(route(text,context))
    if self.path=="/speak":
     with TRAVIS_BRAIN.request("Voice response"):

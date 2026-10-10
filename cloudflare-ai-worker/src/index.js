@@ -3192,6 +3192,16 @@ export default {
           return json({ok:true,summary:String(parsed.summary||'').trim()||'Análise concluída.',actions,model:usedModel,usage:result?.usage||null},200,origin);
         }
 
+        if(body?.stream===true && body?.mode==='conversation'){
+          const stream=await env.AI.run(MODEL,{
+            messages:[
+              {role:'system',content:assistSystem(body?.language,body?.mode)+' Start with a short, useful sentence. Continue with detail only as needed.'},
+              {role:'user',content:'REQUEST:\n'+question+'\n\nOBSERVED CONTEXT:\n'+JSON.stringify(context).slice(0,30000)}
+            ],stream:true,max_tokens:550,temperature:0.2
+          });
+          return new Response(stream,{headers:{'content-type':'text/event-stream','cache-control':'no-store','x-travis-model':MODEL,...cors(origin)}});
+        }
+
         let result=null,usedModel=MODEL,answer='',modelError='';
         try{
           result=await runAssist(env,question,context,body?.language,body?.mode);

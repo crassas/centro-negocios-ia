@@ -136,3 +136,10 @@ try{
  assert.equal(unavailable.status,503);const error=await unavailable.json();assert.equal(error.ok,false);assert.equal(error.reason,'quota');assert.equal(error.answer,undefined);
  console.log('OK conversation uses real alternate inference; quota failure never becomes a successful answer');
 }
+
+{
+ let calls=0;
+ const response=await worker.fetch(new Request('https://test/api/assist',{method:'POST',body:JSON.stringify({question:'Explain gravity briefly',mode:'conversation',language:'en',stream:true})}),{AI:{async run(model,input){calls++;assert.equal(input.stream,true);assert.match(input.messages[0].content,/British English/);return new ReadableStream({start(c){c.enqueue(new TextEncoder().encode('data: {"response":"Gravity attracts mass."}\n\ndata: [DONE]\n\n'));c.close();}});}}},{});
+ assert.equal(calls,1);assert.equal(response.headers.get('content-type'),'text/event-stream');assert.match(response.headers.get('x-travis-model'),/^@cf\//);assert.match(await response.text(),/Gravity attracts mass/);
+ console.log('OK conversational streaming passes through model events without buffering or translation');
+}

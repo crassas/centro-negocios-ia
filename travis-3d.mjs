@@ -1,7 +1,8 @@
+import { readVoiceReply } from './travis-voice-stream.mjs?v=live-1';
 import {createMotionAudio} from './travis-motion-audio.mjs?v=motion-1';
 import { createConceptProjection } from './travis-concept-projection.mjs?v=sand-1';
 import './travis-action-cards.mjs?v=sand-1';
-import { createVoiceInput } from './travis-voice-input.mjs?v=stt-fast-1';
+import { createVoiceInput } from './travis-voice-input.mjs?v=live-1';
 import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=motion-1';
 import { INTERFACE_COPY, interfaceLanguage, applyInterfaceLanguage, languageFromInterfaceCommand } from './travis-interface-language.mjs?v=1';
 import { resolveWakePhrase } from './travis-wake-phrase.mjs?v=pt-1';
@@ -141,7 +142,7 @@ if (!hud || !launcher || !canvas) {
   window.addEventListener('travis:close',()=>motionAudio.silence());
   window.addEventListener('travis:user-start',()=>motionAudio.silence());
   let voiceInput=null,voiceInputFailed=false,voicePaused=false,standby=false,initiativeTimer=0;
-  const savedLanguage=(()=>{try{return sessionStorage.getItem('travis.language')||'auto';}catch{return 'auto';}})();
+  const savedLanguage=(()=>{try{return sessionStorage.getItem('travis.language')||'en';}catch{return 'en';}})();
   let replyLanguage=savedLanguage==='pt'?'pt':'en',inputLanguage='auto',preferredLanguage=['pt','en'].includes(savedLanguage)?savedLanguage:'auto',proactive=true,lastInteraction=performance.now();
   // Display language is independent of the speaking language. Default: English.
   const savedInterfaceLanguage=(()=>{try{return sessionStorage.getItem('travis.ui.language')||'en';}catch{return 'en';}})();
@@ -154,6 +155,8 @@ if (!hud || !launcher || !canvas) {
   }
   setInterfaceLanguage(savedInterfaceLanguage,{persist:false});
   function interruptReply(){
+    voicePlaybackResolve?.();voicePlaybackResolve=null;
+    window.dispatchEvent(new CustomEvent('travis:speech-cancel'));
     voiceSession++;voiceRequestController?.abort();voiceRequestController=null;
     clearTimeout(voiceFinishTimer);voiceFinishTimer=0;
     if(voiceSource){try{voiceSource.onended=null;voiceSource.stop();voiceSource.disconnect();}catch{}voiceSource=null;}
@@ -165,9 +168,10 @@ if (!hud || !launcher || !canvas) {
   async function ensureVoiceInput(){
     if(voicePaused||!opened||voiceInputFailed)return false;
     if(!voiceInput)voiceInput=createVoiceInput({
-      onStart(){if(!opened||voicePaused||voiceBusy||state==='speaking')return;lastInteraction=performance.now();window.dispatchEvent(new CustomEvent('travis:user-start'));interruptReply();setState('listening',standby?'Say Travis to wake me.':'I’m listening.');},
-      onSpeech(blob,endedAt){if(!opened||voicePaused||voiceBusy||state==='speaking')return;voiceSpeechEndedAt=endedAt;handleVoiceBlob(blob,'audio/wav',voiceSession);},
+      onStart(){if(!opened||voicePaused)return;lastInteraction=performance.now();window.dispatchEvent(new CustomEvent('travis:user-start'));interruptReply();setState('listening',standby?'Say Travis to wake me.':'I’m listening.');},
+      onSpeech(blob,endedAt){if(!opened||voicePaused)return;voiceSpeechEndedAt=endedAt;handleVoiceBlob(blob,'audio/wav',voiceSession);},
       onLevel(level){if(state!=='speaking')externalVoiceLevel=level;},
+      isPlayback:()=>Boolean(voiceSource),
       checkTurn:blob=>localJson('/turn',{body:blob,type:'audio/wav',signal:AbortSignal.timeout(1500)}),
       onError(error){console.warn('Neural voice input unavailable:',error.message);},
     });
@@ -216,6 +220,7 @@ if (!hud || !launcher || !canvas) {
   let voiceRequestController=null;
   let voiceSource=null;
   let voicePlaybackRaf=0;
+  let voicePlaybackResolve=null;
   let micSourceNode=null;
   let micAnalyser=null;
   let voiceSpeechEndedAt=0;
@@ -650,7 +655,7 @@ if (!hud || !launcher || !canvas) {
   }
 
   function localFetch(path,{body=null,type='application/json',method='POST',signal=null}={}) {
-    const endpoint=path.split('?')[0],timeout=endpoint==='/jarvis'?120000:endpoint==='/visual-research'?35000:30000;
+    const endpoint=path.split('?')[0],timeout=['/jarvis','/jarvis-stream'].includes(endpoint)?120000:endpoint==='/visual-research'?35000:30000;
     const headers={};
     if (body!=null && type) headers['Content-Type']=type;
     const init={
@@ -716,6 +721,7 @@ if (!hud || !launcher || !canvas) {
 
   function stopVoiceConversation() {
     window.dispatchEvent(new CustomEvent('travis:speech-cancel'));
+    voicePlaybackResolve?.();voicePlaybackResolve=null;
     voiceInput?.stop();clearTimeout(initiativeTimer);
     voiceSession++;
     clearTimeout(voiceFinishTimer);
@@ -754,13 +760,13 @@ if (!hud || !launcher || !canvas) {
     return speechFacePromise;
   }
 
-  async function playVoiceArrayBuffer(arrayBuffer,session,reply,metrics=null) {
+  async function playVoiceArrayBuffer(arrayBuffer,session,reply,metrics=null,continuous=false) {
     if(!opened||session!==voiceSession)return;
     const ac=audio();
     if(!ac)throw new Error('Áudio indisponível.');
-    // Phone speakers can feed the microphone; do not let the VAD interrupt its own voice.
-    voiceInput?.stop();
+    // Keep the echo-cancelled neural microphone open for genuine interruptions.
     releaseVoiceMic({stopRecorder:true});
+    void ensureVoiceInput();
     if(ac.state!=='running'){
       await Promise.race([ac.resume(),new Promise((_,reject)=>setTimeout(()=>reject(new Error('Toca para ativar o áudio.')),4000))]);
       if(ac.state!=='running')throw new Error('Audio playback needs a foreground gesture.');
@@ -785,7 +791,12 @@ if (!hud || !launcher || !canvas) {
     setState('speaking',String(reply||'Responding.').slice(0,96));
     flashPower=.08;
 
+    let resolvePlayback;
+    const playbackDone=new Promise(resolve=>{resolvePlayback=resolve;});
+    voicePlaybackResolve=resolvePlayback;
     source.onended=()=>{
+      resolvePlayback();
+      if(voicePlaybackResolve===resolvePlayback)voicePlaybackResolve=null;
       if(voiceSource!==source)return;
       try{analyser.disconnect();source.disconnect();}catch{}
       voiceSource=null;
@@ -793,7 +804,7 @@ if (!hud || !launcher || !canvas) {
       externalVoiceLevel=0;
       speechFace?.reset();
       faceRig?.update(0);
-      if(opened&&session===voiceSession){
+      if(opened&&session===voiceSession&&!continuous){
         voiceBusy=false;
         lastInteraction=performance.now();
         window.dispatchEvent(new CustomEvent('travis:speech-end'));
@@ -812,6 +823,7 @@ if (!hud || !launcher || !canvas) {
       voiceMetrics.push({...metrics});if(voiceMetrics.length>20)voiceMetrics.shift();
       console.info('Travis voice latency',metrics);
     }
+    if(continuous)await playbackDone;
   }
 
   function presentToolResult(answer) {
@@ -896,14 +908,13 @@ if (!hud || !launcher || !canvas) {
   async function handleVoiceBlob(blob,mime,session) {
     if (!opened || session!==voiceSession) return;
     voiceBusy=true;
-    // Silero has finished this utterance. Keep the microphone off until playback finishes.
-    if(typeof blob!=='string')voiceInput?.stop();
+    // Keep listening: a new real utterance cancels this generation.
     voiceRequestController?.abort();
     const controller=new AbortController();
     voiceRequestController=controller;
 
     try {
-      setState('thinking','Transcribing speech…');
+      setState('thinking','Listening to your request…');
       const metrics={speechEndedAt:voiceSpeechEndedAt||performance.now()};
       const recognitionLanguage=inputLanguage!=='auto'
         ? inputLanguage : (preferredLanguage==='en'||preferredLanguage==='pt' ? preferredLanguage : 'auto');
@@ -1042,10 +1053,30 @@ if (!hud || !launcher || !canvas) {
         return;
       }
       setState('thinking','Handling your request…');
-      const answer=await localJson('/jarvis',{body:{text,session:dialogueSession,project:activeProject,language:inputLanguage,wake:wokeFromStandby,vision:vision.snapshot()},signal:controller.signal});
+      let audioChain=Promise.resolve(),streamHasAudio=false,playbackError=null;
+      const response=await localFetch('/jarvis-stream',{body:{text,session:dialogueSession,project:activeProject,language:recognitionLanguage,wake:wokeFromStandby,vision:vision.snapshot()},signal:controller.signal});
+      const streamed=await readVoiceReply(response,(wav,part,language)=>{
+        const first=!streamHasAudio;streamHasAudio=true;
+        if(first){metrics.replyAt=performance.now();metrics.transcriptToReplyMs=Math.round(metrics.replyAt-metrics.transcriptAt);}
+        audioChain=audioChain.then(async()=>{
+          if(session!==voiceSession||controller.signal.aborted||!opened||playbackError)return;
+          replyLanguage=language==='pt'?'pt':'en';
+          await playVoiceArrayBuffer(wav,session,part,first?metrics:null,true);
+        }).catch(error=>{if(session!==voiceSession)return;playbackError=error;controller.abort();interruptReply();setState('ready',error.message);scheduleListening(voiceSession,250);});
+      });
+      const answer=streamed.answer;
+      if(streamed.spoken){
+        void audioChain.then(()=>{
+          if(!opened||session!==voiceSession||playbackError)return;
+          voiceBusy=false;lastInteraction=performance.now();
+          window.dispatchEvent(new CustomEvent('travis:speech-end'));
+          setState(standby||voicePaused?'idle':'ready',standby?'Standing by. Say Travis.':'I’m here.');
+          scheduleListening(session,80);
+        });
+      }
       if (!opened || session!==voiceSession) return;
       replyLanguage=answer.language==='pt'?'pt':'en';
-      // Listening stays bilingual even when the reply language is locked: the next command may switch it.
+      // Use the chosen recognition language directly; explicit commands can switch it.
       preferredLanguage=answer.preferences?.language||'auto';
       try{sessionStorage.setItem('travis.language',preferredLanguage);}catch{}
       inputLanguage='auto';
@@ -1065,6 +1096,7 @@ if (!hud || !launcher || !canvas) {
       }
       const reply=String(answer.reply||'').trim();
       if (!reply) throw new Error('Travis returned an empty response.');
+      if(streamed.spoken)return;
       setState('thinking','Preparing voice…');
 
       const speech=await localFetch('/speak',{
@@ -1091,9 +1123,9 @@ if (!hud || !launcher || !canvas) {
     } catch (error) {
       if (controller.signal.aborted || session!==voiceSession) return;
       console.warn('Travis voice:',error);
-      voiceBusy=false;
+      interruptReply();
       setState('ready',error?.message||'Falha na conversa local.');
-      scheduleListening(session,900);
+      scheduleListening(voiceSession,350);
     } finally {
       if (voiceRequestController===controller) voiceRequestController=null;
     }
