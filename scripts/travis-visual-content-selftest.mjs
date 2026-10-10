@@ -25,3 +25,24 @@ for(const text of ['Show photos of Earth','Mostra imagens de uma casa','Find ima
 assert.equal(parseVisualIntent('Show me you').type,'dismiss');
 for(const text of ['Next image','Mostra outra imagem','mais imagens','Previous image'])assert.equal(parseVisualIntent(text,{active:true,kind:'illustration'}).type,'control',text);
 for(const title of ['House','Casa moderna','Building'])assert(hasLocalVisual('house',title));
+
+// Regression: copied examples (including one unclosed smart quote) are commands,
+// not the title of a reference-image search. Preserve quoted text on explicit request.
+for(const text of ['“mostra um motor elétrico','“Mostra um motor elétrico”','"Mostra um motor elétrico"',
+ '«Mostra um motor elétrico»','Travis, mostra-me um motor eléctrico, por favor.',
+ 'Podes mostrar-me um motor elétrico?','“Mostra um motor elétrico em 3D”',
+ 'motor elétrico','motor eléctrico','“electric motor”','Show an electric motor, please.']){
+ const intent=parseVisualIntent(text);assert.equal(intent.scene,'mechanical',text);assert.equal(intent.title,'Electric motor',text);
+ assert(hasLocalVisual(intent.scene,intent.title),text);assert.equal(intent.referenceRequested,false,text);
+}
+for(const text of ['“Mostra uma casa”','«Mostra Marte»','“Mostra Júpiter','“Mostra a Terra”']){
+ const intent=parseVisualIntent(text);assert(hasLocalVisual(intent.scene,intent.title),text);
+}
+for(const [text,title] of [['Escreve “mostra um motor elétrico”','mostra um motor elétrico'],['“Mostra as letras «Olá»”','Olá'],['Escreve "Não mostres um motor"','Não mostres um motor']]){
+ const intent=parseVisualIntent(text);assert.equal(intent.scene,'text');assert.equal(intent.title,title);
+}
+for(const text of ['“Não mostres um motor elétrico”','“Mostra os meus emails”'])assert.equal(parseVisualIntent(text),null,text);
+for(const text of ['“Separa as peças”','“Junta as peças','“Volta ao Travis”'])assert(parseVisualIntent(text,{active:true,kind:'illustration'}),text);
+assert(parseVisualIntent('“Mostra fotos de um motor elétrico”').referenceRequested,'Explicit photos must still use research');
+const specific=parseVisualIntent('“Mostra um motor V8 Ferrari”');assert(!hasLocalVisual(specific.scene,specific.title),'Do not invent a specific product model');
+console.log('PASS COPIED_REQUESTS: smart/unclosed quotes, electric motor aliases, politeness, controls, literal text, negatives and explicit photos');

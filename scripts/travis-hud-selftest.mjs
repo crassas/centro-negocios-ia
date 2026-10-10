@@ -48,7 +48,7 @@ assert(sw.includes('travis-audio-sync.mjs?v=1'),'PWA must cache the audio synchr
 assert(ui.includes("import './travis-action-cards.mjs?v=motion-1'"),'3D client must initialize the projection deck');
 assert(ui.includes('TravisProjection?.interpret?.(text)'),'Voice/keyboard must share the visual interpreter');
 assert(sw.includes('travis-concept-projection.mjs?v=motion-1'),'PWA must cache 3D projections');
-assert(sw.includes('travis-english-intents.mjs?v=motion-1'),'PWA must cache English grammar');
+assert(sw.includes('travis-english-intents.mjs?v=motion-routing-1'),'PWA must cache English grammar');
 assert(sw.includes('travis-action-cards.mjs?v=motion-1'),'PWA must cache auto-return action deck');
 
 assert(vision.includes('navigator.mediaDevices.getUserMedia'),'Browser camera permission must remain explicit.');

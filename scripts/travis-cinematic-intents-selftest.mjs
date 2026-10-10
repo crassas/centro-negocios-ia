@@ -70,7 +70,7 @@ for(const scene of ['planet','map','house','person','object'])
  assert(visual.includes("kind==='"+scene+"'"),'Missing '+scene+' 3D builder');
 assert(visual.includes('ghost')&&visual.includes('show(scene,now,subject'));
 assert(html.includes('travis-3d.mjs?v=motion-1'));
-assert(sw.includes('travis-english-intents.mjs?v=motion-1'));
+assert(sw.includes('travis-english-intents.mjs?v=motion-routing-1'));
 console.log('TRAVIS_CINEMATIC_INTENTS_PASS',JSON.stringify({
  scenarios:scenarios.length,controls:controlCases.length,synonyms:synonyms.length,
  autoReturn:true,pin:true,cinematicMorph:true

@@ -566,13 +566,13 @@ def sync_travis_client(ref):
             raise RuntimeError("travis-particle-morph.mjs: shared holographic material missing")
         if "createDetailedSubject" not in fetched["travis-visual-subjects.mjs"] or "earthLand" not in fetched["travis-earth-land.mjs"]:
             raise RuntimeError("Travis detailed visual content missing")
-        if "travis-visual-story.mjs?v=motion-1" not in fetched["travis-action-cards.mjs"]:
+        if "travis-visual-story.mjs?v=motion-routing-1" not in fetched["travis-action-cards.mjs"]:
             raise RuntimeError("Travis narration cues disconnected")
         if "createArchitecture" not in fetched["travis-architecture.mjs"]:
             raise ValueError("Travis architecture module missing")
         if "travis-holographic-surface.mjs?v=motion-1" not in fetched["travis-concept-projection.mjs"]:
             raise RuntimeError("Travis fine light surfaces disconnected")
-        if "travis-english-intents.mjs?v=motion-1" not in fetched["travis-action-cards.mjs"]:
+        if "travis-english-intents.mjs?v=motion-routing-1" not in fetched["travis-action-cards.mjs"]:
             raise RuntimeError("travis-action-cards.mjs: English intent router missing")
         if "travis-particle-morph.mjs?v=motion-1" not in fetched["travis-concept-projection.mjs"]:
             raise RuntimeError("travis-concept-projection.mjs: unified particle material missing")
