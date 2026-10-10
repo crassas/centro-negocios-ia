@@ -56,6 +56,26 @@ def _swap(path,before,after):
     os.chmod(tmp,path.stat().st_mode & 0o777)
     tmp.replace(path)
 
+HLS_PLAYER=UI/"travis-cctv-player.mjs"
+HLS_INSTALLER=STATE/"travis-hls-android-patch.py"
+HLS_MARKER="TRAVIS_HLS_PUBLIC_VIDEO_V1"
+
+def ensure_public_hls_video():
+    """Keep slow-start HLS video tuned without touching upstream camera sources."""
+    if not HLS_PLAYER.is_file() or not HLS_INSTALLER.is_file():
+        return False
+    text=HLS_PLAYER.read_text(encoding="utf-8")
+    if HLS_MARKER in text:return True
+    try:
+        proc=subprocess.run(["python3",str(HLS_INSTALLER),"apply"],
+                            check=False,capture_output=True,timeout=12,text=True)
+        if proc.returncode!=0:
+            print("[watch] travis-hls · patch declined",flush=True)
+            return False
+        return HLS_MARKER in HLS_PLAYER.read_text(encoding="utf-8")
+    except (OSError,subprocess.SubprocessError):
+        return False
+
 def ensure_road_links():
     if not all(x.is_file() for x in (INDEX,VOICE,CSS,MODULE,BRIDGE,GATEWAY)):
         return False
@@ -88,6 +108,7 @@ def ensure_road_links():
             if not BACKUP_VOICE.exists():BACKUP_VOICE.write_text(js,encoding="utf-8")
             _swap(VOICE,js,out)
             print("[watch] travis-road · live public road voice route linked",flush=True)
+        ensure_public_hls_video()
         return True
     except (OSError,ValueError,subprocess.SubprocessError) as e:
         print("[watch] travis-road · declined:",type(e).__name__,flush=True)
