@@ -66,7 +66,7 @@ test('Public CCTV autopilot chooses verified authorised source without manual se
   assert.equal(opened.length,before,'A city without registered sources must not fall back elsewhere');
   a=await ctl.routeCommand('Show a live camera in Delaware');
   assert.equal(a.verified,true);
-  assert.match(a.reply,/live video/i);
+  assert.match(a.reply,/playing video/i);
   assert.equal(opened.at(-1),'deldot-public-1');
   a=await ctl.routeCommand('Abre a câmara do telemóvel');
   assert.equal(a.handled,false);
