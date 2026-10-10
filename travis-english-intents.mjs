@@ -3,6 +3,7 @@ import {cinematicIntent} from './travis-scene-planner.mjs?v=figures-1';
 // Universal conversational projection intent for PT-PT and English.
 // Explicitly requested conceptual imagery is routed to local particle shapes;
 // unrecognised real-world facts and private data stay with the normal tools.
+import {aircraftSubject} from './travis-aircraft.mjs?v=aircraft-1';
 const fold=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 // A pasted command may include the opening quotation mark from a suggested
 // example. Remove only wrappers around the request, never quotes inside it:
@@ -37,7 +38,7 @@ const categories=[
  ['map',/\b(?:map|maps|mapa|mapas|routes?|rotas?|rua|avenida|road|street|city|cidade|town|village|aldeia|pais|country|countries|world map|geografia|geography|globo terrestre|google maps|porto|lisboa|lisbon|paris|london|londres|tokyo|toquio|new york|coimbra|campanha|gaia)\b/],
  ['house',/\b(?:house|houses|home|apartment|apartamento|building|buildings|edificio|edificios|casa|casas|moradia|palacio|palace|castle|castelo|architecture|arquitetura|blueprint|planta|floor plan|floorplan|arranha-ceus|skyscraper|room|sala|quarto|kitchen|cozinha|bedroom|fachada|facade|armazem|warehouse|bridge|ponte|temple|templo)\b/],
  ['mechanical',/\b(?:electric motor|motor eletrico|motor|engine|rotor|stator|estator)\b/],
- ['vehicle',/\b(?:car|cars|carro|carros|automovel|vehicle|veiculo|moto|motorcycle|camiao|truck|van|carrinha|bicycle|bicicleta|airplane|aviao|helicopter|helicoptero|spaceship|spacecraft|nave|foguetao|rocket|train|comboio|ship|barco|boat|drone|robot|robo|mecha|jet|satellite|satelite)\b/],
+ ['vehicle',/\b(?:car|cars|carro|carros|automovel|vehicle|veiculo|moto|motorcycle|camiao|truck|van|carrinha|bicycle|bicicleta|airplane|aeroplane|aircraft|airliner|aviao|aeroplano|aeronave|helicopter|helicoptero|spaceship|spacecraft|nave|foguetao|rocket|train|comboio|ship|barco|boat|drone|robot|robo|mecha|jet|satellite|satelite)\b/],
  ['person',/\b(?:person|people|human|humano|humana|pessoa|pessoas|corpo|body|human body|face|rosto|figura humana|silhouette|silhueta|portrait|retrato|bust|busto|anatomy|anatomia|skeleton|esqueleto|muscle|musculo|heart|coracao|brain|cerebro|alien|extraterrestre)\b/],
  ['landscape',/\b(?:landscape|paisagem|forest|floresta|tree|arvore|plant|planta|flower|flor|mountain|montanha|beach|praia|sea|ocean|oceano|waterfall|cascata|river|rio|desert|deserto|nature|natureza|volcano|vulcao|island|ilha|garden|jardim|cave|gruta|clouds|nuvens|animals?|animais?|dog|cao|cat|gato|dragon|dragao|dinossauro|dinosaur)\b/],
  ['diagram',/\b(?:diagram|diagrama|flowchart|fluxograma|network|rede|schema|esquema|molecule|molecula|dna|adn|cell|celula|atom|atomo|timeline|linha temporal|graph|grafico|circuit|circuito|algorithm|algoritmo|system|sistema|process|processo)\b/],
@@ -86,7 +87,7 @@ const controlRules=[
  ['next',/^(?:next|next one|next image|next photo|another image|more images|show me (?:the next one|another image|more images)|proximo|seguinte|mais imagens|outra imagem|outra foto|proxima imagem|mostra (?:o proximo|outra imagem|mais imagens|a proxima imagem))$/],
  ['previous',/^(?:previous|previous one|previous image|previous photo|last one|anterior|imagem anterior|foto anterior|mostra (?:o anterior|a imagem anterior))$/]
 ];
-const spokenPortuguese=t=>/\b(?:quero|queria|gostava|apetece|apetecia|ver|mostra|mostrar|faz|por|poe|poe-me|podes|consegues|casa|carro|mapa|cidade|saturno|marte|planeta|agora|deixa|esquerda|direita|mais|explica|explicar|ensina|escreve|espaco|letras|sol|terra|elec?trico)\b/.test(t);
+const spokenPortuguese=t=>/\b(?:quero|queria|gostava|apetece|apetecia|ver|mostra|mostrar|faz|por|poe|poe-me|podes|consegues|casa|carro|mapa|cidade|saturno|marte|planeta|agora|deixa|esquerda|direita|mais|explica|explicar|ensina|escreve|espaco|letras|sol|terra|aviao|aeroplano|aeronave|elec?trico)\b/.test(t);
 export function parseVisualIntent(text,{active=false,kind=''}={}){
  const input=requestText(text),raw=compact(input);
  const literalRequest=/^(?:escreve|write)\s|^(?:mostra(?:-me)?|show(?: me)?|projeta)\s+(?:(?:as?|os?|the)\s+)?(?:letras?|letters?|palavras?|words?|texto|text|numeros?|numbers?)\b/.test(raw);
@@ -107,16 +108,17 @@ export function parseVisualIntent(text,{active=false,kind=''}={}){
  const explain=!literalRequest&&/\b(?:explain|explica|explicar|ensina|teach|how does|como funciona|como se forma)\b/.test(raw);
  const referenceRequested=!literalRequest&&/\b(?:photos?|photographs?|pictures?|images?|fotos?|fotografias?|imagens?|references?|referencias?)\b/.test(raw)&&!/\b(?:imagina|imagine)\b/.test(raw);
  const research=!literalRequest&&/\b(?:pesquisa|research|search|procura)\b/.test(raw);
- const bare=/^(?:(?:o|a|the) )?(?:mercury|mercurio|venus|earth|terra|mars|marte|jupiter|saturn|saturno|uranus|urano|neptune|neptuno|sun|sol|moon|lua|space|espaco|universe|universo|galaxy|galaxia|letras|letters|alfabeto|alphabet|sistema solar|solar system|motor(?: elec?trico)?|electric motor)$/.test(fold(input).replace(/[.!?]+$/,'').trim());
+ const bare=Boolean(aircraftSubject(input))||/^(?:(?:o|a|the) )?(?:mercury|mercurio|venus|earth|terra|mars|marte|jupiter|saturn|saturno|uranus|urano|neptune|neptuno|sun|sol|moon|lua|space|espaco|universe|universo|galaxy|galaxia|letras|letters|alfabeto|alphabet|sistema solar|solar system|motor(?: elec?trico)?|electric motor)$/.test(fold(input).replace(/[.!?]+$/,'').trim());
  const visual=/^(?:escreve|write)\b/.test(raw)||explain||bare||(referenceRequested&&/\b(?:find|get|procura|pesquisa|arranja)\b/.test(raw))||(research&&Boolean(known))||directCue.test(raw)||visualSpecific.test(raw)||followup||
     (request(verbsNoun)&&request(cue)&&/\b(?:see|ver|mostrar|show|look|visualiz|projet|hologram)\b/.test(raw));
  if(!visual)return null;
  // The request is explicitly visual. Any unfamiliar subject can at least be
  // represented by a generically labelled local particle concept.
  const entry=categories.find(([,re])=>re.test(raw));
- const scene=entry?.[0]||'object';
+ let scene=entry?.[0]||'object';
  let title=asTitle(raw,scene);
  if(referenceRequested)title=title.replace(/^(?:(?:some|more|real|actual|umas?|algumas?|mais)\s+)*(?:photos?|photographs?|pictures?|images?|fotos?|fotografias?|imagens?|references?|referencias?)\b\s*(?:(?:of|about|de|da|do|das|dos|sobre)\s+)?(?:(?:a|an|the|uma?|o|a)\s+)?/i,'').trim()||title;
+ if(!referenceRequested&&scene!=='text'&&aircraftSubject(title)){scene='vehicle';title=spokenPortuguese(fold(text))||/aviao|aeronave|aeroplano/.test(fold(text))?'Avião':'Airplane';}
  if(scene==='text'){
   const quoted=input.match(/[\"“«]([^\"”»]{1,640})[\"”»]/);
   title=quoted?.[1]||input.replace(/^(?:escreve|write)\s+/i,'').replace(/^(?:(?:mostra|mostra-me|show me|show|write|escreve|projeta)\s+)?(?:(?:a|as|o|os|the|uma|umas)\s+)?(?:letters?|letras?|palavra|palavras|word|words|text|texto|numero|numeros|number|numbers)\s*/i,'').trim();

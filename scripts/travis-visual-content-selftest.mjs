@@ -47,3 +47,18 @@ for(const text of ['“Separa as peças”','“Junta as peças','“Volta ao Tr
 assert(parseVisualIntent('“Mostra fotos de um motor elétrico”').referenceRequested,'Explicit photos must still use research');
 const specific=parseVisualIntent('“Mostra um motor V8 Ferrari”');assert(!hasLocalVisual(specific.scene,specific.title),'Do not invent a specific product model');
 console.log('PASS COPIED_REQUESTS: smart/unclosed quotes, electric motor aliases, politeness, controls, literal text, negatives and explicit photos');
+
+for(const text of ['Mostra um avião','Mostra uma avião','avião','Podes mostrar-me um avião?',
+ 'Mostra um avião comercial','Show me a plane','Show an airplane','Show an aeroplane',
+ 'Show a passenger aircraft','airplane','“Mostra um avião”']){
+ const i=parseVisualIntent(text);assert.equal(i.scene,'vehicle',text);
+ assert.equal(identifyVisualSubject(i.scene,i.title),'airplane',text);assert(hasLocalVisual(i.scene,i.title),text);
+}
+for(const text of ['Show me a hand plane','Mostra uma plaina','Show a mathematical plane','Mostra um Boeing 747']){
+ const i=parseVisualIntent(text);assert.equal(i.scene,'object',text);assert(!hasLocalVisual(i.scene,i.title),text);
+}
+assert.equal(parseVisualIntent('Escreve avião').scene,'text');
+assert.equal(parseVisualIntent('Não mostres um avião'),null);
+assert(parseVisualIntent('Mostra fotografias de um avião').referenceRequested);
+assert.equal(parseVisualIntent('Mostra uma mão').scene,'anatomy');
+console.log('PASS AIRCRAFT_ROUTING: PT/EN aircraft, hand plane, mathematical plane, named models, literal text, photos and anatomy');

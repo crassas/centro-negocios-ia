@@ -8,6 +8,8 @@ export const anatomyPart=value=>{
 };
 export function anatomySubject(text){
  const t=' '+focusKey(text)+' ';
+ // Compound tool names are whole objects, not references to a human hand.
+ if(/\b(?:hand|bench|block|woodworking|carpenter(?:s)?) plane\b/.test(t))return null;
  if(/\b(?:esqueleto|skeleton|skeletal system|sistema esqueletico)\b/.test(t))return 'Skeleton';
  if(/\b(?:corpo humano|human body|anatomia|anatomy)\b/.test(t))return 'Human body';
  const matches=ANATOMY_PARTS.filter(p=>[p.id,p.pt,p.en,...p.aliases].some(a=>t.includes(' '+focusKey(a)+' ')));

@@ -1,3 +1,4 @@
+import {aircraftSubject,createAircraft} from './travis-aircraft.mjs?v=aircraft-1';
 import {createSceneFocus} from './travis-scene-focus.mjs?v=figures-1';
 import {earthLand} from './travis-earth-land.mjs?v=1';
 import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=figures-1';
@@ -5,6 +6,7 @@ export const foldVisual=s=>String(s??'').normalize('NFD').replace(/[\u0300-\u036
 export const celestialNames={mercury:['mercury','mercurio'],venus:['venus'],earth:['earth','terra'],mars:['mars','marte'],jupiter:['jupiter'],saturn:['saturn','saturno'],uranus:['uranus','urano'],neptune:['neptune','neptuno'],pluto:['pluto','plutao'],moon:['moon','lua'],sun:['sun','sol']};
 export function identifyVisualSubject(scene,subject){
  const text=foldVisual(subject);
+ if(['vehicle','object'].includes(scene)&&aircraftSubject(subject))return 'airplane';
  if(scene==='text')return 'text';if(scene==='reference')return 'reference';
  if(scene==='diagram'&&/\b(?:dna|adn)\b/.test(text))return 'dna';
  if(scene==='diagram'&&/\b(?:atom|atomo)\b/.test(text))return 'atom';
@@ -69,7 +71,9 @@ function planetMap(THREE,name){
  texture.userData.generatedVisual=name;return texture;
 }
 export function createDetailedSubject(THREE,scene,subject,{reference=null,reducedMotion=false}={}){
- const variant=identifyVisualSubject(scene,subject),group=new THREE.Group(),materials=[],textures=[];
+ const variant=identifyVisualSubject(scene,subject);
+ if(variant==='airplane')return createAircraft(THREE,{reducedMotion});
+ const group=new THREE.Group(),materials=[],textures=[];
  let animate=null,selection=null;
  group.name='TravisSubject:'+variant;
  const surface=(geometry,{map=null,mask=false,gain=1,photo=false,natural=false,tint=0xffffff}={})=>{const mat=createHolographicSurfaceMaterial(THREE,{map,mask,gain,photo,natural,tint});materials.push(mat);const mesh=new THREE.Mesh(geometry,mat);group.add(mesh);return mesh;};

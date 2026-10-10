@@ -72,6 +72,20 @@ catalog={'chair':{'name':'Wooden Chair','type':2,'polycount':400,'tags':['chair'
 assert mod.model_candidates('cadeira de madeira',catalog)[0][1]=='chair'
 assert mod.model_candidates('motor elétrico',catalog)==[]
 assert mod.model_candidates('cadeira gigante invisível',catalog)==[]
+# Production Poly Haven result that previously won the query "plane".
+planes={'hand_plane_no4':{'name':'Hand Plane No4','type':2,'polycount':8220,
+    'tags':['vintage','hand tool','carpentry','old','wood','workshop']},
+    'airliner':{'name':'Passenger Airplane','type':2,'polycount':40000,'tags':['aircraft','plane']},
+    'flat_plane':{'name':'Mathematical Plane','type':2,'polycount':2,'tags':['geometry']}}
+for query in ['plane','avião','aviao','aircraft','airplane','aeroplane']:
+    assert [row[1] for row in mod.model_candidates(query,planes)]==['airliner'],query
+    assert mod.model_candidates(query,{'hand_plane_no4':planes['hand_plane_no4']})==[],query
+for query in ['plaina','hand plane','bench plane']:
+    assert [row[1] for row in mod.model_candidates(query,planes)]==['hand_plane_no4'],query
+assert mod.model_candidates('mathematical plane',planes)[0][1]=='flat_plane'
+assert mod.model_candidates('Boeing 747 airplane',planes)==[]
+assert not mod.model_candidates('airplane',{'bad':{**planes['hand_plane_no4'],'tags':['airplane','aircraft']}})
+print('PASS AIRCRAFT_MEANING: PT/EN synonyms, production hand-plane rejection, geometry and named-model separation')
 gltf={'asset':{'version':'2.0'},'scene':0,'scenes':[{'nodes':[0]}],'nodes':[{'mesh':0}],
     'meshes':[{'primitives':[{'attributes':{'POSITION':0},'material':0}]}],
     'accessors':[{'count':3,'type':'VEC3'}],'buffers':[{'byteLength':36,'uri':'chair.bin'}],

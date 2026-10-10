@@ -35,6 +35,7 @@ ALIASES = {'football': 'association football', 'futebol': 'association football'
            'soccer': 'association football', 'borboleta': 'butterfly', 'borboletas': 'butterfly',
            'gato': 'cat', 'cao': 'dog', 'cavalo': 'horse', 'flor': 'flower',
            'casa': 'house', 'edificio': 'building', 'terra': 'Earth', 'marte': 'Mars',
+           'plane': 'airplane', 'aviao': 'airplane', 'aeroplano': 'airplane', 'plaina': 'hand plane',
            'sol': 'Sun', 'lua': 'Moon', 'via lactea': 'Milky Way',
            'aurora boreal': 'aurora', 'aurora austral': 'aurora', 'buraco negro': 'black hole',
            'nebulosa': 'nebula', 'galaxia': 'galaxy', 'espaco': 'space', 'sistema solar': 'solar system',
@@ -126,9 +127,24 @@ MODEL_STOP = {'a', 'an', 'the', 'of', 'de', 'do', 'da', 'um', 'uma', 'em', 'in',
               '3d', 'modelo', 'model', 'object', 'objeto', 'holograma', 'hologram'}
 
 
-def model_terms(query):
-    terms = [MODEL_WORDS.get(t, t) for t in re.findall(r'[a-z0-9]+', folded(query)) if t not in MODEL_STOP]
-    return {t for t in terms if t}
+def model_terms(query, *, candidate=False):
+    terms = {MODEL_WORDS.get(t, t) for t in re.findall(r'[a-z0-9]+', folded(query)) if t not in MODEL_STOP}
+    # Canonical meanings, not ambiguous translated words. "Plane" alone in a
+    # user's request means an aircraft; a catalog must positively identify it.
+    aircraft = {'airplane', 'airplanes', 'aeroplane', 'airliner', 'aircraft', 'aviao', 'avioes', 'aeroplano', 'aeronave'}
+    woodworking = {'plaina', 'handplane', 'planer'}
+    tool_context = {'hand', 'bench', 'block', 'woodworking', 'carpenter', 'carpentry', 'carpinteiro', 'carpintaria'}
+    flat_context = {'geometric', 'geometrical', 'mathematical', 'geometrico', 'matematico', 'coordinate'}
+    if terms & woodworking or 'plane' in terms and terms & tool_context:
+        terms -= woodworking | tool_context | {'plane'}
+        terms.add('handplane')
+    elif terms & aircraft:
+        terms -= aircraft | {'plane'}
+        terms.add('aircraft')
+    elif 'plane' in terms and not terms & flat_context and not candidate:
+        terms.remove('plane')
+        terms.add('aircraft')
+    return terms - {''}
 
 
 def model_candidates(query, assets):
@@ -141,8 +157,11 @@ def model_candidates(query, assets):
             continue
         if not 0 < item.get('polycount', 0) <= 100000:
             continue
-        name = set(re.findall(r'[a-z]+', folded(item.get('name', ''))))
-        tags = set(re.findall(r'[a-z]+', folded(' '.join(item.get('tags', [])))))
+        name = model_terms(item.get('name', ''), candidate=True)
+        tags = model_terms(' '.join(item.get('tags', [])), candidate=True)
+        # Explicit incompatible object names override broad/misleading tags.
+        if 'aircraft' in terms and 'handplane' in name or 'handplane' in terms and 'aircraft' in name:
+            continue
         # Furniture sets and statues must not stand in for an individual object.
         if (name & {'set', 'statue', 'covered', 'modular'}) - terms:
             continue

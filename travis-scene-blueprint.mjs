@@ -6,6 +6,7 @@ const definitions=[
  ['Venus','Vénus',/\bvenus\b/],['Mercury','Mercúrio',/\b(?:mercury|mercurio)\b/],['Uranus','Urano',/\b(?:uranus|urano)\b/],['Neptune','Neptuno',/\b(?:neptune|neptuno)\b/],
  ['Meteor','Meteoroide',/\b(?:meteorit[oa]s?|meteoroides?|meteoros?|meteoroids?|meteorites?|meteors?|asteroides?|asteroids?)\b/],
  ['Comet','Cometa',/\b(?:cometas?|comets?)\b/],['Satellite','Satélite',/\b(?:satelites?|satellites?)\b/],['Rocket','Foguetão',/\b(?:foguet(?:ao|oes|es?)|rockets?|spacecraft|naves?)\b/],
+ ['Airplane','Avião',/\b(?:airplane|aeroplane|airliner|aviao|aeroplano|aeronave)\b/],
  ['House','Casa',/\b(?:casas?|houses?)\b/],['Tree','Árvore',/\b(?:arvores?|trees?)\b/],['Mountain','Montanha',/\b(?:montanhas?|mountains?)\b/],
  ['Motor','Motor',/\b(?:motor(?:es)?|engines?)\b/],['DNA','ADN',/\b(?:dna|adn)\b/],['Hydrogen','Hidrogénio',/\b(?:hidrogenio|hydrogen)\b/],
  ['rain','Chuva',/\b(?:chuva|chover|rain)\b/],['snow','Neve',/\b(?:neve|snow)\b/],['clouds','Nuvens',/\b(?:nuvens|nuvem|clouds?)\b/],

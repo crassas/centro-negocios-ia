@@ -26,7 +26,7 @@ assert.equal('code' in validateScenePlan({...initial,code:'throw new Error()'}),
 let previous=-Infinity;for(let i=0;i<=1000;i++){const [x,y,z]=flybyPosition(i/1000,1.2);assert(x>=previous);previous=x;assert(Math.hypot(x,y,z)>1.2);}
 // Real Three.js: each constructed object has depth, can be isolated, and returns
 // to the exact same composition; detail buffers remain static during animation.
-for(const assets of [['Meteor'],['Satellite'],['Tree','Mountain'],['Cube','Sphere','Pyramid'],['Motor','DNA']]){
+for(const assets of [['Airplane'],['Airplane','House'],['Meteor'],['Satellite'],['Tree','Mountain'],['Cube','Sphere','Pyramid'],['Motor','DNA']]){
  const built=createComposedScene(THREE,makeScenePlan(assets)),snapshot=[];
  built.group.traverse(o=>{if(o.geometry)snapshot.push({o,version:o.geometry.attributes.position.version});});
  assert(snapshot.length>0);const box=new THREE.Box3().setFromObject(built.group),size=box.getSize(new THREE.Vector3());assert(size.x>.1&&size.y>.1&&size.z>.1);

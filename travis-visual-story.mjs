@@ -1,5 +1,6 @@
 // Audio-clock cues: noun positions approximate section timing, never claim
 // phoneme alignment. Source audio completion remains authoritative.
+import {aircraftSubject} from './travis-aircraft.mjs?v=aircraft-1';
 const fold=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const topics=[
  ['science','Black hole',/\b(?:black hole|buraco negro)\b/g],
@@ -39,6 +40,7 @@ export function cueAtTime(cues,elapsed,duration){
  return chosen;
 }
 export function hasLocalVisual(scene,title){
+ if(['vehicle','object'].includes(scene)&&aircraftSubject(title))return true;
  const t=fold(title).replace(/[.!?]/g,'').trim();
  if(scene==='science')return /^(?:black hole|aurora|dna|hydrogen)$/.test(t);
  if(scene==='text')return true;

@@ -59,6 +59,7 @@ RAW_REPO_BASE = "https://raw.githubusercontent.com/crassas/centro-negocios-ia"
 # Only the versioned client modules needed for voice/camera repairs are updated.
 # Avoid overwriting other operator-owned UI files and assets.
 TRAVIS_CLIENT_FILES = (
+    "travis-aircraft.mjs",
     "travis-figures.mjs",
     "travis-figure-catalog.mjs",
     "assets/travis/figures/ATTRIBUTION.txt",
@@ -628,6 +629,8 @@ def sync_travis_client(ref):
             if not raw or len(raw) > 450000:
                 raise RuntimeError(f"{name}: resposta ausente ou demasiado grande")
             fetched[name] = raw.decode("utf-8")
+        if "travis-aircraft.mjs?v=aircraft-1" not in fetched["travis-english-intents.mjs"] or "travis-aircraft.mjs?v=aircraft-1" not in fetched["sw.js"]:
+            raise RuntimeError("Travis aircraft resolver disconnected")
         for asset, consumer in (("travis-figures.mjs", "travis-action-cards.mjs"), ("travis-figure-catalog.mjs", "travis-figures.mjs"), ("travis-scene-focus.mjs", "travis-concept-projection.mjs"), ("travis-anatomy.mjs", "travis-action-cards.mjs"), ("travis-anatomy-catalog.mjs", "travis-anatomy.mjs"), ("travis-scene-blueprint.mjs", "travis-scene-planner.mjs"), ("travis-scene-composer.mjs", "travis-concept-projection.mjs"), ("travis-atmosphere.mjs", "travis-3d.mjs"), ("travis-cinema-depth.css", "index.html")):
             if asset+"?v=figures-1" not in fetched[consumer] or asset+"?v=figures-1" not in fetched["sw.js"]:
                 raise RuntimeError("Inconsistent constructed-scene asset: "+asset)
