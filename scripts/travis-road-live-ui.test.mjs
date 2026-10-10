@@ -17,6 +17,7 @@ test("God's Eye road panel renders measured sources and annotates ONLY verified 
       });
     }
     querySelector(selector){
+      if(selector==='#travis-gev-official .travis-gev-toolbar')return toolbar;
       return selector.startsWith('#')?nodes.get(selector.slice(1))||null:null;
     }
     querySelectorAll(selector){return selector==='[data-road-area]'?this.areaButtons||[]:[];}
@@ -68,7 +69,7 @@ test("God's Eye road panel renders measured sources and annotates ONLY verified 
     assert.match(result.reply,/Vou consultar/i);
     await new Promise(r=>setTimeout(r,50));
     assert.equal(window.TravisRoadLive.status().state,'current');
-    assert.equal(nodes.get('travis-road-live').hidden,false);
+    assert.equal(hud.children[0].hidden,false);
     assert.ok(calls.fetch[0].includes('/api/road-live/london'));
     assert.equal(calls.annotations.at(-1)[0].latitude,51.5);
     assert.equal(nodes.get('travis-road-list').children.length,1);
