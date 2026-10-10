@@ -26,7 +26,7 @@ export const AREA_REFERENCES=Object.freeze([
   {name:'Nova Iorque',match:/\b(?:new york|nova iorque|manhattan)\b/,lat:40.7128,lon:-74.006,radiusKm:100},
   {name:'Tóquio',match:/\b(?:toquio|tokyo)\b/,lat:35.6762,lon:139.6503,radiusKm:100},
 ]);
-const CAMERA=/\b(?:camera|cameras|camara|camaras|cctv|webcam|webcams|public feeds?|live feeds?|cam)\b/;
+const CAMERA=/\b(?:camera|cameras|camara|camaras|cctv|webcam|webcams|public feeds?|live feeds?|videos? publicos?|public videos?|live videos?|transmissao publica|cam)\b/;
 const DEVICE=/\b(?:camara (?:do |de )?(?:telemovel|telefone|phone)|camera (?:of |on )?(?:my |the )?phone|selfie|camara frontal|front camera|rear camera|camera traseira)\b/;
 const START=/\b(?:mostra|mostrar|abre|abrir|liga|ligar|seleciona|selecionar|escolhe|escolher|procura|procurar|encontra|encontrar|quero ver|podes mostrar|show|open|watch|find|choose|pick|select|connect|activate|look for|take me|go to|vejo|ver|auto|automatic)\b/;
 const STOP=/\b(?:para|parar|termina|terminar|stop|stop touring|stop tour|desliga|desligar|fecha|fechar|close|cancel|cancela)\b/;
