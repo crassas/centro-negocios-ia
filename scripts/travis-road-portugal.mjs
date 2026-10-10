@@ -66,7 +66,13 @@ export function parsePortugalIncidents(input,{area="porto",now=Date.now()}={}){
         ?x.sourceUrl:null
     });
   }
-  out.sort((a,b)=>Date.parse(b.observedAt)-Date.parse(a.observedAt));
+  // Make accidents / obstructions visible before hundreds of routine
+  // loading-bay permits, without hiding or modifying any reported event.
+  const priority=x=>
+    x.category==="accident"?0:x.category==="traffic"?1:
+    /cargas e descargas|loading bay/i.test(x.label)?5:2;
+  out.sort((a,b)=>priority(a)-priority(b)
+    || Date.parse(b.observedAt)-Date.parse(a.observedAt));
   return out.slice(0,MAX_ROWS);
 }
 const sunsetMessage="O fornecedor Trânsito Agora anunciou que a API deixaria de funcionar sem chave em 14-10-2026. A ligação gratuita está desactivada para evitar pedidos sem autorização.";
