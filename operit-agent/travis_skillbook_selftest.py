@@ -13,7 +13,7 @@ class SkillBookTests(unittest.TestCase):
         status=book.status()
         self.assertTrue(status["loaded"], status["error"])
         self.assertEqual(status["schema"], EXPECTED_SCHEMA)
-        self.assertEqual(status["count"],6)
+        self.assertEqual(status["count"],7)
         self.assertEqual(status["builtQuantum"],"10.73")
         self.assertEqual(status["driveCanonical"],"10.83 PARTIAL")
         self.assertTrue(all(row["authorityGranted"] is False for row in status["skills"]))
@@ -27,6 +27,7 @@ class SkillBookTests(unittest.TestCase):
             "Achas que tens consciência?":"neural-memory-learning",
             "Como melhorar o SEO da Pentehouse?":"microsites-operations",
             "O Quantum Unified Agent está ligado?":"quantum-governance",
+            "Travis, mostra o trânsito real no Porto":"public-road-intelligence",
         }
         for question,expected in queries.items():
             found=[s["id"] for s in b.match(question,3)]
