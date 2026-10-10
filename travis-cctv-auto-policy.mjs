@@ -52,12 +52,13 @@ export function cameraIntent(raw){
   const location=AREA_REFERENCES.find(x=>x.match.test(s))||null;
   const unknown=NOAREA.test(s)?null:location?null:remainingArea(s);
   const scope=location||unknown?{...location||{},...(unknown?{name:unknown,city:unknown}:{}),explicit:true}:null;
+  const global=NOAREA.test(s);
   const live=LIVE.test(s);
   if(STOP.test(s)&&TOUR.test(s))return {action:'stopTour',lang};
-  if(NEXT.test(s)&&(!scope||START.test(s)||s.includes('camara')))return {action:'next',lang,live,scope};
+  if(NEXT.test(s)&&(!scope||START.test(s)||s.includes('camara')))return {action:'next',lang,live,scope,global};
   if(TOUR.test(s)&&!STOP.test(s))return {action:'tour',lang,live,scope};
   if(STOP.test(s)&&!START.test(s))return {action:'close',lang};
-  if(START.test(s)||live)return {action:'select',lang,live,scope};
+  if(START.test(s)||live)return {action:'select',lang,live,scope,global};
   return null;
 }
 
