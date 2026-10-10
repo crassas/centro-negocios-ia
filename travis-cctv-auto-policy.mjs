@@ -58,7 +58,7 @@ export function cameraIntent(raw){
   if(NEXT.test(s)&&(!scope||START.test(s)||s.includes('camara')))return {action:'next',lang,live,scope,global};
   if(TOUR.test(s)&&!STOP.test(s))return {action:'tour',lang,live,scope};
   if(STOP.test(s)&&!START.test(s))return {action:'close',lang};
-  if(START.test(s)||live)return {action:'select',lang,live,scope,global};
+  if(START.test(s)||live||global)return {action:'select',lang,live,scope,global};
   return null;
 }
 
