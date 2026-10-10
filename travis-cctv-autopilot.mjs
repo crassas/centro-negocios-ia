@@ -60,7 +60,7 @@ async function select(intent){
     await net.load();
     if(token!==operation)return {handled:true,language:lang,
       reply:tr(lang,'Pedido de câmara interrompido.','Camera request interrupted.')};
-    const scope=intent.scope||contextScope();
+    const scope=intent.global?null:intent.scope||contextScope();
     const exclude=new Set(intent.action==='next'&&selected?[selected.id]:[]);
     const pool=rankPublicCameras(net.locations(),{
       scope,preferVideo:!!intent.live,exclude,limit:25});
@@ -122,7 +122,16 @@ function setup(){
   button.id='travis-cctv-auto';button.type='button';
   button.textContent='AUTO CCTV';
   button.title='Find one registered public camera without choosing from the list';
-  button.addEventListener('click',()=>{void select({action:'select',lang:'pt'});});
+  button.addEventListener('click',async()=>{
+    if(busy)return;
+    button.disabled=true;button.textContent='SEARCHING';
+    const region=document.getElementById('travis-gev-status');
+    if(region)region.textContent='CHECKING PUBLIC CAMERA';
+    try{
+      const result=await select({action:'select',lang:'pt'});
+      if(region)region.textContent=String(result.reply||'PUBLIC CAMERA SEARCH COMPLETE').slice(0,160);
+    }finally{button.disabled=false;button.textContent='AUTO CCTV';}
+  });
   bar.appendChild(button);
 }
 setup();
