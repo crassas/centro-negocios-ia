@@ -7,6 +7,16 @@ const HOST=['localhost','127.0.0.1'].includes(location.hostname)?location.hostna
 const BASE='http://'+HOST+':4187';
 const TTL=15*60*1000;
 let cameras=[],byId=new Map(),lastLoaded=0,inflight=null,error='',state='idle',packs={};
+let worldOpen=false,retryTimer=null,retries=0;
+const RETRY_DELAYS=[3000,10000,30000];
+function clearRetry(){clearTimeout(retryTimer);retryTimer=null;}
+function retryVisibleCatalog(){
+  if(!worldOpen||document.hidden||retryTimer||retries>=RETRY_DELAYS.length)return;
+  retryTimer=setTimeout(()=>{
+    retryTimer=null;
+    if(worldOpen&&!document.hidden)void load({force:true});
+  },RETRY_DELAYS[retries++]);
+}
 const validCamera=item=>{
   const lat=Number(item.lat),lon=Number(item.lon);
   return typeof item.id==='string'||typeof item.id==='number'
@@ -22,10 +32,11 @@ function status(){
     service:BASE,canSelect:cameras.length>0};
 }
 async function load({force=false}={}){
-  if(!force && cameras.length && Date.now()-lastLoaded<TTL){
+  if(!force && state==='ready' && cameras.length && Date.now()-lastLoaded<TTL){
     publish();return status();
   }
   if(inflight)return inflight;
+  clearRetry();
   state='loading';error='';publish();
   inflight=(async()=>{
     const ctrl=new AbortController();
@@ -51,6 +62,7 @@ async function load({force=false}={}){
       cameras=[...found.values()];
       byId=found;
       lastLoaded=Date.now();state='ready';error='';
+      retries=0;
       packs={};
       for(const row of cameras)packs[row.pack]=(packs[row.pack]||0)+1;
       publish();
@@ -60,6 +72,7 @@ async function load({force=false}={}){
       publish();return status();
     }finally{
       clearTimeout(timer);inflight=null;
+      if(state==='error'||state==='stale')retryVisibleCatalog();
     }
   })();
   return inflight;
@@ -97,8 +110,15 @@ window.TravisCctv=Object.freeze({
   base:BASE
 });
 window.addEventListener('travis:world',e=>{
-  if(e.detail?.open){
-    // Catalog is not loaded on startup, only on user activation.
-    if(state==='idle')void load();
-  }
+  worldOpen=Boolean(e.detail?.open);
+  if(!worldOpen){clearRetry();return;}
+  // A previous outage must not make the globe permanently unable to retry.
+  if(!inflight){retries=0;void load();}
+});
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){clearRetry();return;}
+  if(worldOpen&&!inflight){retries=0;void load();}
+});
+window.addEventListener('online',()=>{
+  if(worldOpen&&!document.hidden&&!inflight){retries=0;void load();}
 });

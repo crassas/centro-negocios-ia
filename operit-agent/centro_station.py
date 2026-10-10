@@ -871,6 +871,44 @@ def ensure_soak_monitor():
         print(f"[auto] soak · {type(exc).__name__}", flush=True)
 
 
+_world_watch_attempt = None
+
+
+def ensure_travis_world_watch(now=None):
+    """Recover the installed optional camera watcher after Android stops it.
+
+    The old shell startup hook was lost whenever centrostation was updated.
+    Supervise the existing extension here; do not install it or start Cesium.
+    Its own singleton lock prevents duplicate watchers after simultaneous starts.
+    """
+    global _world_watch_attempt
+    root = HOME / ".centro-extensions"
+    runner = root / "travis-world-watch.py"
+    if (not runner.is_file() or (root / "travis-world.disabled").exists()
+            or os.environ.get("CENTRO_TRAVIS_WORLD_AUTOSTART", "1").lower()
+            in {"0", "false", "no", "off"}):
+        return False
+    try:
+        alive, pid = pid_running(root / "travis-world-watch.pid")
+        if alive and str(runner) in proc_cmdline(pid).split():
+            return True
+        now = time.monotonic() if now is None else now
+        if _world_watch_attempt is not None and now - _world_watch_attempt < 45:
+            return False
+        _world_watch_attempt = now
+        with (root / "travis-world-watch.log").open("ab", buffering=0) as log:
+            child = subprocess.Popen(
+                [sys.executable, str(runner)], cwd=root,
+                stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                start_new_session=True, close_fds=True,
+            )
+        (root / "travis-world-watch.pid").write_text(str(child.pid))
+        print(f"[auto] travis-world · supervisor solicitado · PID {child.pid}", flush=True)
+    except (OSError, ValueError) as exc:
+        print(f"[auto] travis-world · {type(exc).__name__}", flush=True)
+    return False
+
+
 def fetch_runtime_update():
     # Network downloads must not block health checks, heartbeat or recovery.
     try:
@@ -931,6 +969,7 @@ def main():
             progress[0]=time.monotonic()
             actions = []
             ensure_soak_monitor()
+            ensure_travis_world_watch()
             reexec_station = False
             busy = server_busy()
             if busy:
