@@ -1,4 +1,4 @@
-import './travis-action-cards.mjs?v=motion-1';
+import './travis-action-cards.mjs?v=real-3d-1';
 const hud=document.querySelector('#travis-hud');
 const $=id=>document.getElementById(id);
 let gmailRequested=new URLSearchParams(location.search).get('connect')==='gmail';

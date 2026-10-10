@@ -1,6 +1,6 @@
 import {createMotionAudio} from './travis-motion-audio.mjs?v=motion-1';
-import { createConceptProjection } from './travis-concept-projection.mjs?v=motion-1';
-import './travis-action-cards.mjs?v=motion-1';
+import { createConceptProjection } from './travis-concept-projection.mjs?v=real-3d-1';
+import './travis-action-cards.mjs?v=real-3d-1';
 import { createVoiceInput } from './travis-voice-input.mjs?v=stt-fast-1';
 import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=motion-1';
 import { INTERFACE_COPY, interfaceLanguage, applyInterfaceLanguage, languageFromInterfaceCommand } from './travis-interface-language.mjs?v=1';
@@ -8,7 +8,7 @@ import { resolveWakePhrase } from './travis-wake-phrase.mjs?v=pt-1';
 import { createTravisVision } from './travis-vision.mjs?v=scene-1';
 import { buildSpeechEnvelope, speechEnvelopeLevel } from './travis-audio-sync.mjs?v=1';
 import { sceneSignature } from './travis-scene-tracker.mjs?v=1';
-import { cameraCommand } from './travis-vision-policy.mjs?v=scene-1';
+import { cameraCommand } from './travis-vision-policy.mjs?v=objects-1';
 import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=motion-1';
 import { projectWebAnswer } from './travis-web-projection.mjs?v=agent-1';
 import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=motion-1';
@@ -1014,7 +1014,7 @@ if (!hud || !launcher || !canvas) {
       if(interpretation?.researchQuery){
         setState('thinking',interpretation.language==='pt'?'A procurar uma referência visual…':'Finding a visual reference…');
         try{
-          const reference=await localJson('/visual-research',{body:{query:interpretation.researchQuery,language:interpretation.language,includeImage:interpretation.needsReference,imageIndex:interpretation.imageIndex||0},signal:AbortSignal.any([controller.signal,AbortSignal.timeout(25000)])});
+          const reference=await localJson('/visual-research',{body:{query:interpretation.researchQuery,language:interpretation.language,includeImage:interpretation.needsReference,imageIndex:interpretation.imageIndex||0,preferModel:interpretation.needsReference&&!interpretation.referenceRequested&&interpretation.kind!=='reference-next'},signal:AbortSignal.any([controller.signal,AbortSignal.timeout(35000)])});
           if(!opened||session!==voiceSession||controller.signal.aborted)return;
           const receipt=await window.TravisProjection?.applyReference?.(reference,interpretation);
           if(receipt&&interpretation.handled)interpretation.reply=receipt;

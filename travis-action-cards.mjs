@@ -1,5 +1,6 @@
 // Front workspace driven by actual host tool results. Text is always inert.
 import {MOTION,revealCaption,readingHold} from './travis-motion.mjs?v=motion-1';
+import {decodeReferenceModel,disposeReferenceModel} from './travis-model-library.mjs?v=1';
 import {hologramPresentation as projection} from './travis-presence.mjs?v=motion-1';
 import {mountYouTube,closeYouTube,controlYouTube,youtubeState} from './travis-youtube.mjs?v=3';
 import {parseVisualIntent,rewriteEnglishToolRequest,mayNeedVisualModel} from './travis-english-intents.mjs?v=motion-routing-1';
@@ -12,6 +13,7 @@ let current=null,selected=null,frame=0,wasVisible=false,returnTimer=0,pinned=fal
 let narration=null,storyEpoch=0;
 const caption=document.createElement('div');caption.className='travis-visual-caption';caption.hidden=true;hud?.append(caption);
 function cancelNarration(){narration=null;storyEpoch++;}
+function awaitReference(){cancelNarration();clearTimeout(returnTimer);returnTimer=0;renderVersion++;}
 const planetSequence=['Mercury','Venus','Earth','Mars','Jupiter','Saturn','Uranus','Neptune'];
 function canReturn(){
   if(!current||pinned||current.autoReturn===false)return false;
@@ -34,10 +36,10 @@ function updatePin(){
   heading.title=pinned?'Pinned until you dismiss it':'Returns to Travis automatically';
 }
 const schematic=(scene,title)=>{
-  const names={mechanical:'ELECTRIC MOTOR · CUTAWAY',text:'TEXT',space:'SPACE',reference:'VISUAL REFERENCE',planet:'PLANETARY CONCEPT',map:'SCHEMATIC MAP',house:'ARCHITECTURAL WIREFRAME',
+  const names={model:'3D MODEL',mechanical:'ELECTRIC MOTOR · CUTAWAY',text:'TEXT',space:'SPACE',reference:'VISUAL REFERENCE',planet:'PLANETARY CONCEPT',map:'SCHEMATIC MAP',house:'ARCHITECTURAL WIREFRAME',
     person:'HUMAN FIGURE CONCEPT',vehicle:'VEHICLE CONCEPT',landscape:'NATURE CONCEPT',
     diagram:'CONCEPT DIAGRAM',object:'OBJECT WIREFRAME'};
-  const summaries={mechanical:'Generic educational electric motor cutaway; not measured CAD.',text:'Letterforms made of holographic light.',space:'Illustrative star field, not a live sky chart.',reference:'Holographic relief from a sourced image; not a recovered 3D model.',planet:'Illustrative orbital model, not NASA imagery.',
+  const summaries={model:'Sourced three-dimensional geometry with Travis holographic material.',mechanical:'Generic educational electric motor cutaway; not measured CAD.',text:'Letterforms made of holographic light.',space:'Illustrative star field, not a live sky chart.',reference:'Holographic relief from a sourced image; not a recovered 3D model.',planet:'Illustrative orbital model, not NASA imagery.',
     map:'Illustrative route grid, not live geography or verified coordinates.',
     house:'Conceptual building geometry, not a survey or architectural plan.',
     person:'Generic holographic figure, not a reconstruction of a real person.',
@@ -88,7 +90,16 @@ function render(data,{story=false}={}){
   }
   if(data.sourceUrl){const link=document.createElement('a');link.href=data.sourceUrl;link.target='_blank';link.rel='noopener noreferrer';link.textContent=' · '+String(data.sourceName||'Source');caption.append(link);}
   if(data.creditUrl){const link=document.createElement('a');link.href=data.creditUrl;link.target='_blank';link.rel='noopener noreferrer';link.textContent=' · Image credit';caption.append(link);}
-  if(data.scene==='reference'){const note=document.createElement('small');note.textContent='IMAGE RELIEF';caption.append(note);}
+  if(data.scene==='model'){
+    const note=document.createElement('small');note.textContent='OBJETO 3D · '+String(data.modelName||'');caption.append(note);
+    const controls=document.createElement('div');controls.className='travis-reference-navigation';
+    for(const [request,label] of [['Roda para a esquerda','↶'],['Roda para a direita','↷']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.setAttribute('aria-label',request);button.addEventListener('click',()=>window.TravisVisual?.ask(request));controls.append(button);}caption.append(controls);
+  }
+  if(data.scene==='reference'){
+    const note=document.createElement('small');note.textContent='FOTOGRAFIA · RELEVO';caption.append(note);
+    const model=document.createElement('button');model.type='button';model.className='travis-reference-photos';model.textContent='Procurar objeto 3D';
+    model.addEventListener('click',()=>window.TravisVisual?.ask('Mostra '+(data.gallery?.query||data.title)+' em 3D'));caption.append(model);
+  }
   if(data.gallery?.count>1){
     const navigation=document.createElement('div');navigation.className='travis-reference-navigation';
     navigation.setAttribute('aria-label',data.gallery.language==='pt'?'Imagens de referência':'Reference images');
@@ -211,8 +222,7 @@ if(deck){
           ||typeof result.title!=='string'||result.title.length>110)return null;
       const pt=/\b(?:quero|gostava|apetece|imagina|podes|consegues|como|seria|mostra)\b/i.test(text);
       const needsReference=!hasLocalVisual(result.scene,result.title);
-      render(schematic(needsReference?'text':result.scene,result.title));
-      window.TravisVisual?.commands(true,{automatic:true});show();
+      if(needsReference)awaitReference();else{render(schematic(result.scene,result.title));window.TravisVisual?.commands(true,{automatic:true});show();}
       return {handled:true,language:pt?'pt':'en',
         reply:pt?'A projetar '+result.title+'.':'Projecting '+result.title+'.',
         kind:'scene',source:'local-language-model',title:result.title,needsReference,researchQuery:needsReference?result.title:null,visualVersion:storyEpoch};
@@ -229,6 +239,14 @@ if(deck){
       if(intent?.visualVersion!==storyEpoch)return null;
       if(!result?.ok)return intent.language==='pt'?'Não encontrei uma referência visual fiável para esse pedido.':'I could not find a reliable visual reference for that request.';
       if(!intent.needsReference){current.sourceUrl=result.url;current.sourceName=result.source;const link=document.createElement('a');link.href=result.url;link.target='_blank';link.rel='noopener noreferrer';link.textContent=' · '+String(result.source||'Source');caption.append(link);return null;}
+      if(result.representation==='model-3d'&&result.model){
+        let model;
+        try{model=await decodeReferenceModel(result.model);}catch{return intent.language==='pt'?'Não consegui abrir este modelo 3D. Podes pedir fotografias do objeto.':'I could not open this 3D model. You can request photos of the object.';}
+        if(intent.visualVersion!==storyEpoch){disposeReferenceModel(model);return null;}
+        render({...schematic('model',intent.title),reference:{model},modelName:result.model.name,sourceUrl:result.url,sourceName:result.source,imageAuthor:result.author,imageLicense:result.license,explaining:Boolean(intent.explain)});
+        window.TravisVisual?.commands(true,{automatic:true});show();
+        return intent.language==='pt'?'A projetar '+intent.title+' em três dimensões.':'Projecting '+intent.title+' in three dimensions.';
+      }
       let image=null;
       if(/^data:image\/(?:jpeg|png|webp);base64,/.test(result.imageData||'')){
         image=new Image();image.src=result.imageData;try{await image.decode();if(image.naturalWidth*image.naturalHeight>12000000)image=null;}catch{image=null;}
@@ -236,9 +254,10 @@ if(deck){
       if(intent.visualVersion!==storyEpoch)return null;
       const title=result.title||intent.title;
       const gallery=image?{query:intent.researchQuery||result.query||intent.title,language:intent.language||'en',index:result.imageIndex||0,count:result.imageCount||1}:null;
-      render({...schematic(image?'reference':'text',title),reference:image?{image}:null,sourceUrl:result.url,sourceName:result.source,creditUrl:result.creditUrl,imageAuthor:result.author,imageLicense:result.license,gallery,explaining:Boolean(intent.explain)});
+      render({...schematic(image?'reference':'text',title),reference:image?{image}:null,sourceUrl:image?(result.creditUrl||result.url):result.url,sourceName:image?(result.imageSource||result.source):result.source,imageAuthor:result.author,imageLicense:result.license,gallery,explaining:Boolean(intent.explain)});
       window.TravisVisual?.commands(true,{automatic:true});show();
       if(image&&intent.kind==='reference-next')return intent.language==='pt'?'Imagem '+(gallery.index+1)+' de '+gallery.count+'.':'Image '+(gallery.index+1)+' of '+gallery.count+'.';
+      if(image&&result.modelUnavailable)return intent.language==='pt'?'Não encontrei um modelo 3D compatível. Esta é uma fotografia de referência de '+title+'.':'I could not find a compatible 3D model. This is a reference photograph of '+title+'.';
       return intent.language==='pt'?(image?'Encontrei uma imagem de referência de '+title+'.':'Encontrei informação sobre '+title+', mas sem imagem disponível.'):(image?'I found a visual reference for '+title+'.':'I found information about '+title+', but no image was available.');
     },
     interpret(text){
@@ -258,8 +277,7 @@ if(deck){
         if(intent.scene==='planet'&&/\b(?:random|any|aleatorio|aleatória|aleatoria|qualquer)\b/i.test(String(text).normalize('NFD').replace(/[\u0300-\u036f]/g,'')))
           intent.title=planetSequence[Math.floor(Math.random()*planetSequence.length)];
         const needsReference=Boolean(intent.referenceRequested)||!hasLocalVisual(intent.scene,intent.title);
-        render({...schematic(needsReference?'text':intent.scene,intent.title),explaining:Boolean(intent.explain)});
-        window.TravisVisual?.commands(true,{automatic:true});show();
+        if(needsReference)awaitReference();else{render({...schematic(intent.scene,intent.title),explaining:Boolean(intent.explain)});window.TravisVisual?.commands(true,{automatic:true});show();}
         return {...intent,handled:!intent.explain,reply:intent.language==='pt'
           ?'A projetar '+intent.title+'.':'Projecting '+intent.title+'.',
           language:intent.language||'en',kind:'scene',needsReference,
@@ -283,14 +301,14 @@ if(deck){
         if(['explode','assemble'].includes(action)){cancelNarration();}
         if(action==='next'&&!current?.gallery&&current?.kind==='illustration'&&/\b(?:image|images|photo|imagem|imagens|foto)\b/i.test(text)){
           cancelNarration();clearTimeout(returnTimer);
-          return {handled:true,kind:'scene',language:/imagem|imagens|foto|mais/i.test(text)?'pt':'en',title:current.title,reply:'',needsReference:true,
+          return {handled:true,kind:'scene',language:/imagem|imagens|foto|mais/i.test(text)?'pt':'en',title:current.title,reply:'',needsReference:true,referenceRequested:true,
             researchQuery:current.title,imageIndex:0,visualVersion:storyEpoch};
         }
         if((action==='next'||action==='previous')&&current?.gallery){
           const gallery=current.gallery;
           if(gallery.count<2)return {handled:true,reply:gallery.language==='pt'?'Só encontrei uma imagem para este tema.':'I found only one image for this subject.',kind:'control'};
           cancelNarration();clearTimeout(returnTimer);
-          return {handled:true,kind:'reference-next',language:gallery.language,title:current.title,reply:'',needsReference:true,
+          return {handled:true,kind:'reference-next',language:gallery.language,title:current.title,reply:'',needsReference:true,referenceRequested:true,
             researchQuery:gallery.query,imageIndex:(gallery.index+(action==='next'?1:-1)+gallery.count)%gallery.count,visualVersion:storyEpoch};
         }
         if((action==='next'||action==='previous')&&current?.scene==='planet'){

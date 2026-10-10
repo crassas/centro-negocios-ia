@@ -52,6 +52,11 @@ export function cameraCommand(message) {
   if (/^(?:o que (?:estas a ver|consegues ver|detetas|estas a detetar)|que objetos (?:ves|detetas)|quem estas a localizar|what (?:can you see|do you see|are you detecting))$/.test(text)) return 'describe';
   const camera=/\b(?:camera|camara|cameras|camaras|webcam|vision|visao)\b/.test(text);
   if(!camera)return null;
+  // "Show a photographic camera" requests an object; it must never open the
+  // phone camera. Explicit start/switch commands still control the hardware.
+  if(/^(?:mostra(?:-me)?|show(?: me)?|projeta|project|render)\b/.test(text)&&
+     (/\buma? (?:camera|camara|webcam)\b/.test(text)||/^show(?: me)? an? (?:camera|webcam)\b/.test(text)||
+      /\b(?:fotografic[ao]|photographic|holograma|hologram|3d|modelo|model|fotos?|fotografias?|photos?|images?|imagens?)\b/.test(text)))return null;
   if (/^(?:desliga|desligar|desligues|desativa|desativar|fecha|fechar|stop|disable|close|turn off)\b/.test(text)) return 'stop';
   if (!/^(?:liga|ligar|ligues|ativa|ativar|activa|activar|abre|abrir|abrir|mostra|muda|mudar|troca|trocar|usar|usa|use|open|enable|start|turn on|switch|change|flip)\b/.test(text))return null;
   // Use the first requested facing direction ("rear instead of front").

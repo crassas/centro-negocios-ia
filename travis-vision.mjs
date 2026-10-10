@@ -1,6 +1,6 @@
 // Vision Tracker integration: one camera, one model set, fresh observations only.
 // Images remain in this browser. Only validated labels/positions reach dialogue.
-import { facePosition, gestureDecision, faceColourFromPixels } from './travis-vision-policy.mjs?v=scene-1';
+import { facePosition, gestureDecision, faceColourFromPixels } from './travis-vision-policy.mjs?v=objects-1';
 import { INTERFACE_COPY, visionStatusCopy } from './travis-interface-language.mjs?v=1';
 import { SceneTracker, normalizedDetections, describeScene, objectName } from './travis-scene-tracker.mjs?v=1';
 
