@@ -5,9 +5,9 @@
  */
 import {cameraIntent,rankPublicCameras,AREA_REFERENCES,normalizeCctvText}
   from './travis-cctv-auto-policy.mjs?v=auto-1';
-let selected=null, candidates=[], operation=0, busy=false;
+let selected=null, candidates=[], operation=0, busy=false, lastResult=null;
 const tr=(l,pt,en)=>l==='en'?en:pt;
-const status=()=>({busy,selected:selected?.id||null,choices:candidates.length});
+const status=()=>({busy,selected:selected?.id||null,choices:candidates.length,lastResult});
 function contextScope(){
   const view=window.TravisGevBridge?.status?.();
   if(view?.coordinates&&Number.isFinite(view.coordinates.lat)){
@@ -31,7 +31,8 @@ async function verified(camera,token){
     return s.sourceId===camera.id&&s.updatedFrame>=at?'snapshot':null;
   }
   if(result.type!=='hls-requested')return null;
-  for(let i=0;i<20;i++){
+  // DelDOT playlists can take >10 seconds to open on Android; give HLS time to start.
+  for(let i=0;i<56;i++){ 
     if(token!==operation||document.hidden)return null;
     const s=player.status();
     if(s.sourceId!==camera.id)return null;
@@ -64,15 +65,12 @@ async function select(intent){
     const exclude=new Set(intent.action==='next'&&selected?[selected.id]:[]);
     const ranked=rankPublicCameras(net.locations(),{
       scope,preferVideo:!!intent.live,exclude,limit:25});
-    const pool=intent.live
-      ? [...ranked.filter(c=>c.feedType==='hls').slice(0,2),
-         ...rankPublicCameras(net.locations(),{scope,preferVideo:false,exclude,limit:25})
-           .filter(c=>c.feedType==='image').slice(0,5)]
-      : ranked;
+    // An explicit video request MUST NOT fall back silently to a JPEG.
+    const pool=intent.live?ranked.filter(c=>c.feedType==='hls'):ranked;
     if(intent.action!=='next'||!candidates.length)candidates=pool;
     const choices=(intent.action==='next'&&candidates.length
       ? [...candidates.filter(c=>c.id!==selected?.id),...pool]
-      : pool).filter((c,i,a)=>a.findIndex(x=>x.id===c.id)===i).slice(0,3);
+      : pool).filter((c,i,a)=>a.findIndex(x=>x.id===c.id)===i).slice(0,intent.live?2:3);
     if(!choices.length)return {handled:true,language:lang,
       reply:tr(lang,
         'Não encontrei câmaras públicas registadas nesta zona.',
@@ -81,8 +79,9 @@ async function select(intent){
       if(token!==operation)return {handled:true,language:lang,
         reply:tr(lang,'Pedido interrompido.','Request interrupted.')};
       const kind=await verified(camera,token);
-      if(!kind)continue;
+      if(!kind || (intent.live && kind!=='video'))continue;
       selected=camera;
+      lastResult={verified:true,kind,source:camera.name,city:camera.city,at:Date.now()};
       focus(camera);
       const name=camera.name+', '+(camera.city||camera.pack);
       return {handled:true,language:lang,verified:true,
@@ -94,10 +93,13 @@ async function select(intent){
             'I found a real public camera image from '+name+
             '. This is a still frame, not live video.')};
     }
+    lastResult={verified:false,requested:intent.live?'video':'any',at:Date.now()};
     return {handled:true,language:lang,verified:false,
       reply:tr(lang,
-        'Encontrei câmaras no catálogo, mas não consegui confirmar uma imagem disponível.',
-        'I found registered cameras but could not verify a working image.')};
+        intent.live?'As fontes públicas HLS testadas não deram vídeo verificável. Não substituí por fotografias.':
+          'Encontrei câmaras no catálogo, mas não consegui confirmar uma imagem disponível.',
+        intent.live?'The public HLS sources did not produce verified video. I did not substitute still images.':
+          'I found registered cameras but could not verify a working image.')};
   }catch(e){
     console.warn('[Travis public camera selection]',e);
     return {handled:true,language:lang,verified:false,
@@ -118,7 +120,19 @@ async function routeCommand(raw){
         'Posso escolher automaticamente uma câmara pública de cada vez. Diz-me a cidade.',
         'I can select an available public camera on request. Name a city.')};
   }
-  return select(intent);
+  // Do not hold the speaking turn open while an HLS decoder buffers.
+  // Surface the truthful outcome in the existing visible Travis status area.
+  void select(intent).then(result=>{
+    const region=document.getElementById('travis-gev-status');
+    if(region)region.textContent=String(result.reply||'Public camera check completed.').slice(0,220);
+    window.dispatchEvent(new CustomEvent('travis:cctv-auto-result',{detail:result}));
+  }).catch(error=>console.warn('[Travis CCTV] Selection error',error));
+  return {handled:true,language:intent.lang,verified:false,
+    reply:tr(intent.lang,
+      intent.live?'Vou procurar uma transmissão pública HLS e confirmar se o vídeo reproduz.':
+        'Vou procurar uma câmara pública disponível e verificar a imagem.',
+      intent.live?'I will look for public HLS video and confirm actual playback.':
+        'I will look for a public camera and verify its image.')};
 }
 function setup(){
   const bar=document.querySelector('#travis-gev-official .travis-gev-toolbar');
@@ -138,6 +152,21 @@ function setup(){
     }finally{button.disabled=false;button.textContent='AUTO CCTV';}
   });
   bar.appendChild(button);
+  const videoButton=document.createElement('button');
+  videoButton.id='travis-cctv-video-auto';videoButton.type='button';
+  videoButton.textContent='LIVE VIDEO';
+  videoButton.title='Tentar vídeo HLS público real. Sem fotografias fingidas.';
+  videoButton.addEventListener('click',async()=>{
+    if(busy)return;
+    videoButton.disabled=true;videoButton.textContent='CHECKING VIDEO';
+    const region=document.getElementById('travis-gev-status');
+    if(region)region.textContent='A verificar vídeo público HLS · aguarda confirmação';
+    try{
+      const result=await select({action:'select',lang:'pt',live:true,global:true});
+      if(region)region.textContent=String(result.reply||'Public HLS check ended').slice(0,220);
+    }finally{videoButton.disabled=false;videoButton.textContent='LIVE VIDEO';}
+  });
+  bar.appendChild(videoButton);
 }
 setup();
 window.TravisCctvAutopilot=Object.freeze({routeCommand,select,status});
