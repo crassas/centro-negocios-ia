@@ -50,71 +50,7 @@ const PLACE_ALIASES=[
   ['dubai','dubai'],['maputo','maputo'],['bissau','bissau'],
   ['lagos','lagos'],['coimbra','coimbra'],['braga','braga'],
   ['planet earth|planeta terra|planet|planeta|globe|globo|mundo|world','earth']
-].map(([phrase,id])=>({test:new RegExp('\\b(?:'+phrase+')\\b'),exact:new RegExp('^(?:'+phrase+')
-
-/** These are the official upstream's 17 keyless categories, not 17 always-live feeds. */
-export const GEO_LAYERS=Object.freeze([
-  {key:'flights',pt:'Voos civis',en:'Flights',ids:['flights'],words:/\b(?:flights?|planes?|aircraft|airplanes?|avioes?|voos?|aeronaves?)\b/},
-  {key:'military',pt:'Voos militares',en:'Military flights',ids:['military'],words:/\b(?:military|militares?|aviacao militar|military flights?)\b/},
-  {key:'satellites',pt:'Satélites',en:'Satellites',ids:['satellites'],words:/\b(?:satellites?|satelites?|iss|estacao espacial)\b/},
-  {key:'earthquakes',pt:'Sismos',en:'Earthquakes',ids:['earthquakes'],words:/\b(?:earthquakes?|quakes?|sismos?|terramotos?|tremores?)\b/},
-  {key:'traffic',pt:'Trânsito simulado',en:'Traffic simulation',ids:['traffic'],words:/\b(?:traffic|trafego|transito|carros?|vehicles?|congestionamento)\b/},
-  {key:'cctv',pt:'Câmaras públicas',en:'Public cameras',ids:['cctv'],words:/\b(?:cctv|cameras?|camaras?|webcams?)\b/},
-  {key:'alpr',pt:'Localização ALPR',en:'Mapped ALPR',ids:['alpr-cameras'],words:/\b(?:alpr|leitores? de matricula|license plate readers?)\b/},
-  {key:'radio',pt:'Rádio mundial',en:'World radio',ids:['radio'],words:/\b(?:radio|radios?|emissoras?|stations?)\b/},
-  {key:'transit',pt:'Transportes públicos',en:'Public transit',ids:['transit'],words:/\b(?:transit|transportes? publicos?|autocarros?|buses?|metros?|trams?|trains?)\b/},
-  {key:'bikeshare',pt:'Bicicletas partilhadas',en:'Bikeshare',ids:['bikeshare'],words:/\b(?:bikeshare|bikes?|bicicletas?|ciclovias?)\b/},
-  {key:'directions',pt:'Rotas',en:'Directions',ids:['directions'],words:/\b(?:directions|routes?|rotas?|caminhos?|itinerarios?)\b/},
-  {key:'launches',pt:'Missões espaciais',en:'Space missions',ids:['rocket-launches'],words:/\b(?:rockets?|launches?|lancamentos?|fogueto?s?|missoes? espaciais?)\b/},
-  {key:'installations',pt:'Instalações cartografadas',en:'Mapped installations',ids:['military-installations'],words:/\b(?:installations|bases? militares?|instalacoes? militares?|infraestruturas? militares?)\b/},
-  {key:'wind',pt:'Vento',en:'Wind',ids:['wind'],words:/\b(?:wind|vento|ventos?)\b/},
-  {key:'weather',pt:'Radar, nuvens e relâmpagos',en:'Observed weather',ids:['weather-radar','weather-satellite','weather-lightning'],words:/\b(?:weather|meteorologia|radar|chuva|rain|nuvens?|clouds?|relampagos?|lightning|tempestades?)\b/},
-  {key:'cyclones',pt:'Ciclones',en:'Cyclones',ids:['weather-cyclones'],words:/\b(?:cyclones?|ciclones?|furacoes?|hurricanes?|tuf(ao|oes)|typhoons?)\b/}
-]);
-export const normalizeGeoText=(value)=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[’']/g,'').replace(/[,!?;:.]+/g,' ').replace(/\s+/g,' ').trim();
-const NAMED=/\b(?:gods?\s+(?:eye|eyes|ai)(?:\s+view)?|eye of god|godseye|globo|mapa(?:\s+do travis)?|world view)\b/;
-const COMMAND=/\b(?:activate|deactivate|engage|start|open|show|take|fly|go|navigate|turn|switch|enable|disable|close|hide|stop|mostra|mostrar|abre|abrir|ativa|ativar|activa|activar|liga|ligar|ir|vai|voa|voar|leva|navega|desliga|desligar|fecha|fechar|oculta|esconde|mete|poe|poer)\b/;
-const NEGATIVE=/\b(?:hide|disable|deactivate|remove|off|desliga|desligar|esconde|oculta|ocultar|retira|retirar|tira)\b/;
-const EXIT=/\b(?:back to travis|return to travis|voltar ao travis|regressa ao travis|fecha o mapa|fechar o globo|close the globe|exit gods eye|sair do globo)\b/;
-const ENGLISH=/\b(?:please|activate|deactivate|engage|show|fly|take|open|close|enable|disable|earth|globe|flight|flights|satellite|satellites|weather|back|return|switch|map|show me|on|off|to)\b/;
-
-export function interpretGeoRequest(raw,{active=false}={}){
-  const text=normalizeGeoText(raw);
-  if(!text)return null;
-  const language=ENGLISH.test(text)?'en':'pt';
-  const named=NAMED.test(text);
-  const action=COMMAND.test(text);
-  const quit=EXIT.test(text)||(named && /\b(?:deactivate|disable|disengage|shutdown|turn off|stop|exit|close|desativa|desativar|desliga|desligar|fecha|fechar)\b/.test(text));
-  if(quit)return {type:'close',language};
-  const layers=GEO_LAYERS.filter(item=>item.words.test(text));
-  const place=PLACE_ALIASES.find(item=>item.test.test(text))?.id||null;
-  const coord=String(raw||'').match(/(?:^|[^\\d-])(-?\\d{1,2}(?:\\.\\d{1,6})?)\\s*[,;]\\s*(-?\\d{1,3}(?:\\.\\d{1,6})?)(?=$|[^\\d.])/);
-  const coordinates=coord && Math.abs(Number(coord[1]))<=90 && Math.abs(Number(coord[2]))<=180
-    ? {label:'Coordinates',lat:Number(coord[1]),lon:Number(coord[2]),alt:45000}:null;
-  if(active && /\b(?:help|ajuda|capacidades|capabilities|que podes|what can)\b/.test(text))return {type:'help',language};
-  if(active && /\b(?:night vision|visao noturna|nvg|flir|thermal|termica|noir|crt)\b/.test(text)){
-    const style=/\b(?:night vision|visao noturna|nvg)\b/.test(text)?'surveillance':
-      /\b(?:flir|thermal|termica)\b/.test(text)?'thermal':
-      /\bnoir\b/.test(text)?'noir':'retro';
-    return {type:'style',style,language};
-  }
-  if(active && /\b(?:osm|openstreetmap|esri|satellite imagery|imagem satelite)\b/.test(text)){
-    return {type:'map',map:/\b(?:osm|openstreetmap)\b/.test(text)?'osm':'esri-imagery',language};
-  }
-  if(layers.length && (active||action||named)){
-    return {type:'layers',layers:layers.map(layer=>layer.key),enable:!NEGATIVE.test(text),place,coordinates,language};
-  }
-  const exactPlace=Boolean(place&&PLACE_ALIASES.some(item=>item.id===place&&item.exact.test(text)));
-  if((place||coordinates) && (action||named||(active&&exactPlace))){
-    return {type:'navigate',place,coordinates,language};
-  }
-  if(named && (action||!NEGATIVE.test(text)))return {type:'open',language};
-  if(active && layers.length && !/\\b(?:what|how|why|when|who|which|where|quantos?|quantas?|como|porque|quando|qual|quais|que|fala me|tell me)\\b/.test(text)){
-    return {type:'layers',layers:layers.map(layer=>layer.key),enable:!NEGATIVE.test(text),language};
-  }
-  return null;
-}
-),id}));
+].map(([phrase,id])=>({test:new RegExp('\\b(?:'+phrase+')\\b'),id}));
 
 /** These are the official upstream's 17 keyless categories, not 17 always-live feeds. */
 export const GEO_LAYERS=Object.freeze([
