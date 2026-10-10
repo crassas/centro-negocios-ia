@@ -12,33 +12,33 @@ import hashlib
 PLAYER=Path("/root/.centro-ui/travis-cctv-player.mjs")
 BACKUP=Path("/root/.centro-extensions/travis-cctv-player.before-hls-20261010.mjs")
 MARK="// TRAVIS_HLS_PUBLIC_VIDEO_V1 · give slow Android HLS playlists time to start."
-OLD_BUFFER="""    hls=new Hls({
-      enableWorker:false,maxBufferLength:12,maxMaxBufferLength:22,
-      maxBufferSize:12*1024*1024,
-      manifestLoadingTimeOut:14000,fragLoadingTimeOut:14000
-    });"""
-NEW_BUFFER="""    // TRAVIS_HLS_PUBLIC_VIDEO_V1 · give slow Android HLS playlists time to start.
-    hls=new Hls({
-      enableWorker:false,maxBufferLength:9,maxMaxBufferLength:18,
-      maxBufferSize:10*1024*1024,
-      liveSyncDurationCount:2,liveMaxLatencyDurationCount:6,
-      manifestLoadingTimeOut:19000,fragLoadingTimeOut:21000
-    });"""
-OLD_ERROR="""    hls.on(Hls.Events.ERROR,(_event,e)=>{
-      if(e?.fatal&&mine===seq&&mode==='video'&&!playing)
-        void showImage(cameraId,{reason:'HLS unavailable; trying original camera image.'});
-    });"""
-NEW_ERROR="""    let hlsRetried=false;
-    hls.on(Hls.Events.ERROR,(_event,e)=>{
-      if(!e?.fatal||mine!==seq||mode!=='video'||playing)return;
-      if(!hlsRetried&&e.type===Hls.ErrorTypes.NETWORK_ERROR){
-        hlsRetried=true;
-        message('Public HLS stream slow; one reconnect attempt. Not yet verified.');
-        try{hls?.startLoad(-1);}catch{}
-        return;
-      }
-      void showImage(cameraId,{reason:'Video could not be verified; checking a genuine still image.'});
-    });"""
+OLD_BUFFER="""     hls=new Hls({
+       enableWorker:false,maxBufferLength:12,maxMaxBufferLength:22,
+       maxBufferSize:12*1024*1024,
+       manifestLoadingTimeOut:14000,fragLoadingTimeOut:14000
+     });"""
+NEW_BUFFER="""     // TRAVIS_HLS_PUBLIC_VIDEO_V1 · give slow Android HLS playlists time to start.
+     hls=new Hls({
+       enableWorker:false,maxBufferLength:9,maxMaxBufferLength:18,
+       maxBufferSize:10*1024*1024,
+       liveSyncDurationCount:2,liveMaxLatencyDurationCount:6,
+       manifestLoadingTimeOut:19000,fragLoadingTimeOut:21000
+     });"""
+OLD_ERROR="""     hls.on(Hls.Events.ERROR,(_event,e)=>{
+       if(e?.fatal&&mine===seq&&mode==='video'&&!playing)
+         void showImage(cameraId,{reason:'HLS unavailable; trying original camera image.'});
+     });"""
+NEW_ERROR="""     let hlsRetried=false;
+     hls.on(Hls.Events.ERROR,(_event,e)=>{
+       if(!e?.fatal||mine!==seq||mode!=='video'||playing)return;
+       if(!hlsRetried&&e.type===Hls.ErrorTypes.NETWORK_ERROR){
+         hlsRetried=true;
+         message('Public HLS stream slow; one reconnect attempt. Not yet verified.');
+         try{hls?.startLoad(-1);}catch{}
+         return;
+       }
+       void showImage(cameraId,{reason:'Video could not be verified; checking a genuine still image.'});
+     });"""
 OLD_TIMEOUT="""   refreshTimer=setTimeout(()=>{
      if(open&&mine===seq&&mode==='video'&&!playing)
        void showImage(cameraId,{reason:'HLS timed out; checking original image.'});
