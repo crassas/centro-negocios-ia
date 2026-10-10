@@ -50,7 +50,7 @@ no_face=env["vision_dialogue"]("What colour is my face?",{"vision":frame([100,78
 assert "Show your face" in no_face,no_face
 assert env["vision_dialogue"]("What colour is my t-shirt?",{"vision":v}) is None
 env["dialogue_turns"]=lambda ctx:[{"tool":"vision_observation","assistant":"Through the camera, I can detect a face."}]
-follow=env["vision_dialogue"]("And what colour is it?",{"vision":v,"session":"test-context-123456"})
+follow=env["vision_dialogue"]("And what colour is it?",{"vision":v,"session":"test-figures-123456"})
 print("FOLLOWUP",follow)
 assert follow and "medium brown" in follow
 print("PASS BACKEND: PT/EN RGB, lighting, visible face, stale samples, invalid inputs, follow-up")

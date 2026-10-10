@@ -1,5 +1,5 @@
-import {createSceneFocus} from './travis-scene-focus.mjs?v=context-1';
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=context-1';
+import {createSceneFocus} from './travis-scene-focus.mjs?v=figures-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=figures-1';
 // Educational electric motor cutaway. Generic proportions, never measured CAD.
 // Inspired by the exploded-view choreography in claude-motion/sims/engine.
 export function createMechanical(THREE,{exploded=false,reducedMotion=false}={}){

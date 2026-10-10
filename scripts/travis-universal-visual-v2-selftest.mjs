@@ -20,7 +20,7 @@ const examples=[
  ['Faz aparecer um barco','vehicle','barco','pt'],
  ['Quero ver o Porto num mapa','map','porto','pt'],
  ['Show me a map of London','map','london','en'],
- ['Mostra-me uma pessoa','person','pessoa','pt'],
+ ['Mostra-me uma pessoa','figure','figura humana','pt'],
  ['Show me a human silhouette','person','human','en'],
  ['Apetece-me ver uma floresta','landscape','floresta','pt'],
  ['I would love to see a dinosaur','landscape','dinosaur','en'],
@@ -37,7 +37,7 @@ for(const [text,scene,contains,language] of examples){
  assert.equal(answer.scene,scene,text);
  assert(answer.title.toLowerCase().includes(contains.toLowerCase()),text+' had an incorrect subject: '+answer.title);
  assert.equal(answer.language,language,text);
- assert(answer.schematic&&answer.autoReturn);
+ if(scene==='figure')assert.equal(answer.schematic,false);else assert(answer.schematic&&answer.autoReturn);
 }
 const followups=[['Now Jupiter','planet','en'],['Agora Júpiter','planet','pt'],
  ['What about Saturn?','planet','en'],['E agora uma casa','house','pt']];
@@ -84,11 +84,11 @@ assert(scene.includes('createTravisParticleMorph('),'Scene geometry must feed mo
 assert(scene.includes('active.visible=false')&&scene.includes('createHolographicSurfaceMaterial'),'Fine surfaces must reconstruct after the particle transfer');
 assert(client.includes('conceptProjection.setSource('),'Morph origin must be the actual Travis 3D form');
 assert(client.includes("returnToCore?.("),'Returning holograms must reassemble the Travis core');
-assert(client.includes("travis-concept-projection.mjs?v=context-1"));
+assert(client.includes("travis-concept-projection.mjs?v=figures-1"));
 assert(engine.includes('TravisMorphParticles'));
 assert(engine.includes('aFrom')&&engine.includes('aTo')&&engine.includes('uMorph'));
 assert(css.includes('data-immersive="true"'),'Visual projection must give full screen');
-assert(sw.includes('travis-particle-morph.mjs?v=context-1'));
+assert(sw.includes('travis-particle-morph.mjs?v=figures-1'));
 console.log('PASS UNIVERSAL_VISUAL_V2',JSON.stringify({
  openVocabularyScenes:examples.length,controls:controls.length,negativeSafety:true,
  particleMorph:true,fineLightSurfaces:true,immersive:true,modelFallback:true

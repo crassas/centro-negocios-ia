@@ -1,0 +1,15 @@
+Human figure: BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International.
+https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html
+https://creativecommons.org/licenses/by/4.0/
+Source: BodyParts3D 4.0 PART-OF OBJ, FMA7163 Skin, element FJ2810.
+Current licence verified 2026-10-10; licensor update 2025-02-27. Original OBJ comments refer to the previous licence.
+Adaptations: simplification to 60000 triangles, coordinate transform, quantisation, chunking and holographic material. Adult male reference body; not a named person or diagnostic model.
+
+Astronaut / Advanced Crew Escape Suit (ACES): NASA/Michael D. Carbajal.
+https://science.nasa.gov/3d-resources/advanced-crew-escape-suit/
+https://assets.science.nasa.gov/content/dam/science/cds/3d/resources/model/advanced-crew-escape-suit/Advanced%20Crew%20Escape%20Suit.glb
+https://www.nasa.gov/nasa-brand-center/images-and-media/
+NASA makes these resources available for educational and informational use, including personal web pages. No NASA endorsement is claimed. Source attribution retained.
+Adaptations: offline Draco decode, coordinate transform, quantised geometry, original normals and material colours, opaque holographic material. Static source pose, 88872 triangles; no walking or skeletal animation is claimed. ACES is a launch and reentry pressure suit, not an extravehicular activity suit.
+
+Build inputs are SHA-256 identified in manifest.json. Reproducible conversion: scripts/prepare_travis_figures.py.

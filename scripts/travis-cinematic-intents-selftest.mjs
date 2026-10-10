@@ -9,7 +9,7 @@ const scenarios=[
  ['Could you display a route map?','map'],['I would like to see a city map','map'],
  ['Project this house as a hologram','house'],['Bring up the house blueprint','house'],
  ['Visualize a building','house'],['Turn that into a house','house'],
- ['Show me a human figure','person'],['Project a person hologram','person'],
+ ['Show me a human figure','figure'],['Project a person hologram','person'],
  ['Could you show a human bust?','person'],['Show me an object in 3D','object'],
  ['Bring up a product wireframe','object'],['Render an object','object']
 ];
@@ -61,16 +61,16 @@ const ui=fs.readFileSync('travis-3d.mjs','utf8'),
  visual=fs.readFileSync('travis-concept-projection.mjs','utf8'),
  sw=fs.readFileSync('sw.js','utf8'),
  html=fs.readFileSync('index.html','utf8');
-assert(ui.includes("import './travis-action-cards.mjs?v=context-1'"));
+assert(ui.includes("import './travis-action-cards.mjs?v=figures-1'"));
 assert(ui.includes('TravisProjection?.interpret?.(text)'));
 assert(deck.includes('scheduleReturn(')&&deck.includes('pinned=true'));
 assert(deck.includes('youtubeState().playing'));
 assert(deck.includes('travis:speech-end')&&deck.includes('travis:visual-control'));
-for(const scene of ['planet','map','house','person','object'])
+for(const scene of ['planet','map','house','figure','object'])
  assert(visual.includes("kind==='"+scene+"'"),'Missing '+scene+' 3D builder');
 assert(visual.includes('ghost')&&visual.includes('show(scene,now,subject'));
-assert(html.includes('travis-3d.mjs?v=context-1'));
-assert(sw.includes('travis-english-intents.mjs?v=context-1'));
+assert(html.includes('travis-3d.mjs?v=figures-1'));
+assert(sw.includes('travis-english-intents.mjs?v=figures-1'));
 console.log('TRAVIS_CINEMATIC_INTENTS_PASS',JSON.stringify({
  scenarios:scenarios.length,controls:controlCases.length,synonyms:synonyms.length,
  autoReturn:true,pin:true,cinematicMorph:true

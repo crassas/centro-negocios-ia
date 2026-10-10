@@ -1,11 +1,11 @@
-import {createSceneFocus} from './travis-scene-focus.mjs?v=context-1';
-import {validateScenePlan,flybyPosition,SPACE_ASSETS} from './travis-scene-blueprint.mjs?v=context-1';
-import {createDetailedSubject} from './travis-visual-subjects.mjs?v=context-1';
-import {createAnimatedScene} from './travis-animated-scenes.mjs?v=context-1';
-import {createScienceScene} from './travis-science-scenes.mjs?v=context-1';
-import {createArchitecture} from './travis-architecture.mjs?v=context-1';
-import {createMechanical} from './travis-mechanical.mjs?v=context-1';
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=context-1';
+import {createSceneFocus} from './travis-scene-focus.mjs?v=figures-1';
+import {validateScenePlan,flybyPosition,SPACE_ASSETS} from './travis-scene-blueprint.mjs?v=figures-1';
+import {createDetailedSubject} from './travis-visual-subjects.mjs?v=figures-1';
+import {createAnimatedScene} from './travis-animated-scenes.mjs?v=figures-1';
+import {createScienceScene} from './travis-science-scenes.mjs?v=figures-1';
+import {createArchitecture} from './travis-architecture.mjs?v=figures-1';
+import {createMechanical} from './travis-mechanical.mjs?v=figures-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=figures-1';
 
 // Independent objects share the existing surface/morph renderer. Construction
 // happens once per command; animation updates transforms and small trail buffers.

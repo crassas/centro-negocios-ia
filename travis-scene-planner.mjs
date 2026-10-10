@@ -1,12 +1,13 @@
-import {anatomySubject} from './travis-anatomy.mjs?v=context-1';
-import {compositionIntent,sceneAsset} from './travis-scene-blueprint.mjs?v=context-1';
+import {anatomySubject,anatomyPart} from './travis-anatomy.mjs?v=figures-1';
+import {figureSubject,figureLabel} from './travis-figure-catalog.mjs?v=figures-1';
+import {compositionIntent,sceneAsset} from './travis-scene-blueprint.mjs?v=figures-1';
 // Explicit, bounded procedural scenes. Unknown assets still use the research path.
 const fold=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 export const bodyNames={mercury:'Mercury',mercurio:'Mercury',venus:'Venus',terra:'Earth',earth:'Earth',mars:'Mars',marte:'Mars',jupiter:'Jupiter',saturn:'Saturn',saturno:'Saturn',uranus:'Uranus',urano:'Uranus',neptune:'Neptune',neptuno:'Neptune',moon:'Moon',lua:'Moon',sun:'Sun',sol:'Sun'};
 export function cinematicIntent(text,{active=false}={}){
  const t=fold(text).trim();
  if(/^(?:nao|nunca|don't|do not)\b/.test(t)||/^(?:escreve|write)\b/.test(t))return null;
- const language=/\b(?:mostra|explica|esqueleto|corpo|pulmoes|coracao|cerebro|chuva|foguetao|terra|lua|marte|aconteceria|como|isola|gota|neve|fogo|pausa|continua)\b/.test(t)?'pt':'en';
+ const language=/\b(?:mostra|explica|pessoa|humano|humana|astronauta|traje espacial|esqueleto|corpo|pulmoes|coracao|cerebro|chuva|foguetao|terra|lua|marte|aconteceria|como|isola|gota|neve|fogo|pausa|continua)\b/.test(t)?'pt':'en';
  if(active){
   for(const [action,re] of [['pause-motion',/^(?:pausa|para|congela)(?: a animacao| o movimento| isso)?$|^(?:pause|freeze)(?: the animation| animation| it)?$/],['resume-motion',/^(?:continua|retoma|anima)(?: a animacao| o movimento| isso)?$|^(?:resume|animate)(?: the animation| animation| it)?$/],['slow-motion',/^(?:mais devagar|abranda|slow(?:er| down)|slow motion)$/],['normal-motion',/^(?:velocidade normal|normal speed)$/],['wide-view',/^(?:mostra tudo|mostra todos|vista geral|volta a vista geral|show all|show everything|wide view)$/]])if(re.test(t))return {type:'control',action,language};
   if(/\b(?:isola|isolar|isole|isolate|focus on|foca|foca-te|aproxima.*planeta)\b/.test(t)&&!/\b(?:apenas|so|somente|only|alone)\b/.test(t)){
@@ -20,7 +21,11 @@ export function cinematicIntent(text,{active=false}={}){
   if(target)return {type:'solo',target,language};
  }
  const anatomy=anatomySubject(t);
- if(anatomy&&!/\b(?:fotos?|fotografias?|photos?|pictures?|images?|imagens?)\b/.test(t)&&(/\b(?:mostra|ver|cria|projeta|explica|show|explain|display)\b/.test(t)||anatomySubject(t)===t))return {type:'scene',scene:'anatomy',title:anatomy,explain:/\b(?:explica|explain)\b/.test(t),language};
+ const photoRequest=/\b(?:fotos?|fotografias?|photos?|photographs?|pictures?|images?|imagens?)\b/.test(t);
+ const bareAnatomy=Boolean(anatomyPart(t))||/^(?:(?:o|a|the) )?(?:corpo humano|human body|anatomia|anatomy|anatomia interna|internal anatomy|esqueleto|skeleton|human skeleton)$/.test(t);
+ if(anatomy&&!photoRequest&&(/\b(?:mostra|ver|cria|projeta|explica|show|explain|display)\b/.test(t)||bareAnatomy))return {type:'scene',scene:'anatomy',title:anatomy,explain:/\b(?:explica|explain)\b/.test(t),language};
+ const figure=!photoRequest&&figureSubject(t.replace(/^(?:mostra(?:-me)?|show(?: me)?|cria|create|projeta|display|explica|explain)\s+/,'').replace(/\s+(?:em 3d|in 3d)$/,''));
+ if(figure)return {type:'scene',scene:'figure',title:figureLabel(figure,language),figureId:figure,autoReturn:true,schematic:false,source:'local-reference-catalog',explain:/\b(?:explica|explain)\b/.test(t),language};
  const composed=compositionIntent(text);if(composed)return composed;
  const explicit=/\b(?:mostra|ver|cria|faz|projeta|imagina|simula|explica|aconteceria|chegaria|viajaria|show|create|imagine|simulate|explain|what if|would happen|would .*reach|how.*(?:get|travel|reach))\b/.test(t);
  const photo=/\b(?:fotos?|fotografias?|photos?|photographs?|imagens? reais|real images?)\b/.test(t);

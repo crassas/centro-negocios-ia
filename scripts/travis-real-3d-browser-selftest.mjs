@@ -86,7 +86,7 @@ try{
  assert.equal(await page.evaluate(()=>TravisVisual.diagnostics().hologram.variant),'jupiter');
  // Real provider geometry must have depth, one draw call and the shared material.
  const meshEvidence=await page.evaluate(async payload=>{
-  const {decodeReferenceModel,disposeReferenceModel,validateModelDocument}=await import('./travis-model-library.mjs?v=context-1');
+  const {decodeReferenceModel,disposeReferenceModel,validateModelDocument}=await import('./travis-model-library.mjs?v=figures-1');
   const model=await decodeReferenceModel(payload),evidence={triangles:model.triangles,bounds:model.bounds,children:model.group.children.length,holographic:model.materials[0].userData.holographicSurface};disposeReferenceModel(model);
   let blocked=0;for(const edit of [d=>d.buffers[0].uri='https://localhost/private',d=>d.images=[{uri:'https://evil.test/a.png'}],d=>d.nodes[0].children=[0],d=>d.accessors[0].count=99999999]){const d=structuredClone(payload.gltf);edit(d);try{validateModelDocument(d);}catch{blocked++;}}
   return {...evidence,blocked};

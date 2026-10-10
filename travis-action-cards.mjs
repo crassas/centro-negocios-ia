@@ -1,15 +1,17 @@
-import {loadAnatomy,anatomyLabel,anatomyPart} from './travis-anatomy.mjs?v=context-1';
-import {compositionIntent,sceneAsset,makeScenePlan,sceneLabel} from './travis-scene-blueprint.mjs?v=context-1';
-import {discoveryChapters,scienceReference} from './travis-discovery.mjs?v=context-1';
-import {bodyNames} from './travis-scene-planner.mjs?v=context-1';
+import {loadAnatomy,anatomyLabel,anatomyPart} from './travis-anatomy.mjs?v=figures-1';
+import {loadFigure} from './travis-figures.mjs?v=figures-1';
+import {FIGURES,figureSubject,figureLabel,figureKey} from './travis-figure-catalog.mjs?v=figures-1';
+import {compositionIntent,sceneAsset,makeScenePlan,sceneLabel} from './travis-scene-blueprint.mjs?v=figures-1';
+import {discoveryChapters,scienceReference} from './travis-discovery.mjs?v=figures-1';
+import {bodyNames} from './travis-scene-planner.mjs?v=figures-1';
 import {createVisualSources} from './travis-visual-sources.mjs?v=sand-1';
 // Front workspace driven by actual host tool results. Text is always inert.
 import {MOTION,revealCaption,readingHold} from './travis-motion.mjs?v=motion-1';
-import {decodeReferenceModel,disposeReferenceModel} from './travis-model-library.mjs?v=context-1';
+import {decodeReferenceModel,disposeReferenceModel} from './travis-model-library.mjs?v=figures-1';
 import {hologramPresentation as projection} from './travis-presence.mjs?v=motion-1';
 import {mountYouTube,closeYouTube,controlYouTube,youtubeState} from './travis-youtube.mjs?v=3';
-import {parseVisualIntent,rewriteEnglishToolRequest,mayNeedVisualModel} from './travis-english-intents.mjs?v=context-1';
-import {buildNarrationCues,cueAtTime,hasLocalVisual} from './travis-visual-story.mjs?v=context-1';
+import {parseVisualIntent,rewriteEnglishToolRequest,mayNeedVisualModel} from './travis-english-intents.mjs?v=figures-1';
+import {buildNarrationCues,cueAtTime,hasLocalVisual} from './travis-visual-story.mjs?v=figures-1';
 const hud=document.getElementById('travis-hud');
 const deck=document.getElementById('travis-action-deck');
 const heading=document.getElementById('travis-action-heading');
@@ -20,6 +22,32 @@ const caption=document.createElement('div');caption.className='travis-visual-cap
 const sources=createVisualSources(hud,{onInteract:touchProjection});
 function cancelNarration(){narration=null;storyEpoch++;window.dispatchEvent(new CustomEvent('travis:visual-timeline',{detail:null}));}
 function awaitReference(){cancelNarration();clearTimeout(returnTimer);returnTimer=0;renderVersion++;}
+function visualAsset(scene,title){
+  if(['text','reference'].includes(scene))return null;
+  const figure=figureSubject(title);if(figure)return {pendingFigure:figure};
+  const key=figureKey(title),part=anatomyPart(title);
+  if(part)return {pendingAnatomy:part.id};
+  if(/^(?:human body|corpo humano|anatomy|anatomia|anatomia interna|internal anatomy)$/.test(key))return {pendingAnatomy:'Human body'};
+  if(/^(?:skeleton|human skeleton|esqueleto|esqueleto humano)$/.test(key))return {pendingAnatomy:'Skeleton'};
+  return null;
+}
+async function prepareVisual(intent,{signal}={}){
+  try{
+    const figure=intent.pendingFigure;
+    const data=figure?await loadFigure(figure,{signal}):await loadAnatomy(intent.pendingAnatomy,{signal});
+    if(signal?.aborted||intent.visualVersion!==storyEpoch||intent.renderTicket!==undefined&&intent.renderTicket!==renderVersion)return false;
+    const title=figure?figureLabel(figure,intent.language):anatomyLabel(intent.pendingAnatomy,intent.language);
+    const source=figure?FIGURES[figure]:{sourceName:'BodyParts3D · DBCLS',sourceUrl:'https://dbarchive.biosciencedbc.jp/en/bodyparts3d/desc.html',creditUrl:'https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html',imageAuthor:'BodyParts3D, © The Database Center for Life Science',imageLicense:'CC Attribution 4.0 International · Geometria simplificada, reagrupada e colorida para Travis.'};
+    render({...schematic(figure?'figure':'anatomy',title),...source,figure:figure?data:null,anatomy:figure?null:data,explaining:Boolean(intent.explain)},{story:Boolean(intent.story)});
+    if(intent.wideScene)wideScene=intent.wideScene;
+    window.TravisVisual?.commands(true,{automatic:true});show();
+    intent.prepared=true;intent.reply=intent.language==='pt'?'Aqui está '+title+'.':'Here is '+title+'.';return true;
+  }catch(error){
+    if(intent.visualVersion!==storyEpoch||intent.renderTicket!==undefined&&intent.renderTicket!==renderVersion||signal?.aborted&&signal.reason?.name!=='TimeoutError')return false;
+    intent.handled=true;intent.reply=intent.language==='pt'?'Não consegui carregar este modelo 3D. Tenta novamente.':'I could not load this 3D model. Please try again.';
+    return false;
+  }
+}
 const planetSequence=['Mercury','Venus','Earth','Mars','Jupiter','Saturn','Uranus','Neptune'];
 function canReturn(){
   if(!current||pinned||current.autoReturn===false)return false;
@@ -76,6 +104,16 @@ const menu={kind:'capabilities',title:'Your workspace',items:[
   {title:'Sites',detail:'Check availability',request:'Verifica os sites'}
 ]};
 function render(data,{story=false}={}){
+  // Tool results and narrative cues must use the same sourced geometry as input.
+  if(data.kind==='illustration'&&!data.figure&&!data.anatomy&&!data.reference){
+    const pending=visualAsset(data.scene,data.title);
+    if(pending){
+      if(!story)awaitReference();
+      const intent={...pending,language:data.language||'pt',explain:data.explaining,story,visualVersion:storyEpoch,renderTicket:++renderVersion};
+      void prepareVisual(intent,{signal:AbortSignal.timeout(20000)});return;
+    }
+    if(['person','figure','anatomy'].includes(data.scene))return;
+  }
   if(!story)cancelNarration();
   // Keep the real search choices available if a selected video cannot be embedded.
   if(data.kind==='youtube'&&data.videoId&&current?.kind==='youtube'){
@@ -86,7 +124,7 @@ function render(data,{story=false}={}){
   clearTimeout(returnTimer);updatePin();
   hud.dataset.projectionKind=String(data.kind||'result');hud.dataset.scene=String(data.scene||'');
   window.dispatchEvent(new CustomEvent('travis:illustration',{detail:{
-    scene:data.kind==='illustration'?data.scene:null,subject:data.title||'',reference:data.reference||null,plan:data.plan||null,anatomy:data.anatomy||null,keepTime:Boolean(data.keepTime)
+    scene:data.kind==='illustration'?data.scene:null,subject:data.title||'',reference:data.reference||null,plan:data.plan||null,anatomy:data.anatomy||null,figure:data.figure||null,keepTime:Boolean(data.keepTime)
   }}));
   if(!matchMedia('(prefers-reduced-motion: reduce)').matches)deck.animate?.([{opacity:0,filter:'blur(9px)',transform:'translate(-50%, 16px) scale(.97)'},{opacity:1,filter:'blur(0px)',transform:'translate(-50%, 0) scale(1)'}],{duration:MOTION.caption*1000,easing:MOTION.entrance});
   heading.textContent=String(data.title||'Your workspace');
@@ -218,10 +256,12 @@ if(deck){
     pauseDiscovery(){cancelNarration();if(current?.discovery){current.explaining=false;pinned=true;clearTimeout(returnTimer);updatePin();}},
     mayNeedModel:mayNeedVisualModel,
     applyModelIntent(result,text=''){
-      const valid=['planet','map','house','person','vehicle','landscape','diagram','object','text','space','mechanical'];
+      const valid=['planet','map','house','person','figure','anatomy','vehicle','landscape','diagram','object','text','space','mechanical'];
       if(result?.ok!==true||!valid.includes(result.scene)
           ||typeof result.title!=='string'||result.title.length>110)return null;
       const pt=/\b(?:quero|gostava|apetece|imagina|podes|consegues|como|seria|mostra)\b/i.test(text);
+      const pending=visualAsset(result.scene,result.title);
+      if(pending){awaitReference();return {...pending,handled:true,kind:'scene',language:pt?'pt':'en',title:result.title,visualVersion:storyEpoch,reply:''};}
       const needsReference=!hasLocalVisual(result.scene,result.title);
       if(needsReference)awaitReference();else{render(schematic(result.scene,result.title));window.TravisVisual?.commands(true,{automatic:true});show();}
       return {handled:true,language:pt?'pt':'en',
@@ -234,27 +274,12 @@ if(deck){
       if(!current?.explaining||pinned||!context)return;
       clearTimeout(returnTimer);returnTimer=0;
       const initial={scene:current.scene,title:current.title};
-      const cues=current.scene==='journey'||current.scene==='composition'||current.scene==='anatomy'||current.discovery?[{...initial,at:0}]:buildNarrationCues(text,initial);
+      const cues=['journey','composition','anatomy','figure'].includes(current.scene)||current.discovery?[{...initial,at:0}]:buildNarrationCues(text,initial);
       if(current.scene==='journey')window.dispatchEvent(new CustomEvent('travis:visual-timeline',{detail:{context,start,duration,continuous,text}}));
       narration={cues,context,start,duration,index:0,epoch:storyEpoch};refresh();
     },
-    async prepareAnatomy(intent,{signal}={}){
-      try{
-        const data=await loadAnatomy(intent.pendingAnatomy,{signal});
-        if(signal?.aborted||intent.visualVersion!==storyEpoch)return false;
-        render({...schematic('anatomy',anatomyLabel(intent.pendingAnatomy,intent.language)),anatomy:data,explaining:Boolean(intent.explain),
-          sourceName:'BodyParts3D · DBCLS',sourceUrl:'https://dbarchive.biosciencedbc.jp/en/bodyparts3d/desc.html',
-          creditUrl:'https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html',
-          imageAuthor:'BodyParts3D, © The Database Center for Life Science',imageLicense:'CC Attribution 4.0 International · Geometria simplificada, reagrupada e colorida para Travis.'});
-        if(intent.wideScene)wideScene=intent.wideScene;
-        window.TravisVisual?.commands(true,{automatic:true});show();
-        intent.reply=intent.language==='pt'?'Aqui está '+anatomyLabel(intent.pendingAnatomy,'pt')+'.':'Here is '+anatomyLabel(intent.pendingAnatomy,'en')+'.';
-        return true;
-      }catch(error){
-        if(intent.visualVersion!==storyEpoch||signal?.aborted&&signal.reason?.name!=='TimeoutError')return false;
-        intent.handled=true;intent.reply=intent.language==='pt'?'Não consegui carregar a anatomia 3D. Tenta novamente.':'I could not load the 3D anatomy. Please try again.';return false;
-      }
-    },
+    prepareVisual,
+    prepareAnatomy:prepareVisual,
     async applyReference(result,intent){
       if(intent?.visualVersion!==storyEpoch)return null;
       if(!result?.ok)return intent.language==='pt'?'Não encontrei uma referência visual fiável para esse pedido.':'I could not find a reliable visual reference for that request.';
@@ -267,6 +292,8 @@ if(deck){
         window.TravisVisual?.commands(true,{automatic:true});show();
         return intent.language==='pt'?'A projetar '+intent.title+' em três dimensões.':'Projecting '+intent.title+' in three dimensions.';
       }
+      // A 3D request cannot silently become a flat (possibly unrelated) photo.
+      if(!intent.referenceRequested&&intent.kind!=='reference-next')return intent.language==='pt'?'Ainda não encontrei um modelo 3D correspondente. Podes pedir fotografias como alternativa.':'I have not found a matching 3D model. You can ask for photos as an alternative.';
       let image=null;
       if(/^data:image\/(?:jpeg|png|webp);base64,/.test(result.imageData||'')){
         image=new Image();image.src=result.imageData;try{await image.decode();if(image.naturalWidth*image.naturalHeight>12000000)image=null;}catch{image=null;}
@@ -327,8 +354,9 @@ if(deck){
       }
       if(intent.type==='scene'){
         wideScene=null;selectedVisual=null;
-        if(intent.scene==='anatomy'){
-          awaitReference();return {...intent,handled:!intent.explain,kind:'scene',pendingAnatomy:intent.title,visualVersion:storyEpoch,reply:''};
+        const pending=!intent.referenceRequested&&(intent.scene==='anatomy'?{pendingAnatomy:intent.title}:visualAsset(intent.scene,intent.title));
+        if(pending){
+          awaitReference();return {...intent,...pending,handled:!intent.explain,kind:'scene',visualVersion:storyEpoch,reply:''};
         }
         if(intent.scene==='planet'&&/\b(?:random|any|aleatorio|aleatória|aleatoria|qualquer)\b/i.test(String(text).normalize('NFD').replace(/[\u0300-\u036f]/g,'')))
           intent.title=planetSequence[Math.floor(Math.random()*planetSequence.length)];

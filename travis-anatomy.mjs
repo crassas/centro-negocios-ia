@@ -1,6 +1,6 @@
-import {ANATOMY_PARTS} from './travis-anatomy-catalog.mjs?v=context-1';
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=context-1';
-import {createSceneFocus,focusKey} from './travis-scene-focus.mjs?v=context-1';
+import {ANATOMY_PARTS} from './travis-anatomy-catalog.mjs?v=figures-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=figures-1';
+import {createSceneFocus,focusKey} from './travis-scene-focus.mjs?v=figures-1';
 export {ANATOMY_PARTS};
 const cache=new Map();
 export const anatomyPart=value=>{

@@ -1,15 +1,16 @@
-import {createSceneFocus} from './travis-scene-focus.mjs?v=context-1';
-import {createAnatomy} from './travis-anatomy.mjs?v=context-1';
-import {validateScenePlan} from './travis-scene-blueprint.mjs?v=context-1';
-import {createComposedScene} from './travis-scene-composer.mjs?v=context-1';
-import {createScienceScene} from './travis-science-scenes.mjs?v=context-1';
-import {journeyCueTarget} from './travis-scene-planner.mjs?v=context-1';
-import {createAnimatedScene} from './travis-animated-scenes.mjs?v=context-1';
-import {createMechanical} from './travis-mechanical.mjs?v=context-1';
-import {createArchitecture} from './travis-architecture.mjs?v=context-1';
-import {createDetailedSubject,identifyVisualSubject} from './travis-visual-subjects.mjs?v=context-1';
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=context-1';
-import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=context-1';
+import {createFigure} from './travis-figures.mjs?v=figures-1';
+import {createSceneFocus} from './travis-scene-focus.mjs?v=figures-1';
+import {createAnatomy} from './travis-anatomy.mjs?v=figures-1';
+import {validateScenePlan} from './travis-scene-blueprint.mjs?v=figures-1';
+import {createComposedScene} from './travis-scene-composer.mjs?v=figures-1';
+import {createScienceScene} from './travis-science-scenes.mjs?v=figures-1';
+import {journeyCueTarget} from './travis-scene-planner.mjs?v=figures-1';
+import {createAnimatedScene} from './travis-animated-scenes.mjs?v=figures-1';
+import {createMechanical} from './travis-mechanical.mjs?v=figures-1';
+import {createArchitecture} from './travis-architecture.mjs?v=figures-1';
+import {createDetailedSubject,identifyVisualSubject} from './travis-visual-subjects.mjs?v=figures-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=figures-1';
+import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=figures-1';
 // Film-inspired schematic projections. Unprovided geographic/CAD/person
 // geometry stays visibly conceptual; real source links are separate.
 export function createConceptProjection(THREE,{reducedMotion=false}={}){
@@ -76,17 +77,7 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   mats.push(...detailed.materials);variant=detailed.variant;
   objects.push({type:'house',house:detailed.group});
  }
- function person(){
-  const head=sphere(.32,0xc8b299,0,.73,0);
-  const torso=mesh(new THREE.CylinderGeometry(.42,.30,1.01,14,1,true),0x987f6b,
-   {wire:true,alpha:.69},0,-.29,0);
-  for(const sign of [-1,1]){
-   line([[sign*.36,.08,0],[sign*.65,-.45,0],[sign*.56,-1.0,0]]);
-   line([[sign*.17,-.80,0],[sign*.23,-1.42,0]]);
-  }
-  ring(.52,1.02).position.y=.72;
-  objects.push({type:'person',head,torso});
- }
+
  function object(){
   const geometric=mesh(new THREE.DodecahedronGeometry(.80,1),0xcfb38d,{wire:true,alpha:.84});
   const inner=mesh(new THREE.IcosahedronGeometry(.65,1),0x777787,{alpha:.28});
@@ -190,17 +181,19 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   }
  }
  function show(scene,now,subject='',options={}){
+  if(scene==='person'||scene==='figure'&&!options.figure||scene==='anatomy'&&!options.anatomy)return false;
   if(scene==='composition'&&!validateScenePlan(options.plan))return false;
   const savedTime=options.keepTime?motionTime:0,savedPause=options.keepTime&&motionPaused,savedSpeed=options.keepTime?motionSpeed:1;
   if(ghost){dispose(ghost.group,ghost.mats,ghost.textures);ghost=null;}
   if(active.children.length)ghost={group:activeFrame,mats,textures,start:now};
   else dispose(activeFrame,mats,textures);
   active=new THREE.Group();activeFrame=new THREE.Group();activeFrame.add(active);root.add(activeFrame);mats=[];objects=[];textures=[];animated=null;motionTime=0;motionPaused=false;motionSpeed=1;narrationClock=null;journeyProgress=null;
-  kind=['orbit','atom','network','wave','planet','map','house','person','vehicle','landscape','diagram','object','text','space','reference','mechanical','model','weather','journey','science','composition','anatomy'].includes(scene)?scene:'network';
+  kind=['orbit','atom','network','wave','planet','map','house','person','vehicle','landscape','diagram','object','text','space','reference','mechanical','model','weather','journey','science','composition','anatomy','figure'].includes(scene)?scene:'network';
   planetName=['earth','mars','venus','saturn','jupiter','uranus','neptune','mercury','moon','sun'].find(x=>
    new RegExp('\\b'+x+'\\b').test(String(subject).toLowerCase()))||'';
   born=now;zoom=1;dx=dy=spin=0;label=subject;variant=identifyVisualSubject(kind,subject);
-  if(kind==='anatomy'){animated=createAnatomy(THREE,options.anatomy,{reducedMotion});active.add(animated.group);mats.push(...animated.materials);variant=animated.variant;}
+  if(kind==='figure'){animated=createFigure(THREE,options.figure,{reducedMotion});active.add(animated.group);mats.push(...animated.materials);textures.push(...animated.textures);variant=animated.variant;}
+  else if(kind==='anatomy'){animated=createAnatomy(THREE,options.anatomy,{reducedMotion});active.add(animated.group);mats.push(...animated.materials);variant=animated.variant;}
   else if(kind==='composition'){animated=createComposedScene(THREE,options.plan,{reducedMotion});active.add(animated.group);mats.push(...animated.materials);textures.push(...animated.textures);variant=animated.variant;}
   else if(kind==='science'){animated=createScienceScene(THREE,subject);if(animated){active.add(animated.group);mats.push(...animated.materials);textures.push(...animated.textures);variant=animated.variant;}}
   else if(['weather','journey'].includes(kind)||kind==='vehicle'&&/rocket|foguetao/i.test(subject)){animated=createAnimatedScene(THREE,kind,subject);active.add(animated.group);mats.push(...animated.materials);textures.push(...animated.textures);variant=animated.variant;}
@@ -208,7 +201,7 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   else if(['text','space','reference'].includes(kind)||['dna','atom','cube','sphere','pyramid'].includes(variant)){const detailed=createDetailedSubject(THREE,kind,subject,options);if(detailed){active.add(detailed.group);mats.push(...detailed.materials);textures.push(...detailed.textures);variant=detailed.variant;animated=detailed.update?detailed:null;}}
   else if(kind==='mechanical'){const built=createMechanical(THREE,{exploded:options.exploded===true,reducedMotion});animated=built;active.add(built.group);mats.push(...built.materials);variant=built.variant;}
   else if(kind==='planet')planet();else if(kind==='map')map();else if(kind==='house')house();
-  else if(kind==='person')person();else if(kind==='vehicle')vehicle();
+  else if(kind==='vehicle')vehicle();
   else if(kind==='landscape')landscape();else if(kind==='diagram')diagram();
   else if(kind==='object')object();else classic(kind);
   if(kind==='house')active.rotation.y=-.50;

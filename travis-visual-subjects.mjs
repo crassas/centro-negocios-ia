@@ -1,6 +1,6 @@
-import {createSceneFocus} from './travis-scene-focus.mjs?v=context-1';
+import {createSceneFocus} from './travis-scene-focus.mjs?v=figures-1';
 import {earthLand} from './travis-earth-land.mjs?v=1';
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=context-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=figures-1';
 export const foldVisual=s=>String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 export const celestialNames={mercury:['mercury','mercurio'],venus:['venus'],earth:['earth','terra'],mars:['mars','marte'],jupiter:['jupiter'],saturn:['saturn','saturno'],uranus:['uranus','urano'],neptune:['neptune','neptuno'],pluto:['pluto','plutao'],moon:['moon','lua'],sun:['sun','sol']};
 export function identifyVisualSubject(scene,subject){

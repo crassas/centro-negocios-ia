@@ -2,15 +2,15 @@ import {HOLOGRAPHIC_LIGHT_GLSL} from './travis-holographic-head.mjs?v=sand-1';
 
 // Fine, depth-writing light cells carry surface detail; travelling particles
 // carry the same material between forms. The head retains its facial rig.
-export function createHolographicSurfaceMaterial(THREE,{map=null,mask=false,gain=1,photo=false,natural=false,tint=0xffffff}={}){
+export function createHolographicSurfaceMaterial(THREE,{map=null,mask=false,gain=1,photo=false,natural=false,tint=0xffffff,porosity=.03}={}){
  const material=new THREE.ShaderMaterial({
-  uniforms:{uDetailScale:{value:1},uFocus:{value:1},uTime:{value:0},uBuild:{value:0},uVoice:{value:0},uMap:{value:map},uHasMap:{value:map?1:0},uMask:{value:mask?1:0},uGain:{value:gain},uPhoto:{value:photo?1:0},uNatural:{value:natural||photo?1:0},uTint:{value:new THREE.Color(tint)}},
+  uniforms:{uPorosity:{value:porosity},uDetailScale:{value:1},uFocus:{value:1},uTime:{value:0},uBuild:{value:0},uVoice:{value:0},uMap:{value:map},uHasMap:{value:map?1:0},uMask:{value:mask?1:0},uGain:{value:gain},uPhoto:{value:photo?1:0},uNatural:{value:natural||photo?1:0},uTint:{value:new THREE.Color(tint)}},
   vertexShader:`varying vec3 vP,vN,vV;varying vec2 vUv;
    void main(){vP=position;vUv=uv;vec4 mv=modelViewMatrix*vec4(position,1.);
     vN=normalize(normalMatrix*normal);vV=normalize(-mv.xyz);gl_Position=projectionMatrix*mv;}`,
   fragmentShader:`precision highp float;
    ${HOLOGRAPHIC_LIGHT_GLSL}
-   uniform float uDetailScale,uFocus,uTime,uBuild,uVoice,uHasMap,uMask,uGain,uPhoto,uNatural;uniform vec3 uTint;uniform sampler2D uMap;
+   uniform float uPorosity,uDetailScale,uFocus,uTime,uBuild,uVoice,uHasMap,uMask,uGain,uPhoto,uNatural;uniform vec3 uTint;uniform sampler2D uMap;
    varying vec3 vP,vN,vV;varying vec2 vUv;
    void main(){
     vec4 texel=vec4(.68,.68,.68,1.);if(uHasMap>.5)texel=texture2D(uMap,vUv);
@@ -22,7 +22,7 @@ export function createHolographicSurfaceMaterial(THREE,{map=null,mask=false,gain
     vec3 cell=floor(vP*330.*uDetailScale);float grain=fract(sin(dot(cell,vec3(12.9898,78.233,37.719)))*43758.5453);
     float front=clamp((vP.y+1.5)/3.,0.,1.)*.35+grain*.65;
     if(uBuild<.999&&front>uBuild)discard;
-    if(grain>mix(.97,.996,uPhoto))discard;
+    if(grain>1.-mix(uPorosity,.004,uPhoto))discard;
     vec3 n=normalize(vN);float facing=max(0.,dot(n,normalize(vV)));
     float edge=pow(1.-facing,2.4),key=max(0.,dot(n,normalize(vec3(-.35,.6,1.))));
     float contour=pow(.5+.5*sin(vP.y*390.*uDetailScale),18.)*(1.-smoothstep(.7,2.2,fwidth(vP.y*390.*uDetailScale)));

@@ -66,7 +66,7 @@ try{
  const photos=await page.evaluate(()=>TravisProjection.interpret('“Mostra fotos de um motor elétrico”'));
  assert(photos.needsReference&&photos.referenceRequested,'Photos only when explicitly requested');
  const scriptRequests=await page.evaluate(()=>performance.getEntriesByType('resource').map(x=>x.name));
- assert(scriptRequests.some(url=>url.includes('travis-english-intents.mjs?v=context-1')),'Browser must load the new router');
+ assert(scriptRequests.some(url=>url.includes('travis-english-intents.mjs?v=figures-1')),'Browser must load the new router');
  assert.equal(fixtureRequests.filter(r=>['/visual-research','/visual-intent','/jarvis','/jarvis-stream'].includes(r.name)).length,0,'Copied local commands must not call research or the model');
  assert(fixtureRequests.some(r=>r.name==='/speak'&&r.body.text==='A projetar Electric motor.'));
  assert.deepEqual(errors,[]);

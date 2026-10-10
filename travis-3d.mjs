@@ -1,9 +1,9 @@
 import { createLiveSTT } from './travis-live-stt.mjs?v=live-1';
 import { readVoiceReply } from './travis-voice-stream.mjs?v=live-1';
 import {createMotionAudio} from './travis-motion-audio.mjs?v=motion-1';
-import {playDiscovery} from './travis-discovery.mjs?v=context-1';
-import { createConceptProjection } from './travis-concept-projection.mjs?v=context-1';
-import './travis-action-cards.mjs?v=context-1';
+import {playDiscovery} from './travis-discovery.mjs?v=figures-1';
+import { createConceptProjection } from './travis-concept-projection.mjs?v=figures-1';
+import './travis-action-cards.mjs?v=figures-1';
 import { createVoiceInput } from './travis-voice-input.mjs?v=live-1';
 import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=motion-1';
 import { INTERFACE_COPY, interfaceLanguage, applyInterfaceLanguage, languageFromInterfaceCommand } from './travis-interface-language.mjs?v=1';
@@ -16,7 +16,7 @@ import { createHolographicHeadMaterial, createAssemblyParticles } from './travis
 import { projectWebAnswer } from './travis-web-projection.mjs?v=agent-1';
 import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=motion-1';
 import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
-import { createBacklight } from './travis-atmosphere.mjs?v=context-1';
+import { createBacklight } from './travis-atmosphere.mjs?v=figures-1';
 import { createFaceRig } from './travis-face-rig.mjs?v=articulation-2';
 import * as THREE from 'three';
 import { createNeuralField } from './travis-brain-view.mjs?v=motion-1';
@@ -69,7 +69,7 @@ if (!hud || !launcher || !canvas) {
   let assemblyParticles=null;
   let neuralField=null,conceptProjection=null,pendingConcept=null,pendingSubject='',pendingOptions={};
   window.addEventListener('travis:illustration',event=>{
-    pendingConcept=event.detail?.scene||null;pendingSubject=event.detail?.subject||'';pendingOptions={reference:event.detail?.reference,plan:event.detail?.plan,anatomy:event.detail?.anatomy,keepTime:event.detail?.keepTime};
+    pendingConcept=event.detail?.scene||null;pendingSubject=event.detail?.subject||'';pendingOptions={reference:event.detail?.reference,plan:event.detail?.plan,anatomy:event.detail?.anatomy,figure:event.detail?.figure,keepTime:event.detail?.keepTime};
     if(pendingConcept)conceptProjection?.show(pendingConcept,performance.now()/1000,pendingSubject,pendingOptions);
     else conceptProjection?.hide();
     if(pendingConcept)motionAudio.play('morph');
@@ -1023,11 +1023,6 @@ if (!hud || !launcher || !canvas) {
       }
       text=window.TravisProjection?.select(text)||text;
       let interpretation=window.TravisProjection?.interpret?.(text);
-      if(interpretation?.pendingAnatomy){
-        setState('thinking',interpretation.language==='pt'?'A preparar a anatomia…':'Preparing anatomy…');
-        await window.TravisProjection.prepareAnatomy(interpretation,{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(20000)])});
-        if(!opened||session!==voiceSession||controller.signal.aborted)return;
-      }
       // Unfamiliar colloquial image requests may use the already running
       // local language model. This never starts a heavyweight LLM mid-voice.
       if(!interpretation?.handled&&window.TravisProjection?.mayNeedModel?.(text)){
@@ -1041,6 +1036,11 @@ if (!hud || !launcher || !canvas) {
           if(controller.signal.aborted||session!==voiceSession)return;
           console.debug('Visual intent model not ready:',error.message);
         }
+      }
+      if(interpretation?.pendingAnatomy||interpretation?.pendingFigure){
+        setState('thinking',interpretation.language==='pt'?'A preparar o modelo 3D…':'Preparing the 3D model…');
+        await window.TravisProjection.prepareVisual(interpretation,{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(20000)])});
+        if(!opened||session!==voiceSession||controller.signal.aborted)return;
       }
       if(interpretation?.researchQuery){
         setState('thinking',interpretation.language==='pt'?'A procurar uma referência visual…':'Finding a visual reference…');
