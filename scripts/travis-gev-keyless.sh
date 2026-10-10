@@ -95,7 +95,9 @@ serve_app() {
   exec env -u OPENAI_API_KEY -u GOOGLE_MAPS_API_KEY -u GOOGLE_MAPS_SERVER_API_KEY \
     -u CESIUM_ION_TOKEN -u AISSTREAM_API_KEY -u FIRMS_MAP_KEY \
     -u MAPILLARY_CLIENT_TOKEN -u TOMTOM_API_KEY -u LL2_API_TOKEN \
-    -u OPENSKY_CLIENT_ID -u OPENSKY_CLIENT_SECRET HOST=127.0.0.1 \
+    -u OPENSKY_CLIENT_ID -u OPENSKY_CLIENT_SECRET \
+    GEV_EMBED_FRAME_ANCESTORS='http://127.0.0.1:8770 http://localhost:8770' \
+    HOST=127.0.0.1 \
     node node_modules/vite/bin/vite.js --host 127.0.0.1 --port "$PORT" --strictPort
 }
 start_app() {
