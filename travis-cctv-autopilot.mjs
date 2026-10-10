@@ -62,8 +62,13 @@ async function select(intent){
       reply:tr(lang,'Pedido de câmara interrompido.','Camera request interrupted.')};
     const scope=intent.global?null:intent.scope||contextScope();
     const exclude=new Set(intent.action==='next'&&selected?[selected.id]:[]);
-    const pool=rankPublicCameras(net.locations(),{
+    const ranked=rankPublicCameras(net.locations(),{
       scope,preferVideo:!!intent.live,exclude,limit:25});
+    const pool=intent.live
+      ? [...ranked.filter(c=>c.feedType==='hls').slice(0,2),
+         ...rankPublicCameras(net.locations(),{scope,preferVideo:false,exclude,limit:25})
+           .filter(c=>c.feedType==='image').slice(0,5)]
+      : ranked;
     if(intent.action!=='next'||!candidates.length)candidates=pool;
     const choices=(intent.action==='next'&&candidates.length
       ? [...candidates.filter(c=>c.id!==selected?.id),...pool]
