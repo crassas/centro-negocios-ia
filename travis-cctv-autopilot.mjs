@@ -71,10 +71,12 @@ async function select(intent){
     const choices=(intent.action==='next'&&candidates.length
       ? [...candidates.filter(c=>c.id!==selected?.id),...pool]
       : pool).filter((c,i,a)=>a.findIndex(x=>x.id===c.id)===i).slice(0,intent.live?2:3);
-    if(!choices.length)return {handled:true,language:lang,
+    if(!choices.length)return {handled:true,language:lang,verified:false,
       reply:tr(lang,
-        'Não encontrei câmaras públicas registadas nesta zona.',
-        'No registered public cameras were found in this area.')};
+        intent.live?'Não encontrei fontes HLS públicas de vídeo nesta zona. As fotografias não são transmissões.':
+          'Não encontrei câmaras públicas registadas nesta zona.',
+        intent.live?'No registered public HLS video sources were found in this area. Still images are not video.':
+          'No registered public cameras were found in this area.')};
     for(const camera of choices){
       if(token!==operation)return {handled:true,language:lang,
         reply:tr(lang,'Pedido interrompido.','Request interrupted.')};
