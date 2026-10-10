@@ -734,3 +734,8 @@ button.travis-action-card{cursor:pointer}
 #travis-hud .travis-reference-navigation button,#travis-hud .travis-reference-photos{min-width:36px;min-height:36px;padding:4px 8px;border:1px solid rgba(213,185,147,.25);border-radius:50%;background:rgba(15,12,8,.45);color:#ddc5a4;font:400 22px/1 system-ui;cursor:pointer}
 #travis-hud .travis-reference-photos{display:block;margin:5px 0 0 auto;min-height:28px;border-radius:14px;font:500 9px/1.2 system-ui;letter-spacing:.12em;text-transform:uppercase}
 .travis-visual-caption .travis-reference-credit{letter-spacing:0;text-transform:none;font-size:8px;max-width:200px;margin:3px 0 0 auto;opacity:.7;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+/* Masked captions; the title remains one accessible label. */
+.travis-motion-word{display:inline-block;overflow:hidden;vertical-align:bottom}.travis-motion-word>span{display:inline-block}.travis-motion-title{display:inline}
+#travis-hud .travis-mechanical-controls{flex-wrap:wrap;gap:6px}
+#travis-hud .travis-mechanical-controls button{font:500 10px/1.2 system-ui;letter-spacing:.04em;min-width:58px;min-height:40px;padding:6px 9px;border-radius:16px;white-space:nowrap}

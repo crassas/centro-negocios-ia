@@ -49,13 +49,18 @@ try{
  for(const [request,variant] of [
   ['Mostra-me Júpiter','jupiter'],['Mostra-me Marte','mars'],['Mostra-me a Terra','earth'],
   ['Mostra-me o Sol','sun'],['Mostra-me o espaço','galaxy'],['Mostra as letras "TRAVIS"','text'],
-  ['Mostra-me ADN','dna'],['Mostra-me uma casa','detailed-house'],['Mostra uma casa moderna','modern-house'],['Show a building','apartment-building']
+  ['Mostra-me ADN','dna'],['Mostra-me uma casa','detailed-house'],['Mostra uma casa moderna','modern-house'],['Show a building','apartment-building'],['Mostra um motor elétrico','motor-cutaway']
  ]){
   const receipt=await page.evaluate(request=>TravisProjection.interpret(request),request);
   assert(receipt?.handled,request);await page.waitForTimeout(1600);
   await record(variant);assert.equal(states.at(-1).state.hologram.variant,variant,request);
   assert.equal(states.at(-1).state.hologram.matter.active,true);
  }
+ await page.evaluate(()=>TravisProjection.interpret('Separa as peças'));await page.waitForTimeout(1600);await record('motor-exploded');assert.equal(states.at(-1).state.hologram.variant,'motor-exploded');
+ await page.evaluate(()=>TravisProjection.interpret('Junta as peças'));await page.waitForTimeout(1600);assert.equal(await page.evaluate(()=>TravisVisual.diagnostics().hologram.variant),'motor-cutaway');
+ await page.evaluate(()=>TravisProjection.interpret('Desliga os sons'));assert.equal(await page.evaluate(()=>TravisVisual.diagnostics().motionAudio.enabled),false);
+ await page.evaluate(()=>TravisProjection.interpret('Liga os sons'));assert.equal(await page.evaluate(()=>TravisVisual.diagnostics().motionAudio.enabled),true);
+ await page.evaluate(()=>TravisProjection.interpret('Show a building'));
  const photosFromShape=await page.evaluate(()=>TravisProjection.interpret('mais imagens'));
  assert(photosFromShape.needsReference&&photosFromShape.researchQuery==='Building');
  const explanation=await page.evaluate(()=>TravisProjection.interpret('Explica-me o sistema solar'));

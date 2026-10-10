@@ -19,15 +19,17 @@ const categories=[
  ['planet',/(?:\b(?:planet|planets|planetary|solar system|solar|sistema solar|planeta|planetas|estrela|estrela polar|star|stars|galaxy|galaxia|universo|universe|mercury|mercurio|venus|earth|terra|mars|marte|jupiter|saturn|saturno|uranus|urano|neptune|neptuno|neptun[oae]|pluto|plutao|moon|lua|sun|sol|asteroid|asteroide|comet|cometa)\b)/],
  ['map',/\b(?:map|maps|mapa|mapas|routes?|rotas?|rua|avenida|road|street|city|cidade|town|village|aldeia|pais|country|countries|world map|geografia|geography|globo terrestre|google maps|porto|lisboa|lisbon|paris|london|londres|tokyo|toquio|new york|coimbra|campanha|gaia)\b/],
  ['house',/\b(?:house|houses|home|apartment|apartamento|building|buildings|edificio|edificios|casa|casas|moradia|palacio|palace|castle|castelo|architecture|arquitetura|blueprint|planta|floor plan|floorplan|arranha-ceus|skyscraper|room|sala|quarto|kitchen|cozinha|bedroom|fachada|facade|armazem|warehouse|bridge|ponte|temple|templo)\b/],
+ ['mechanical',/\b(?:electric motor|motor eletrico|motor|engine|rotor|stator|estator)\b/],
  ['vehicle',/\b(?:car|cars|carro|carros|automovel|vehicle|veiculo|moto|motorcycle|camiao|truck|van|carrinha|bicycle|bicicleta|airplane|aviao|helicopter|helicoptero|spaceship|spacecraft|nave|foguetao|rocket|train|comboio|ship|barco|boat|drone|robot|robo|mecha|jet|satellite|satelite)\b/],
  ['person',/\b(?:person|people|human|humano|humana|pessoa|pessoas|corpo|body|human body|face|rosto|figura humana|silhouette|silhueta|portrait|retrato|bust|busto|anatomy|anatomia|skeleton|esqueleto|muscle|musculo|heart|coracao|brain|cerebro|alien|extraterrestre)\b/],
  ['landscape',/\b(?:landscape|paisagem|forest|floresta|tree|arvore|plant|planta|flower|flor|mountain|montanha|beach|praia|sea|ocean|oceano|waterfall|cascata|river|rio|desert|deserto|nature|natureza|volcano|vulcao|island|ilha|garden|jardim|cave|gruta|clouds|nuvens|animals?|animais?|dog|cao|cat|gato|dragon|dragao|dinossauro|dinosaur)\b/],
  ['diagram',/\b(?:diagram|diagrama|flowchart|fluxograma|network|rede|schema|esquema|molecule|molecula|dna|adn|cell|celula|atom|atomo|timeline|linha temporal|graph|grafico|circuit|circuito|algorithm|algoritmo|system|sistema|process|processo)\b/],
  ['object',/\b(?:object|objects|objeto|objetos|product|produto|item|items|model|modelo|cube|cubo|sphere|esfera|pyramid|piramide|phone|telemovel|telephone|telefone|book|livro|chair|cadeira|table|mesa|lamp|candeeiro|sculpture|escultura|sword|espada|tool|ferramenta|watch|relogio|camera|machine|maquina|key|chave|furniture|mobília|furniture)\b/]
 ];
-const baseNames={text:'ABC',space:'Space',planet:'Planetary system',map:'Schematic map',house:'Architecture',person:'Human figure',vehicle:'Vehicle',landscape:'Landscape',diagram:'Diagram',object:'Object'};
+const baseNames={mechanical:'Electric motor',text:'ABC',space:'Space',planet:'Planetary system',map:'Schematic map',house:'Architecture',person:'Human figure',vehicle:'Vehicle',landscape:'Landscape',diagram:'Diagram',object:'Object'};
 const namedPlanets=new Map(Object.entries({mercurio:'Mercury',venus:'Venus',terra:'Earth',marte:'Mars',jupiter:'Jupiter',saturno:'Saturn',urano:'Uranus',neptuno:'Neptune',plutao:'Pluto',lua:'Moon',sol:'Sun'}));
 const asTitle=(raw,scene)=>{
+ if(scene==='mechanical'&&/^(?:(?:mostra(?:-me)?|show(?: me)?|explica(?:-me)?|explain) )?(?:(?:um|o|an?|the) )?(?:motor(?: eletrico)?|(?:electric )?(?:motor|engine))$/.test(raw))return 'Electric motor';
  if(scene==='planet'){
   const planets={mars:'Mars',marte:'Mars',mercury:'Mercury',mercurio:'Mercury',
    venus:'Venus',earth:'Earth',terra:'Earth',jupiter:'Jupiter',saturn:'Saturn',
@@ -50,6 +52,8 @@ const asTitle=(raw,scene)=>{
  return (cleaned.replace(/^(?:a|an|the|um|uma|o|as|os)\s+/,'').slice(0,100)||baseNames[scene]).replace(/^./,c=>c.toUpperCase());
 };
 const controlRules=[
+ ['explode',/^(?:separa (?:as )?pecas|abre (?:o )?motor|vista explodida|explode(?: the engine| it)?|separate (?:the )?parts|exploded view)$/],
+ ['assemble',/^(?:junta (?:as )?pecas|monta(?: o motor| outra vez)?|volta a montar|assemble(?: it| the engine)?|reassemble)$/],
  ['dismiss',/^(?:(?:can|could|would) you )?(?:close (?:it|that|this|the (?:view|projection|panel|hologram))|dismiss (?:it|that|this)|hide (?:it|that|this|the projection)|clear (?:the screen|it|this|that)|go back|back to (?:core|travis|normal|the main view)|return to (?:core|travis|normal|main view)|restore (?:the )?(?:original|main|normal) view|volta (?:ao )?(?:travis|normal|inicio|nucleo)?|regressa (?:ao )?(?:travis|nucleo)?|fecha (?:isso|isto|a projecao|o holograma)|limpa (?:o ecra|isso)|desfaz(?: a projecao)?|voltar ao nucleo)$/],
  ['pin',/^(?:keep (?:this|it|that)(?: open| up)?|pin (?:this|it|that)|leave (?:it|that|this) (?:there|open)|hold (?:this|that) view|mantem (?:isso|isto|a projecao)(?: aberto)?|mantem aberto|deixa (?:isso|isto|aberto|ai)|fixa(?: isso| isto| o holograma)?)$/],
  ['unpin',/^(?:unpin(?: it)?|auto return|let it close|resume automatic return|desafixa(?: isso| isto)?|podes fechar automaticamente|retoma o regresso automatico)$/],
@@ -69,6 +73,7 @@ const spokenPortuguese=t=>/\b(?:quero|queria|gostava|apetece|apetecia|ver|mostra
 export function parseVisualIntent(text,{active=false,kind=''}={}){
  const raw=compact(text);
  if(raw.length<2||raw.length>650||negatives.test(raw)||/^(?:don't|do not|never|nao|nunca)\b/.test(raw))return null;
+ if(/^(?:desliga|desativa|liga|ativa) (?:os )?(?:sons|efeitos sonoros)$|^(?:enable|disable|mute|unmute) (?:motion )?(?:sounds|sound effects)$/.test(raw))return {type:'sound',enabled:!(/^(?:desliga|desativa|disable|mute)\b/.test(raw)),language:/^(?:desliga|desativa|liga|ativa)/.test(raw)?'pt':'en'};
  if(active)for(const [action,re] of controlRules)if(re.test(raw) &&
    !(kind==='youtube'&&['next','previous'].includes(action)))
    return {type:action==='pin'||action==='unpin'||action==='dismiss'?action:'control',action};

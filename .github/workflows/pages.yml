@@ -55,6 +55,7 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/travis-three-test" --ignore-scripts --no-audit --no-fund three@0.180.0
           node scripts/travis-morph-continuity-selftest.mjs "$RUNNER_TEMP/travis-three-test/node_modules/three/build/three.module.js"
+          node scripts/travis-motion-selftest.mjs "$RUNNER_TEMP/travis-three-test/node_modules/three/build/three.module.js"
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

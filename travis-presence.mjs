@@ -1,3 +1,4 @@
+import {MOTION} from './travis-motion.mjs?v=motion-1';
 // Local animation direction. Conversation state drives gestures, never device sensors.
 const clamp=x=>Math.max(0,Math.min(1,x));
 const ease=x=>{x=clamp(x);return x*x*(3-2*x);};
@@ -37,7 +38,7 @@ export function createPresenceMotion({random=Math.random,reducedMotion=false}={}
 // Reversible, wall-clock transitions: a slow frame cannot strand half a face.
 export function createHologramPresentation({reducedMotion=false}={}){
   let phase='face',from=0,to=0,started=0;
-  const duration=reducedMotion?.001:1.15;
+  let duration=reducedMotion?.001:MOTION.enter;
   function sample(now){
     const t=clamp((now-started)/duration);
     let amount=from+(to-from)*(t*t*t*(t*(t*6-15)+10));
@@ -48,7 +49,7 @@ export function createHologramPresentation({reducedMotion=false}={}){
   }
   function transition(target,now){
     const value=sample(now).amount;
-    from=value;to=target;started=now;
+    from=value;to=target;started=now;duration=reducedMotion?.001:target===1?MOTION.enter:MOTION.exit;
     phase=target===1?'dissolving':'returning';
   }
   return {

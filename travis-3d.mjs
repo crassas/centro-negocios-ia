@@ -1,21 +1,22 @@
-import { createConceptProjection } from './travis-concept-projection.mjs?v=detail-1';
-import './travis-action-cards.mjs?v=detail-1';
+import {createMotionAudio} from './travis-motion-audio.mjs?v=motion-1';
+import { createConceptProjection } from './travis-concept-projection.mjs?v=motion-1';
+import './travis-action-cards.mjs?v=motion-1';
 import { createVoiceInput } from './travis-voice-input.mjs?v=stt-fast-1';
-import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=detail-1';
+import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=motion-1';
 import { INTERFACE_COPY, interfaceLanguage, applyInterfaceLanguage, languageFromInterfaceCommand } from './travis-interface-language.mjs?v=1';
 import { resolveWakePhrase } from './travis-wake-phrase.mjs?v=pt-1';
 import { createTravisVision } from './travis-vision.mjs?v=scene-1';
 import { buildSpeechEnvelope, speechEnvelopeLevel } from './travis-audio-sync.mjs?v=1';
 import { sceneSignature } from './travis-scene-tracker.mjs?v=1';
 import { cameraCommand } from './travis-vision-policy.mjs?v=scene-1';
-import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=detail-1';
+import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=motion-1';
 import { projectWebAnswer } from './travis-web-projection.mjs?v=agent-1';
-import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=3';
+import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=motion-1';
 import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
 import { createBacklight } from './travis-atmosphere.mjs?v=cinema-1';
 import { createFaceRig } from './travis-face-rig.mjs?v=articulation-2';
 import * as THREE from 'three';
-import { createNeuralField } from './travis-brain-view.mjs?v=detail-1';
+import { createNeuralField } from './travis-brain-view.mjs?v=motion-1';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -68,12 +69,13 @@ if (!hud || !launcher || !canvas) {
     pendingConcept=event.detail?.scene||null;pendingSubject=event.detail?.subject||'';
     if(pendingConcept)conceptProjection?.show(pendingConcept,performance.now()/1000,pendingSubject,{reference:event.detail?.reference});
     else conceptProjection?.hide();
+    if(pendingConcept)motionAudio.play('morph');
   });
   window.addEventListener('travis:visual-control',event=>{
-    conceptProjection?.control?.(event.detail?.action);
+    if(conceptProjection?.control?.(event.detail?.action))motionAudio.play('control');
   });
   window.addEventListener('travis:commands',event=>{
-    if(event.detail?.open===false)conceptProjection?.returnToCore?.(performance.now()/1000);
+    if(event.detail?.open===false){conceptProjection?.returnToCore?.(performance.now()/1000);motionAudio.play('return');}
   });
   const holographicEyeMaterials=[];
   let faceHit;
@@ -133,6 +135,11 @@ if (!hud || !launcher || !canvas) {
   const IS_LOCAL_TRAVIS_UI=['127.0.0.1','localhost'].includes(location.hostname) && location.port==='8770';
   const LOCAL_TRAVIS_BASE=IS_LOCAL_TRAVIS_UI?location.origin:'http://127.0.0.1:8770';
   let voiceSession=0;
+  const motionAudio=createMotionAudio({context:()=>audioContext,state:()=>({open:opened,listening:state==='listening'||voiceInput?.diagnostics().active||voiceRecorder?.state==='recording',paused:voicePaused,speaking:state==='speaking'||voiceBusy,reducedMotion})});
+  window.addEventListener('travis:motion-sound',e=>motionAudio.setEnabled(e.detail?.enabled));
+  window.addEventListener('travis:state',e=>{if(['listening','speaking'].includes(e.detail?.state))motionAudio.silence();});
+  window.addEventListener('travis:close',()=>motionAudio.silence());
+  window.addEventListener('travis:user-start',()=>motionAudio.silence());
   let voiceInput=null,voiceInputFailed=false,voicePaused=false,standby=false,initiativeTimer=0;
   const savedLanguage=(()=>{try{return sessionStorage.getItem('travis.language')||'auto';}catch{return 'auto';}})();
   let replyLanguage=savedLanguage==='pt'?'pt':'en',inputLanguage='auto',preferredLanguage=['pt','en'].includes(savedLanguage)?savedLanguage:'auto',proactive=true,lastInteraction=performance.now();
@@ -2231,7 +2238,7 @@ if (!hud || !launcher || !canvas) {
         neural:neuralField?.diagnostics(),
         presence:{...presencePose},projection:hologramPresentation.sample(performance.now()/1000),
         media:window.TravisProjection?.media(),
-        hologram:conceptProjection?.state?.(),projectionControl:window.TravisProjection?.status?.(),
+        hologram:conceptProjection?.state?.(),motionAudio:motionAudio.status(),projectionControl:window.TravisProjection?.status?.(),
         meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,voiceInput:voiceInput?.diagnostics(),vision:vision.diagnostics(),replyLanguage,inputLanguage,preferredLanguage,uiLanguage,visualModePolicy:'automatic',standby,proactive,voicePaused,
         recording:voiceRecorder?.state,pendingTasks:[...pendingVoiceTasks.keys()],lastTaskResult:lastVoiceTaskResult,voiceMetrics:voiceMetrics.map(m=>({...m}))};
     },

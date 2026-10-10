@@ -1,7 +1,8 @@
-import {createArchitecture} from './travis-architecture.mjs?v=detail-1';
-import {createDetailedSubject,identifyVisualSubject} from './travis-visual-subjects.mjs?v=detail-1';
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=detail-1';
-import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=detail-1';
+import {createMechanical} from './travis-mechanical.mjs?v=motion-1';
+import {createArchitecture} from './travis-architecture.mjs?v=motion-1';
+import {createDetailedSubject,identifyVisualSubject} from './travis-visual-subjects.mjs?v=motion-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=motion-1';
+import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=motion-1';
 // Film-inspired schematic projections. Unprovided geographic/CAD/person
 // geometry stays visibly conceptual; real source links are separate.
 export function createConceptProjection(THREE,{reducedMotion=false}={}){
@@ -185,11 +186,12 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   if(active.children.length)ghost={group:activeFrame,mats,textures,start:now};
   else dispose(activeFrame,mats,textures);
   active=new THREE.Group();activeFrame=new THREE.Group();activeFrame.add(active);root.add(activeFrame);mats=[];objects=[];textures=[];
-  kind=['orbit','atom','network','wave','planet','map','house','person','vehicle','landscape','diagram','object','text','space','reference'].includes(scene)?scene:'network';
+  kind=['orbit','atom','network','wave','planet','map','house','person','vehicle','landscape','diagram','object','text','space','reference','mechanical'].includes(scene)?scene:'network';
   planetName=['earth','mars','venus','saturn','jupiter','uranus','neptune','mercury','moon','sun'].find(x=>
    new RegExp('\\b'+x+'\\b').test(String(subject).toLowerCase()))||'';
   born=now;zoom=1;dx=dy=spin=0;label=subject;variant=identifyVisualSubject(kind,subject);
   if(['text','space','reference'].includes(kind)||['dna','atom','cube','sphere','pyramid'].includes(variant)){const detailed=createDetailedSubject(THREE,kind,subject,options);if(detailed){active.add(detailed.group);mats.push(...detailed.materials);textures.push(...detailed.textures);variant=detailed.variant;}}
+  else if(kind==='mechanical'){const built=createMechanical(THREE,{exploded:options.exploded===true});active.add(built.group);mats.push(...built.materials);variant=built.variant;}
   else if(kind==='planet')planet();else if(kind==='map')map();else if(kind==='house')house();
   else if(kind==='person')person();else if(kind==='vehicle')vehicle();
   else if(kind==='landscape')landscape();else if(kind==='diagram')diagram();
@@ -215,8 +217,9 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   matter.setSource(typeof sourceProvider==='function'?sourceProvider():sourceProvider);
   matter.returnToSource(now);
  }
- function control(action){
+ function control(action,now=performance.now()/1000){
   if(!kind)return false;
+  if(['explode','assemble'].includes(action)){if(kind!=='mechanical')return false;show('mechanical',now,label,{exploded:action==='explode'});return true;}
   const step=.25;
   if(action==='zoom-in')zoom=limit(zoom*1.3,.5,2.5);
   else if(action==='zoom-out')zoom=limit(zoom/1.3,.5,2.5);

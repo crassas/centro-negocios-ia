@@ -1,4 +1,4 @@
-import {HOLOGRAPHIC_LIGHT_GLSL} from './travis-holographic-head.mjs?v=detail-1';
+import {HOLOGRAPHIC_LIGHT_GLSL} from './travis-holographic-head.mjs?v=motion-1';
 
 // Fine, depth-writing light cells carry surface detail; travelling particles
 // carry the same material between forms. The head retains its facial rig.

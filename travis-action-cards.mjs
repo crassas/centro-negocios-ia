@@ -1,8 +1,9 @@
 // Front workspace driven by actual host tool results. Text is always inert.
-import {hologramPresentation as projection} from './travis-presence.mjs?v=3';
+import {MOTION,revealCaption,readingHold} from './travis-motion.mjs?v=motion-1';
+import {hologramPresentation as projection} from './travis-presence.mjs?v=motion-1';
 import {mountYouTube,closeYouTube,controlYouTube,youtubeState} from './travis-youtube.mjs?v=3';
-import {parseVisualIntent,rewriteEnglishToolRequest,mayNeedVisualModel} from './travis-english-intents.mjs?v=detail-1';
-import {buildNarrationCues,cueAtTime,hasLocalVisual} from './travis-visual-story.mjs?v=detail-1';
+import {parseVisualIntent,rewriteEnglishToolRequest,mayNeedVisualModel} from './travis-english-intents.mjs?v=motion-1';
+import {buildNarrationCues,cueAtTime,hasLocalVisual} from './travis-visual-story.mjs?v=motion-1';
 const hud=document.getElementById('travis-hud');
 const deck=document.getElementById('travis-action-deck');
 const heading=document.getElementById('travis-action-heading');
@@ -33,10 +34,10 @@ function updatePin(){
   heading.title=pinned?'Pinned until you dismiss it':'Returns to Travis automatically';
 }
 const schematic=(scene,title)=>{
-  const names={text:'TEXT',space:'SPACE',reference:'VISUAL REFERENCE',planet:'PLANETARY CONCEPT',map:'SCHEMATIC MAP',house:'ARCHITECTURAL WIREFRAME',
+  const names={mechanical:'ELECTRIC MOTOR · CUTAWAY',text:'TEXT',space:'SPACE',reference:'VISUAL REFERENCE',planet:'PLANETARY CONCEPT',map:'SCHEMATIC MAP',house:'ARCHITECTURAL WIREFRAME',
     person:'HUMAN FIGURE CONCEPT',vehicle:'VEHICLE CONCEPT',landscape:'NATURE CONCEPT',
     diagram:'CONCEPT DIAGRAM',object:'OBJECT WIREFRAME'};
-  const summaries={text:'Letterforms made of holographic light.',space:'Illustrative star field, not a live sky chart.',reference:'Holographic relief from a sourced image; not a recovered 3D model.',planet:'Illustrative orbital model, not NASA imagery.',
+  const summaries={mechanical:'Generic educational electric motor cutaway; not measured CAD.',text:'Letterforms made of holographic light.',space:'Illustrative star field, not a live sky chart.',reference:'Holographic relief from a sourced image; not a recovered 3D model.',planet:'Illustrative orbital model, not NASA imagery.',
     map:'Illustrative route grid, not live geography or verified coordinates.',
     house:'Conceptual building geometry, not a survey or architectural plan.',
     person:'Generic holographic figure, not a reconstruction of a real person.',
@@ -57,6 +58,7 @@ const schematic=(scene,title)=>{
 };
 const clock=()=>performance.now()/1000;
 const menu={kind:'capabilities',title:'Your workspace',items:[
+  {title:'Estúdio visual',detail:'Percorrer as transformações do Travis',url:new URL('./tools/travis-motion/studio.html',location.href).href},
   {title:'Repositories',detail:'Inspect your projects',request:'Mostra os meus repositórios'},
   {title:'Tasks',detail:'Read your real task list',request:'Mostra as minhas tarefas'},
   {title:'Agents',detail:'Current executions',request:'Estado dos agentes'},
@@ -75,9 +77,15 @@ function render(data,{story=false}={}){
   window.dispatchEvent(new CustomEvent('travis:illustration',{detail:{
     scene:data.kind==='illustration'?data.scene:null,subject:data.title||'',reference:data.reference||null
   }}));
-  if(!matchMedia('(prefers-reduced-motion: reduce)').matches)deck.animate?.([{opacity:0,filter:'blur(9px)',transform:'translate(-50%, 16px) scale(.97)'},{opacity:1,filter:'blur(0px)',transform:'translate(-50%, 0) scale(1)'}],{duration:750,easing:'cubic-bezier(.16,1,.3,1)'});
+  if(!matchMedia('(prefers-reduced-motion: reduce)').matches)deck.animate?.([{opacity:0,filter:'blur(9px)',transform:'translate(-50%, 16px) scale(.97)'},{opacity:1,filter:'blur(0px)',transform:'translate(-50%, 0) scale(1)'}],{duration:MOTION.caption*1000,easing:MOTION.entrance});
   heading.textContent=String(data.title||'Your workspace');
-  caption.replaceChildren();caption.textContent=data.kind==='illustration'?String(data.title||''):'';
+  caption.replaceChildren();
+  if(data.kind==='illustration'){const title=document.createElement('span');title.className='travis-motion-title';caption.append(title);revealCaption(title,data.title||'',{reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches});}
+  if(data.scene==='mechanical'){
+    const note=document.createElement('small');note.textContent='MODELO DIDÁTICO · CORTE';caption.append(note);
+    const controls=document.createElement('div');controls.className='travis-reference-navigation travis-mechanical-controls';
+    for(const [request,label] of [['Separa as peças','Separar'],['Junta as peças','Montar']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.addEventListener('click',()=>window.TravisVisual?.ask(request));controls.append(button);}caption.append(controls);
+  }
   if(data.sourceUrl){const link=document.createElement('a');link.href=data.sourceUrl;link.target='_blank';link.rel='noopener noreferrer';link.textContent=' · '+String(data.sourceName||'Source');caption.append(link);}
   if(data.creditUrl){const link=document.createElement('a');link.href=data.creditUrl;link.target='_blank';link.rel='noopener noreferrer';link.textContent=' · Image credit';caption.append(link);}
   if(data.scene==='reference'){const note=document.createElement('small');note.textContent='IMAGE RELIEF';caption.append(note);}
@@ -181,7 +189,7 @@ if(deck){
     render(data);window.TravisVisual?.commands(true,{automatic:true});
     show(true);
   });
-  window.addEventListener('travis:speech-end',()=>{const explained=Boolean(narration);cancelNarration();scheduleReturn(explained?2800:current?.kind==='illustration'?10500:13500);});
+  window.addEventListener('travis:speech-end',()=>{const explained=Boolean(narration);cancelNarration();scheduleReturn(explained?Math.max(2800,readingHold(current?.title||'')*1000):current?.kind==='illustration'?10500:13500);});
   window.addEventListener('travis:speech-cancel',()=>{cancelNarration();if(current)scheduleReturn(2800);});
   window.addEventListener('travis:user-start',()=>{cancelNarration();clearTimeout(returnTimer);returnTimer=0;});
   window.addEventListener('travis:state',event=>{
@@ -198,7 +206,7 @@ if(deck){
     media:youtubeState,
     mayNeedModel:mayNeedVisualModel,
     applyModelIntent(result,text=''){
-      const valid=['planet','map','house','person','vehicle','landscape','diagram','object','text','space'];
+      const valid=['planet','map','house','person','vehicle','landscape','diagram','object','text','space','mechanical'];
       if(result?.ok!==true||!valid.includes(result.scene)
           ||typeof result.title!=='string'||result.title.length>110)return null;
       const pt=/\b(?:quero|gostava|apetece|imagina|podes|consegues|como|seria|mostra)\b/i.test(text);
@@ -245,6 +253,7 @@ if(deck){
         const rewritten=rewriteEnglishToolRequest(text);
         return rewritten!==text?{handled:false,rewritten}:null;
       }
+      if(intent.type==='sound'){window.dispatchEvent(new CustomEvent('travis:motion-sound',{detail:{enabled:intent.enabled}}));return {handled:true,language:intent.language,kind:'control',reply:intent.language==='pt'?(intent.enabled?'Sons de movimento ligados.':'Sons de movimento desligados.'):(intent.enabled?'Motion sounds enabled.':'Motion sounds disabled.')};}
       if(intent.type==='scene'){
         if(intent.scene==='planet'&&/\b(?:random|any|aleatorio|aleatória|aleatoria|qualquer)\b/i.test(String(text).normalize('NFD').replace(/[\u0300-\u036f]/g,'')))
           intent.title=planetSequence[Math.floor(Math.random()*planetSequence.length)];
@@ -270,6 +279,8 @@ if(deck){
       }
       if(intent.type==='control'){
         const action=intent.action;
+        if(['explode','assemble'].includes(action)&&current?.scene!=='mechanical')return {handled:true,reply:'Este controlo está disponível no modelo de motor elétrico.',language:'pt',kind:'control'};
+        if(['explode','assemble'].includes(action)){cancelNarration();}
         if(action==='next'&&!current?.gallery&&current?.kind==='illustration'&&/\b(?:image|images|photo|imagem|imagens|foto)\b/i.test(text)){
           cancelNarration();clearTimeout(returnTimer);
           return {handled:true,kind:'scene',language:/imagem|imagens|foto|mais/i.test(text)?'pt':'en',title:current.title,reply:'',needsReference:true,

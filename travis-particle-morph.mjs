@@ -1,5 +1,6 @@
+import {MOTION} from './travis-motion.mjs?v=motion-1';
 import {particleBounds,fitParticleToViewport} from './travis-projection-framing.mjs?v=1';
-import {createHolographicParticleMaterial} from './travis-holographic-head.mjs?v=detail-1';
+import {createHolographicParticleMaterial} from './travis-holographic-head.mjs?v=motion-1';
 
 export const morphEase=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
 export function morphVisibility(progress,returning,alphaStart=0,avatarStart=0){
@@ -36,7 +37,7 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
  const material=createHolographicParticleMaterial(THREE);
  const points=new THREE.Points(geometry,material);points.name='TravisMorphParticles';
  points.frustumCulled=false;root.add(points);
- let started=0,duration=1.18,toCore=false,active=false,sourceObject=null;
+ let started=0,duration=MOTION.enter,toCore=false,active=false,sourceObject=null;
  let currentAlpha=0,lastProgress=0,sourceSummary='fallback-core',targetSummary='core';
  let currentBounds=particleBounds(to),lastFit=null,rawTarget=null,rawNormals=null;
  let viewKey='',lastTime=0,lastVoice=0,alphaStart=0,avatarStart=0,avatarDissolve=0;
@@ -150,7 +151,7 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
    const next=collect(target||source||sourceObject)||{positions:from.slice(),normals:normalFrom.slice()};
    rawTarget=next.positions;rawNormals=next.normals;currentBounds=particleBounds(rawTarget);
    toCore=!target;alphaStart=wasActive?currentAlpha:0;avatarStart=wasActive?avatarDissolve:0;
-   targetSummary=label;started=now;lastTime=now;duration=reducedMotion?.001:1.18;lastProgress=0;
+   targetSummary=label;started=now;lastTime=now;duration=reducedMotion?.001:toCore?MOTION.exit:MOTION.enter;lastProgress=0;
    fitTarget({camera});viewKey=camera?keyFor({camera}):'';
    dirty();active=true;points.visible=true;
  }
@@ -161,7 +162,7 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
    if(!toCore&&key!==viewKey){
      // Fit only the destination. Preserve the last displayed point positions
      // when controls or viewport change, including during an interrupted morph.
-     if(viewKey){const visible=current(lastTime||now);from.set(visible.positions);normalFrom.set(visible.normals);started=now;duration=reducedMotion?.001:.38;alphaStart=currentAlpha;avatarStart=avatarDissolve;}
+     if(viewKey){const visible=current(lastTime||now);from.set(visible.positions);normalFrom.set(visible.normals);started=now;duration=reducedMotion?.001:MOTION.control;alphaStart=currentAlpha;avatarStart=avatarDissolve;}
      fitTarget(view);dirty();viewKey=key;
    }
    const progress=advance(now),visibility=morphVisibility(progress,toCore,alphaStart,avatarStart);

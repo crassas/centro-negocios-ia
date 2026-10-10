@@ -1,0 +1,16 @@
+{
+  "title": "TRAVIS · MATÉRIA E MOVIMENTO",
+  "seed": 11,
+  "duration": 26,
+  "fps": 30,
+  "beats": [
+    {"name":"presence","at":0,"label":"Uma presença. Muitas formas.","action":"face"},
+    {"name":"jupiter","at":2.5,"label":"Júpiter","scene":"planet","subject":"Jupiter","sound":"morph"},
+    {"name":"earth","at":6,"label":"Terra","scene":"planet","subject":"Earth","sound":"morph"},
+    {"name":"architecture","at":9.5,"label":"Arquitetura · modelo conceptual","scene":"house","subject":"Modern house","sound":"morph"},
+    {"name":"motor","at":13,"label":"Motor elétrico · corte didático","scene":"mechanical","subject":"Electric motor","sound":"morph"},
+    {"name":"separate","at":16.5,"label":"Peças separadas · eixo, bobinas, rolamentos","control":"explode","sound":"control"},
+    {"name":"assemble","at":20,"label":"Montagem","control":"assemble","sound":"control"},
+    {"name":"return","at":23,"label":"De volta ao Travis.","action":"return","sound":"return"}
+  ]
+}
