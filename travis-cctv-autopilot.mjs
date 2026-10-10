@@ -72,8 +72,11 @@ async function select(intent){
     const sources=intent.live?ranked.filter(c=>c.feedType==='hls'):ranked;
     const known=intent.live&&intent.global===true
       ? new Map([['deldot-ncam221',0],['deldot-ncam214',1]]) : new Map();
-    const pool=known.size ? sources.sort((a,b)=>
-      (known.get(a.id)??100)-(known.get(b.id)??100)) : sources;
+    const knownPublic=known.size?net.locations().filter(c=>known.has(c.id)&&c.feedType==='hls'):[];
+    const pool=known.size
+      ? [...knownPublic,...sources].filter((c,i,list)=>list.findIndex(x=>x.id===c.id)===i)
+          .sort((a,b)=>(known.get(a.id)??100)-(known.get(b.id)??100))
+      : sources;
     if(intent.action!=='next'||!candidates.length)candidates=pool;
     const choices=(intent.action==='next'&&candidates.length
       ? [...candidates.filter(c=>c.id!==selected?.id),...pool]
