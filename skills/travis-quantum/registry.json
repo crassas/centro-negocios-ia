@@ -1,0 +1,203 @@
+{
+  "schema": "travis-quantum-skills/v1",
+  "version": "2026-10-10.1",
+  "parent": {
+    "name": "QUANTUM UNIFIED AGENT",
+    "runtime": "10.73",
+    "driveCanonical": "10.83 PARTIAL",
+    "authorityGranted": false
+  },
+  "source": "crassas/centro-negocios-ia:feature/travis-gev-17-keyless",
+  "policy": "local-first/evidence-required/no-new-authority",
+  "skills": [
+    {
+      "id": "quantum-governance",
+      "title": "Quantum Unified Agent — governo e evidência",
+      "description": "Usar o Quantum V10.73 como governador de planeamento e decisões, sem inventar versões, permissões nem execuções.",
+      "triggers": [
+        "quantum",
+        "agente unificado",
+        "governance",
+        "governo",
+        "decision",
+        "decisao",
+        "estrategia",
+        "strategy",
+        "skills",
+        "capacidades"
+      ],
+      "requires": [
+        "/root/travis_quantum.py",
+        "/root/.centro-jarvis/quantum-runtime-manifest.json",
+        "/root/quantum-runtime/v10.73/quantum-unified-agent-v10.73/VALIDATION-V10.73.json"
+      ],
+      "provider": null,
+      "category": "core",
+      "scope": "advisory",
+      "authority_granted": false,
+      "source": "skills/travis-quantum/quantum-governance/SKILL.md"
+    },
+    {
+      "id": "gods-eye-world",
+      "title": "God's Eye View — globo geoespacial",
+      "description": "Controlar o globo oficial Esri/OSM no Travis, por voz PT/EN, com as 17 categorias que têm caminho sem chave.",
+      "triggers": [
+        "globo",
+        "god's eye",
+        "gods eye",
+        "godseye",
+        "world view",
+        "terra",
+        "earth",
+        "satellites",
+        "satelites",
+        "voos",
+        "flights",
+        "sismos",
+        "earthquakes",
+        "meteorologia",
+        "weather",
+        "mapa",
+        "map"
+      ],
+      "requires": [
+        "/root/.centro-ui/travis-gev-bridge.mjs",
+        "/root/.centro-ui/travis-gev-intents.mjs",
+        "/root/travis-gev-keyless/src/app/embed.js"
+      ],
+      "provider": "http://127.0.0.1:4173/",
+      "category": "world",
+      "scope": "user_requested",
+      "authority_granted": false,
+      "source": "skills/travis-quantum/gods-eye-world/SKILL.md"
+    },
+    {
+      "id": "public-camera-selection",
+      "title": "Câmaras públicas — selecção autónoma",
+      "description": "Encontrar automaticamente uma câmara pública registada, confirmar vídeo ou imagem e apresentar no God's Eye sem pedir selecção manual.",
+      "triggers": [
+        "camara",
+        "camera",
+        "cctv",
+        "webcam",
+        "traffic cameras",
+        "camaras publicas",
+        "camera publica",
+        "camera em direto",
+        "live camera",
+        "video em direto"
+      ],
+      "requires": [
+        "/root/.centro-ui/travis-cctv-autopilot.mjs",
+        "/root/.centro-ui/travis-global-camera-registry.mjs",
+        "/root/.centro-ui/travis-cctv-player.mjs"
+      ],
+      "provider": "http://127.0.0.1:4187/healthz",
+      "category": "cctv",
+      "scope": "user_requested",
+      "authority_granted": false,
+      "source": "skills/travis-quantum/public-camera-selection/SKILL.md"
+    },
+    {
+      "id": "voice-vision-session",
+      "title": "Voz PT/EN e visão autorizada",
+      "description": "Gerir conversa em português de Portugal e inglês, reconhecimento de voz, síntese e câmara do telemóvel apenas com permissão.",
+      "triggers": [
+        "fala",
+        "voz",
+        "speak",
+        "voice",
+        "audio",
+        "microfone",
+        "microphone",
+        "camera do telemovel",
+        "camara do telemovel",
+        "visao",
+        "vision",
+        "gestos",
+        "gestures",
+        "portugues",
+        "english"
+      ],
+      "requires": [
+        "/root/.centro-ui/travis-vision.mjs",
+        "/root/.centro-ui/travis-voice-input.mjs",
+        "/root/.centro-models/tts/pt_PT-tugao-medium.onnx",
+        "/root/.centro-models/tts/en_GB-northern_english_male-medium.onnx"
+      ],
+      "provider": "http://127.0.0.1:8770/health",
+      "category": "senses",
+      "scope": "permission_required",
+      "authority_granted": false,
+      "source": "skills/travis-quantum/voice-vision-session/SKILL.md"
+    },
+    {
+      "id": "neural-memory-learning",
+      "title": "Memória persistente e aprendizagem verificável",
+      "description": "Saber que existem memória SQLite, episódios, grafo e reflexão; distinguir capacidades instaladas de consciência ou aprendizagem de pesos.",
+      "triggers": [
+        "memoria",
+        "memory",
+        "lembras",
+        "remember",
+        "aprende",
+        "learning",
+        "learn",
+        "neural",
+        "neural graph",
+        "cerebro",
+        "brain",
+        "autoconsciencia",
+        "awareness",
+        "consciencia"
+      ],
+      "requires": [
+        "/root/travis_awareness.py",
+        "/root/travis_cognitive.py",
+        "/root/travis_brain.py",
+        "/root/travis_core.py"
+      ],
+      "provider": "http://127.0.0.1:8770/health",
+      "category": "memory",
+      "scope": "advisory",
+      "authority_granted": false,
+      "source": "skills/travis-quantum/neural-memory-learning/SKILL.md"
+    },
+    {
+      "id": "microsites-operations",
+      "title": "Microsites, SEO local e execução segura",
+      "description": "Aplicar rotinas comprováveis de SEO local, AEO, GEO, QA e publicação aos sites do Centro sem improvisar acessos.",
+      "triggers": [
+        "site",
+        "sites",
+        "website",
+        "seo",
+        "aeo",
+        "geo",
+        "indexacao",
+        "indexar",
+        "posicao google",
+        "serp",
+        "pentehouse",
+        "best pizza",
+        "beatriz",
+        "dois irmaos",
+        "microsites",
+        "repositório",
+        "repo"
+      ],
+      "requires": [
+        "/root/repos/centro-negocios-ia",
+        "/root/repos/pente_houselanding",
+        "/root/repos/best-pizza-kebab",
+        "/root/repos/restaurante-2-irmaos",
+        "/root/repos/engomadoria-beatriz"
+      ],
+      "provider": "http://127.0.0.1:8765/health",
+      "category": "business",
+      "scope": "explicit_approval_for_mutation",
+      "authority_granted": false,
+      "source": "skills/travis-quantum/microsites-operations/SKILL.md"
+    }
+  ]
+}
