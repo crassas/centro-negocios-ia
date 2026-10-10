@@ -1,3 +1,4 @@
+import { createLiveSTT } from './travis-live-stt.mjs?v=live-1';
 import { readVoiceReply } from './travis-voice-stream.mjs?v=live-1';
 import {createMotionAudio} from './travis-motion-audio.mjs?v=motion-1';
 import { createConceptProjection } from './travis-concept-projection.mjs?v=cinematic-1';
@@ -170,7 +171,8 @@ if (!hud || !launcher || !canvas) {
     if(voicePaused||!opened||voiceInputFailed)return false;
     if(!voiceInput)voiceInput=createVoiceInput({
       onStart(){if(!opened||voicePaused)return;lastInteraction=performance.now();window.dispatchEvent(new CustomEvent('travis:user-start'));interruptReply();setState('listening',standby?'Say Travis to wake me.':'I’m listening.');},
-      onSpeech(blob,endedAt){if(!opened||voicePaused)return;voiceSpeechEndedAt=endedAt;handleVoiceBlob(blob,'audio/wav',voiceSession);},
+      liveSTT:()=>createLiveSTT((body,signal)=>localJson('/transcribe-live',{body,signal:AbortSignal.any([signal,AbortSignal.timeout(5000)])})),
+      onSpeech(blob,endedAt,transcript){if(!opened||voicePaused)return;voiceSpeechEndedAt=endedAt;handleVoiceBlob(blob,'audio/wav',voiceSession,transcript);},
       onLevel(level){if(state!=='speaking')externalVoiceLevel=level;},
       isPlayback:()=>Boolean(voiceSource),
       checkTurn:blob=>localJson('/turn',{body:blob,type:'audio/wav',signal:AbortSignal.timeout(1500)}),
@@ -906,7 +908,7 @@ if (!hud || !launcher || !canvas) {
   },750);
   window.addEventListener('pagehide',()=>clearInterval(visionNarrationTimer),{once:true});
 
-  async function handleVoiceBlob(blob,mime,session) {
+  async function handleVoiceBlob(blob,mime,session,liveTranscript=null) {
     if (!opened || session!==voiceSession) return;
     voiceBusy=true;
     // Keep listening: a new real utterance cancels this generation.
@@ -919,7 +921,9 @@ if (!hud || !launcher || !canvas) {
       const metrics={speechEndedAt:voiceSpeechEndedAt||performance.now()};
       const recognitionLanguage=inputLanguage!=='auto'
         ? inputLanguage : (preferredLanguage==='en'||preferredLanguage==='pt' ? preferredLanguage : 'auto');
-      const transcript=typeof blob==='string'?{text:blob}:await localJson('/transcribe?language='+recognitionLanguage,{
+      const liveResult=liveTranscript?await liveTranscript:null;
+      if(!opened||session!==voiceSession||controller.signal.aborted)return;
+      const transcript=typeof blob==='string'?{text:blob}:liveResult||await localJson('/transcribe?language='+recognitionLanguage,{
         body:blob,
         type:mime||'application/octet-stream',
         signal:controller.signal
@@ -929,6 +933,7 @@ if (!hud || !launcher || !canvas) {
       metrics.transcriptAt=performance.now();
       metrics.speechEndToTranscriptMs=Math.round(metrics.transcriptAt-metrics.speechEndedAt);
       metrics.sttDurationMs=transcript.durationMs??null;
+      metrics.sttEngine=transcript.engine||'whisper';
       metrics.recognitionLanguage=recognitionLanguage;
       let text=String(transcript.text||'').trim();
       window.dispatchEvent(new CustomEvent('travis:transcript',{detail:{role:'user',text}}));

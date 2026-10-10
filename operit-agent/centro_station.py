@@ -75,6 +75,7 @@ TRAVIS_CLIENT_FILES = (
     "travis-vision.mjs",
     "travis-voice-input.mjs",
     "travis-voice-stream.mjs",
+    "travis-live-stt.mjs",
     "travis-interface-language.mjs",
     "travis-form-director.mjs",
     "travis-brain-view.mjs",
@@ -842,7 +843,7 @@ def main():
                 if ui_changed:
                     actions.append({"service":"autoupdate/travis-client","ok":not update_errors,"output":"módulos atualizados: "+", ".join(ui_changed)})
                 if changed:
-                    if any(name in changed for name in ("travis_stream.py", "jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh", "travis_brain.py", "travis_scene.py", "travis_visual_research.py")):
+                    if any(name in changed for name in ("travis_stream.py", "jarvis_sherpa.py", "jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh", "travis_brain.py", "travis_scene.py", "travis_visual_research.py")):
                         pending_jarvis_restart = True
                     if any(name in changed for name in ("centro_server.py", "business_db.py", "travis_core.py")):
                         pending_server_restart = True

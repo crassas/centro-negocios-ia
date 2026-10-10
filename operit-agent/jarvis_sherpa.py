@@ -50,7 +50,7 @@ READ_ONLY_INTENT = re.compile(
     r"pesquis\w*|procur\w*|encontr\w*|saber|"
     r"compar\w*|fech\w*|paus\w*|retom\w*|decid\w*|avali\w*|analisa\w*|"
     r"diz|dizer|fala|falar|convers\w*|"
-    r"abre|abrir|abro|ler|l[eê]|qual|quais|como|porque|"
+    r"abre|abra|abrir|abro|ler|l[eê]|qual|quais|como|porque|"
     r"o que|quem|quando|onde|ol[aá]|bom dia|boa tarde|"
     r"check|show|explain|search|find|look|read|tell|"
     r"speak|talk|hello|hi|what|how|who|where|when|why|open)\b",
@@ -131,8 +131,47 @@ def create_recognizer():
         **{key:str(val) for key,val in required.items()},
         num_threads=2,provider="cpu",decoding_method="greedy_search")
 
+def live_decode(recognizer,sessions,payload):
+    """Decode bounded PCM fragments while the user is still speaking."""
+    import base64
+    import numpy as np
+    now=time.monotonic()
+    for key in list(sessions):
+        if now-sessions[key]['touched']>45:sessions.pop(key,None)
+    key=str(payload.get('id',''))
+    if not re.fullmatch(r'[a-zA-Z0-9-]{16,80}',key):raise ValueError('invalid_stream_id')
+    if payload.get('cancel'):
+        sessions.pop(key,None);return {'cancelled':True}
+    seq=payload.get('seq')
+    if not isinstance(seq,int) or not 0<=seq<=120:raise ValueError('invalid_sequence')
+    data=base64.b64decode(payload.get('pcm',''),validate=True)
+    if len(data)>64000 or len(data)%2:raise ValueError('invalid_pcm_fragment')
+    if key not in sessions:
+        if seq!=0:raise ValueError('missing_stream_start')
+        if len(sessions)>=3:raise RuntimeError('too_many_live_streams')
+        stream=recognizer.create_stream()
+        stream.accept_waveform(16000,np.zeros(4000,dtype=np.float32))
+        sessions[key]={'stream':stream,'next':0,'samples':0,'touched':now}
+    state=sessions[key]
+    if seq!=state['next']:raise ValueError('out_of_order_fragment')
+    state['next']+=1;state['touched']=now;state['samples']+=len(data)//2
+    if state['samples']>480000:
+        sessions.pop(key,None);raise ValueError('live_audio_exceeds_30_seconds')
+    stream=state['stream']
+    if data:stream.accept_waveform(16000,np.frombuffer(data,dtype=np.int16).astype(np.float32)/32768)
+    final=payload.get('final') is True
+    if final:
+        stream.accept_waveform(16000,np.zeros(8000,dtype=np.float32));stream.input_finished()
+    started=time.monotonic()
+    while recognizer.is_ready(stream):recognizer.decode_stream(stream)
+    text=str(recognizer.get_result(stream)).strip()
+    if final:sessions.pop(key,None)
+    return {'text':text,'final':final,'accepted':final and safe_short_read_transcript(text),
+            'engine':'sherpa-live','durationMs':int((time.monotonic()-started)*1000)}
+
+
 def worker():
-    recognizer=create_recognizer()
+    recognizer=create_recognizer();sessions={}
     print("TRAVIS_STT:"+json.dumps({
         "ready":True,"engine":"sherpa-nemotron-3.5-streaming",
         "languages":["pt","en"],"role":"candidate_only"}),flush=True)
@@ -140,7 +179,7 @@ def worker():
         try:
             payload=json.loads(line)
             if not isinstance(payload,dict):raise ValueError("payload_must_be_object")
-            result=transcribe_audio(recognizer,payload.get("path",""))
+            result=live_decode(recognizer,sessions,payload) if payload.get("live") is True else transcribe_audio(recognizer,payload.get("path",""))
         except Exception as exc:
             result={"error":type(exc).__name__,"safeFastCandidate":False}
         print("TRAVIS_STT:"+json.dumps(result,ensure_ascii=False),flush=True)

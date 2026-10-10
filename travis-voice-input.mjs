@@ -24,16 +24,17 @@ export function pcmWave(samples){
   for(let i=0;i<samples.length;i++)v.setInt16(44+i*2,Math.max(-1,Math.min(1,samples[i]))*32767,true);
   return new Blob([buffer],{type:'audio/wav'});
 }
-export function createVoiceInput({onStart,onSpeech,onLevel,checkTurn,onError,isPlayback=()=>false}){
-  let detector,starting,active=false,generation=0,pending=null,timer=0,speaking=false,lastVoice=0,turnEngine='silero',realStarted=false,playbackVoiceMs=0;
+export function createVoiceInput({onStart,onSpeech,onLevel,checkTurn,onError,isPlayback=()=>false,liveSTT=null}){
+  let detector,starting,active=false,generation=0,pending=null,timer=0,speaking=false,lastVoice=0,turnEngine='silero',realStarted=false,playbackVoiceMs=0,live=null,preFrames=[],preSamples=0;
   const append=(a,b)=>{if(!a)return b;const gap=4000,c=new Float32Array(a.length+gap+b.length);c.set(a);c.set(b,a.length+gap);return c;};
+  function beginLive(){if(!live&&liveSTT){live=liveSTT();for(const frame of preFrames)live.push(frame);}}
   function submit(epoch){
     if(!active||generation!==epoch||speaking||!pending)return;
-    const audio=pending;pending=null;onSpeech(pcmWave(audio),lastVoice);
+    const audio=pending;pending=null;const transcript=live?.finish();live=null;onSpeech(pcmWave(audio),lastVoice,transcript);
   }
   async function ended(audio){
     if(!active)return;
-    speaking=false;if(isPlayback()&&!realStarted){pending=null;return;}pending=append(pending,audio);const epoch=++generation;
+    speaking=false;if(isPlayback()&&!realStarted){pending=null;live?.cancel();live=null;return;}pending=append(pending,audio);const epoch=++generation;
     clearTimeout(timer);
     // Never wait indefinitely for the semantic detector. A natural silence remains a fallback.
     timer=setTimeout(()=>submit(epoch),100);
@@ -57,17 +58,20 @@ export function createVoiceInput({onStart,onSpeech,onLevel,checkTurn,onError,isP
           positiveSpeechThreshold:.57,negativeSpeechThreshold:.33,minSpeechMs:210,preSpeechPadMs:500,redemptionMs:320,
           getStream:()=>navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}}),
           onSpeechStart(){if(!active)return;speaking=true;realStarted=false;playbackVoiceMs=0;generation++;clearTimeout(timer);},
-          onSpeechRealStart(){if(active&&!isPlayback()){realStarted=true;onStart();}},
-          onVADMisfire(){if(!active)return;speaking=false;if(pending){const epoch=++generation;timer=setTimeout(()=>submit(epoch),100);}},
+          onSpeechRealStart(){if(active&&!isPlayback()){realStarted=true;beginLive();onStart();}},
+          onVADMisfire(){if(!active)return;speaking=false;if(!pending){live?.cancel();live=null;}if(pending){const epoch=++generation;timer=setTimeout(()=>submit(epoch),100);}},
           onFrameProcessed(p,frame){
             if(!active)return;if(p.isSpeech>.65)lastVoice=performance.now();
+            if(speaking&&live)live.push(frame);
+            preFrames.push(new Float32Array(frame));preSamples+=frame.length;
+            while(preSamples>8000&&preFrames.length>1)preSamples-=preFrames.shift().length;
             let energy=0;for(const x of frame)energy+=x*x;
             const rms=Math.sqrt(energy/frame.length);
             // Strong, sustained residual speech after browser echo cancellation.
             // A noise spike or a few leaked speaker frames must not cancel a turn.
             if(speaking&&!realStarted&&isPlayback()){
               playbackVoiceMs=p.isSpeech>.88&&rms>.018?playbackVoiceMs+frame.length/16:0;
-              if(playbackVoiceMs>=240){realStarted=true;onStart();}
+              if(playbackVoiceMs>=240){realStarted=true;beginLive();onStart();}
             }
             onLevel(Math.min(1,rms/.08),p.isSpeech);
           },
@@ -78,7 +82,7 @@ export function createVoiceInput({onStart,onSpeech,onLevel,checkTurn,onError,isP
       })().catch(error=>{active=false;onError?.(error);throw error;}).finally(()=>{starting=null;});
       return starting;
     },
-    stop(){active=false;generation++;speaking=false;pending=null;clearTimeout(timer);void detector?.pause();},
+    stop(){active=false;generation++;speaking=false;pending=null;live?.cancel();live=null;preFrames=[];preSamples=0;clearTimeout(timer);void detector?.pause();},
     diagnostics(){return {active,speaking,turnEngine,lastVoice};},
   };
 }

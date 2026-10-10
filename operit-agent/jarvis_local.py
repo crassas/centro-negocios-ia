@@ -1386,8 +1386,7 @@ def _merge_wavs(paths,out):
    wav.writeframes(chunk)
 def warm_voice():
  # Prioritise the fast STT worker; semantic turn is deferred until explicitly used.
- workers=[FAST_STT_WORKER,TTS_EN_WORKER,TTS_WORKER,PT_STT_WORKER]
- if os.environ.get("TRAVIS_STT_BACKEND","whisper")=="sherpa":workers.append(SHERPA_STT_WORKER)
+ workers=[FAST_STT_WORKER,TTS_EN_WORKER,TTS_WORKER,SHERPA_STT_WORKER,PT_STT_WORKER]
  for worker in workers:
   try:
    with worker.lock:worker.start()
@@ -1651,7 +1650,7 @@ def centro_activity():
  with urllib.request.urlopen(request,timeout=5) as response:return json.load(response)
 TRUSTED_WEB_ORIGINS={"https://crassas.github.io"}
 LOCAL_ORIGINS={"http://127.0.0.1:8770","http://localhost:8770"}
-WEB_VOICE_ENDPOINTS={"/jarvis-stream","/health","/transcribe","/listen","/jarvis","/speak","/voice-task","/turn","/initiative","/resume","/visual-intent","/visual-research"}
+WEB_VOICE_ENDPOINTS={"/transcribe-live","/jarvis-stream","/health","/transcribe","/listen","/jarvis","/speak","/voice-task","/turn","/initiative","/resume","/visual-intent","/visual-research"}
 
 LOCAL_COCKPIT_ENDPOINTS={"/awareness","/brain/state","/brain/graph","/brain/events","/brain/control","/brain/feedback","/connections","/cockpit","/gmail/configure","/gmail/start","/gmail/inbox","/gmail/disconnect"}
 
@@ -1719,8 +1718,9 @@ class Handler(BaseHTTPRequestHandler):
   def audio_chunk(part):
    INFERENCE_INFO.stream_emitted=True
    language=getattr(DIALOGUE_INFO,"language",stream_language[0])
+   ready_ms=int((time.monotonic()-start)*1000)
    audio=speak(part,language)
-   emit({"type":"audio","language":language,"text":part,"audio":base64.b64encode(audio).decode(),"atMs":int((time.monotonic()-start)*1000)})
+   emit({"type":"audio","language":language,"text":part,"audio":base64.b64encode(audio).decode(),"textReadyMs":ready_ms,"atMs":int((time.monotonic()-start)*1000)})
   chunks=travis_stream.SpeechChunks(audio_chunk)
   INFERENCE_INFO.stream_emitted=False
   INFERENCE_INFO.on_delta=chunks.feed if tool=="local_llm" else None
@@ -1757,6 +1757,14 @@ class Handler(BaseHTTPRequestHandler):
     if path=="/transcribe":return self.send({"ok":True,"text":text,"durationMs":int((time.monotonic()-stage_start)*1000),"languageRequested":language})
     return self.send({"text":text,**route(text)})
    obj=json.loads(data)
+   if path=="/transcribe-live":
+    if len(data)>90000:raise ValueError("Live audio fragment too large")
+    with TRAVIS_BRAIN.request("Live speech recognition"):
+     payload={k:obj[k] for k in ("id","seq","pcm","final","cancel") if k in obj}
+     payload["live"]=True
+     result=json.loads(SHERPA_STT_WORKER.request(payload).removeprefix("TRAVIS_STT:"))
+     if result.get("error"):raise RuntimeError(result["error"])
+     return self.send(result)
    if path=="/visual-intent":return self.send(visual_intent_model_request(obj))
    if path=="/visual-research":
     try:from travis_visual_research import request as visual_research_request

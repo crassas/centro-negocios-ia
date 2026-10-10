@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {createLiveSTT} from '../travis-live-stt.mjs';
+const calls=[];
+const input=createLiveSTT(async payload=>{calls.push(payload);return {text:'Open YouTube please',engine:'sherpa-live',final:payload.final,accepted:payload.final};});
+for(let i=0;i<20;i++)input.push(new Float32Array(512).fill(.25));
+const result=await input.finish();
+assert.equal(result.text,'Open YouTube please');assert.equal(calls.length,2);
+assert.deepEqual(calls.map(x=>x.seq),[0,1]);assert(calls[1].final);
+assert.equal(calls.reduce((n,x)=>n+Buffer.from(x.pcm,'base64').length,0),20*512*2);
+assert.equal(await input.finish(),null,'No duplicate final submission');
+const uncertain=createLiveSTT(async x=>({text:'delete a file',final:x.final,accepted:false}));
+uncertain.push(new Float32Array(2000));assert.equal(await uncertain.finish(),null,'Uncertain or mutation-like transcripts must use the accurate fallback');
+const unavailable=createLiveSTT(async()=>{throw Error('model unavailable');});
+unavailable.push(new Float32Array(8192));assert.equal(await unavailable.finish(),null);
+const cancellations=[];const cancelled=createLiveSTT(async x=>{cancellations.push(x);return null;});cancelled.cancel();await Promise.resolve();assert.equal(cancellations[0].cancel,true);
+console.log('PASS live STT: ordered PCM, no sample loss, one final, uncertainty/offline fallback, cancellation');

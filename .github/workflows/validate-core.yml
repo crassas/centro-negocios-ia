@@ -76,6 +76,14 @@ jobs:
           PYTHONPATH=operit-agent python3 operit-agent/jarvis_selftest.py
           node scripts/travis-voice-selftest.mjs
 
+      - name: Streaming voice and supervisor ownership
+        run: |
+          python3 operit-agent/travis_stream_selftest.py
+          python3 operit-agent/station_control_selftest.py
+          node scripts/travis-stream-selftest.mjs
+          node scripts/travis-live-stt-selftest.mjs
+          node scripts/travis-voice-input-selftest.mjs
+
       - name: Reflexion memory and evaluator self-tests
         run: |
           python3 operit-agent/travis_reflexion_selftest.py

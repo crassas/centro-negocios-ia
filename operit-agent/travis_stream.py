@@ -45,7 +45,7 @@ class SpeechChunks:
         while self.pending:
             stop = re.search(r'[.!?](?:["”])?(?=\s)', self.pending)
             boundary = stop.end() if stop else 0
-            target = 140 if self.count == 0 else 240
+            target = 72 if self.count == 0 else 240
             if not boundary and len(self.pending) > target:
                 boundary = self.pending.rfind(' ', 30, target)
             if boundary <= 0:
