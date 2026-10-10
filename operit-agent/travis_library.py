@@ -21,7 +21,7 @@ from pathlib import Path
 
 import travis_library_seed as seed
 
-VERSION = 1
+VERSION = 2
 MAX_SOURCE_BYTES = 4_000_000
 MAX_CHUNKS_PER_BOOK = 3600
 STOPWORDS = set(
@@ -180,7 +180,7 @@ class ReadingLibrary:
         return True
 
     def seed(self):
-        """Idempotent catalogue and 38 originally-authored Portuguese study cards."""
+        """Idempotent catalogue and originally-authored study cards and bilingual world references."""
         inserted=0
         with self.db() as db:
             for record in seed.BOOKS:self._put_work(db,record,"book")

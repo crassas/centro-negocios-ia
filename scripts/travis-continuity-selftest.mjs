@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {conversationIdentity,saveConversationIdentity,isPlaybackEcho} from '../travis-continuity.mjs';
+const storage=()=>{const data=new Map();return {getItem:key=>data.get(key),setItem:(key,value)=>data.set(key,value)};};
+const persistent=storage(),tab=storage();tab.setItem('travis-dialogue-session','previous-tab-001');
+assert.equal(conversationIdentity(persistent,tab),'previous-tab-001');
+assert.equal(conversationIdentity(persistent,storage()),'previous-tab-001');
+saveConversationIdentity('personal-owner-001',persistent,tab);
+assert.equal(conversationIdentity(persistent,storage()),'personal-owner-001');
+assert.equal(saveConversationIdentity('invalid!',persistent,tab),false);
+assert.equal(isPlaybackEcho('Earth goes around the Sun','The Earth goes around the Sun once a year.'),true);
+assert.equal(isPlaybackEcho('A Terra gira em torno do Sol','A Terra gira em torno do Sol.'),true);
+assert.equal(isPlaybackEcho('stop','The word stop means pause.'),false);
+assert.equal(isPlaybackEcho('Travis espera','Travis espera'),false);
+assert.equal(isPlaybackEcho('But how does Mars move?','Earth goes around the Sun.'),false);
+assert.equal(isPlaybackEcho('yes','yes'),false);
+console.log('PASS: browser identity survives restart; PT/EN playback echo ignored; commands preserved');

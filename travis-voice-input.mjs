@@ -25,7 +25,7 @@ export function pcmWave(samples){
   return new Blob([buffer],{type:'audio/wav'});
 }
 export function createVoiceInput({onStart,onSpeech,onLevel,checkTurn,onError,isPlayback=()=>false,liveSTT=null}){
-  let detector,starting,active=false,generation=0,pending=null,timer=0,speaking=false,lastVoice=0,turnEngine='silero',realStarted=false,playbackVoiceMs=0,live=null,preFrames=[],preSamples=0;
+  let detector,starting,active=false,generation=0,pending=null,timer=0,speaking=false,lastVoice=0,turnEngine='silero',realStarted=false,startedDuringPlayback=false,playbackVoiceMs=0,live=null,preFrames=[],preSamples=0;
   const append=(a,b)=>{if(!a)return b;const gap=4000,c=new Float32Array(a.length+gap+b.length);c.set(a);c.set(b,a.length+gap);return c;};
   function beginLive(){if(!live&&liveSTT){live=liveSTT();for(const frame of preFrames)live.push(frame);}}
   function submit(epoch){
@@ -34,7 +34,7 @@ export function createVoiceInput({onStart,onSpeech,onLevel,checkTurn,onError,isP
   }
   async function ended(audio){
     if(!active)return;
-    speaking=false;if(isPlayback()&&!realStarted){pending=null;live?.cancel();live=null;return;}pending=append(pending,audio);const epoch=++generation;
+    speaking=false;if((startedDuringPlayback||isPlayback())&&!realStarted){pending=null;live?.cancel();live=null;return;}pending=append(pending,audio);const epoch=++generation;
     clearTimeout(timer);
     // Never wait indefinitely for the semantic detector. A natural silence remains a fallback.
     timer=setTimeout(()=>submit(epoch),100);
@@ -57,7 +57,7 @@ export function createVoiceInput({onStart,onSpeech,onLevel,checkTurn,onError,isP
           model:'v5',baseAssetPath:'/assets/voice/vad/',onnxWASMBasePath:'/assets/voice/ort/',
           positiveSpeechThreshold:.57,negativeSpeechThreshold:.33,minSpeechMs:210,preSpeechPadMs:500,redemptionMs:320,
           getStream:()=>navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}}),
-          onSpeechStart(){if(!active)return;speaking=true;realStarted=false;playbackVoiceMs=0;generation++;clearTimeout(timer);},
+          onSpeechStart(){if(!active)return;speaking=true;realStarted=false;startedDuringPlayback=isPlayback();playbackVoiceMs=0;generation++;clearTimeout(timer);},
           onSpeechRealStart(){if(active&&!isPlayback()){realStarted=true;beginLive();onStart();}},
           onVADMisfire(){if(!active)return;speaking=false;if(!pending){live?.cancel();live=null;}if(pending){const epoch=++generation;timer=setTimeout(()=>submit(epoch),100);}},
           onFrameProcessed(p,frame){

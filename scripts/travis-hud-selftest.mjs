@@ -22,8 +22,8 @@ for(const text of ['id="travis-three-canvas"','id="travis-camera-toggle"','id="t
 for(const file of ['travis-cinema.css','travis-cinema-depth.css','travis-vision.mjs','travis-vision-policy.mjs']){
   assert(fs.statSync(file).size>100,'Missing cinematic/vision asset: '+file);
 }
-assert(html.includes('travis-3d.mjs?v=figures-1'),'Main scene version must match release.');
-assert(sw.includes('travis-3d.mjs?v=figures-1'),'PWA cache must use the released scene.');
+assert(html.includes('travis-3d.mjs?v=continuity-1'),'Main scene version must match release.');
+assert(sw.includes('travis-3d.mjs?v=continuity-1'),'PWA cache must use the released scene.');
 assert(sw.includes('travis-vision.mjs?v=scene-1'),'PWA cache must use current camera script.');
 assert(cinema.length>1000 && cinemaDepth.length>1000,'Cinematic layers must be present.');
 assert(css.includes('#travis-three-canvas'),'Full-screen scene styling required.');
@@ -78,10 +78,10 @@ const voiceInputSource=fs.readFileSync('travis-voice-input.mjs','utf8');
 const localVoiceServer=fs.readFileSync('operit-agent/jarvis_local.py','utf8');
 assert(voiceInputSource.includes('timer=setTimeout(()=>submit(epoch),100)'), 'Short utterances must dispatch promptly.');
 assert(voiceInputSource.includes('pending.length<160000'), 'Short phrases must skip concurrent turn inference.');
-assert(ui.includes("onStart(){if(!opened||voicePaused)return;"), 'An authorised utterance must interrupt transcription.');
+assert(ui.includes("hud.dataset.echoGuard='confirmed-user';interruptReply();"), 'A confirmed user utterance must interrupt playback.');
 assert(localVoiceServer.includes('FAST_STT_WORKER=VoiceWorker'), 'Fast Whisper worker missing.');
 assert(localVoiceServer.includes('pcmDirect'), 'Direct WAV transcription missing.');
-assert(sw.includes('travis-voice-input.mjs?v=live-1'), 'PWA cache must load new voice capture.');
+assert(sw.includes('travis-voice-input.mjs?v=continuity-1'), 'PWA cache must load new voice capture.');
 console.log('TRAVIS_CINEMATIC_VISION_SELFTEST_OK',JSON.stringify({
   importedModules:mjsImports.length,objectModelBytes:tflite.length,
   localCamera:true,voiceContinuity:true,persistent3d:true

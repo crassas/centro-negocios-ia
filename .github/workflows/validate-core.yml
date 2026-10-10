@@ -78,6 +78,8 @@ jobs:
 
       - name: Streaming voice and supervisor ownership
         run: |
+          python3 operit-agent/travis_continuity_selftest.py
+          node scripts/travis-continuity-selftest.mjs
           python3 operit-agent/travis_stream_selftest.py
           python3 operit-agent/station_control_selftest.py
           node scripts/travis-stream-selftest.mjs

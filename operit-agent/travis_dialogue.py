@@ -29,7 +29,7 @@ def detect_language(text, fallback='en'):
     return 'pt' if pt > en else 'en' if en > pt else fallback
 
 def language_instruction(language):
-    return ('Reply in European Portuguese (Portugal), naturally and without Brazilian phrasing.'
+    return ('Reply in European Portuguese (Portugal), naturally, without gerunds or Brazilian phrasing.'
             if language == 'pt' else 'Reply in natural British English.')
 
 def illustration(text):
@@ -72,6 +72,8 @@ def portuguese_reply(tool, result, fallback):
     if tool == 'task_list':
         rows = result['tasks']; return ('Tens ' + str(len(rows)) + ' tarefas pendentes. ' + '. '.join(r['title'] for r in rows[:3])) if rows else 'Não tens tarefas pendentes no Travis.'
     if tool == 'note_fact': return 'Guardei essa informação na memória.'
+    if tool == 'neural_recall':
+        return ('Recuperei estes registos: '+'. '.join(r['title'] for r in result[:4])) if result else 'Não encontrei uma recordação relevante.'
     if tool == 'system_status': return 'O Centro está ' + ('ativo.' if result['centro'].get('ok') else 'indisponível.')
     if tool == 'brain_pause': return 'A reflexão automática está ' + ('pausada.' if result['paused'] else 'ativa.')
     if tool == 'openclaw_status':

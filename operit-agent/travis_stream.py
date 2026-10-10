@@ -3,20 +3,24 @@ import json
 import re
 
 
-def read_sse(response, on_delta=None, limit=3000):
+def read_sse(response, on_delta=None, limit=3000, require_done=False):
     parts = []
     size = 0
+    complete = False
     for raw in response:
         line = raw.decode('utf-8').strip()
         if not line.startswith('data:'):
             continue
         data = line[5:].strip()
         if data == '[DONE]':
+            complete = True
             break
         item = json.loads(data)
         if item.get('error') or item.get('errors'):
             raise RuntimeError('Speech model stream failed')
         choices = item.get('choices') or []
+        if choices and choices[0].get('finish_reason') == 'stop':
+            complete = True
         delta = item.get('response') or (choices[0].get('delta', {}).get('content') if choices else '') or ''
         if not isinstance(delta, str):
             continue
@@ -30,6 +34,8 @@ def read_sse(response, on_delta=None, limit=3000):
     text = ''.join(parts).strip()
     if not text:
         raise RuntimeError('Empty model stream')
+    if require_done and not complete:
+        raise RuntimeError('Model response interrupted before completion')
     return text
 
 

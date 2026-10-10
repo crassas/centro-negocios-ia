@@ -27,6 +27,9 @@ class StreamTests(unittest.TestCase):
  def test_invalid_empty_and_error_streams_fail(self):
   for data in (b'data: [DONE]\n',b'data: {"error":"quota"}\n'):
    with self.assertRaises(RuntimeError):read_sse(io.BytesIO(data))
+ def test_strict_transport_cannot_report_truncated_text_as_complete(self):
+  with self.assertRaisesRegex(RuntimeError,"interrupted"):
+   read_sse(io.BytesIO(b'data: {"response":"Partial sentence"}\n'),require_done=True)
  def test_response_size_is_bounded(self):
   self.assertEqual(read_sse(io.BytesIO(b'data: {"response":"abcdefghijk"}\n'),limit=5),'abcde')
 if __name__=='__main__':unittest.main(verbosity=2)

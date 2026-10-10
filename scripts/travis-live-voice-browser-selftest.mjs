@@ -11,9 +11,11 @@ const server=http.createServer(async(req,res)=>{try{
  const name=new URL(req.url,'http://localhost').pathname;
  if(name==='/travis-voice-input.mjs'){res.setHeader('content-type','text/javascript');return res.end(`export function createVoiceInput(callbacks){window.voiceTest=callbacks;let active=false;return {async start(){active=true},stop(){active=false},diagnostics(){return {active,speaking:false}}}}`);}
  if(req.method==='POST'&&name==='/jarvis-stream'){
-  requests++;for await(const part of req){};
+  requests++;let body='';for await(const part of req)body+=part;
+  if(JSON.parse(body).text==='stop'){res.setHeader('content-type','application/json');return res.end(JSON.stringify({ok:true,reply:'Stopped.',language:'en',tool:'stop'}));}
   res.setHeader('content-type','application/x-ndjson');
   res.write(JSON.stringify({type:'audio',audio:wav.toString('base64'),text:'First useful sentence.',language:'en'})+'\n');
+  if(requests===4){setTimeout(()=>{if(!res.destroyed)res.end(JSON.stringify({type:'error',error:'synthetic network interruption'})+'\n');},100);return;}
   setTimeout(()=>{if(res.destroyed)return;res.write(JSON.stringify({type:'audio',audio:wav.toString('base64'),text:'Second useful sentence.',language:'en'})+'\n');},200);
   setTimeout(()=>{if(res.destroyed)return;finalSent=true;res.end(JSON.stringify({type:'result',answer:{ok:true,reply:'First useful sentence. Second useful sentence.',language:'en',preferences:{language:'en',proactive:false},tool:'local_llm'}})+'\n'+JSON.stringify({type:'done'})+'\n');},1500);
   return;
@@ -42,11 +44,24 @@ try{
  await page.locator('#travis-command-text').fill('Tell me another short story');
  await page.locator('#travis-command button[type=submit]').click();
  await page.waitForFunction(()=>TravisVisual.diagnostics().lipSync.playbackClock,{},{timeout:10000});
- const at=Date.now();await page.evaluate(()=>window.voiceTest.onStart());
- await page.waitForFunction(()=>!TravisVisual.diagnostics().lipSync.playbackClock&&TravisVisual.diagnostics().state==='listening');
+ await page.evaluate(()=>window.voiceTest.onStart());
+ assert.equal(await page.evaluate(()=>Boolean(TravisVisual.diagnostics().lipSync.playbackClock)),true,'VAD alone must not cancel playback');
+ await page.evaluate(()=>window.voiceTest.onSpeech(new Blob(),performance.now(),Promise.resolve({text:'First useful sentence.'})));
+ assert.equal(await page.evaluate(()=>document.querySelector('#travis-hud').dataset.echoGuard),'ignored');
+ assert.equal(await page.evaluate(()=>Boolean(TravisVisual.diagnostics().lipSync.playbackClock)),true,'Echo must not cancel playback');
+ const at=Date.now();await page.evaluate(async()=>{window.voiceTest.onStart();await window.voiceTest.onSpeech(new Blob(),performance.now(),Promise.resolve({text:'stop'}));});
+ await page.waitForFunction(()=>!TravisVisual.diagnostics().lipSync.playbackClock);
  const interruptionMs=Date.now()-at;
  await page.waitForTimeout(1800);
  assert.equal(await page.evaluate(()=>Boolean(TravisVisual.diagnostics().lipSync.playbackClock)),false,'Cancelled queued audio must not restart');
- assert.equal(requests,2);assert.deepEqual(errors,[]);
- console.log(JSON.stringify({pass:true,firstAudioBeforeFinalReply:true,interruptionMs,noStalePlayback:true,requests,errors}));
+ assert.equal(requests,3);
+ await page.locator('#travis-command-text').fill('Tell me a final story');
+ await page.locator('#travis-command button[type=submit]').click();
+ await page.waitForFunction(()=>TravisVisual.diagnostics().lipSync.playbackClock);
+ await page.waitForTimeout(230);
+ assert.equal(await page.evaluate(()=>Boolean(TravisVisual.diagnostics().lipSync.playbackClock)),true,'Received audio must finish after stream failure');
+ await page.waitForFunction(()=>document.querySelector('#travis-status-message').textContent.includes('connection interrupted'));
+ assert.equal(requests,4,'A failed request must never be redispatched');
+ assert.deepEqual(errors,[]);
+ console.log(JSON.stringify({pass:true,firstAudioBeforeFinalReply:true,echoIgnored:true,interruptionMs,noStalePlayback:true,partialAudioPreserved:true,requests,errors}));
 }finally{await browser.close();server.closeAllConnections();server.close();}

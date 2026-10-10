@@ -161,6 +161,7 @@ TRAVIS_CLIENT_FILES = (
     "travis-cockpit.mjs",
     "travis-vision-policy.mjs",
     "travis-face-rig.mjs",
+    "travis-continuity.mjs",
     "travis-3d.mjs",
     "sw.js",
     "index.html",
@@ -184,6 +185,9 @@ RUNTIME_FILES = {
     "travis_speech_response.py": HOME / "travis_speech_response.py",
     "jarvis_sherpa.py": HOME / "jarvis_sherpa.py",
     "jarvis_piper.py": HOME / "jarvis_piper.py",
+    "travis_continuity.py": HOME / "travis_continuity.py",
+    "travis_dialogue.py": HOME / "travis_dialogue.py",
+    "travis_world_knowledge.py": HOME / "travis_world_knowledge.py",
     "travis_library.py": HOME / "travis_library.py",
     "travis_library_seed.py": HOME / "travis_library_seed.py",
     "travis_gmail.py": HOME / "travis_gmail.py",
@@ -627,13 +631,13 @@ def sync_travis_client(ref):
         for asset, consumer in (("travis-figures.mjs", "travis-action-cards.mjs"), ("travis-figure-catalog.mjs", "travis-figures.mjs"), ("travis-scene-focus.mjs", "travis-concept-projection.mjs"), ("travis-anatomy.mjs", "travis-action-cards.mjs"), ("travis-anatomy-catalog.mjs", "travis-anatomy.mjs"), ("travis-scene-blueprint.mjs", "travis-scene-planner.mjs"), ("travis-scene-composer.mjs", "travis-concept-projection.mjs"), ("travis-atmosphere.mjs", "travis-3d.mjs"), ("travis-cinema-depth.css", "index.html")):
             if asset+"?v=figures-1" not in fetched[consumer] or asset+"?v=figures-1" not in fetched["sw.js"]:
                 raise RuntimeError("Inconsistent constructed-scene asset: "+asset)
-        if "travis-3d.mjs?v=figures-1" not in fetched["index.html"]:
+        if "travis-3d.mjs?v=continuity-1" not in fetched["index.html"]:
             raise RuntimeError("index.html: versão de voz inesperada")
         if "travis-audio-sync.mjs?v=1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: sincronização de voz ausente")
         if "travis-vision.mjs?v=scene-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: visão não ligada")
-        if "travis-3d.mjs?v=figures-1" not in fetched["sw.js"]:
+        if "travis-3d.mjs?v=continuity-1" not in fetched["sw.js"]:
             raise RuntimeError("sw.js: cache desatualizada")
         if "travis-action-cards.mjs?v=figures-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: cinematic action deck not connected")
@@ -682,7 +686,7 @@ def sync_travis_client(ref):
             raise RuntimeError("travis-action-cards.mjs: auto return missing")
         if "travis-concept-projection.mjs?v=figures-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: cinematic geometry missing")
-        if "travis-voice-input.mjs?v=live-1" not in fetched["travis-3d.mjs"]:
+        if "travis-voice-input.mjs?v=continuity-1" not in fetched["travis-3d.mjs"]:
             raise RuntimeError("travis-3d.mjs: transcrição rápida não ligada")
         if "travis-form-selector" in fetched["index.html"] or "data-travis-form=" in fetched["index.html"]:
             raise RuntimeError("index.html: o seletor de modos voltou a aparecer")
@@ -913,7 +917,7 @@ def main():
                 if ui_changed:
                     actions.append({"service":"autoupdate/travis-client","ok":not update_errors,"output":"módulos atualizados: "+", ".join(ui_changed)})
                 if changed:
-                    if any(name in changed for name in ("travis_stream.py", "jarvis_sherpa.py", "jarvis_piper.py", "jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh", "travis_brain.py", "travis_scene.py", "travis_visual_research.py")):
+                    if any(name in changed for name in ("travis_continuity.py", "travis_world_knowledge.py", "travis_library.py", "travis_library_seed.py", "travis_dialogue.py", "travis_stream.py", "jarvis_sherpa.py", "jarvis_piper.py", "jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh", "travis_brain.py", "travis_scene.py", "travis_visual_research.py")):
                         pending_jarvis_restart = True
                     if any(name in changed for name in ("centro_server.py", "business_db.py", "travis_core.py")):
                         pending_server_restart = True

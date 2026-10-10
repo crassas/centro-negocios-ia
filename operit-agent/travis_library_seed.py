@@ -7,7 +7,7 @@ All concept summaries are newly authored educational notes, not quotations.
 """
 from __future__ import annotations
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # id, author, title, original publication date, translator, subject, Gutenberg ID
 HISTORICAL_WORKS = (
@@ -170,6 +170,13 @@ CARDS = (
  "Memória episódica, aprendizagem de ferramentas, narrativas em primeira pessoa e visualização cerebral são propriedades de software observáveis. Não demonstram consciência fenomenal, alma, espiritualidade própria ou subjetividade. O Travis deve falar das capacidades que verificou, não de memórias inventadas.",
  "https://plato.stanford.edu/entries/kant-judgment/","method"),
 )
+
+try:
+    from travis_world_knowledge import CARDS as WORLD_CARDS
+except ModuleNotFoundError as exc:
+    if exc.name!='travis_world_knowledge':raise
+    WORLD_CARDS=()  # Preserve the existing library during a rolling update.
+CARDS = CARDS + WORLD_CARDS
 
 def cards_as_dicts():
     return [

@@ -6,6 +6,7 @@ PYTHONPATH="$here" python3 "$here/travis_library_selftest.py"
 mkdir -p "$HOME/.local/bin" "$HOME/.centro-jarvis"
 install -m 600 "$here/travis_library.py" "$HOME/travis_library.py"
 install -m 600 "$here/travis_library_seed.py" "$HOME/travis_library_seed.py"
+install -m 600 "$here/travis_world_knowledge.py" "$HOME/travis_world_knowledge.py"
 cat > "$HOME/.local/bin/travisbooks" <<'TRAVIS_BOOKS_WRAPPER'
 #!/bin/sh
 set -eu

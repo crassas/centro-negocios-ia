@@ -1,10 +1,11 @@
+import {conversationIdentity,saveConversationIdentity,isPlaybackEcho} from './travis-continuity.mjs?v=continuity-1';
 import { createLiveSTT } from './travis-live-stt.mjs?v=live-1';
-import { readVoiceReply } from './travis-voice-stream.mjs?v=live-1';
+import { readVoiceReply } from './travis-voice-stream.mjs?v=continuity-1';
 import {createMotionAudio} from './travis-motion-audio.mjs?v=motion-1';
 import {playDiscovery} from './travis-discovery.mjs?v=figures-1';
 import { createConceptProjection } from './travis-concept-projection.mjs?v=figures-1';
 import './travis-action-cards.mjs?v=figures-1';
-import { createVoiceInput } from './travis-voice-input.mjs?v=live-1';
+import { createVoiceInput } from './travis-voice-input.mjs?v=continuity-1';
 import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=motion-1';
 import { INTERFACE_COPY, interfaceLanguage, applyInterfaceLanguage, languageFromInterfaceCommand } from './travis-interface-language.mjs?v=1';
 import { resolveWakePhrase } from './travis-wake-phrase.mjs?v=pt-1';
@@ -152,8 +153,9 @@ if (!hud || !launcher || !canvas) {
   window.addEventListener('travis:close',()=>motionAudio.silence());
   window.addEventListener('travis:user-start',()=>motionAudio.silence());
   let voiceInput=null,voiceInputFailed=false,voicePaused=false,standby=false,initiativeTimer=0;
-  const savedLanguage=(()=>{try{return sessionStorage.getItem('travis.language')||'en';}catch{return 'en';}})();
-  let replyLanguage=savedLanguage==='pt'?'pt':'en',inputLanguage='auto',preferredLanguage=['pt','en'].includes(savedLanguage)?savedLanguage:'auto',proactive=true,lastInteraction=performance.now();
+  const savedLanguage=(()=>{try{return localStorage.getItem('travis.language')||sessionStorage.getItem('travis.language')||'en';}catch{return 'en';}})();
+  const lastLanguage=(()=>{try{return localStorage.getItem('travis.lastLanguage');}catch{return null;}})();
+  let replyLanguage=savedLanguage==='pt'||(savedLanguage==='auto'&&lastLanguage==='pt')?'pt':'en',inputLanguage='auto',preferredLanguage=['pt','en'].includes(savedLanguage)?savedLanguage:'auto',proactive=true,lastInteraction=performance.now();
   // Display language is independent of the speaking language. Default: English.
   const savedInterfaceLanguage=(()=>{try{return sessionStorage.getItem('travis.ui.language')||'en';}catch{return 'en';}})();
   let uiLanguage='en';
@@ -179,9 +181,16 @@ if (!hud || !launcher || !canvas) {
   async function ensureVoiceInput(){
     if(voicePaused||!opened||voiceInputFailed)return false;
     if(!voiceInput)voiceInput=createVoiceInput({
-      onStart(){if(!opened||voicePaused)return;lastInteraction=performance.now();window.dispatchEvent(new CustomEvent('travis:user-start'));interruptReply();setState('listening',standby?'Say Travis to wake me.':'I’m listening.');},
+      onStart(){
+        if(!opened||voicePaused)return;
+        if(voiceSource||(playbackTranscript&&performance.now()-lastPlaybackAt<1100)){
+          interruptionCandidate=true;hud.dataset.echoGuard='checking';return;
+        }
+        interruptionCandidate=false;interruptionEpoch++;
+        lastInteraction=performance.now();window.dispatchEvent(new CustomEvent('travis:user-start'));interruptReply();setState('listening',standby?'Say Travis to wake me.':'I’m listening.');
+      },
       liveSTT:()=>createLiveSTT((body,signal)=>localJson('/transcribe-live',{body,signal:AbortSignal.any([signal,AbortSignal.timeout(5000)])})),
-      onSpeech(blob,endedAt,transcript){if(!opened||voicePaused)return;voiceSpeechEndedAt=endedAt;handleVoiceBlob(blob,'audio/wav',voiceSession,transcript);},
+      onSpeech:acceptSpokenTurn,
       onLevel(level){if(state!=='speaking')externalVoiceLevel=level;},
       isPlayback:()=>Boolean(voiceSource),
       checkTurn:blob=>localJson('/turn',{body:blob,type:'audio/wav',signal:AbortSignal.timeout(1500)}),
@@ -211,14 +220,36 @@ if (!hud || !launcher || !canvas) {
     },30000);
   }
 
-  // Keep the conversation across reloads in this tab without mixing separate tabs.
-  const dialogueSession=(()=>{
-    try {
-      const saved=sessionStorage.getItem('travis-dialogue-session');
-      const id=/^[a-zA-Z0-9-]{8,80}$/.test(saved||'')?saved:crypto.randomUUID();
-      sessionStorage.setItem('travis-dialogue-session',id);return id;
-    } catch {return crypto.randomUUID();}
-  })();
+  let dialogueSession=conversationIdentity(localStorage,sessionStorage);
+  let playbackTranscript='',lastPlaybackAt=0,interruptionCandidate=false,interruptionEpoch=0;
+  async function acceptSpokenTurn(blob,endedAt,transcript){
+    if(!opened||voicePaused)return;
+    const candidate=interruptionCandidate,epoch=++interruptionEpoch;
+    interruptionCandidate=false;
+    if(candidate){
+      const session=voiceSession;
+      try{
+        const result=(transcript?await transcript:null)||await localJson('/transcribe?language='+preferredLanguage,{body:blob,type:'audio/wav'});
+        if(!opened||voicePaused||epoch!==interruptionEpoch||session!==voiceSession)return;
+        if(!result?.text||isPlaybackEcho(result.text,playbackTranscript)){
+          hud.dataset.echoGuard='ignored';return;
+        }
+        hud.dataset.echoGuard='confirmed-user';interruptReply();
+        voiceSpeechEndedAt=endedAt;
+        return handleVoiceBlob(blob,'audio/wav',voiceSession,Promise.resolve(result));
+      }catch(error){console.warn('Travis interruption check:',error.message);return;}
+    }
+    voiceSpeechEndedAt=endedAt;handleVoiceBlob(blob,'audio/wav',voiceSession,transcript);
+  }
+  let identityRestored=false;
+  async function restoreConversation(signal){
+    if(identityRestored)return;
+    const info=await localJson('/continuity',{body:{session:dialogueSession,restorePersonal:IS_LOCAL_TRAVIS_UI},signal});
+    if(info?.session&&saveConversationIdentity(info.session,localStorage,sessionStorage)){
+      dialogueSession=info.session;identityRestored=true;
+      if(info.preferences){preferredLanguage=info.preferences.language||preferredLanguage;replyLanguage=info.preferences.lastLanguage||replyLanguage;}
+    }
+  }
   let activeProject=null;
   let voiceBusy=false;
   let voiceStream=null;
@@ -667,7 +698,7 @@ if (!hud || !launcher || !canvas) {
   }
 
   function localFetch(path,{body=null,type='application/json',method='POST',signal=null}={}) {
-    const endpoint=path.split('?')[0],timeout=['/jarvis','/jarvis-stream'].includes(endpoint)?120000:endpoint==='/visual-research'?35000:30000;
+    const endpoint=path.split('?')[0],timeout=['/jarvis','/jarvis-stream'].includes(endpoint)?120000:endpoint==='/speak'?75000:endpoint==='/visual-research'?35000:30000;
     const headers={};
     if (body!=null && type) headers['Content-Type']=type;
     const init={
@@ -785,6 +816,8 @@ if (!hud || !launcher || !canvas) {
     }
     if(!opened||session!==voiceSession)return;
     const decoded=await ac.decodeAudioData(arrayBuffer.slice(0));
+    playbackTranscript=(continuous?playbackTranscript+' ':'')+String(reply||'');
+    playbackTranscript=playbackTranscript.slice(-2400);lastPlaybackAt=performance.now();
     if(!opened||session!==voiceSession)return;
     const envelope=buildSpeechEnvelope(decoded);
     const source=ac.createBufferSource();
@@ -807,6 +840,7 @@ if (!hud || !launcher || !canvas) {
     const playbackDone=new Promise(resolve=>{resolvePlayback=resolve;});
     voicePlaybackResolve=resolvePlayback;
     source.onended=()=>{
+      lastPlaybackAt=performance.now();
       resolvePlayback();
       if(voicePlaybackResolve===resolvePlayback)voicePlaybackResolve=null;
       if(voiceSource!==source)return;
@@ -1112,6 +1146,7 @@ if (!hud || !launcher || !canvas) {
         await playVoiceArrayBuffer(wav,session,interpretation.reply);
         return;
       }
+      await restoreConversation(controller.signal);
       setState('thinking','Handling your request…');
       let audioChain=Promise.resolve(),streamHasAudio=false,playbackError=null;
       const response=await localFetch('/jarvis-stream',{body:{text,session:dialogueSession,project:activeProject,language:recognitionLanguage,wake:wokeFromStandby,vision:vision.snapshot()},signal:controller.signal});
@@ -1124,6 +1159,14 @@ if (!hud || !launcher || !canvas) {
           await playVoiceArrayBuffer(wav,session,part,first?metrics:null,true);
         }).catch(error=>{if(session!==voiceSession)return;playbackError=error;controller.abort();interruptReply();setState('ready',error.message);scheduleListening(voiceSession,250);});
       });
+      if(streamed.interrupted){
+        await audioChain;
+        if(!opened||session!==voiceSession||playbackError)return;
+        voiceBusy=false;lastInteraction=performance.now();
+        window.dispatchEvent(new CustomEvent('travis:speech-end'));
+        setState('ready',replyLanguage==='pt'?'A ligação interrompeu a resposta. Podes pedir para continuar.':'The connection interrupted the answer. You can ask me to continue.');
+        scheduleListening(session,250);return;
+      }
       const answer=streamed.answer;
       if(streamed.spoken){
         void audioChain.then(()=>{
@@ -1138,7 +1181,7 @@ if (!hud || !launcher || !canvas) {
       replyLanguage=answer.language==='pt'?'pt':'en';
       // Use the chosen recognition language directly; explicit commands can switch it.
       preferredLanguage=answer.preferences?.language||'auto';
-      try{sessionStorage.setItem('travis.language',preferredLanguage);}catch{}
+      try{localStorage.setItem('travis.language',preferredLanguage);localStorage.setItem('travis.lastLanguage',replyLanguage);sessionStorage.setItem('travis.language',preferredLanguage);}catch{}
       inputLanguage='auto';
       proactive=answer.preferences?.proactive!==false;
       if(answer.result?.action==='conversation_control'){
@@ -1344,17 +1387,22 @@ if (!hud || !launcher || !canvas) {
         loadingLabel.textContent='TRAVIS LOCAL · VOICE ONLINE';
         loadingLabel.classList.add('is-done');
       }
+      if(!greet){
+        // Restore identity without producing/consuming a return greeting.
+        await restoreConversation(controller.signal);
+      }
       scheduleVoiceTaskPoll();scheduleInitiative();
       if (greet) {
-        const greetingLanguage=preferredLanguage==='pt'?'pt':'en';
+        const greetingLanguage=['pt','en'].includes(preferredLanguage)?preferredLanguage:replyLanguage;
         replyLanguage=greetingLanguage;
         let greetingText=greetingLanguage==='pt'?'Estou aqui. Podemos continuar.':'I’m here, sir. We can continue.';
         setState('thinking','Restoring conversation context…');
         let resumeInfo=null;
         try {
-          resumeInfo=await localJson('/resume',{body:{session:dialogueSession,language:greetingLanguage},signal:controller.signal});
+          resumeInfo=await localJson('/resume',{body:{session:dialogueSession,language:greetingLanguage,restorePersonal:IS_LOCAL_TRAVIS_UI},signal:controller.signal});
         } catch(error) { console.warn('Travis resume unavailable:',error); }
         if (!opened||session!==voiceSession||controller.signal.aborted)return;
+        if(resumeInfo?.session&&saveConversationIdentity(resumeInfo.session,localStorage,sessionStorage))dialogueSession=resumeInfo.session;
         if (resumeInfo?.speak===false) {
           voiceBusy=false;
           setState('ready','Ready to continue.');

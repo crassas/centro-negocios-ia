@@ -7,11 +7,11 @@ export async function readVoiceReply(response,onAudio){
     return {answer,spoken:false};
   }
   const reader=response.body.getReader(),decoder=new TextDecoder();
-  let pending='',answer=null,spoken=false,done=false;
+  let pending='',answer=null,spoken=false,done=false,failure=null;
   function event(line){
     if(!line.trim())return;
     const item=JSON.parse(line);
-    if(item.type==='error')throw new Error(item.error||'Voice stream failed.');
+    if(item.type==='error'){failure=item.error||'Voice stream failed.';return;}
     if(item.type==='audio'){
       const bytes=Uint8Array.from(atob(item.audio),char=>char.charCodeAt(0));
       spoken=true;onAudio(bytes.buffer,item.text,item.language);
@@ -29,7 +29,14 @@ export async function readVoiceReply(response,onAudio){
       if(chunk.done)break;
     }
     if(pending.trim())event(pending);
-    if(!answer||!done)throw new Error('Voice response was interrupted.');
-    return {answer,spoken};
+    if(failure||!answer||!done){
+      if(!spoken)throw new Error(failure||'Voice response was interrupted.');
+      return {answer,spoken,interrupted:true,error:failure||'Voice response was interrupted.'};
+    }
+    return {answer,spoken,interrupted:false};
+  }catch(error){
+    // Preserve audio already received; never retry a possibly executed request.
+    if(spoken)return {answer,spoken,interrupted:true,error:error.message};
+    throw error;
   }finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
 }
