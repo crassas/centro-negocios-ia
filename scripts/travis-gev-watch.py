@@ -308,10 +308,9 @@ def ensure_public_camera_auto_route() -> bool:
             PUBLIC_AUTO_BLOCK + PUBLIC_AUTO_SOURCE,
             1,
         )
-        temporary = TRAVIS_3D.with_name("travis-3d.mjs.public-auto.tmp")
+        temporary = TRAVIS_3D.with_name("travis-3d.public-auto.tmp.mjs")
         temporary.write_text(updated, encoding="utf-8")
         os.chmod(temporary, TRAVIS_3D.stat().st_mode & 0o777)
-        import subprocess
         try:
             subprocess.run(
                 ["node", "--check", str(temporary)],
