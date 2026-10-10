@@ -62,7 +62,7 @@ test("God's Eye road panel renders measured sources and annotates ONLY verified 
   try{
     await import('../travis-road-live.mjs?selftest=20261010');
     assert.equal(typeof window.TravisRoadLive?.show,'function');
-    assert.equal(nodes.get('travis-road-toggle').id,'travis-road-toggle');
+    assert.equal(toolbar.children[0].id,'travis-road-toggle');
     const result=window.TravisRoadLive.routeCommand('Travis, mostra trânsito real em Londres');
     assert.equal(result.handled,true);
     assert.match(result.reply,/Vou consultar/i);
