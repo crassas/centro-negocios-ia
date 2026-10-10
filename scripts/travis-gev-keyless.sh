@@ -84,35 +84,48 @@ install_app() {
   (cd "$APP_DIR" && keyless npm run doctor)
   info "Installed. Start with: bash scripts/travis-gev-keyless.sh start"
 }
-start_app() {
-  need npm; check_node; check_checkout
+# Direct Node/Vite daemon: setsid separates its session from the Remote MCP shell.
+# Keep this command internal; launch only via start_app after preflight.
+serve_app() {
+  check_node; check_checkout
   [[ -d "$APP_DIR/node_modules/vite" ]] || die "Run install first."
   mkdir -p "$STATE_DIR"
-  if [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
-    if endpoint_ready; then info "Already responding at http://127.0.0.1:$PORT/"; return; fi
-    die "Stored process alive but endpoint unhealthy. No processes killed. Inspect $LOG_FILE."
+  cd "$APP_DIR"
+  printf '%s\n' "$$" > "$PID_FILE"
+  exec env -u OPENAI_API_KEY -u GOOGLE_MAPS_API_KEY -u GOOGLE_MAPS_SERVER_API_KEY \
+    -u CESIUM_ION_TOKEN -u AISSTREAM_API_KEY -u FIRMS_MAP_KEY \
+    -u MAPILLARY_CLIENT_TOKEN -u TOMTOM_API_KEY -u LL2_API_TOKEN \
+    -u OPENSKY_CLIENT_ID -u OPENSKY_CLIENT_SECRET HOST=127.0.0.1 \
+    node node_modules/vite/bin/vite.js --host 127.0.0.1 --port "$PORT" --strictPort
+}
+start_app() {
+  check_node; check_checkout
+  [[ -d "$APP_DIR/node_modules/vite" ]] || die "Run install first."
+  mkdir -p "$STATE_DIR"
+  if endpoint_ready; then
+    info "Already responding at http://127.0.0.1:$PORT/ (no restart)"
+    return
+  fi
+  if [[ -f "$PID_FILE" ]]; then
+    local old_pid
+    old_pid="$(cat "$PID_FILE")"
+    if [[ "$old_pid" =~ ^[0-9]+$ ]] && kill -0 "$old_pid" 2>/dev/null; then
+      die "Stored PID $old_pid is alive but HTTP is not healthy. Inspect $LOG_FILE."
+    fi
   fi
   port_free || die "Port $PORT occupied by another service; refusing to change it."
   rm -f "$PID_FILE"
-  (
-    cd "$APP_DIR"
-    nohup env -u OPENAI_API_KEY -u GOOGLE_MAPS_API_KEY -u GOOGLE_MAPS_SERVER_API_KEY \
-      -u CESIUM_ION_TOKEN -u AISSTREAM_API_KEY -u FIRMS_MAP_KEY \
-      -u MAPILLARY_CLIENT_TOKEN -u TOMTOM_API_KEY -u LL2_API_TOKEN \
-      -u OPENSKY_CLIENT_ID -u OPENSKY_CLIENT_SECRET \
-      HOST=127.0.0.1 npm run dev -- --host 127.0.0.1 --port "$PORT" --strictPort \
-      >> "$LOG_FILE" 2>&1 < /dev/null &
-    echo "$!" > "$PID_FILE"
-  )
+  # No npm shell intermediary; the orphaned process belongs to its own session.
+  setsid -f bash "$0" _serve >> "$LOG_FILE" 2>&1 < /dev/null
   local n
-  for n in 1 2 3 4 5 6 7 8 9 10 11 12; do
+  for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
     if endpoint_ready; then
-      info "ONLINE: http://127.0.0.1:$PORT/ (17 keyless-capable layers in Data Layers)"
+      info "ONLINE: http://127.0.0.1:$PORT/ (17 keyless-capable layers)"
       return
     fi
-    sleep 1
+    sleep 2
   done
-  die "Health check failed. Inspect $LOG_FILE. Existing Travis untouched."
+  die "Health check failed. Inspect $LOG_FILE; other services were not changed."
 }
 status_app() {
   check_node
@@ -147,6 +160,7 @@ fi
 case "$1" in
   install) install_app ;;
   start) start_app ;;
+  _serve) serve_app ;;
   status) status_app ;;
   mcp) mcp_app ;;
   *) die "Unknown action: $1 (use install|start|status|mcp)" ;;
