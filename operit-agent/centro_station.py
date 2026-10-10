@@ -120,6 +120,7 @@ RUNTIME_FILES = {
     "travis_decision.py": HOME / "travis_decision.py",
     "travis_speech_response.py": HOME / "travis_speech_response.py",
     "jarvis_sherpa.py": HOME / "jarvis_sherpa.py",
+    "jarvis_piper.py": HOME / "jarvis_piper.py",
     "travis_library.py": HOME / "travis_library.py",
     "travis_library_seed.py": HOME / "travis_library_seed.py",
     "travis_gmail.py": HOME / "travis_gmail.py",
@@ -843,7 +844,7 @@ def main():
                 if ui_changed:
                     actions.append({"service":"autoupdate/travis-client","ok":not update_errors,"output":"módulos atualizados: "+", ".join(ui_changed)})
                 if changed:
-                    if any(name in changed for name in ("travis_stream.py", "jarvis_sherpa.py", "jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh", "travis_brain.py", "travis_scene.py", "travis_visual_research.py")):
+                    if any(name in changed for name in ("travis_stream.py", "jarvis_sherpa.py", "jarvis_piper.py", "jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh", "travis_brain.py", "travis_scene.py", "travis_visual_research.py")):
                         pending_jarvis_restart = True
                     if any(name in changed for name in ("centro_server.py", "business_db.py", "travis_core.py")):
                         pending_server_restart = True

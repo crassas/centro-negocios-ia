@@ -1277,6 +1277,7 @@ class VoiceWorker:
  def __init__(self,kind,model=None):self.kind=kind;self.model=Path(model) if model else None;self.process=None;self.buffer=b"";self.lock=threading.RLock()
  def start(self):
   if self.process is not None and self.process.poll() is None:return
+  piper_python=False
   if self.kind=="stt-sherpa":args=[str(ROOT/"conversation-v2-stage/venv/bin/python"),str(Path(__file__).with_name("jarvis_sherpa.py")),"--worker"]
   elif self.kind in {"stt","stt-fast","stt-pt"}:args=[str(ROOT/"venv/bin/python"),str(Path(__file__).with_name("jarvis_whisper.py")),str(self.model or MODELS/"stt/ggml-base.bin"),"--worker"]
   elif self.kind=='turn':args=[str(ROOT/'conversation-v2-stage/venv/bin/python'),str(Path(__file__).with_name('jarvis_turn.py'))]
@@ -1284,12 +1285,16 @@ class VoiceWorker:
    model=self.model or MODELS/"tts/pt_PT-tugao-medium.onnx"
    if not model.is_file():raise RuntimeError("Modelo de voz indisponível: "+model.name)
    args=[str(ROOT/"bin/piper"),"-m",str(model),"--json-input","-q"]
+   piper_script=Path(__file__).with_name('jarvis_piper.py')
+   piper_interpreter=ROOT/'conversation-v2-stage/venv/bin/python'
+   if os.environ.get('TRAVIS_TTS_BACKEND')!='legacy' and piper_script.is_file() and piper_interpreter.is_file() and (ROOT/'piper-runtime-1.8.0/piper/__init__.py').is_file():
+    args=[str(piper_interpreter),str(piper_script),str(model)];piper_python=True
   ROOT.mkdir(parents=True,exist_ok=True)
   worker_env=os.environ.copy()
   if self.kind in {"stt-fast","stt-pt"}:worker_env["TRAVIS_STT_ACCURACY"]="fast"
   with (ROOT/(self.kind+"-worker.log")).open("ab") as log:self.process=subprocess.Popen(args,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=log,bufsize=0,env=worker_env)
   self.buffer=b""
-  if self.kind in {"stt","stt-fast","stt-pt","stt-sherpa","turn"}:
+  if piper_python or self.kind in {"stt","stt-fast","stt-pt","stt-sherpa","turn"}:
    if not json.loads(self.line(20).split(':',1)[1]).get("ready"):raise RuntimeError("Voz não ficou pronta")
  def line(self,timeout):
   deadline=time.monotonic()+timeout

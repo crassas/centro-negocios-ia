@@ -22,6 +22,9 @@ def main():
     # Only the upstream CPU turn model and its NumPy feature extractor are used.
     # Installing the whole media/provider framework would add unnecessary services.
     subprocess.run([str(python), '-m', 'pip', 'install', '--no-deps', 'pipecat-ai==1.12.0'], check=True)
+    subprocess.run([str(python), '-m', 'pip', 'install', '--only-binary=:all:',
+                    '--no-deps', '--target', str(ROOT.parent/'piper-runtime-1.8.0'),
+                    'piper-tts==1.8.0'], check=True)
     manifests = []
     for package, version, folder, names in [
         ('onnxruntime-web', '1.22.0', 'ort', {'ort.wasm.min.js', 'ort-wasm-simd-threaded.mjs', 'ort-wasm-simd-threaded.wasm'}),
@@ -50,9 +53,9 @@ def main():
             raise RuntimeError('Missing browser asset: ' + package)
         manifests.append({'package': package, 'version': version, 'integrity': integrity,
                           'source': metadata['dist']['tarball'], 'files': sorted(copied)})
-    for name in ['jarvis_turn.py', 'travis_dialogue.py']:
+    for name in ['jarvis_turn.py', 'jarvis_piper.py', 'travis_dialogue.py']:
         shutil.copy2(Path(__file__).with_name(name), Path.home() / name)
-    (ROOT / 'installed.json').write_text(json.dumps({'browser': manifests, 'pipecat-ai': '1.12.0'}, indent=2))
+    (ROOT / 'installed.json').write_text(json.dumps({'browser': manifests, 'pipecat-ai': '1.12.0', 'piper-tts': '1.8.0'}, indent=2))
     print('VOICE_COMPONENTS_INSTALLED: Silero v5, Pipecat Smart Turn v3.2; no speech provider added.')
 
 if __name__ == '__main__':
