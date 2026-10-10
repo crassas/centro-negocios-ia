@@ -1,9 +1,9 @@
 import { createLiveSTT } from './travis-live-stt.mjs?v=live-1';
 import { readVoiceReply } from './travis-voice-stream.mjs?v=live-1';
 import {createMotionAudio} from './travis-motion-audio.mjs?v=motion-1';
-import {playDiscovery} from './travis-discovery.mjs?v=discovery-1';
-import { createConceptProjection } from './travis-concept-projection.mjs?v=discovery-1';
-import './travis-action-cards.mjs?v=discovery-1';
+import {playDiscovery} from './travis-discovery.mjs?v=spectrum-1';
+import { createConceptProjection } from './travis-concept-projection.mjs?v=spectrum-1';
+import './travis-action-cards.mjs?v=spectrum-1';
 import { createVoiceInput } from './travis-voice-input.mjs?v=live-1';
 import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=motion-1';
 import { INTERFACE_COPY, interfaceLanguage, applyInterfaceLanguage, languageFromInterfaceCommand } from './travis-interface-language.mjs?v=1';
@@ -139,7 +139,13 @@ if (!hud || !launcher || !canvas) {
 
   const IS_LOCAL_TRAVIS_UI=['127.0.0.1','localhost'].includes(location.hostname) && location.port==='8770';
   const LOCAL_TRAVIS_BASE=IS_LOCAL_TRAVIS_UI?location.origin:'http://127.0.0.1:8770';
-  let voiceSession=0;
+  let voiceSession=0,discoveryJourney=null;
+  const discoveryAudio=new Map();let discoveryAudioBytes=0;
+  function rememberDiscoveryAudio(key,wav){
+    if(wav.byteLength>2500000)return;
+    discoveryAudio.set(key,wav);discoveryAudioBytes+=wav.byteLength;
+    while(discoveryAudioBytes>8000000||discoveryAudio.size>8){const first=discoveryAudio.keys().next().value;discoveryAudioBytes-=discoveryAudio.get(first).byteLength;discoveryAudio.delete(first);}
+  }
   const motionAudio=createMotionAudio({context:()=>audioContext,state:()=>({open:opened,listening:state==='listening'||voiceInput?.diagnostics().active||voiceRecorder?.state==='recording',paused:voicePaused,speaking:state==='speaking'||voiceBusy,reducedMotion})});
   window.addEventListener('travis:motion-sound',e=>motionAudio.setEnabled(e.detail?.enabled));
   window.addEventListener('travis:state',e=>{if(['listening','speaking'].includes(e.detail?.state))motionAudio.silence();});
@@ -161,6 +167,7 @@ if (!hud || !launcher || !canvas) {
   function interruptReply(){
     voicePlaybackResolve?.();voicePlaybackResolve=null;
     window.dispatchEvent(new CustomEvent('travis:speech-cancel'));
+    if(discoveryJourney?.status==='playing'||discoveryJourney?.status==='preparing')discoveryJourney.status='paused';
     voiceSession++;voiceRequestController?.abort();voiceRequestController=null;
     clearTimeout(voiceFinishTimer);voiceFinishTimer=0;
     if(voiceSource){try{voiceSource.onended=null;voiceSource.stop();voiceSource.disconnect();}catch{}voiceSource=null;}
@@ -1043,16 +1050,44 @@ if (!hud || !launcher || !canvas) {
         }
       }
       if(interpretation?.rewritten)text=interpretation.rewritten;
+      if(interpretation?.resume){
+        if(discoveryJourney&&discoveryJourney.next<discoveryJourney.chapters.length)interpretation={...interpretation,chapters:discoveryJourney.chapters,language:discoveryJourney.language,start:discoveryJourney.next};
+        else interpretation.reply=interpretation.language==='pt'?'Não há uma viagem em pausa. Podes dizer: surpreende-me.':'There is no paused journey. You can say: surprise me.';
+      }
       if(interpretation?.chapters?.length){
         replyLanguage=interpretation.language==='pt'?'pt':'en';
+        const journey=discoveryJourney={chapters:interpretation.chapters,language:replyLanguage,next:interpretation.start||0,status:'preparing',retries:0};
+        const valid=()=>opened&&session===voiceSession&&!controller.signal.aborted;
         setState('thinking',replyLanguage==='pt'?'A abrir a viagem…':'Opening the journey…');
-        await playDiscovery(interpretation.chapters,{
-          valid:()=>opened&&session===voiceSession&&!controller.signal.aborted,
-          prepare:async chapter=>{const speech=await localFetch('/speak',{body:{text:chapter.text,language:replyLanguage},signal:controller.signal});if(!speech.ok)throw new Error(replyLanguage==='pt'?'A voz não está disponível agora.':'Voice is unavailable right now.');return speech.arrayBuffer();},
-          present:(chapter,index,total)=>window.TravisProjection.presentDiscoveryChapter(chapter,index,total),
-          play:(wav,chapter)=>playVoiceArrayBuffer(wav,session,chapter.text,null,true),
-          finish:()=>{voiceBusy=false;lastInteraction=performance.now();window.dispatchEvent(new CustomEvent('travis:speech-end'));setState(voicePaused?'idle':'ready',replyLanguage==='pt'?'Estou aqui.':'I’m here.');scheduleListening(session,100);}
-        });
+        try{
+          await playDiscovery(journey.chapters,{
+            start:journey.next,valid,
+            prepare:async chapter=>{
+              const key=journey.language+':'+chapter.text;
+              if(discoveryAudio.has(key))return discoveryAudio.get(key);
+              const speech=await localFetch('/speak',{body:{text:chapter.text,language:journey.language},signal:controller.signal});
+              if(!speech.ok){const error=new Error('Voice preparation failed');error.retryable=speech.status>=500||speech.status===408||speech.status===429;throw error;}
+              const wav=await speech.arrayBuffer();if(wav.byteLength<44)throw new Error('Empty voice response');
+              if(valid())rememberDiscoveryAudio(key,wav);return wav;
+            },
+            checkpoint:(index,status)=>{journey.next=index;journey.status=status;},
+            retrying:()=>{journey.retries++;},
+            present:(chapter,index,total)=>window.TravisProjection.presentDiscoveryChapter(chapter,index,total),
+            play:async(wav,chapter)=>{
+              try{await playVoiceArrayBuffer(wav,session,chapter.text,null,true);}catch(error){
+                const key=journey.language+':'+chapter.text,cached=discoveryAudio.get(key);
+                if(cached){discoveryAudioBytes-=cached.byteLength;discoveryAudio.delete(key);}throw error;
+              }
+            },
+            finish:()=>{journey.status='completed';voiceBusy=false;lastInteraction=performance.now();window.dispatchEvent(new CustomEvent('travis:speech-end'));setState(voicePaused?'idle':'ready',replyLanguage==='pt'?'Estou aqui.':'I’m here.');scheduleListening(session,100);}
+          });
+        }catch(error){
+          if(!valid())return;
+          journey.status='paused';journey.reason='voice-unavailable';voiceBusy=false;
+          window.TravisProjection?.pauseDiscovery();
+          setState('ready',replyLanguage==='pt'?'Viagem em pausa. Diz «continua a viagem» para retomar.':'Journey paused. Say “continue the journey” to resume.');
+          scheduleListening(session,250);
+        }
         return;
       }
       if(interpretation?.handled){
@@ -1881,6 +1916,7 @@ if (!hud || !launcher || !canvas) {
 
     sizeForViewport();
     resize();
+    try{await conceptProjection.warm(renderer,camera,scene);}catch(error){console.debug('Projection prewarm:',error.message);}
     setLoading('VISUAL CORE ONLINE',true);
     ready=true;
   }
@@ -2314,7 +2350,7 @@ if (!hud || !launcher || !canvas) {
         presence:{...presencePose},projection:hologramPresentation.sample(performance.now()/1000),
         media:window.TravisProjection?.media(),
         hologram:conceptProjection?.state?.(),motionAudio:motionAudio.status(),projectionControl:window.TravisProjection?.status?.(),
-        meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,voiceInput:voiceInput?.diagnostics(),vision:vision.diagnostics(),replyLanguage,inputLanguage,preferredLanguage,uiLanguage,visualModePolicy:'automatic',standby,proactive,voicePaused,
+        discovery:discoveryJourney?{next:discoveryJourney.next,total:discoveryJourney.chapters.length,status:discoveryJourney.status,retries:discoveryJourney.retries}:null,meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,voiceInput:voiceInput?.diagnostics(),vision:vision.diagnostics(),replyLanguage,inputLanguage,preferredLanguage,uiLanguage,visualModePolicy:'automatic',standby,proactive,voicePaused,
         recording:voiceRecorder?.state,pendingTasks:[...pendingVoiceTasks.keys()],lastTaskResult:lastVoiceTaskResult,voiceMetrics:voiceMetrics.map(m=>({...m}))};
     },
     form(mode='auto') {

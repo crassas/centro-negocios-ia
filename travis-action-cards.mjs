@@ -1,13 +1,13 @@
-import {discoveryChapters,scienceReference} from './travis-discovery.mjs?v=discovery-1';
-import {bodyNames} from './travis-scene-planner.mjs?v=discovery-1';
+import {discoveryChapters,scienceReference} from './travis-discovery.mjs?v=spectrum-1';
+import {bodyNames} from './travis-scene-planner.mjs?v=spectrum-1';
 import {createVisualSources} from './travis-visual-sources.mjs?v=sand-1';
 // Front workspace driven by actual host tool results. Text is always inert.
 import {MOTION,revealCaption,readingHold} from './travis-motion.mjs?v=motion-1';
-import {decodeReferenceModel,disposeReferenceModel} from './travis-model-library.mjs?v=sand-1';
+import {decodeReferenceModel,disposeReferenceModel} from './travis-model-library.mjs?v=spectrum-1';
 import {hologramPresentation as projection} from './travis-presence.mjs?v=motion-1';
 import {mountYouTube,closeYouTube,controlYouTube,youtubeState} from './travis-youtube.mjs?v=3';
-import {parseVisualIntent,rewriteEnglishToolRequest,mayNeedVisualModel} from './travis-english-intents.mjs?v=discovery-1';
-import {buildNarrationCues,cueAtTime,hasLocalVisual} from './travis-visual-story.mjs?v=discovery-1';
+import {parseVisualIntent,rewriteEnglishToolRequest,mayNeedVisualModel} from './travis-english-intents.mjs?v=spectrum-1';
+import {buildNarrationCues,cueAtTime,hasLocalVisual} from './travis-visual-story.mjs?v=spectrum-1';
 const hud=document.getElementById('travis-hud');
 const deck=document.getElementById('travis-action-deck');
 const heading=document.getElementById('travis-action-heading');
@@ -226,6 +226,7 @@ if(deck){
       render({...schematic(chapter.scene,chapter.title),sourceName:chapter.sourceName,sourceUrl:chapter.sourceUrl,explaining:true,discovery:{id:chapter.id,index,total}});
       window.TravisVisual?.commands(true,{automatic:true});show();
     },
+    pauseDiscovery(){cancelNarration();if(current?.discovery){current.explaining=false;pinned=true;clearTimeout(returnTimer);updatePin();}},
     mayNeedModel:mayNeedVisualModel,
     applyModelIntent(result,text=''){
       const valid=['planet','map','house','person','vehicle','landscape','diagram','object','text','space','mechanical'];
@@ -287,6 +288,7 @@ if(deck){
         return rewritten!==text?{handled:false,rewritten}:null;
       }
       if(intent.type==='discovery'){
+        if(intent.resume)return {handled:true,kind:'discovery',resume:true,language:intent.language};
         const chapters=discoveryChapters(intent.ids,intent.language);wideScene=null;selectedVisual=null;
         window.TravisProjection.presentDiscoveryChapter(chapters[0],0,chapters.length);
         return {handled:true,kind:'discovery',language:intent.language,chapters,reply:chapters[0].text};

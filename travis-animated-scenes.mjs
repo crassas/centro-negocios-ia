@@ -1,6 +1,6 @@
-import {createDetailedSubject} from './travis-visual-subjects.mjs?v=discovery-1';
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=sand-1';
-import {transferState} from './travis-scene-planner.mjs?v=discovery-1';
+import {createDetailedSubject} from './travis-visual-subjects.mjs?v=spectrum-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=spectrum-1';
+import {transferState} from './travis-scene-planner.mjs?v=spectrum-1';
 const clamp=t=>Math.max(0,Math.min(1,t));
 export function createAnimatedScene(THREE,kind,subject){
  const group=new THREE.Group(),materials=[],textures=[];let last={};
@@ -60,14 +60,14 @@ export function createAnimatedScene(THREE,kind,subject){
  void main(){vec3 p=position;float t=uTime;vSeed=aSeed;vAlpha=uBuild*(1.-smoothstep(.95,1.3,abs(p.x)));
  ${ocean?'p.y=-.25+sin(p.x*4.+t*1.2)*.16+cos(p.z*6.-t*.8)*.13;':fire?'float age=fract(aSeed+t*(.18+aSeed*.13));p.y=-1.+age*2.;p.x*=.5*(1.-age);p.x+=sin(age*9.+t*1.3)*age*.15;p.z*=.45*(1.-age);vAlpha*=1.-age;':clouds?'p.y=.45+sin(p.x*3.+p.z*4.)*.15;p.x+=sin(t*.18+aSeed)*.10;':snow?'p.y=1.1-mod(1.1-p.y+t*(.24+aSeed*.22),2.2);p.x+=sin(t*.5+aSeed*30.)*.12;':'p.y=1.1-mod(1.1-p.y+t*(1.5+aSeed*.8),2.2);p.x-=sin(t*.4)*.09;'}
  vec4 mv=modelViewMatrix*vec4(p,1.);gl_Position=projectionMatrix*mv;gl_PointSize=clamp(${clouds?'14.':rain?'7.':snow?'3.':'2.'}*5./max(2.,-mv.z),1.,${clouds?'18.':rain?'10.':'4.'});}`,
- fragmentShader:`precision highp float;varying float vSeed,vAlpha;void main(){vec2 uv=gl_PointCoord-.5;${rain?'uv.x*=4.;':''}float d=length(uv);if(d>.5)discard;gl_FragColor=vec4(mix(vec3(.65,.38,.13),vec3(1.,.86,.62),vSeed),vAlpha*(1.-smoothstep(.05,.5,d))*${clouds?'.12':'.85'});}`,
+ fragmentShader:`precision highp float;varying float vSeed,vAlpha;void main(){vec2 uv=gl_PointCoord-.5;${rain?'uv.x*=4.;':''}float d=length(uv);if(d>.5)discard;gl_FragColor=vec4(${fire?'mix(vec3(1.,.19,.025),vec3(1.,.91,.43),vSeed)':snow||clouds?'mix(vec3(.55,.72,.92),vec3(.92,.98,1.),vSeed)':'mix(vec3(.13,.43,.86),vec3(.60,.90,1.),vSeed)'},vAlpha*(1.-smoothstep(.05,.5,d))*${clouds?'.12':'.85'});}`,
  transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});materials.push(mat);group.add(new THREE.Points(geo,mat));
  let rippleMaterial=null;
  if(rain){
   const data=[],angles=[],phases=[];
   for(let i=0;i<18;i++)for(let j=0;j<24;j++)for(const k of [j,j+1]){data.push((rand(i+170)-.5)*2.25,-1.09,(rand(i+230)-.5)*1.05);angles.push(k/24*Math.PI*2);phases.push(rand(i+370));}
   const rippleGeometry=new THREE.BufferGeometry();rippleGeometry.setAttribute('position',new THREE.Float32BufferAttribute(data,3));rippleGeometry.setAttribute('aAngle',new THREE.Float32BufferAttribute(angles,1));rippleGeometry.setAttribute('aSeed',new THREE.Float32BufferAttribute(phases,1));
-  rippleMaterial=new THREE.ShaderMaterial({uniforms:{uTime:{value:0},uBuild:{value:0},uVoice:{value:0}},vertexShader:`attribute float aAngle,aSeed;uniform float uTime,uBuild;varying float vAlpha;void main(){float age=fract(aSeed+uTime*.7);vec3 p=position;p.x+=cos(aAngle)*age*.16;p.z+=sin(aAngle)*age*.16;vAlpha=(1.-age)*uBuild*.35;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}`,fragmentShader:`precision highp float;varying float vAlpha;void main(){gl_FragColor=vec4(.9,.7,.4,vAlpha);}`,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending});materials.push(rippleMaterial);group.add(new THREE.LineSegments(rippleGeometry,rippleMaterial));
+  rippleMaterial=new THREE.ShaderMaterial({uniforms:{uTime:{value:0},uBuild:{value:0},uVoice:{value:0}},vertexShader:`attribute float aAngle,aSeed;uniform float uTime,uBuild;varying float vAlpha;void main(){float age=fract(aSeed+uTime*.7);vec3 p=position;p.x+=cos(aAngle)*age*.16;p.z+=sin(aAngle)*age*.16;vAlpha=(1.-age)*uBuild*.35;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}`,fragmentShader:`precision highp float;varying float vAlpha;void main(){gl_FragColor=vec4(.34,.72,1.,vAlpha);}`,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending});materials.push(rippleMaterial);group.add(new THREE.LineSegments(rippleGeometry,rippleMaterial));
  }
  let bolt=null;
  if(storm){bolt=line([[-.3,1,0],[.05,.65,0],[-.1,.35,0],[.25,.1,0]],.85);}

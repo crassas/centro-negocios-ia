@@ -81,8 +81,7 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
    if(!list.length)return null;
    const sums=[],total=list.reduce((sum,item)=>{const next=sum+item.weight;sums.push(next);return next;},0);
    const vec=new THREE.Vector3(),b=new THREE.Vector3(),c=new THREE.Vector3();
-   const convert=(o,index,out)=>out.fromBufferAttribute(o.geometry.attributes.position,index)
-      .applyMatrix4(o.matrixWorld).applyMatrix4(reverse);
+   const convert=(o,index,out)=>{out.fromBufferAttribute(o.geometry.attributes.position,index);o.userData?.morphPosition?.(index,out);return out.applyMatrix4(o.matrixWorld).applyMatrix4(reverse);};
    const dest=new Float32Array(n*3),normals=new Float32Array(n*3);
    const normal=new THREE.Vector3(),nb=new THREE.Vector3(),nc=new THREE.Vector3();
    for(let i=0;i<n;i++){
@@ -188,7 +187,8 @@ export function createTravisParticleMorph(THREE,{count=2700,reducedMotion=false}
  }
  function hide(){active=false;points.visible=false;currentAlpha=avatarDissolve=0;material.uniforms.uOpacity.value=0;}
  function dispose(){root.remove(points);geometry.dispose();material.dispose();}
- return {root,points,presentation:()=>presentation,follow:object=>{liveShape=object;},setSource,go,returnToSource,update,hide,dispose,setTheme,
+ function blendSurface(build){if(!toCore){material.uniforms.uOpacity.value=currentAlpha*(1-morphEase((build-.72)/.28));points.visible=material.uniforms.uOpacity.value>.001;}}
+ return {root,points,blendSurface,presentation:()=>presentation,follow:object=>{liveShape=object;},setSource,go,returnToSource,update,hide,dispose,setTheme,
   state:()=>({active,points:n,morphProgress:lastProgress,source:sourceSummary,target:targetSummary,
    returning:toCore,avatarDissolve,voice:lastVoice,opacity:currentAlpha,fit:lastFit,
    coordinateSpace:'projection-root',from:from.slice(0,9),to:to.slice(0,9)})};

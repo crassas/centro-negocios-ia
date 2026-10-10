@@ -35,7 +35,11 @@ ALIASES = {'football': 'association football', 'futebol': 'association football'
            'soccer': 'association football', 'borboleta': 'butterfly', 'borboletas': 'butterfly',
            'gato': 'cat', 'cao': 'dog', 'cavalo': 'horse', 'flor': 'flower',
            'casa': 'house', 'edificio': 'building', 'terra': 'Earth', 'marte': 'Mars',
-           'sol': 'Sun', 'lua': 'Moon', 'via lactea': 'Milky Way'}
+           'sol': 'Sun', 'lua': 'Moon', 'via lactea': 'Milky Way',
+           'aurora boreal': 'aurora', 'aurora austral': 'aurora', 'buraco negro': 'black hole',
+           'nebulosa': 'nebula', 'galaxia': 'galaxy', 'espaco': 'space', 'sistema solar': 'solar system',
+           'astronauta': 'astronaut', 'arvore': 'tree', 'leao': 'lion', 'tigre': 'tiger',
+           'aguia': 'eagle', 'golfinho': 'dolphin', 'tubarao': 'shark', 'polvo': 'octopus'}
 
 
 def public_url(url):
@@ -282,7 +286,7 @@ def model_detail_image(document, includes):
 
 
 def nasa_images(query):
-    if not re.search(r'\b(?:mars|jupiter|saturn|earth|moon|sun|solar|space|galaxy|nebula|astronaut|nasa|milky way|planet|mercury|venus|uranus|neptune|pluto|hubble|webb)\b', folded(query)):
+    if not re.search(r'\b(?:mars|jupiter|saturn|earth|moon|sun|solar|space|galaxy|nebula|astronaut|nasa|milky way|planet|mercury|venus|uranus|neptune|pluto|hubble|webb|aurora|black hole)\b', folded(query)):
         return []
     data = json_api('https://images-api.nasa.gov/search', {'q': query, 'media_type': 'image', 'page_size': 12})
     result = []
@@ -365,6 +369,17 @@ def score_image(item, query):
 
 
 def collection(query, language, include_image):
+    # Independent providers start before Wikimedia. A slow encyclopedia lookup
+    # must not consume their request budget or stop their images from appearing.
+    if not include_image:
+        return _collection(query, language, False)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        external = pool.submit(contextvars.copy_context().run, external_images,
+                               ALIASES.get(folded(query), query))
+        return _collection(query, language, True, external)
+
+
+def _collection(query, language, include_image, external=None):
     host = language + '.wikipedia.org'
     search = ALIASES.get(folded(query), query)
     wiki_query = search if language == 'en' else query
@@ -420,7 +435,10 @@ def collection(query, language, include_image):
                     'source': 'Wikipedia', 'width': thumbnail.get('width', 640), 'height': thumbnail.get('height', 480)})
             except ValueError:
                 pass
-        candidates.extend(external_images(search))
+        try:
+            candidates.extend(external.result() if external else external_images(search))
+        except Exception:
+            pass
         candidates.sort(key=lambda item: score_image(item, search), reverse=True)
         # Reserve a place for each relevant independent source; six Wikimedia
         # variants must not crowd NASA or natural-history photographs out.
@@ -460,12 +478,17 @@ def _resolve(query, language='en', include_image=True, image_index=0, prefer_mod
         return {'ok': False, 'reason': 'invalid-image-index'}
     language = 'pt' if language == 'pt' else 'en'
     if prefer_model and include_image:
+        # Reserve most of the total budget for references if no matching 3D
+        # object exists. Nested fetches inherit this shorter deadline.
+        model_budget = _DEADLINE.set(min(_DEADLINE.get() or float('inf'), time.monotonic() + 9))
         try:
             model = resolve_model(query, language)
             if model:
                 return model
         except Exception:
             pass
+        finally:
+            _DEADLINE.reset(model_budget)
     key = (query.casefold(), language, bool(include_image))
     result = cached(_CACHE, key)
     hit = result is not None

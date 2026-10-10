@@ -1,23 +1,24 @@
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=sand-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=spectrum-1';
 const rand=n=>{const f=Math.sin(n*127.1+311.7)*43758.5453123;return f-Math.floor(f);};
 export function createScienceScene(THREE,subject){
  const title=String(subject).toLowerCase(),group=new THREE.Group(),materials=[],textures=[];
  group.name='TravisDiscovery';group.userData.dynamic=true;let state={};
  const gold=createHolographicSurfaceMaterial(THREE,{gain:1.25});materials.push(gold);
  function surface(geo,parent=group){const m=new THREE.Mesh(geo,gold);parent.add(m);return m;}
- function grains(positions,{size=2,alpha=.72}={}){
+ function grains(positions,{size=2,alpha=.72,colors=null,motion=''}={}){
   const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  if(colors)geo.setAttribute('aColor',new THREE.Float32BufferAttribute(colors,3));
   const seeds=Float32Array.from({length:positions.length/3},(_,i)=>rand(i+33));geo.setAttribute('aSeed',new THREE.BufferAttribute(seeds,1));
   const mat=new THREE.ShaderMaterial({uniforms:{uTime:{value:0},uBuild:{value:0},uVoice:{value:0}},transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false,
-   vertexShader:`attribute float aSeed;uniform float uTime,uBuild;varying float vLight;void main(){vec4 p=modelViewMatrix*vec4(position,1.);gl_Position=projectionMatrix*p;gl_PointSize=clamp(${size.toFixed(2)}*5./max(2.,-p.z),1.,5.);vLight=uBuild*(.68+.32*sin(aSeed*40.+uTime*.8));}`,
-   fragmentShader:`precision highp float;varying float vLight;void main(){float d=length(gl_PointCoord-.5);if(d>.5)discard;gl_FragColor=vec4(1.,.76,.40,(1.-smoothstep(.08,.5,d))*vLight*${alpha.toFixed(2)});}`});
+   vertexShader:`attribute float aSeed;${colors?'attribute vec3 aColor;varying vec3 vColor;':''}uniform float uTime,uBuild;varying float vLight;void main(){${colors?'vColor=mix(vec3(1.,.76,.40),aColor,smoothstep(.12,.9,uBuild));':''}vec3 local=position;${motion}vec4 p=modelViewMatrix*vec4(local,1.);gl_Position=projectionMatrix*p;gl_PointSize=clamp(${size.toFixed(2)}*5./max(2.,-p.z),1.,5.);vLight=uBuild*(.68+.32*sin(aSeed*40.+uTime*.8));}`,
+   fragmentShader:`precision highp float;${colors?'varying vec3 vColor;':''}varying float vLight;void main(){float d=length(gl_PointCoord-.5);if(d>.5)discard;gl_FragColor=vec4(${colors?'vColor':'vec3(1.,.76,.40)'},(1.-smoothstep(.08,.5,d))*vLight*${alpha.toFixed(2)});}`});
   materials.push(mat);const points=new THREE.Points(geo,mat);group.add(points);return points;
  }
  // Merge local solid pieces into a single mesh so molecular detail remains
  // inexpensive on a phone. The shared particle sampler sees the full geometry.
  function merge(geometries){
   const output=new THREE.BufferGeometry();for(const key of ['position','normal','uv']){
-   const size=key==='uv'?2:3,values=[];for(const geo of geometries)values.push(...geo.attributes[key].array);
+   const size=key==='uv'?2:3,values=new Float32Array(geometries.reduce((n,g)=>n+g.attributes[key].array.length,0));let offset=0;for(const geo of geometries){const data=geo.attributes[key].array;values.set(data,offset);offset+=data.length;}
    output.setAttribute(key,new THREE.Float32BufferAttribute(values,size));
   }for(const geo of geometries)geo.dispose();return output;
  }
@@ -70,22 +71,33 @@ export function createScienceScene(THREE,subject){
   return {group,materials,textures,variant:'black-hole-accretion',update(time){disc.rotation.y=time*.24;disc.material.uniforms.uTime.value=time;discMaterial.uniforms.uTime.value=time;state={type:'black-hole-accretion',time,particles:5800,schematic:true};},state:()=>state};
  }
  if(/aurora/.test(title)){
-  const positions=[],count=3900;for(let i=0;i<count;i++)positions.push(0,0,0);
-  const curtains=grains(positions,{size:1.5,alpha:.65}),attribute=curtains.geometry.attributes.position;
-  function pose(time){for(let i=0;i<count;i++){
+  const positions=[],colors=[],count=5400;
+  const wave=(x,t,sheet)=>Math.sin(x*2.8+t*.35+sheet*.8)*.19+Math.sin(x*6-t*.23)*.10;
+  const waveGLSL='sin(local.x*2.8+uTime*.35+sheet*.8)*.19+sin(local.x*6.-uTime*.23)*.10';
+  const motion=`float sheet=mod(aSeed,3.);local.y+=${waveGLSL}-(sin(local.x*2.8+sheet*.8)*.19+sin(local.x*6.)*.10);local.z+=(sin(local.x*2.+uTime*.3)-sin(local.x*2.))*.25;`;
+  for(let i=0;i<count;i++){
    const x=(rand(i*3+1)-.5)*2.7,h=rand(i*3+2),sheet=i%3;
-   const wave=Math.sin(x*2.8+time*.35+sheet*.8)*.19+Math.sin(x*6.-time*.23)*.10;
-   attribute.setXYZ(i,x,-.55+h*(.75+.6*Math.sin(x*1.7+1.2)**2)+wave,(sheet-1)*.25+Math.sin(x*2.+time*.3)*.25);
-  }attribute.needsUpdate=true;curtains.geometry.computeBoundingSphere();}
-  pose(0);
+   positions.push(x,-.55+h*(.75+.6*Math.sin(x*1.7+1.2)**2)+wave(x,0,sheet),(sheet-1)*.25+Math.sin(x*2)*.25);
+   // Illustrative oxygen green/red and nitrogen violet, not a spectral measurement.
+   const low=[.23,.42,1.],green=[.15,1.,.43],high=[.93,.22,.62],f=Math.max(0,Math.min(1,(h-.43)/.57));
+   const base=h<.12?low:green;for(let k=0;k<3;k++)colors.push(base[k]*(1-f)+high[k]*f);
+  }
+  const curtains=grains(positions,{size:1.35,alpha:.62,colors,motion});
+  for(let i=0;i<count;i++)curtains.geometry.attributes.aSeed.setX(i,i%3);
+  // The GPU animates the curtains. Sampling a departing form reproduces that
+  // exact pose once, without uploading thousands of vertices every frame.
+  curtains.geometry.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,.1,0),2.2);
+  curtains.userData.morphPosition=(index,v)=>{const t=curtains.material.uniforms.uTime.value,sheet=index%3;v.y+=wave(v.x,t,sheet)-wave(v.x,0,sheet);v.z+=(Math.sin(v.x*2+t*.3)-Math.sin(v.x*2))*.25;return v;};
   const ribbonGeometry=new THREE.PlaneGeometry(2.7,1,180,24);
   const ribbonMaterial=new THREE.ShaderMaterial({uniforms:{uBuild:{value:0},uTime:{value:0},uVoice:{value:0}},transparent:true,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,toneMapped:false,
    vertexShader:`varying vec2 vUv;uniform float uTime;void main(){vUv=uv;vec3 p=position;float wave=sin(p.x*2.8+uTime*.35)*.19+sin(p.x*6.-uTime*.23)*.10;p.y=-.55+uv.y*(.75+.6*pow(sin(p.x*1.7+1.2),2.))+wave;p.z=sin(p.x*2.+uTime*.3)*.25;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}`,
-   fragmentShader:`precision highp float;varying vec2 vUv;uniform float uBuild,uTime;void main(){float thread=pow(.5+.5*sin(vUv.x*540.+sin(vUv.x*40.+uTime*.3)*3.),5.);float edge=smoothstep(0.,.08,vUv.x)*(1.-smoothstep(.92,1.,vUv.x));float fade=sin(vUv.y*3.14159)*edge;gl_FragColor=vec4(.94,.65,.29,fade*(.08+thread*.20)*uBuild);}`});
-  materials.push(ribbonMaterial);group.add(new THREE.Mesh(ribbonGeometry,ribbonMaterial));
+   fragmentShader:`precision highp float;varying vec2 vUv;uniform float uBuild,uTime;void main(){float thread=pow(.5+.5*sin(vUv.x*540.+sin(vUv.x*40.+uTime*.3)*3.),5.);float edge=smoothstep(0.,.08,vUv.x)*(1.-smoothstep(.92,1.,vUv.x));float fade=sin(vUv.y*3.14159)*edge;vec3 spectral=mix(vec3(.10,1.,.39),vec3(.90,.15,.55),smoothstep(.4,1.,vUv.y));spectral=mix(vec3(.24,.36,1.),spectral,smoothstep(0.,.13,vUv.y));vec3 colour=mix(vec3(.94,.65,.29),spectral,smoothstep(.12,.9,uBuild));gl_FragColor=vec4(colour,fade*(.12+thread*.32)*uBuild);}`});
+  materials.push(ribbonMaterial);const ribbon=new THREE.Mesh(ribbonGeometry,ribbonMaterial);group.add(ribbon);
+  ribbon.userData.morphPosition=(index,v)=>{const h=ribbonGeometry.attributes.uv.getY(index),t=ribbonMaterial.uniforms.uTime.value;v.y=-.55+h*(.75+.6*Math.sin(v.x*1.7+1.2)**2)+wave(v.x,t,0);v.z=Math.sin(v.x*2+t*.3)*.25;return v;};
+  ribbonGeometry.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,.1,0),2.2);
   const horizon=[];for(let i=0;i<340;i++){const x=(i/339-.5)*2.7;horizon.push(x,-.77+Math.sin(x*6.)*.045+Math.cos(x*13.)*.02,.2);}
   grains(horizon,{size:1.25,alpha:.38});
-  return {group,materials,textures,variant:'aurora-curtains',update(time){pose(time);curtains.material.uniforms.uTime.value=time;ribbonMaterial.uniforms.uTime.value=time;state={type:'aurora-curtains',time,particles:count,schematic:true};},state:()=>state};
+  return {group,materials,textures,variant:'aurora-curtains',update(time){curtains.material.uniforms.uTime.value=time;ribbonMaterial.uniforms.uTime.value=time;state={type:'aurora-curtains',time,particles:count,palette:'oxygen-green-nitrogen-violet',motion:'gpu',schematic:true};},state:()=>state};
  }
  gold.dispose();return null;
 }

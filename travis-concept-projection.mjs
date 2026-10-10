@@ -1,14 +1,15 @@
-import {createScienceScene} from './travis-science-scenes.mjs?v=discovery-1';
-import {journeyCueTarget} from './travis-scene-planner.mjs?v=discovery-1';
-import {createAnimatedScene} from './travis-animated-scenes.mjs?v=discovery-1';
-import {createMechanical} from './travis-mechanical.mjs?v=sand-1';
-import {createArchitecture} from './travis-architecture.mjs?v=sand-1';
-import {createDetailedSubject,identifyVisualSubject} from './travis-visual-subjects.mjs?v=discovery-1';
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=sand-1';
-import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=discovery-1';
+import {createScienceScene} from './travis-science-scenes.mjs?v=spectrum-1';
+import {journeyCueTarget} from './travis-scene-planner.mjs?v=spectrum-1';
+import {createAnimatedScene} from './travis-animated-scenes.mjs?v=spectrum-1';
+import {createMechanical} from './travis-mechanical.mjs?v=spectrum-1';
+import {createArchitecture} from './travis-architecture.mjs?v=spectrum-1';
+import {createDetailedSubject,identifyVisualSubject} from './travis-visual-subjects.mjs?v=spectrum-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=spectrum-1';
+import { createTravisParticleMorph } from './travis-particle-morph.mjs?v=spectrum-1';
 // Film-inspired schematic projections. Unprovided geographic/CAD/person
 // geometry stays visibly conceptual; real source links are separate.
 export function createConceptProjection(THREE,{reducedMotion=false}={}){
+ let warmed=false;
  const root=new THREE.Group();root.name='TravisConceptProjection';root.position.y=.34;
  const matter=createTravisParticleMorph(THREE,{count:12000,reducedMotion});
  let sourceProvider=null,cameraProvider=null,flowVoice=0,flowTime=null,animated=null,motionTime=0,motionPaused=false,motionSpeed=1,narrationClock=null,journeyProgress=null,pausedAt=null;
@@ -212,6 +213,18 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   active.visible=false;
   root.visible=true;
  }
+ // Compile the common surface/star programs during startup, before the first
+ // visible transformation. Keep the tiny hidden owners so Three retains them.
+ async function warm(renderer,camera,scene){
+  if(warmed||!renderer?.compileAsync)return;warmed=true;
+  const warmGroup=new THREE.Group();warmGroup.visible=false;warmGroup.name='TravisProgramWarmup';root.add(warmGroup);
+  warmGroup.add(new THREE.Mesh(new THREE.PlaneGeometry(.001,.001),createHolographicSurfaceMaterial(THREE)));
+  const stars=new THREE.BufferGeometry();stars.setAttribute('position',new THREE.Float32BufferAttribute([0,0,0],3));stars.setAttribute('color',new THREE.Float32BufferAttribute([1,1,1],3));
+  warmGroup.add(new THREE.Points(stars,new THREE.PointsMaterial({vertexColors:true,size:.008,transparent:true,opacity:.85,depthWrite:false})));
+  // Clone only the Object3D; the live morph owns its attributes and material.
+  warmGroup.add(matter.points.clone());
+  await renderer.compileAsync(warmGroup,camera,scene);
+ }
  function hide(){
   kind='';root.visible=false;flowVoice=0;flowTime=null;animated=null;narrationClock=null;journeyProgress=null;root.rotation.y=0;
   if(ghost){dispose(ghost.group,ghost.mats,ghost.textures);ghost=null;}
@@ -249,7 +262,7 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   if(!kind)return;
   const reveal=limit(projection.amount,0,1);
   // A short attack and a longer release follow speech without rigid audio jolts.
-  const elapsed=Math.max(0,now-Math.max(flowTime??now,born+1.18));
+  const elapsed=Math.max(0,Math.min(.1,now-Math.max(flowTime??now,born)));
   const dt=flowTime===null?1/60:Math.max(0,Math.min(.1,now-flowTime));flowTime=now;
   if(!motionPaused&&!reducedMotion){motionTime+=elapsed*motionSpeed;if(kind==='journey'&&!narrationClock&&journeyProgress!==null)journeyProgress=limit(journeyProgress+elapsed*motionSpeed/22,0,1);}
   if(narrationClock&&!motionPaused){const fraction=limit((narrationClock.context.currentTime-narrationClock.start)/narrationClock.duration,0,1);journeyProgress=narrationClock.from+(narrationClock.to-narrationClock.from)*fraction;}
@@ -266,13 +279,14 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   if(frame){activeFrame.position.set(...frame.position);activeFrame.scale.setScalar(frame.scale);activeFrame.rotation.y=frame.rotation;}
   const build=state.returning?1-limit(state.morphProgress/.40,0,1):limit((state.morphProgress-.42)/.48,0,1);
   active.visible=state.active&&build>.001;
+  matter.blendSurface(build);
   for(const m of mats){if(m.uniforms?.uBuild){m.uniforms.uBuild.value=build;m.uniforms.uTime.value=reducedMotion?0:now;m.uniforms.uVoice.value=voice;}else m.opacity=(m.userData.baseOpacity||.5)*build;}
   if(ghost){
    const remaining=1-limit((now-ghost.start)/(reducedMotion?.01:.74),0,1);
    for(const m of ghost.mats){if(m.uniforms?.uBuild)m.uniforms.uBuild.value=Math.min(m.uniforms.uBuild.value,remaining);else m.opacity=(m.userData.baseOpacity||.5)*remaining;}
    if(remaining<=0){dispose(ghost.group,ghost.mats,ghost.textures);ghost=null;}
   }
-  if(animated&&state.morphProgress>=1&&!state.returning){animated.update(reducedMotion?0:motionTime,reducedMotion?0:journeyProgress);if(animated.group)animated.group.userData.animationTime=motionTime;matter.points.visible=false;}
+  if(animated&&!state.returning){animated.update(reducedMotion?0:motionTime,reducedMotion?0:journeyProgress);if(animated.group)animated.group.userData.animationTime=motionTime;}
   if(reducedMotion||motionPaused)return;
   if(state.morphProgress>=1&&!state.returning&&!['reference','text','weather','journey','planet','science'].includes(kind))active.rotation.y=turnBase+motionTime*.055;
   for(const o of objects){
@@ -299,7 +313,7 @@ export function createConceptProjection(THREE,{reducedMotion=false}={}){
   const from=clock.continuous?Math.max(journeyProgress??animated?.state?.().progress??0,narrationClock?.to??0):0;
   narrationClock={...clock,from,to:clock.continuous?journeyCueTarget(clock.text,from,clock.duration):1};
  }
- return {root,show,hide,update,control,inspect,setSource,setCamera,returnToCore,pick,narrate,
+ return {root,show,hide,update,control,inspect,warm,setSource,setCamera,returnToCore,pick,narrate,
   state:()=>({kind,variant,label,quality:'fine-surface-and-particles',zoom,dx,dy,rotation:spin,morphing:Boolean(ghost)||matter.state().morphProgress<1,
    visible:root.visible,textLayout:active.children.find(child=>child.userData.textLayout)?.userData.textLayout||null,animation:{time:motionTime,paused:motionPaused,speed:motionSpeed,...animated?.state?.()},matter:matter.state()})};
 }

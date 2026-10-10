@@ -6,8 +6,8 @@ export const discoveries={
   pt:'Um buraco negro. O brilho vem da matéria quente à sua volta. Para lá do horizonte de acontecimentos, nem a luz consegue escapar. Esta é uma ilustração, com escalas e movimento simplificados.',
   en:'A black hole. The glow comes from hot matter around it. Beyond the event horizon, even light cannot escape. This is an illustration, with simplified scales and motion.'},
  aurora:{scene:'science',title:'Aurora',sourceName:'NASA · Auroras',sourceUrl:'https://science.nasa.gov/sun/auroras/',
-  pt:'Uma aurora. Partículas energéticas excitam gases na atmosfera, que libertam luz. Estas cortinas ondulam em dourado para conservar a minha forma; as auroras reais também têm outras cores.',
-  en:'An aurora. Energetic particles excite gases in the atmosphere, which release light. These curtains ripple in gold to preserve my visual identity; real auroras also have other colours.'},
+  pt:'Uma aurora. Partículas energéticas excitam gases na atmosfera, que libertam luz. O oxigénio pode emitir verde e vermelho; o azoto contribui com tons azuis e violetas. As cores destas cortinas são uma representação ilustrativa.',
+  en:'An aurora. Energetic particles excite gases in the atmosphere, which release light. Oxygen can emit green and red; nitrogen contributes blue and violet tones. The colours of these curtains are illustrative.'},
  dna:{scene:'science',title:'DNA',sourceName:'NHGRI · Double helix',sourceUrl:'https://www.genome.gov/genetics-glossary/Double-Helix',
   pt:'Agora, a dupla hélice do ADN. Duas cadeias, unidas por pares de bases, guardam informação genética. Podes rodá-la com o dedo e aproximar com dois dedos. O desenho simplifica a estrutura molecular.',
   en:'Now, the DNA double helix. Two strands, joined by base pairs, carry genetic information. Drag to turn it, and pinch to zoom. This drawing simplifies the molecular structure.'},
@@ -26,6 +26,7 @@ export function discoveryIntent(text){
  const t=fold(text).trim().replace(/[.!?]+$/,'');
  if(/\b(?:fotografias?|fotos?|photos?|images?|imagens?|pesquisa|research|procura|search)\b/.test(t))return null;
  const language=/\b(?:surpreende|surpreenda|leva|viaja|vamos|viagem|mostra|explica|atomo|atomos|buraco|adn|helice|hidrogenio|invisivel|quero|podes|futuro)\b/.test(t)?'pt':'en';
+ if(/^(?:continua (?:a )?viagem|retoma (?:a )?viagem|continue (?:the )?journey|resume (?:the )?journey)$/.test(t))return {type:'discovery',resume:true,language:/viagem/.test(t)?'pt':'en'};
  const tour=/^(?:surpreende-me|surpreende me|surpreende|surprise me|leva-me ao futuro|leva me ao futuro|vamos viajar|viaja comigo|take me to the future|take me on a journey|explora o invisivel|explore the invisible)$/.test(t);
  if(tour){const ids=/invisivel|invisible/.test(t)?['dna','atom']:['galaxy','blackhole','earth','aurora','dna','atom'];return {type:'discovery',language,ids};}
  const match=patterns.find(([,re])=>re.test(t));if(!match)return null;
@@ -46,16 +47,29 @@ export function discoveryChapters(ids,language='en'){
 }
 export function scienceReference(title){return Object.values(discoveries).find(x=>x.title===title)||null;}
 
-// One prepared chapter ahead, bounded to the current session. Scenes change
-// only when their own audio is ready. Rejected prefetches never leak promises.
-export async function playDiscovery(chapters,{prepare,present,play,valid,finish}){
- const load=chapter=>Promise.resolve().then(()=>valid()?prepare(chapter):null).then(audio=>({audio}),error=>({error}));
- let pending=load(chapters[0]);
- for(let i=0;i<chapters.length;i++){
-  const result=await pending;if(!valid())return false;if(result.error)throw result.error;
+// One prepared chapter ahead. A transient synthesis failure gets one bounded
+// retry; cancellation is checked before retry/presentation and after playback.
+// Checkpoints advance only after the chapter's audio has actually ended.
+export async function playDiscovery(chapters,{prepare,present,play,valid,finish,start=0,checkpoint=()=>{},retrying=()=>{},wait=ms=>new Promise(r=>setTimeout(r,ms))}){
+ const load=chapter=>Promise.resolve().then(async()=>{
+  for(let attempt=0;attempt<2;attempt++){
+   if(!valid())return {cancelled:true};
+   try{return {audio:await prepare(chapter)};}catch(error){
+    if(!valid())return {cancelled:true};
+    if(attempt===1||error?.retryable===false)return {error};
+    retrying(chapter);await wait(600);
+   }
+  }
+ }).catch(error=>({error}));
+ if(start>=chapters.length||!chapters.length){if(valid())finish();return true;}
+ let pending=load(chapters[start]);
+ for(let i=start;i<chapters.length;i++){
+  const result=await pending;if(!valid()||result.cancelled)return false;
+  checkpoint(i,'preparing');if(result.error)throw result.error;
   if(i+1<chapters.length)pending=load(chapters[i+1]);
-  present(chapters[i],i,chapters.length);
+  checkpoint(i,'playing');present(chapters[i],i,chapters.length);
   await play(result.audio,chapters[i]);if(!valid())return false;
+  checkpoint(i+1,'ready');
  }
  finish();return true;
 }

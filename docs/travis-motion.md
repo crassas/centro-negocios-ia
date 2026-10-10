@@ -159,7 +159,7 @@ Novas formas locais, com material dourado e transição pela mesma nuvem:
 - Hidrogénio: 6 200 amostras da distribuição 1s (`r ~ Gamma(3, 1/2)` em unidades
   de Bohr), cauda limitada para o enquadramento. Os pontos representam a
   probabilidade de encontrar **um** eletrão; o núcleo está exagerado.
-- Aurora: cortinas de partículas e filamentos ondulantes; dourado artístico.
+- Aurora: cortinas de partículas e filamentos verdes, violetas e vermelhos; cores ilustrativas, animadas no GPU.
 - Buraco negro: sombra central, disco luminoso, partículas em rotação e arco
   sugestivo da lente gravitacional. Não calcula geodésicas nem física relativista.
 
@@ -175,3 +175,40 @@ com o mesmo nome usa o Three real e áudio de teste para verificar quatro cenas,
 pausa, arrasto, ampliação, correspondência exata entre capítulo e fala,
 interrupção, regresso ao rosto e reabertura. O desempenho no GPU do telemóvel
 continua sujeito ao dispositivo; o teste de browser utiliza Chromium em software.
+
+
+## Cor, continuidade e recuperação — spectrum-1
+
+O rosto conserva o dourado; planetas, galáxia, meteorologia, fotografias e
+texturas de modelos passam a ter cor. Os materiais introduzem essa cor através
+da reconstrução em partículas. As fotografias conservam a classificação de
+referência com relevo: não são conversões mágicas para um objeto 3D completo.
+A luz nas bordas das fotografias desvanece sem apagar os créditos em Fontes.
+
+Os mapas planetários de 1024 × 512 usam costas vetoriais e desenho procedural
+em canvas, com uma cache limitada a 12 corpos. Não são mosaicos científicos.
+Os planetas pequenos da vista geral usam menos triângulos; a vista isolada
+mantém a malha detalhada. A aurora calcula a ondulação nos shaders; a amostragem
+para uma transição reproduz a pose visível. O arranque prepara os programas
+comuns antes da primeira projeção. A densidade de partículas é limitada.
+
+A viagem prepara apenas um capítulo seguinte. Uma falha temporária da síntese
+recebe uma segunda tentativa, com intervalo de 600 ms. O capítulo só fica
+concluído após o fim do áudio. Uma falha persistente fixa a cena e apresenta
+uma mensagem; «Continua a viagem»/«Retoma a viagem» retoma o capítulo incompleto.
+O áudio dos capítulos tem cache local em memória, limitada a 8 MB/8 entradas;
+fechar a página elimina-a. Nenhum capítulo é saltado em silêncio. Uma interrupção
+continua a cancelar a reprodução e impede resultados antigos de tomar a cena.
+A sequência «Surpreende-me» mantém seis capítulos e termina no hidrogénio.
+
+NASA e iNaturalist iniciam as consultas em paralelo com a Wikipédia. Há aliases
+portugueses para auroras, buracos negros, astronomia e animais. A pesquisa de
+modelos tem até 9 segundos dentro do orçamento global de 30 segundos, com o
+restante reservado às referências. As origens, dimensões, licenças e limites de
+dados mantêm a validação existente. Não há promessas de cobertura 3D universal.
+
+Validação: testes de browser com áudio de teste incluem falha HTTP temporária,
+falha persistente, retoma no capítulo correto, palavras → aurora, pausa/gestos,
+regresso ao rosto e cancelamento. O perfil local de construção do sistema solar
+passou de 1306 ms para 96 ms antes da redução adicional de triângulos; este número
+mede a construção no Chromium de teste, não a taxa de fotogramas do telemóvel.

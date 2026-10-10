@@ -18,3 +18,12 @@ let valid=true,presented=0,finished=false;
 await playDiscovery(chapters,{prepare:async()=>new ArrayBuffer(0),present:()=>presented++,play:async()=>{valid=false;},valid:()=>valid,finish:()=>{finished=true;}});assert.equal(presented,1);assert.equal(finished,false);
 await assert.rejects(()=>playDiscovery(chapters,{prepare:async c=>{if(c.id==='atom')throw new Error('speech unavailable');return c.id;},present:()=>{},play:async()=>{},valid:()=>true,finish:()=>assert.fail()}),/speech unavailable/);
 console.log('PASS Discovery: bilingual routing, local scenes, literal/photo guards, sequential audio, bounded prefetch and cancellation');
+
+for(const text of ['Continua a viagem','Retoma a viagem','Continue the journey'])assert.equal(parseVisualIntent(text).resume,true);
+const retried=[],checkpoints=[];let failures=0;
+await playDiscovery(chapters,{prepare:async c=>{retried.push(c.id);if(c.id==='atom'&&failures++===0)throw new Error('temporary');return c.id;},present:()=>{},play:async()=>{},valid:()=>true,wait:async()=>{},checkpoint:(i,status)=>checkpoints.push([i,status]),finish:()=>{}});
+assert.deepEqual(retried,['dna','atom','atom']);assert.deepEqual(checkpoints.at(-1),[2,'ready']);
+const resumed=[];await playDiscovery(chapters,{start:1,prepare:async c=>c.id,present:c=>resumed.push(c.id),play:async()=>{},valid:()=>true,finish:()=>{}});assert.deepEqual(resumed,['atom']);
+let cancelled=true,attempts=0;
+await playDiscovery(chapters,{prepare:async()=>{attempts++;throw new Error('temporary');},present:()=>assert.fail(),play:async()=>assert.fail(),valid:()=>cancelled,wait:async()=>{cancelled=false;},finish:()=>assert.fail()});assert.equal(attempts,1,'Cancellation prevents a stale retry');
+console.log('PASS Discovery recovery: one bounded retry, chapter checkpoint, resume and cancellation during retry');

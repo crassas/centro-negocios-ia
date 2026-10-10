@@ -6,7 +6,7 @@ if(!playwrightModule||!executablePath||!three||!out)throw new Error('Pass Playwr
 const {chromium}=await import(pathToFileURL(playwrightModule));
 const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');await fs.mkdir(out,{recursive:true});
 const replyFixture='O Sol fica no centro do sistema. A Terra orbita o Sol e recebe a sua luz. Júpiter é um gigante gasoso.';
-const fixtureRequests=[];
+const fixtureRequests=[];let transientFailed=false,permanentFault=false;
 function voiceFixture(seconds=.3){const rate=16000,samples=rate*seconds,b=Buffer.alloc(44+samples*2);b.write('RIFF');b.writeUInt32LE(b.length-8,4);b.write('WAVEfmt ',8);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(rate,24);b.writeUInt32LE(rate*2,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(samples*2,40);for(let i=0;i<samples;i++)b.writeInt16LE(Math.round(Math.sin(i/rate*2*Math.PI*180)*500),44+i*2);return b;}
 const server=http.createServer(async(req,res)=>{try{
  const url=new URL(req.url,'http://localhost');let name=url.pathname;
@@ -18,7 +18,7 @@ const server=http.createServer(async(req,res)=>{try{
    for(const text of chunks)res.write(JSON.stringify({type:'audio',text,language:'pt',audio:voiceFixture(2).toString('base64')})+'\n');
    return res.end(JSON.stringify({type:'result',answer:{ok:true,reply:chunks.join(' '),language:'pt',preferences:{proactive:false},tool:'local_llm'}})+'\n'+JSON.stringify({type:'done'})+'\n');
   }
-  if(name==='/speak'){res.setHeader('Content-Type','audio/wav');return res.end(voiceFixture(3));}
+  if(name==='/speak'){if((request.text.startsWith('Um buraco negro.')&&!transientFailed)||(permanentFault&&request.text.startsWith('Now, the DNA'))){transientFailed=true;res.writeHead(503);return res.end('Temporary voice fixture failure');}res.setHeader('Content-Type','audio/wav');return res.end(voiceFixture(3));}
   res.setHeader('Content-Type','application/json');
   if(name==='/jarvis')return res.end(JSON.stringify({ok:true,reply:replyFixture,language:'pt',preferences:{proactive:false}}));
   if(name==='/visual-research'){const file=request.preferModel?(/camara|câmara/i.test(request.query)?'camara.json':/futebol/i.test(request.query)?'futebol.json':'cadeira.json'):'nasa.json';return res.end(await fs.readFile(path.join(fixtures,file)));}
@@ -48,6 +48,8 @@ try{
   await page.waitForTimeout(2600);const state=await capture(variant);assert.equal(state.render.hologram.variant,variant);assert.equal(state.controller.title,title);assert(state.render.hologram.visible);
   const before=state.render.hologram.animation.time;await page.waitForTimeout(300);assert((await page.evaluate(()=>TravisVisual.diagnostics().hologram.animation.time))>before);
  }
+ await page.evaluate(()=>TravisProjection.interpret('Mostra a Terra'));await page.waitForTimeout(2600);await capture('earth-colour');
+ await page.evaluate(()=>TravisProjection.interpret('Mostra o sistema solar'));await page.waitForTimeout(2600);await capture('solar-colour');
  await page.evaluate(()=>TravisProjection.interpret('Pausa a animação'));await page.waitForTimeout(250);const frozen=await page.evaluate(()=>TravisVisual.diagnostics().hologram.animation.time);await page.waitForTimeout(400);assert.equal(await page.evaluate(()=>TravisVisual.diagnostics().hologram.animation.time),frozen);
  await page.evaluate(()=>TravisProjection.interpret('Continua a animação'));
  await page.evaluate(()=>TravisProjection.interpret('Mostra ADN'));await page.waitForTimeout(2400);
@@ -63,12 +65,26 @@ try{
  await page.waitForFunction(()=>!TravisVisual.diagnostics().voiceBusy,{},{timeout:12000});
  const events=await page.evaluate(()=>chapterEvents);assert.deepEqual(events.map(e=>e.scene),['Milky way','Black hole','Earth','Aurora','DNA','Hydrogen']);assert.deepEqual(events.map(e=>e.index),[0,1,2,3,4,5]);
  assert.equal(fixtureRequests.filter(r=>r.name==='/jarvis-stream'||r.name==='/visual-research').length,0,'Curated journey must not trigger an LLM or model search');
- await capture('journey-complete');await page.waitForTimeout(6500);const face=await capture('return');assert(face.render.avatar.visible);assert.equal(face.render.avatar.dissolve,0);
+ assert.equal(await page.evaluate(()=>TravisVisual.diagnostics().discovery.retries),1,'Transient synthesis failure retries without dropping a chapter');await capture('journey-complete');await page.waitForTimeout(6500);const face=await capture('return');assert(face.render.avatar.visible);assert.equal(face.render.avatar.dissolve,0);
+ // Literal words join the same particle morph; no leftover text overlay.
+ await page.evaluate(()=>TravisProjection.interpret('Escreve LUZ'));await page.waitForTimeout(1800);
+ await page.evaluate(()=>TravisProjection.interpret('Mostra uma aurora boreal'));await page.waitForTimeout(450);await capture('word-to-aurora');
+ await page.waitForTimeout(2000);assert.equal(await page.evaluate(()=>TravisVisual.diagnostics().hologram.variant),'aurora-curtains');
+ // A persistent failure pins the current scene and resumes at the failed chapter.
+ permanentFault=true;
+ await page.locator('#travis-command-text').fill('Surprise me');await page.locator('#travis-command button[type=submit]').click();
+ await page.waitForFunction(()=>TravisVisual.diagnostics().discovery?.status==='paused'&&TravisVisual.diagnostics().discovery?.next===4,{},{timeout:50000});
+ assert.equal(await page.evaluate(()=>TravisProjection.status().pinned),true);await capture('journey-paused');
+ const beforeResume=await page.evaluate(()=>chapterEvents.length);permanentFault=false;
+ await page.locator('#travis-command-text').fill('Continua a viagem');await page.locator('#travis-command button[type=submit]').click();
+ await page.waitForFunction(()=>TravisVisual.diagnostics().discovery?.status==='completed',{},{timeout:20000});
+ const resumed=await page.evaluate(n=>chapterEvents.slice(n),beforeResume);assert.deepEqual(resumed.map(x=>x.scene),['DNA','Hydrogen']);
+ await capture('journey-resumed');
  // Replace a running journey: no stale prefetched chapter may take over.
  await page.locator('#travis-command-text').fill('Surprise me');await page.locator('#travis-command button[type=submit]').click();
  await page.waitForFunction(()=>TravisVisual.diagnostics().state==='speaking',{},{timeout:12000});
  await page.locator('#travis-command-text').fill('Mostra chuva');await page.locator('#travis-command button[type=submit]').click();await page.waitForTimeout(6000);
  assert.equal(await page.evaluate(()=>TravisProjection.status().title),'rain');await capture('interrupted-rain');
  await page.evaluate(()=>TravisVisual.close());await page.waitForTimeout(500);await page.evaluate(()=>TravisVisual.ready());await page.waitForTimeout(2300);assert.equal(await page.evaluate(()=>TravisProjection.status().scene),null);
- assert.deepEqual(errors,[]);await fs.writeFile(path.join(out,'discovery.json'),JSON.stringify({states,events,errors,fixtureRequests},null,2));console.log('PASS Discovery browser: four real 3D scenes, pause, drag, zoom, exact chapter/audio pairing, interruption, return and reopen');
+ assert.deepEqual(errors,[]);await fs.writeFile(path.join(out,'discovery.json'),JSON.stringify({states,events,errors,fixtureRequests},null,2));console.log('PASS Discovery browser: coloured scenes, pause, drag, zoom, exact chapter/audio pairing, transient recovery, resume after persistent failure, interruption, return and reopen');
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

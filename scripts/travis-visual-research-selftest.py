@@ -100,3 +100,20 @@ with patch.object(mod,'fetch',return_value=(b'jpeg','image/jpeg')) as fetch:
     assert mod.model_detail_image(atlas,{'detail.jpg':{'url':'https://dl.polyhaven.org/detail.jpg','size':900000}}) is None
     assert fetch.call_count==1
 print('PASS MODEL_DETAIL: bounded optional atlas on real mesh UVs; no large texture requests')
+
+# The independent query starts even while the encyclopedia is blocked.
+import threading
+external_started=threading.Event()
+def independent(query):
+    assert query=='aurora'
+    external_started.set()
+    return images
+
+def slow_wiki(host,args):
+    assert external_started.wait(1), 'Independent providers must not await Wikipedia'
+    raise TimeoutError('Encyclopedia unavailable')
+mod._CACHE.clear();mod._IMAGES.clear()
+with patch.object(mod,'api',side_effect=slow_wiki),patch.object(mod,'external_images',side_effect=independent),patch.object(mod,'fetch',return_value=(b'jpeg','image/jpeg')):
+    independent_result=mod.resolve('aurora boreal','pt')
+    assert independent_result['ok'] and independent_result['imageSource']=='NASA'
+print('PASS INDEPENDENT_SOURCES: Portuguese query translation and NASA response survive unavailable Wikimedia')

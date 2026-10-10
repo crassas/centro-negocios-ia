@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=sand-1';
+import {createHolographicSurfaceMaterial} from './travis-holographic-surface.mjs?v=spectrum-1';
 
 // A sourced mesh, not an image plane. Only embedded static geometry reaches
 // GLTFLoader; neither materials nor external resources execute on the client.
@@ -60,7 +60,7 @@ export async function decodeReferenceModel(payload){
    if(typeof payload.detailImage==='string'&&payload.detailImage.length<1000100&&/^data:image\/(?:jpeg|png|webp);base64,/.test(payload.detailImage)){
     try{const image=new Image();image.src=payload.detailImage;await image.decode();if(image.naturalWidth*image.naturalHeight<=2000000){map=new THREE.Texture(image);map.flipY=false;map.wrapS=map.wrapT=THREE.RepeatWrapping;map.colorSpace=THREE.SRGBColorSpace;map.needsUpdate=true;}}catch{/* Surface detail is optional; actual geometry remains complete. */}
    }
-   const material=createHolographicSurfaceMaterial(THREE,{gain:1,map}),group=new THREE.Group();group.name='TravisSourcedModel';group.rotation.y=-.55;
+   const material=createHolographicSurfaceMaterial(THREE,{gain:1,map,natural:Boolean(map)}),group=new THREE.Group();group.name='TravisSourcedModel';group.rotation.y=-.55;
    group.add(new THREE.Mesh(geometry,material));
    return {group,materials:[material],textures:map?[map]:[],variant:'sourced-3d',asset:String(payload.asset||'').slice(0,90),triangles:count/3,bounds:size.toArray().map(x=>x*2.5/largest)};
   }catch(error){geometry?.dispose();throw error;}finally{for(const g of pieces)g.dispose();}
