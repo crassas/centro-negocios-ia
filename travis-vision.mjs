@@ -196,12 +196,21 @@ export function createTravisVision({ onGesture=()=>{}, onPose=()=>{}, onScene=()
         track?.addEventListener('ended',()=>{if(attempt===generation){stop();setLabel('Câmara interrompida · toca para retomar');}},{once:true});
         const vw=preview.videoWidth||640,vh=preview.videoHeight||480;
         stage.style.aspectRatio=String(vw/vh);overlay.width=640;overlay.height=Math.round(640*vh/vw);
-        active=true;updateControls();setLabel('A carregar visão local…');
-        await prepareModels();
-        if(attempt!==generation)return false;
+        // Device video FIRST. Optional camera analysis runs in the background.
+        // Do not turn off a working preview because MediaPipe loads slowly.
+        active=true;updateControls();setLabel('Câmara ativa · vídeo local');
         lastVideoTime=-1;lastGestureAt=lastFaceAt=lastObjectAt=0;
-        setLabel(objectDetector?'Câmara activa · rosto, gestos e objetos':'Câmara activa · gestos e rosto');
-        animation=requestAnimationFrame(frame);publish();return true;
+        animation=requestAnimationFrame(frame);publish();
+        void prepareModels().then(()=>{
+          if(attempt!==generation||!active)return;
+          setLabel(objectDetector?'Câmara ativa · vídeo e objetos':'Câmara ativa · vídeo local');
+          publish();
+        }).catch(error=>{
+          console.warn('Optional vision models unavailable:',error.message);
+          objectStatus='unavailable';
+          if(attempt===generation&&active)setLabel('Câmara ativa · vídeo local');
+        });
+        return true;
       }catch(error){
         candidate?.getTracks().forEach(track => track.stop());
         if(attempt===generation){stop();setLabel('Câmara: '+(error.name==='NotAllowedError'?'permissão recusada':error.message));}

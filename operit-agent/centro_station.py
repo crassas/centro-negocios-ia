@@ -59,6 +59,12 @@ RAW_REPO_BASE = "https://raw.githubusercontent.com/crassas/centro-negocios-ia"
 # Only the versioned client modules needed for voice/camera repairs are updated.
 # Avoid overwriting other operator-owned UI files and assets.
 TRAVIS_CLIENT_FILES = (
+    "travis-gods-eye.mjs",
+    "travis-gods-eye.css",
+    "travis-camera-cinema.mjs",
+    "travis-camera-cinema.css",
+    "travis-world-native.mjs",
+    "travis-world-feeds.mjs",
     "travis-world.mjs",
     "travis-world.css",
     "travis-aircraft.mjs",

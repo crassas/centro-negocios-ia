@@ -9,7 +9,7 @@ import { createVoiceInput } from './travis-voice-input.mjs?v=continuity-1';
 import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=motion-1';
 import { INTERFACE_COPY, interfaceLanguage, applyInterfaceLanguage, languageFromInterfaceCommand } from './travis-interface-language.mjs?v=1';
 import { resolveWakePhrase } from './travis-wake-phrase.mjs?v=pt-1';
-import { createTravisVision } from './travis-vision.mjs?v=scene-1';
+import { createTravisVision } from './travis-vision.mjs?v=scene-1&fastcam=1';
 import { buildSpeechEnvelope, speechEnvelopeLevel } from './travis-audio-sync.mjs?v=1';
 import { sceneSignature } from './travis-scene-tracker.mjs?v=1';
 import { cameraCommand } from './travis-vision-policy.mjs?v=objects-1';
@@ -20,6 +20,7 @@ import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
 import { createBacklight } from './travis-atmosphere.mjs?v=figures-1';
 import { createFaceRig } from './travis-face-rig.mjs?v=articulation-2';
 import * as THREE from 'three';
+import {createTravisNativeEarth} from './travis-world-native.mjs?v=eye-6-camera';
 import { createNeuralField } from './travis-brain-view.mjs?v=motion-1';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -57,6 +58,8 @@ if (!hud || !launcher || !canvas) {
   };
 
   let renderer;
+  let nativeEarth=null;
+  let nativeEarthVisible=false;
   let scene;
   let camera;
   let bloomComposer;
@@ -225,6 +228,8 @@ if (!hud || !launcher || !canvas) {
   let liveSttEnabled=false,observationTail=Promise.resolve(),deliveryTurn=null;
   function displayContext(){
     const projection=window.TravisProjection?.status?.(),world=window.TravisWorld?.status?.();
+    const cameraView=window.TravisCameraCinema?.status?.();
+    if(cameraView?.open)return {active:true,scene:'camera-preview',title:cameraView.sourceName||'Camera controls'};
     if(world?.open)return {active:true,scene:'world',title:world.place,place:world.place};
     return {active:Boolean(pendingConcept),scene:projection?.scene||'',title:projection?.title||'',focus:String(projection?.highlighted||'')};
   }
@@ -319,6 +324,12 @@ if (!hud || !launcher || !canvas) {
       if(action==='show_face')setForm('face',{manual:true});
       if(action==='show_brain')setForm('core',{manual:true});
     }
+  });
+  window.TravisCameraVision=Object.freeze({
+    start:(facing='environment')=>vision.start(facing),
+    stop:()=>vision.stop(),
+    switch:()=>vision.switchCamera(),
+    snapshot:()=>vision.snapshot()
   });
 
   function easeOutCubic(t) {
@@ -1020,11 +1031,31 @@ if (!hud || !launcher || !canvas) {
       if(!opened||session!==voiceSession||controller.signal.aborted)return;
       // Local geographical commands use the official God's Eye View embed.
       // The general language model remains available for every other request.
+      // Concrete camera controls never pass through the LLM.
+      const cameraDockIntent=await window.TravisCameraCinema?.routeCommand?.(text);
+      if(cameraDockIntent?.handled){
+        const spoken=String(cameraDockIntent.reply||'Camera request completed.');
+        observeLocal(interactionId,text,spoken);
+        const locale=cameraDockIntent.language||'en';
+        replyLanguage=locale;
+        setState('thinking',spoken);
+        const voiceResponse=await localFetch('/speak',{
+          body:{text:spoken,language:locale},signal:controller.signal
+        });
+        if(voiceResponse.ok){
+          await playVoiceArrayBuffer(await voiceResponse.arrayBuffer(),session,spoken);
+        }else{
+          voiceBusy=false;
+          setState('ready',spoken);
+          scheduleListening(session,180);
+        }
+        return;
+      }
       const worldIntent=window.TravisWorld?.routeCommand?.(text);
       if(worldIntent?.handled){
         const spoken=String(worldIntent.reply||'The globe is ready.');
         observeLocal(interactionId,text,spoken);
-        const locale=/\b(?:show|open|back|return|close|go|take|earth|world|planet)\b/i.test(text)?'en':'pt';
+        const locale=worldIntent.language || (/\b(?:show|open|back|return|close|go|take|earth|world|planet)\b/i.test(text)?'en':'pt');
         replyLanguage=locale;
         setState('thinking',spoken);
         const speech=await localFetch('/speak',{body:{text:spoken,language:locale},signal:controller.signal});
@@ -2055,10 +2086,22 @@ if (!hud || !launcher || !canvas) {
 
   function animate(now) {
     requestAnimationFrame(animate);
-    if (!ready || !renderer || !bloomComposer || !finalComposer) return;
-    if (!opened || webglLost || renderer.getContext().isContextLost()) { lastFrame=now; return; }
-    // Prevent two simultaneous WebGL engines on a phone; speech stays active.
-    if(hud.dataset.world==='open'){lastFrame=now;return;}
+    if (!renderer || !opened || webglLost || renderer.getContext().isContextLost()) {lastFrame=now;return;}
+    // Same GPU/WebGL context used for both the Travis face and the 3D Earth.
+    if(hud.dataset.world==='open'){
+      if(!nativeEarth){
+        nativeEarth=createTravisNativeEarth(THREE,canvas);
+        const initialData=window.TravisWorld?.status?.()?.data;
+        if(initialData)nativeEarth.setData?.(initialData);
+      }
+      nativeEarthVisible=true;
+      nativeEarth.setPlace(window.TravisWorld?.status?.()?.place||'earth');
+      nativeEarth.render(renderer,now,innerWidth,innerHeight);
+      lastFrame=now;
+      return;
+    }
+    if(nativeEarthVisible){nativeEarthVisible=false;resize();}
+    if (!ready || !bloomComposer || !finalComposer) return;
     // Prioritise recognition/inference/TTS on the phone; DOM status remains live.
     // Keep rendering the hologram while reasoning; stopping the frame loop can blank the WebGL layer on Android.
     // When the camera is open, reserve CPU for uninterrupted speech.
