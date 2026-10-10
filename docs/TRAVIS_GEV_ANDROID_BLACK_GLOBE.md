@@ -28,4 +28,22 @@
 - Fazer comutação progressiva com histerese e testes em Android real. A mudança não deve impedir a voz PT/EN nem os comandos de camadas.
 - Não desactivar cabeçalhos de segurança nem inventar chaves de API; preservar o fallback para o globo nativo.
 
-**Estado:** problema identificado por comparação com defeito upstream; nenhuma alteração correctiva à renderização foi aplicada ou validada visualmente no Chrome.
+## Correcção aplicada localmente (10-10-2026)
+
+A aplicação usa agora o módulo `travis-gev-far-earth.mjs`, instalado no checkout oficial como `src/app/travisFarEarth.js` pelo instalador reversível `scripts/travis-gev-far-earth-apply.py`.
+
+- Apenas em Chrome/Android e documento `?embed=1`, quando a altitude excede **8 000 km**, apresenta uma esfera WGS84 texturizada com a imagem terrestre local já existente no Travis (`earth-day-2048.jpg`). Não usa `ImageryProvider`, evitando a categoria de falha de mosaicos de #12936.
+- Ao aproximar para menos de **6 600 km**, restitui o globo oficial Cesium com imagens Esri/OSM e terreno. Há histerese para evitar comutação contínua.
+- A esfera usa a cena WebGL existente, sem nova conta ou API, e a textura é identificada como **referência estática**, não satélite em directo.
+- O instalador verifica o commit upstream `591f299`, cria cópia de segurança de `src/app/scene.js`, guarda manifesto com checksums e suporta `rollback`.
+
+Comandos de instalação e reversão, no próprio equipamento após copiar os dois ficheiros da ramificação de trabalho:
+
+```sh
+python3 /root/.centro-extensions/travis-gev-far-earth-apply.py status
+python3 /root/.centro-extensions/travis-gev-far-earth-apply.py rollback
+```
+
+**Provas verificadas:** `node --check` dos dois módulos; o Vite serve `src/app/scene.js` e `src/app/travisFarEarth.js` com HTTP 200 e a textura JPEG de 512 606 bytes com HTTP 200. O Cesium gerou uma geometria de elipsóide WGS84 texturizada com 8 777 vértices e 16 384 triângulos. Os serviços Travis 8770 e GEV 4173 conservaram HTTP 200.
+
+**Por confirmar:** aspecto e alinhamento geográfico exactos da nova esfera no Chrome real, alternância de altitude e latência com todas as camadas. Pedir captura visual depois de actualizar o Travis no telemóvel. Não declarar validação gráfica completa antes dela.
