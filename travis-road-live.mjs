@@ -7,14 +7,14 @@ const HUD=document.getElementById('travis-hud');
 const HOST=['127.0.0.1','localhost'].includes(location.hostname)?location.hostname:'127.0.0.1';
 const API='http://'+HOST+':4187/api/road-live/';
 const AREA=Object.freeze({
+  porto:{provider:'porto',title:'PORTO · OCORRÊNCIAS REGISTADAS',lat:41.1496,lon:-8.6109,source:'Trânsito Agora',radiusKm:75},
+  lisboa:{provider:'lisboa',title:'LISBOA · OCORRÊNCIAS REGISTADAS',lat:38.7223,lon:-9.1393,source:'Trânsito Agora',radiusKm:75},
   london:{provider:'london',title:'LONDRES · OCORRÊNCIAS',lat:51.5072,lon:-.1276,source:'TfL',radiusKm:null},
   finland:{provider:'finland',title:'FINLÂNDIA · VELOCIDADE MEDIDA',lat:61.2,lon:25.0,source:'Fintraffic',radiusKm:null},
   helsinki:{provider:'finland',title:'HELSÍNQUIA · SENSORES',lat:60.1699,lon:24.9384,source:'Fintraffic',radiusKm:80},
   nyc:{provider:'nyc',title:'NOVA IORQUE · VELOCIDADE',lat:40.7128,lon:-74.0060,source:'NYC DOT',radiusKm:null}
 });
 const KNOWN_UNSUPPORTED=Object.freeze({
- porto:/\b(?:porto|campanha|gaia)\b/,
- lisboa:/\b(?:lisboa|lisbon)\b/,
  madrid:/\b(?:madrid)\b/,
  tokyo:/\b(?:tokyo|toquio)\b/,
  portugal:/\b(?:portugal|brasil|brazil|espanha|spain|franca|france|alemanha|germany|paris|berlim|berlin|dubai|dublin|india)\b/
@@ -39,10 +39,12 @@ function close(){
 function nearestArea(){
   const geo=window.TravisGevBridge?.status?.()||window.TravisWorld?.status?.();
   const place=geo?.place;
+  if(place==='porto'||place==='campanha'||place==='gaia')return 'porto';
+  if(place==='lisboa')return 'lisboa';
   if(place==='london')return 'london';
   if(place==='helsinki')return 'helsinki';
   if(place==='nyc')return 'nyc';
-  if(place==='porto'||place==='lisboa'||place==='tokyo')return 'unsupported';
+  if(place==='tokyo')return 'unsupported';
   return 'london'; // Earth view: default TO EXPLICITLY LABELLED London feed
 }
 function sourceText(item){
@@ -50,7 +52,8 @@ function sourceText(item){
     ?' · '+item.speedKph+' km/h (medidos)':'';
   const ratio=Number.isFinite(item.pctFreeFlow)
     ?' · '+item.pctFreeFlow+'% do fluxo livre':'';
-  return short((item.provider||'')+speed+ratio,165);
+  const origin=item.originalProvider?' · origem: '+item.originalProvider:'';
+  return short((item.provider||'')+origin+speed+ratio,165);
 }
 function timestampText(row){
   const value=row?.observedAt||'';
@@ -67,7 +70,8 @@ function timestampText(row){
 function annotate(items,region){
   const rows=items.slice(0,18).filter(item=>within(item.lat,-90,90)&&within(item.lon,-180,180));
   return rows.map(item=>{
-    let label=item.provider==='TfL'?'OBRA / OCORRÊNCIA':
+    let label=item.provider==='Trânsito Agora'?'OCORRÊNCIA REGISTADA':
+      item.provider==='TfL'?'OBRA / OCORRÊNCIA':
       item.provider==='Fintraffic'?'TMS '+item.speedKph+' km/h':
         'NYC '+item.speedKph+' km/h';
     const color=item.type==='incident'?'amber':
@@ -86,13 +90,15 @@ function renderItems(payload,zone,{applyToGlobe=true}={}){
   const age=Number.isFinite(fetched?.getTime())
     ?' · consulta '+new Intl.DateTimeFormat('pt-PT',{hour:'2-digit',minute:'2-digit'}).format(fetched):'';
   subtitle.textContent=zone?.title||payload.area||'ROAD INTELLIGENCE';
+  const temporary=Boolean(payload.temporaryKeylessUntil);
+  const licenceNote=temporary?' · fonte gratuita temporária: requer chave desde 14/10/2026':'';
   if(payload.state==='stale'){
     showStatus('DADOS POSSIVELMENTE DESACTUALIZADOS · última resposta em cache');
     window.TravisGevBridge?.setExternalAnnotations?.([]);
   }else if(payload.items?.length){
-    showStatus(String(payload.items.length)+' ocorrências / medições apresentadas · '+sourceLabel+age);
+    showStatus(String(payload.items.length)+' registos apresentados · '+sourceLabel+age+licenceNote);
   }else{
-    showStatus(payload.note||'Sem dados de trânsito medidos suficientemente recentes nesta região.');
+    showStatus((payload.note||'Sem dados rodoviários recentes nesta região.')+licenceNote);
     window.TravisGevBridge?.setExternalAnnotations?.([]);
   }
   if(source){
@@ -125,6 +131,8 @@ function renderItems(payload,zone,{applyToGlobe=true}={}){
 function focusArea(region){
   const bridge=window.TravisGevBridge;
   if(!bridge?.navigate||!region)return;
+  if(region===AREA.porto){bridge.navigate('porto');return;}
+  if(region===AREA.lisboa){bridge.navigate('lisboa');return;}
   if(region===AREA.london){bridge.navigate('london');return;}
   if(region===AREA.nyc){bridge.navigate('nyc');return;}
   if(region===AREA.helsinki){bridge.navigate('helsinki');return;}
@@ -191,6 +199,8 @@ function show({area=null}={}){
   return true;
 }
 function areaFromText(text){
+  if(/\b(?:porto|campanha|gaia|matosinhos)\b/.test(text))return 'porto';
+  if(/\b(?:lisboa|lisbon|sintra)\b/.test(text))return 'lisboa';
   if(/\b(?:londres|london)\b/.test(text))return 'london';
   if(/\b(?:helsinquia|helsinki|espoo)\b/.test(text))return 'helsinki';
   if(/\b(?:finlandia|finland)\b/.test(text))return 'finland';
@@ -228,6 +238,8 @@ function mount(){
     '<strong id="travis-road-subtitle">DADOS RODOVIÁRIOS REAIS</strong></div>',
     '<button type="button" id="travis-road-close" aria-label="Fechar trânsito real">×</button></header>',
     '<nav class="travis-road-areas" aria-label="Fontes rodoviárias">',
+    '<button type="button" data-road-area="porto">PORTO</button>',
+    '<button type="button" data-road-area="lisboa">LISBON</button>',
     '<button type="button" data-road-area="london">LONDON</button>',
     '<button type="button" data-road-area="finland">FINLAND</button>',
     '<button type="button" data-road-area="helsinki">HELSINKI</button>',
@@ -236,7 +248,7 @@ function mount(){
     '<div id="travis-road-list" class="travis-road-list"></div>',
     '<footer class="travis-road-credit"><a id="travis-road-source" target="_blank" rel="noopener noreferrer">FONTE PÚBLICA</a>',
     '<button id="travis-road-refresh" type="button">REFRESH</button></footer>',
-    '<p class="travis-road-disclaimer">Dados de ocorrências e postos fixos. Não são posições reais de automóveis nem velocidade em todas as ruas.</p>'
+    '<p class="travis-road-disclaimer">Ocorrências de fontes públicas (algumas agregadas), não congestionamento medido. Velocidades apenas onde existem sensores. Porto/Lisboa: fonte keyless temporária até 14/10/2026.</p>'
   ].join('');
   HUD.appendChild(panel);
   contentList=panel.querySelector('#travis-road-list');
@@ -251,7 +263,7 @@ function mount(){
   const toolbar=HUD.querySelector('#travis-gev-official .travis-gev-toolbar');
   if(toolbar){
     button=btn('ROAD LIVE','toggle');button.id='travis-road-toggle';
-    button.title='Dados rodoviários reais: TfL, Fintraffic e NYC DOT';
+    button.title='Ocorrências públicas: Porto/Lisboa (até 14/10), TfL; velocidades medidas: Fintraffic/NYC.';
     button.onclick=()=>open?close():show();
     toolbar.appendChild(button);
   }
