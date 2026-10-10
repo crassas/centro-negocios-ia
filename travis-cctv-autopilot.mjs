@@ -66,7 +66,14 @@ async function select(intent){
     const ranked=rankPublicCameras(net.locations(),{
       scope,preferVideo:!!intent.live,exclude,limit:25});
     // An explicit video request MUST NOT fall back silently to a JPEG.
-    const pool=intent.live?ranked.filter(c=>c.feedType==='hls'):ranked;
+    // HLS media playlist + MPEG-TS/H.264 was verified on ncam221. Try this
+    // known transport first for a GLOBAL user-requested video test only;
+    // actual visual playback still requires the browser "playing" event.
+    const sources=intent.live?ranked.filter(c=>c.feedType==='hls'):ranked;
+    const known=intent.live&&intent.global===true
+      ? new Map([['deldot-ncam221',0],['deldot-ncam214',1]]) : new Map();
+    const pool=known.size ? sources.sort((a,b)=>
+      (known.get(a.id)??100)-(known.get(b.id)??100)) : sources;
     if(intent.action!=='next'||!candidates.length)candidates=pool;
     const choices=(intent.action==='next'&&candidates.length
       ? [...candidates.filter(c=>c.id!==selected?.id),...pool]
