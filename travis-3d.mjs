@@ -997,6 +997,24 @@ if (!hud || !launcher || !canvas) {
       }
       if(wakeAddress.corrected)metrics.wakeRecoveryKind=wakeAddress.kind;
       lastInteraction=performance.now();
+      // Local geographical commands use the official God's Eye View embed.
+      // The general language model remains available for every other request.
+      const worldIntent=window.TravisWorld?.routeCommand?.(text);
+      if(worldIntent?.handled){
+        const spoken=String(worldIntent.reply||'The globe is ready.');
+        const locale=/\b(?:show|open|back|return|close|go|take|earth|world|planet)\b/i.test(text)?'en':'pt';
+        replyLanguage=locale;
+        setState('thinking',spoken);
+        const speech=await localFetch('/speak',{body:{text:spoken,language:locale},signal:controller.signal});
+        if(speech.ok){
+          await playVoiceArrayBuffer(await speech.arrayBuffer(),session,spoken);
+        }else{
+          voiceBusy=false;
+          setState('ready',spoken);
+          scheduleListening(session,180);
+        }
+        return;
+      }
       // Bilingual presentation changes do not change voice-language settings.
       const requestedInterfaceLanguage=languageFromInterfaceCommand(text);
       if(requestedInterfaceLanguage){
@@ -2007,6 +2025,8 @@ if (!hud || !launcher || !canvas) {
     requestAnimationFrame(animate);
     if (!ready || !renderer || !bloomComposer || !finalComposer) return;
     if (!opened || webglLost || renderer.getContext().isContextLost()) { lastFrame=now; return; }
+    // Prevent two simultaneous WebGL engines on a phone; speech stays active.
+    if(hud.dataset.world==='open'){lastFrame=now;return;}
     // Prioritise recognition/inference/TTS on the phone; DOM status remains live.
     // Keep rendering the hologram while reasoning; stopping the frame loop can blank the WebGL layer on Android.
     // When the camera is open, reserve CPU for uninterrupted speech.
