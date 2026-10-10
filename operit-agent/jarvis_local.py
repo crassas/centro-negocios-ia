@@ -290,6 +290,12 @@ def vision_dialogue(text,context):
  t=norm(text)
  v=(context or {}).get("vision")
  if not isinstance(v,dict) or "fresh" not in v:v=clean_vision(v)
+ display=(context or {}).get('scene') or {}
+ explicit_camera=bool(re.search(r'\b(?:camara|camera|webcam)\b',t))
+ explicit_display=bool(re.search(r'\b(?:holograma|hologram|ecra|screen|projecao|projection)\b',t))
+ # "What am I looking at?" can refer to the hologram. An inactive camera
+ # must not swallow a conversation about the currently displayed object.
+ if display.get('active') and display.get('scene')!='camera-preview' and not explicit_camera and (not v['active'] or explicit_display):return None
  colour_question=bool(re.search(r"\b(?:cor|cores|color|colour|tonalidade|tom|tone|shades?|castanho|brown|skin|pele|complexion)\b",t))
  face_target=bool(re.search(r"\b(?:rosto|face|cara|pele|skin|complexion|facial)\b",t))
  # A short "and which colour?" is resolved from the last observed face.

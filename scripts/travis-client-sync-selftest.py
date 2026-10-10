@@ -34,6 +34,14 @@ with tempfile.TemporaryDirectory(prefix="travis-client-sync-") as temporary:
         assert all((installed / name).read_bytes() == data for name, data in sources.items())
         assert station.sync_travis_client(ref) == ([], []), "Unchanged clients must be preserved"
 
+        # A later manual edit must never be overwritten by automatic updates.
+        local=installed/'travis-camera-cinema.mjs'
+        original=local.read_bytes();local.write_bytes(original+b'\n// local work in progress\n')
+        changed,errors=station.sync_travis_client(ref)
+        assert not changed and 'local modification preserved' in errors[0]
+        assert local.read_bytes().endswith(b'// local work in progress\n')
+        local.write_bytes(original)
+
         # A broken shared shader must reject the complete update before any write.
         before = {name: (installed / name).read_bytes() for name in sources}
         sources["travis-holographic-head.mjs"] = sources["travis-holographic-head.mjs"].replace(

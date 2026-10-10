@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import errno
 import fcntl
+import hashlib
 import json
 import os
 import signal
@@ -755,16 +756,34 @@ def sync_travis_client(ref):
                     raise RuntimeError(name + ": " + test.stderr[-200:])
     except Exception as exc:
         return [], ["Travis client: " + str(exc)[:350]]
+    # A manual phone edit is not an obsolete cache entry. Compare against the
+    # last installed release and refuse the whole bundle if local work diverged.
+    manifest_path=installed/".travis-client-sync.json"
+    try:
+        manifest=json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
+        if not isinstance(manifest,dict):raise ValueError("Invalid client manifest")
+    except (OSError,ValueError):
+        return [], ["Travis client: invalid local manifest; installed files preserved"]
+    fingerprints={name:hashlib.sha256(source.encode('utf-8')).hexdigest() for name,source in fetched.items()}
+    observed={}
+    for name in TRAVIS_CLIENT_FILES:
+        path=installed/name
+        observed[name]=hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+        if observed[name] is not None and observed[name] not in {manifest.get(name),fingerprints[name]}:
+            return [], ["Travis client: local modification preserved: "+name]
     changed=[]
     for name in TRAVIS_CLIENT_FILES:
         path=installed/name
         try:
+            now=hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+            if now!=observed[name]:return changed,["Travis client: concurrent modification preserved: "+name]
             previous=path.read_text(encoding="utf-8") if path.exists() else ""
             if previous != fetched[name]:
                 atomic_write(path, fetched[name], mode=0o600)
                 changed.append(name)
         except OSError as exc:
             return changed, ["Travis client: " + name + ": " + str(exc)[:200]]
+    atomic_write(manifest_path,json.dumps(fingerprints,sort_keys=True),mode=0o600)
     return changed, []
 
 

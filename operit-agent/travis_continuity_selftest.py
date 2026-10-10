@@ -63,6 +63,14 @@ class ContinuityTests(unittest.TestCase):
         self.assertFalse(second['body']['recorded'])
         self.assertEqual(runtime.Tests.brain_post(self,'/interaction',payload,'https://example.org')['code'],403)
 
+    def test_looking_at_hologram_does_not_require_an_inactive_camera(self):
+        context={'session':'display-reference-001','scene':{'active':True,'scene':'vehicle','title':'Airplane'}}
+        with patch.object(j,'infer',return_value='You are looking at an airplane. Its wings produce lift.') as model:
+            result=j.route('Tell me what I am looking at and how it stays in the air.',context)
+        self.assertEqual(result['tool'],'local_llm')
+        self.assertIn('Airplane',model.call_args.args[0])
+        self.assertIn('camera',j.vision_dialogue('What does the camera see?',context).lower())
+
     def test_prompt_keeps_whole_records_and_current_goal_under_pressure(self):
         with j.database():pass
         ctx={'session':'prompt-scope-001','scene':{'active':True,'scene':'solar-system','title':'Sistema solar'}}
