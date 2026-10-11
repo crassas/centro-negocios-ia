@@ -1537,6 +1537,25 @@ def _merge_wavs(paths,out):
   for i,chunk in enumerate(chunks):
    if i:wav.writeframes(pause)
    wav.writeframes(chunk)
+VOICE_PREPARE_LOCK=threading.Lock()
+def prepare_session_voice(language="en"):
+ if language not in {"en","pt"}:raise ValueError("Voice language must be en or pt")
+ if not VOICE_PREPARE_LOCK.acquire(blocking=False):return {"ok":True,"preparing":True}
+ def prepare():
+  try:
+   precise=os.environ.get("TRAVIS_STT_MODE","fast").strip().lower()=="precise"
+   stt=STT_WORKER if precise else PT_STT_WORKER if language=="pt" and PT_STT_WORKER.model.is_file() else FAST_STT_WORKER if FAST_STT_WORKER.model.is_file() else STT_WORKER
+   tts=TTS_WORKER if language=="pt" else TTS_EN_WORKER
+   for worker in (stt,tts):
+    # An actual request has priority; it starts its worker on demand itself.
+    if not worker.lock.acquire(blocking=False):continue
+    try:worker.start()
+    except Exception as exc:event("executions",{"voice_prepare_error":worker.kind,"error":type(exc).__name__})
+    finally:worker.lock.release()
+  finally:VOICE_PREPARE_LOCK.release()
+ threading.Thread(target=prepare,name="travis-selected-voice-prepare",daemon=True).start()
+ return {"ok":True,"preparing":True,"language":language,"policy":"selected-session-only"}
+
 def warm_voice():
  # Prioritise the fast STT worker; semantic turn is deferred until explicitly used.
  workers=[FAST_STT_WORKER,TTS_EN_WORKER,TTS_WORKER,PT_STT_WORKER]
@@ -1810,7 +1829,7 @@ def centro_activity():
  with urllib.request.urlopen(request,timeout=5) as response:return json.load(response)
 TRUSTED_WEB_ORIGINS={"https://crassas.github.io"}
 LOCAL_ORIGINS={"http://127.0.0.1:8770","http://localhost:8770"}
-WEB_VOICE_ENDPOINTS={"/interaction","/continuity","/transcribe-live","/jarvis-stream","/health","/transcribe","/listen","/jarvis","/speak","/voice-task","/turn","/initiative","/resume","/visual-intent","/visual-research"}
+WEB_VOICE_ENDPOINTS={"/interaction","/continuity","/transcribe-live","/jarvis-stream","/health","/transcribe","/listen","/jarvis","/speak","/voice-task","/voice-ready","/turn","/initiative","/resume","/visual-intent","/visual-research"}
 
 LOCAL_COCKPIT_ENDPOINTS={"/awareness","/brain/state","/brain/graph","/brain/events","/brain/control","/brain/feedback","/connections","/cockpit","/gmail/configure","/gmail/start","/gmail/inbox","/gmail/disconnect"}
 
@@ -2015,6 +2034,7 @@ class Handler(BaseHTTPRequestHandler):
     if tool in {"expert_query","repo_review","repo_change","agent_workflow"}:return self.send(start_voice_job(text,context))
     if self.path=="/jarvis-stream":return self.stream_reply(text,context,tool)
     return self.send(route(text,context))
+   if path=="/voice-ready":return self.send(prepare_session_voice(obj.get("language","en")))
    if self.path=="/speak":
     with TRAVIS_BRAIN.request("Voice response"):
      return self.send(speak(obj["text"],obj.get("language","en")),"audio/wav")

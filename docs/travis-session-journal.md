@@ -10,6 +10,10 @@
 
 - [2026-10-11: Road panel, world recovery and resource rest](#2026-10-11-road-panel-world-recovery-and-resource-rest)
 
+## 2026-10-11: Voice conversation recovery
+
+Context summary: Stream completion and audio playback waits are now bounded; audio interruption releases the conversation. Only the selected language pair is prepared when opening a session. Eleven recovery checks passed and the actual English local speech-to-transcription test returned the intended request in 3.370 seconds after preparation. Physical microphone/speaker conversation still needs validation, and this is not ChatGPT-equivalent latency. See [details](travis-voice-recovery.md) and [proof](travis-voice-recovery-proof.json).
+
 ## 2026-10-11: Voice startup without unused preloading
 
 Context summary: Router startup now leaves voice models asleep by default; explicit TRAVIS_WARM_VOICE_STARTUP=1 retains optional preloading. Actual requests wake their selected worker. This saves unused residency after restarts, with cold-start latency on the first voice request. Android Obsidian closures remain unverified because OS exit logs are unavailable. See [resource rest](travis-resource-rest.md) and [startup proof](travis-startup-resource-proof.json).

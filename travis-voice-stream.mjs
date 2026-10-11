@@ -1,5 +1,6 @@
+import {withVoiceDeadline} from './travis-voice-deadlines.mjs?v=voice-recovery-1';
 // Read incremental audio without repeating an already dispatched tool request.
-export async function readVoiceReply(response,onAudio){
+export async function readVoiceReply(response,onAudio,{idleTimeoutMs=25000}={}){
   if(!response.ok)throw new Error('Travis did not accept the voice request.');
   if(!response.headers.get('content-type')?.includes('application/x-ndjson')){
     const answer=await response.json();
@@ -21,12 +22,12 @@ export async function readVoiceReply(response,onAudio){
   }
   try{
     while(true){
-      const chunk=await reader.read();
+      const chunk=await withVoiceDeadline(reader.read(),idleTimeoutMs,'The voice stream stopped responding.');
       pending+=decoder.decode(chunk.value||new Uint8Array(),{stream:!chunk.done});
       if(pending.length>2000000)throw new Error('Voice stream frame exceeds limit.');
       let newline;
       while((newline=pending.indexOf('\n'))>=0){event(pending.slice(0,newline));pending=pending.slice(newline+1);}
-      if(chunk.done)break;
+      if(done||failure||chunk.done)break;
     }
     if(pending.trim())event(pending);
     if(failure||!answer||!done){
@@ -38,5 +39,6 @@ export async function readVoiceReply(response,onAudio){
     // Preserve audio already received; never retry a possibly executed request.
     if(spoken)return {answer,spoken,interrupted:true,error:error.message};
     throw error;
-  }finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
+  }finally{void reader.cancel().catch(()=>{});try{reader.releaseLock();}catch{}}
+
 }

@@ -1,0 +1,376 @@
+{
+  "recordedAt": "2026-10-11T16:07:13.696542+00:00",
+  "recoveryChecks": {
+    "passed": 11,
+    "actualHTTPStreamTests": 4,
+    "actualPlaybackFunctionWithControlledAudioContext": 5,
+    "deadlineChecks": 2
+  },
+  "baseline": {
+    "input": "Actual English local synthesized speech, normalized 16kHz mono; not physical microphone",
+    "results": [
+      {
+        "run": 1,
+        "seconds": 6.209,
+        "result": {
+          "ok": true,
+          "text": "Check System status and memory.",
+          "durationMs": 6200,
+          "languageRequested": "en"
+        }
+      },
+      {
+        "run": 2,
+        "seconds": 3.679,
+        "result": {
+          "ok": true,
+          "text": "Check System status and memory.",
+          "durationMs": 3671,
+          "languageRequested": "en"
+        }
+      }
+    ]
+  },
+  "live": {
+    "before": {
+      "ok": true,
+      "service": "jarvis",
+      "cloud": false,
+      "busy": false,
+      "ui": true,
+      "memoryLearning": "continuous-context-v2",
+      "liveStt": false,
+      "voiceProtocol": "ndjson-audio-v1",
+      "pid": 25037,
+      "resources": {
+        "policy": "on-demand-with-idle-release",
+        "idleTimeoutSeconds": 180,
+        "sweepIntervalSeconds": 30,
+        "residentWorkers": 0,
+        "workerRssKiB": 0,
+        "releasedWorkers": 0,
+        "errors": {},
+        "workers": [
+          {
+            "name": "stt-precise",
+            "resident": false,
+            "rssKiB": 0,
+            "idleSeconds": null
+          },
+          {
+            "name": "stt-fast",
+            "resident": false,
+            "rssKiB": 0,
+            "idleSeconds": null
+          },
+          {
+            "name": "stt-pt",
+            "resident": false,
+            "rssKiB": 0,
+            "idleSeconds": null
+          },
+          {
+            "name": "stt-sherpa",
+            "resident": false,
+            "rssKiB": 0,
+            "idleSeconds": null
+          },
+          {
+            "name": "turn",
+            "resident": false,
+            "rssKiB": 0,
+            "idleSeconds": null
+          },
+          {
+            "name": "tts-pt",
+            "resident": false,
+            "rssKiB": 0,
+            "idleSeconds": null
+          },
+          {
+            "name": "tts-en",
+            "resident": false,
+            "rssKiB": 0,
+            "idleSeconds": null
+          }
+        ]
+      },
+      "projectContext": {
+        "available": true,
+        "policy": "startup-and-on-demand; no-background-loop",
+        "revision": "ac9893c3a286",
+        "checkedAt": 1791734663,
+        "topics": 23,
+        "cachedNotes": 5,
+        "cachedBytes": 15279,
+        "cacheLimitBytes": 196608,
+        "diskReads": 5,
+        "lastSources": [],
+        "lastContextChars": 0,
+        "errors": {},
+        "obsidian": {
+          "configured": true,
+          "available": true,
+          "indexedTopics": 15
+        }
+      },
+      "workflows": {
+        "policy": "requested-read-only-checkpoints",
+        "states": {
+          "complete": 2
+        },
+        "runnerAlive": true,
+        "lastError": "",
+        "maxPending": 16,
+        "retainedCompleted": 101,
+        "expirySeconds": 86400,
+        "automaticWriteReplay": false,
+        "requiresObsidianOpen": false
+      }
+    },
+    "prepareAckSeconds": 0.007,
+    "prepareResult": {
+      "ok": true,
+      "preparing": true,
+      "language": "en",
+      "policy": "selected-session-only"
+    },
+    "selectedWorkers": [
+      "stt-fast",
+      "tts-en"
+    ],
+    "synthesisSeconds": 4.649,
+    "wavBytes": 85548,
+    "recognitionSeconds": 3.37,
+    "transcription": {
+      "ok": true,
+      "text": "Check System status and memory.",
+      "durationMs": 3362,
+      "languageRequested": "en"
+    },
+    "health": {
+      "ok": true,
+      "service": "jarvis",
+      "cloud": false,
+      "busy": false,
+      "ui": true,
+      "memoryLearning": "continuous-context-v2",
+      "liveStt": false,
+      "voiceProtocol": "ndjson-audio-v1",
+      "pid": 25037,
+      "resources": {
+        "policy": "on-demand-with-idle-release",
+        "idleTimeoutSeconds": 180,
+        "sweepIntervalSeconds": 30,
+        "residentWorkers": 2,
+        "workerRssKiB": 337384,
+        "releasedWorkers": 0,
+        "errors": {},
+        "workers": [
+          {
+            "name": "stt-precise",
+            "resident": false,
+            "rssKiB": 0,
+            "idleSeconds": null
+          },
+          {
+            "name": "stt-fast",
+            "resident": true,
+            "rssKiB": 167552,
+            "idleSeconds": 0.0
+          },
+          {
+            "name": "stt-pt",
+            "resident": false,
+            "rssKiB": 0,
+            "idleSeconds": null
+          },
+          {
+            "name": "stt-sherpa",
+            "resident": false,
+            "rssKiB": 0,
+            "idleSeconds": null
+          },
+          {
+            "name": "turn",
+            "resident": false,
+            "rssKiB": 0,
+            "idleSeconds": null
+          },
+          {
+            "name": "tts-pt",
+            "resident": false,
+            "rssKiB": 0,
+            "idleSeconds": null
+          },
+          {
+            "name": "tts-en",
+            "resident": true,
+            "rssKiB": 169832,
+            "idleSeconds": 3.9
+          }
+        ]
+      },
+      "projectContext": {
+        "available": true,
+        "policy": "startup-and-on-demand; no-background-loop",
+        "revision": "ac9893c3a286",
+        "checkedAt": 1791734663,
+        "topics": 23,
+        "cachedNotes": 5,
+        "cachedBytes": 15279,
+        "cacheLimitBytes": 196608,
+        "diskReads": 5,
+        "lastSources": [],
+        "lastContextChars": 0,
+        "errors": {},
+        "obsidian": {
+          "configured": true,
+          "available": true,
+          "indexedTopics": 15
+        }
+      },
+      "workflows": {
+        "policy": "requested-read-only-checkpoints",
+        "states": {
+          "complete": 2
+        },
+        "runnerAlive": true,
+        "lastError": "",
+        "maxPending": 16,
+        "retainedCompleted": 101,
+        "expirySeconds": 86400,
+        "automaticWriteReplay": false,
+        "requiresObsidianOpen": false
+      }
+    },
+    "input": "Actual local synthesizer audio normalized to 16kHz mono; no physical microphone or speaker test"
+  },
+  "servedAssets": {
+    "travis-3d.mjs": {
+      "status": 200,
+      "bytes": 127167
+    },
+    "travis-voice-stream.mjs": {
+      "status": 200,
+      "bytes": 2185
+    },
+    "travis-voice-deadlines.mjs": {
+      "status": 200,
+      "bytes": 448
+    },
+    "sw.js": {
+      "status": 200,
+      "bytes": 5308
+    }
+  },
+  "sqliteQuickCheck": {
+    "memory.sqlite": "ok",
+    "coordination.sqlite": "ok",
+    "workflows.sqlite": "ok"
+  },
+  "health": {
+    "ok": true,
+    "service": "jarvis",
+    "cloud": false,
+    "busy": false,
+    "ui": true,
+    "memoryLearning": "continuous-context-v2",
+    "liveStt": false,
+    "voiceProtocol": "ndjson-audio-v1",
+    "pid": 25037,
+    "resources": {
+      "policy": "on-demand-with-idle-release",
+      "idleTimeoutSeconds": 180,
+      "sweepIntervalSeconds": 30,
+      "residentWorkers": 2,
+      "workerRssKiB": 339120,
+      "releasedWorkers": 0,
+      "errors": {},
+      "workers": [
+        {
+          "name": "stt-precise",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-fast",
+          "resident": true,
+          "rssKiB": 167552,
+          "idleSeconds": 75.0
+        },
+        {
+          "name": "stt-pt",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-sherpa",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "turn",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "tts-pt",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "tts-en",
+          "resident": true,
+          "rssKiB": 171568,
+          "idleSeconds": 78.8
+        }
+      ]
+    },
+    "projectContext": {
+      "available": true,
+      "policy": "startup-and-on-demand; no-background-loop",
+      "revision": "ac9893c3a286",
+      "checkedAt": 1791734663,
+      "topics": 23,
+      "cachedNotes": 5,
+      "cachedBytes": 15279,
+      "cacheLimitBytes": 196608,
+      "diskReads": 5,
+      "lastSources": [],
+      "lastContextChars": 0,
+      "errors": {},
+      "obsidian": {
+        "configured": true,
+        "available": true,
+        "indexedTopics": 15
+      }
+    },
+    "workflows": {
+      "policy": "requested-read-only-checkpoints",
+      "states": {
+        "complete": 2
+      },
+      "runnerAlive": true,
+      "lastError": "",
+      "maxPending": 16,
+      "retainedCompleted": 101,
+      "expirySeconds": 86400,
+      "automaticWriteReplay": false,
+      "requiresObsidianOpen": false
+    }
+  },
+  "otherSessionChangesPreserved": true,
+  "limits": [
+    "Local synthesis-to-recognition is real; physical phone microphone/speaker and repeated mobile browser conversations still require verification.",
+    "STT still takes seconds; no claim of ChatGPT-equivalent latency or full streaming recognition.",
+    "Selected preparation acknowledges asynchronously; preparing is not a ready receipt.",
+    "New client modules require a browser reload/service-worker update.",
+    "No existing tool request is replayed on stream failure."
+  ]
+}

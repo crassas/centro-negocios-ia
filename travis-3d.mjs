@@ -1,6 +1,7 @@
 import {createMindLink} from './travis-mind-link.mjs?v=coordination-1';
 import {conversationIdentity,saveConversationIdentity,isPlaybackEcho} from './travis-continuity.mjs?v=continuity-1';
 import { createLiveSTT } from './travis-live-stt.mjs?v=continuous-2';
+import {withVoiceDeadline} from './travis-voice-deadlines.mjs?v=voice-recovery-1';
 import { readVoiceReply } from './travis-voice-stream.mjs?v=continuity-1';
 import {createMotionAudio} from './travis-motion-audio.mjs?v=motion-1';
 import {playDiscovery} from './travis-discovery.mjs?v=figures-1';
@@ -695,8 +696,8 @@ if (!hud || !launcher || !canvas) {
 
   function audio() {
     try {
-      audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
-      if (audioContext.state === 'suspended') audioContext.resume();
+      if(!audioContext||audioContext.state==='closed')audioContext=new (window.AudioContext || window.webkitAudioContext)();
+      if (audioContext.state === 'suspended'||audioContext.state==='interrupted') void audioContext.resume().catch(()=>{});
       return audioContext;
     } catch {
       return null;
@@ -864,11 +865,11 @@ if (!hud || !launcher || !canvas) {
     releaseVoiceMic({stopRecorder:true});
     void ensureVoiceInput();
     if(ac.state!=='running'){
-      await Promise.race([ac.resume(),new Promise((_,reject)=>setTimeout(()=>reject(new Error('Toca para ativar o áudio.')),4000))]);
+      await withVoiceDeadline(ac.resume(),4000,'Tap to enable audio.');
       if(ac.state!=='running')throw new Error('Audio playback needs a foreground gesture.');
     }
     if(!opened||session!==voiceSession)return;
-    const decoded=await ac.decodeAudioData(arrayBuffer.slice(0));
+    const decoded=await withVoiceDeadline(ac.decodeAudioData(arrayBuffer.slice(0)),8000,'Audio decoding stopped responding.');
     playbackTranscript=(continuous?playbackTranscript+' ':'')+String(reply||'');
     playbackTranscript=playbackTranscript.slice(-2400);lastPlaybackAt=performance.now();
     if(!opened||session!==voiceSession)return;
@@ -889,32 +890,43 @@ if (!hud || !launcher || !canvas) {
     setState('speaking',String(reply||'Responding.').slice(0,96));
     flashPower=.08;
 
-    let resolvePlayback;
-    const playbackDone=new Promise(resolve=>{resolvePlayback=resolve;});
-    voicePlaybackResolve=resolvePlayback;
-    source.onended=()=>{
+    let resolvePlayback,rejectPlayback,finished=false,playbackTimer;
+    const playbackDone=new Promise((resolve,reject)=>{resolvePlayback=resolve;rejectPlayback=reject;});
+    const cancelPlayback=()=>finishPlayback();
+    function finishPlayback(error=null){
+      if(finished)return;finished=true;
+      clearTimeout(playbackTimer);
+      if(voiceFinishTimer===playbackTimer)voiceFinishTimer=0;
+      ac.removeEventListener?.('statechange',audioStateChanged);
       lastPlaybackAt=performance.now();
-      resolvePlayback();
-      if(voicePlaybackResolve===resolvePlayback)voicePlaybackResolve=null;
+      if(voicePlaybackResolve===cancelPlayback)voicePlaybackResolve=null;
+      if(error)rejectPlayback(error);else resolvePlayback();
       if(voiceSource!==source)return;
+      source.onended=null;
+      if(error){try{source.stop();}catch{}}
       try{analyser.disconnect();source.disconnect();}catch{}
-      voiceSource=null;
-      speechClock=null;
-      externalVoiceLevel=0;
-      speechFace?.reset();
-      faceRig?.update(0);
-      if(opened&&session===voiceSession&&!continuous){
-        voiceBusy=false;
-        lastInteraction=performance.now();
+      voiceSource=null;speechClock=null;externalVoiceLevel=0;
+      speechFace?.reset();faceRig?.update(0);
+      if(opened&&session===voiceSession&&(!continuous||error)){
+        voiceBusy=false;lastInteraction=performance.now();
         window.dispatchEvent(new CustomEvent('travis:speech-end'));
-        setState(standby||voicePaused?'idle':'ready',
-          standby?'Standing by. Say Travis.':voicePaused?'Microphone off.':'I’m here.');
+        setState(standby||voicePaused?'idle':'ready',error?.message||
+          (standby?'Standing by. Say Travis.':voicePaused?'Microphone off.':'I’m here.'));
         if(!voicePaused)scheduleListening(session,220);
       }
-    };
+    }
+    function audioStateChanged(){
+      if(ac.state!=='running')finishPlayback(new Error('Audio was interrupted. Tap to resume the conversation.'));
+    }
+    voicePlaybackResolve=cancelPlayback;
+    source.onended=()=>finishPlayback();
+    ac.addEventListener?.('statechange',audioStateChanged);
+    // AudioContext time can freeze; use wall time to release a missing ended event.
+    playbackTimer=setTimeout(()=>finishPlayback(new Error('Audio playback stopped responding.')),Math.ceil(decoded.duration*1000)+5000);
+    voiceFinishTimer=playbackTimer;
 
     window.TravisProjection?.beginNarration?.({text:reply,context:ac,start:startAt,duration:decoded.duration,continuous});
-    source.start(startAt);
+    try{source.start(startAt);}catch(error){finishPlayback(error);}
     if(metrics){
       metrics.replyToFirstAudioMs=Math.round(performance.now()-metrics.replyAt);
       metrics.speechEndToFirstAudioMs=Math.round(performance.now()-metrics.speechEndedAt);
@@ -922,7 +934,7 @@ if (!hud || !launcher || !canvas) {
       voiceMetrics.push({...metrics});if(voiceMetrics.length>20)voiceMetrics.shift();
       console.info('Travis voice latency',metrics);
     }
-    if(continuous)await playbackDone;
+    await playbackDone;
   }
 
   function presentToolResult(answer) {
@@ -1565,6 +1577,8 @@ if (!hud || !launcher || !canvas) {
       if (!opened || session!==voiceSession) return;
       if (!health?.ok) throw new Error('Travis local indisponível.');
       liveSttEnabled=health.liveStt===true;
+      // Prepare only the selected session voice; optional for older local routers.
+      void localJson('/voice-ready',{body:{language:preferredLanguage==='pt'?'pt':'en'},signal:AbortSignal.timeout(3000)}).catch(()=>{});
       if (loadingLabel) {
         loadingLabel.textContent='TRAVIS LOCAL · VOICE ONLINE';
         loadingLabel.classList.add('is-done');
