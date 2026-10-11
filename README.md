@@ -1,5 +1,7 @@
 # Centro de Negócios
 
+Contexto do Travis: [índice de capacidades, procedimentos e provas](TRAVIS_CONTEXT.md).
+
 Aplicação operacional publicada em GitHub Pages. Não usa métricas de demonstração.
 
 ## Funções
