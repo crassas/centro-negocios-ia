@@ -1,3 +1,4 @@
+import {createMindLink} from './travis-mind-link.mjs?v=coordination-1';
 import {conversationIdentity,saveConversationIdentity,isPlaybackEcho} from './travis-continuity.mjs?v=continuity-1';
 import { createLiveSTT } from './travis-live-stt.mjs?v=continuous-2';
 import { readVoiceReply } from './travis-voice-stream.mjs?v=continuity-1';
@@ -20,7 +21,7 @@ import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
 import { createBacklight } from './travis-atmosphere.mjs?v=figures-1';
 import { createFaceRig } from './travis-face-rig.mjs?v=articulation-2';
 import * as THREE from 'three';
-import {createTravisNativeEarth} from './travis-world-native.mjs?v=eye-7-cctv';
+import {createTravisNativeEarth} from './travis-cctv-earth.mjs?v=eye-8-private';
 import { createNeuralField } from './travis-brain-view.mjs?v=motion-1';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -156,7 +157,7 @@ if (!hud || !launcher || !canvas) {
   window.addEventListener('travis:close',()=>motionAudio.silence());
   window.addEventListener('travis:user-start',()=>motionAudio.silence());
   let voiceInput=null,voiceInputFailed=false,voicePaused=false,standby=false,initiativeTimer=0;
-  const savedLanguage=(()=>{try{return localStorage.getItem('travis.language')||sessionStorage.getItem('travis.language')||'en';}catch{return 'en';}})();
+  const savedLanguage=(()=>{try{if(!localStorage.getItem('travis.english-default.20261011')){localStorage.setItem('travis.language','en');localStorage.setItem('travis.lastLanguage','en');localStorage.setItem('travis.english-default.20261011','1');}return localStorage.getItem('travis.language')||sessionStorage.getItem('travis.language')||'en';}catch{return 'en';}})();
   const lastLanguage=(()=>{try{return localStorage.getItem('travis.lastLanguage');}catch{return null;}})();
   let replyLanguage=savedLanguage==='pt'||(savedLanguage==='auto'&&lastLanguage==='pt')?'pt':'en',inputLanguage='auto',preferredLanguage=['pt','en'].includes(savedLanguage)?savedLanguage:'auto',proactive=true,lastInteraction=performance.now();
   // Display language is independent of the speaking language. Default: English.
@@ -228,6 +229,9 @@ if (!hud || !launcher || !canvas) {
   let liveSttEnabled=false,observationTail=Promise.resolve(),deliveryTurn=null;
   function displayContext(){
     const projection=window.TravisProjection?.status?.(),world=window.TravisWorld?.status?.();
+    const cctv=window.TravisCctvPlayer?.status?.(),gev=window.TravisGevBridge?.status?.();
+    if(cctv?.open&&cctv.sourceId)return {active:true,scene:'public-camera',title:cctv.sourceName||'Public camera',sourceId:cctv.sourceId,mediaType:cctv.mode==='video'?'video':cctv.mode==='image'&&cctv.updatedFrame?'snapshot':'unavailable',playing:cctv.playingVerified===true};
+    if(gev?.open)return {active:true,scene:'world',title:gev.coordinates?.label||gev.place||'Earth'};
     const cameraView=window.TravisCameraCinema?.status?.();
     if(cameraView?.open)return {active:true,scene:'camera-preview',title:cameraView.sourceName||'Camera controls'};
     if(world?.open)return {active:true,scene:'world',title:world.place,place:world.place};
@@ -242,6 +246,27 @@ if (!hud || !launcher || !canvas) {
   function reportDelivery(id,complete){
     if(deliveryTurn===id)deliveryTurn=null;
     void localJson('/interaction',{body:{kind:'delivery',id,session:dialogueSession,complete},signal:AbortSignal.timeout(2000)}).catch(()=>{});
+  }
+  const mindLink=createMindLink({getSession:()=>dialogueSession,getDisplay:displayContext,getEpoch:()=>voiceSession,
+    active:()=>opened&&!voicePaused&&!document.hidden,
+    post:body=>localJson('/interaction',{body,signal:AbortSignal.timeout(2500)}),
+    onResult:announceCameraResult});
+  async function announceCameraResult(result,epoch){
+    const deadline=performance.now()+30000;
+    const valid=()=>opened&&!voicePaused&&!document.hidden&&epoch===voiceSession;
+    while(valid()&&(voiceBusy||voiceSource||voiceInput?.diagnostics().speaking)){
+      if(performance.now()>deadline)return;
+      await new Promise(resolve=>setTimeout(resolve,250));
+    }
+    if(!valid()||!result.reply)return;
+    voiceBusy=true;
+    try{
+      const response=await localFetch('/speak',{body:{text:result.reply,language:preferredLanguage==='pt'?'pt':'en'},signal:AbortSignal.timeout(20000)});
+      if(!response.ok)throw new Error('Camera result voice unavailable');
+      const wav=await response.arrayBuffer();
+      if(valid())await playVoiceArrayBuffer(wav,epoch,result.reply);
+    }catch(error){console.warn('Travis camera result:',error.message);}
+    finally{if(epoch===voiceSession&&!voiceSource){voiceBusy=false;scheduleListening(epoch,250);}}
   }
   let playbackTranscript='',lastPlaybackAt=0,interruptionCandidate=false,interruptionEpoch=0;
   async function acceptSpokenTurn(blob,endedAt,transcript){
@@ -1029,9 +1054,46 @@ if (!hud || !launcher || !canvas) {
       lastInteraction=performance.now();
       await restoreConversation(controller.signal);
       if(!opened||session!==voiceSession||controller.signal.aborted)return;
+      await mindLink.observe();
+      if(!opened||session!==voiceSession||controller.signal.aborted)return;
       // Local geographical commands use the official God's Eye View embed.
       // The general language model remains available for every other request.
       // Concrete camera controls never pass through the LLM.
+      // Public worldwide CCTV operates separately from the device camera.
+      const autoPublicCamera=await window.TravisCctvAutopilot?.routeCommand?.(text,{requestId:interactionId,language:preferredLanguage==='pt'?'pt':'en'});
+      if(autoPublicCamera?.handled){
+        if(!opened||session!==voiceSession||controller.signal.aborted)return;
+        const spoken=String(autoPublicCamera.reply||'Public camera search complete.');
+        observeLocal(interactionId,text,spoken);
+        const locale=autoPublicCamera.language||'en';
+        replyLanguage=locale;
+        setState('thinking',spoken);
+        const voiceResponse=await localFetch('/speak',{
+          body:{text:spoken,language:locale},signal:controller.signal
+        });
+        if(voiceResponse.ok){
+          await playVoiceArrayBuffer(await voiceResponse.arrayBuffer(),session,spoken);
+        }else{
+          voiceBusy=false;setState('ready',spoken);scheduleListening(session,180);
+        }
+        return;
+      }
+      const cctvIntent=window.TravisCctvPlayer?.routeCommand?.(text);
+      if(cctvIntent?.handled){
+        const spoken=String(cctvIntent.reply||'Camera radar ready.');
+        const locale=cctvIntent.language||'en';
+        replyLanguage=locale;
+        setState('thinking',spoken);
+        const publicVoice=await localFetch('/speak',{
+          body:{text:spoken,language:locale},signal:controller.signal
+        });
+        if(publicVoice.ok){
+          await playVoiceArrayBuffer(await publicVoice.arrayBuffer(),session,spoken);
+        }else{
+          voiceBusy=false;setState('ready',spoken);scheduleListening(session,180);
+        }
+        return;
+      }
       const cameraDockIntent=await window.TravisCameraCinema?.routeCommand?.(text);
       if(cameraDockIntent?.handled){
         const spoken=String(cameraDockIntent.reply||'Camera request completed.');
@@ -1048,6 +1110,25 @@ if (!hud || !launcher || !canvas) {
           voiceBusy=false;
           setState('ready',spoken);
           scheduleListening(session,180);
+        }
+        return;
+      }
+      // Live road observations come from named public providers. They are NOT
+      // the simulated moving vehicle layer in the official God's Eye View.
+      const liveRoadIntent=window.TravisRoadLive?.routeCommand?.(text);
+      if(liveRoadIntent?.handled){
+        const spoken=String(liveRoadIntent.reply||'Public road information requested.');
+        observeLocal(interactionId,text,spoken);
+        const locale=liveRoadIntent.language||'pt';
+        replyLanguage=locale;
+        setState('thinking',spoken);
+        const roadVoice=await localFetch('/speak',{
+          body:{text:spoken,language:locale},signal:controller.signal
+        });
+        if(roadVoice.ok){
+          await playVoiceArrayBuffer(await roadVoice.arrayBuffer(),session,spoken);
+        }else{
+          voiceBusy=false;setState('ready',spoken);scheduleListening(session,180);
         }
         return;
       }
@@ -2087,6 +2168,7 @@ if (!hud || !launcher || !canvas) {
   function animate(now) {
     requestAnimationFrame(animate);
     if (!renderer || !opened || webglLost || renderer.getContext().isContextLost()) {lastFrame=now;return;}
+    if (hud.dataset.worldEngine==='official') {lastFrame=now;return;}
     // Same GPU/WebGL context used for both the Travis face and the 3D Earth.
     if(hud.dataset.world==='open'){
       if(!nativeEarth){
@@ -2489,7 +2571,7 @@ if (!hud || !launcher || !canvas) {
         presence:{...presencePose},projection:hologramPresentation.sample(performance.now()/1000),
         media:window.TravisProjection?.media(),
         hologram:conceptProjection?.state?.(),motionAudio:motionAudio.status(),projectionControl:window.TravisProjection?.status?.(),
-        discovery:discoveryJourney?{next:discoveryJourney.next,total:discoveryJourney.chapters.length,status:discoveryJourney.status,retries:discoveryJourney.retries}:null,meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,voiceInput:voiceInput?.diagnostics(),vision:vision.diagnostics(),replyLanguage,inputLanguage,preferredLanguage,uiLanguage,visualModePolicy:'automatic',standby,proactive,voicePaused,
+        discovery:discoveryJourney?{next:discoveryJourney.next,total:discoveryJourney.chapters.length,status:discoveryJourney.status,retries:discoveryJourney.retries}:null,meshes:realFaceModel?.children.map(o=>o.name),voiceBusy,voiceInput:voiceInput?.diagnostics(),vision:vision.diagnostics(),replyLanguage,inputLanguage,preferredLanguage,coordination:mindLink.status(),uiLanguage,visualModePolicy:'automatic',standby,proactive,voicePaused,
         recording:voiceRecorder?.state,pendingTasks:[...pendingVoiceTasks.keys()],lastTaskResult:lastVoiceTaskResult,voiceMetrics:voiceMetrics.map(m=>({...m}))};
     },
     form(mode='auto') {

@@ -177,10 +177,10 @@ def reply(data, language="pt"):
 def model_facts(data):
     states = {f["id"]:f["state"] for f in data.get("features",[])}
     m=data.get("memory",{})
-    links = "; ".join(name+"="+states.get(name,"unknown") for name in
+    links = "; ".join(("quantum_software" if name=="quantum" else name)+"="+states.get(name,"unknown") for name in
                       ("quantum", "gods_eye", "public_cameras", "roads", "voice"))
     return (f"Observed Travis: memory={m.get('neurons',0)}, links={m.get('synapses',0)}, "
             f"cycles={m.get('cycles',0)}. "+links+". "
             "Service online does not prove a live feed or completed action. "
-            "Camera/microphone activity requires current browser observations. "
+            "Devices need current browser observations. Quantum names software, not quantum hardware. "
             "No consciousness or model-weight learning is established.")

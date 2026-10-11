@@ -176,7 +176,7 @@ def dialogue_session(context):
  return session if re.fullmatch(r"[a-zA-Z0-9-]{8,80}",session) else ""
 
 def dialogue_preferences(session,changes=None):
- defaults={'language':'auto','lastLanguage':'en','proactive':True,'standby':False}
+ defaults={'language':'en','lastLanguage':'en','proactive':True,'standby':False}
  if not dialogue_session({'session':session}):return defaults
  with database() as c:
   row=c.execute('SELECT data FROM dialogue_preferences WHERE session=?',(session,)).fetchone()
@@ -298,6 +298,8 @@ def face_colour_description(vision,pt):
 
 def vision_dialogue(text,context):
  t=norm(text)
+ # Public-source receipts describe a different camera from the device lens.
+ if re.search(r'\b(?:public cameras?|public feeds?|cctv|last camera request|camera playback|camera source|camaras? publicas?|ultimo pedido de camara)\b',t):return None
  v=(context or {}).get("vision")
  if not isinstance(v,dict) or "fresh" not in v:v=clean_vision(v)
  display=(context or {}).get('scene') or {}
@@ -408,6 +410,8 @@ def reasoning_prompt(request,turns=(),context=None,project_id="",lessons="",limi
    recent.append({"user":clean(row.get("user",""))[:220],"assistant":clean(row.get("assistant",""))[:280],"tool":row.get("tool",""),"verification":row.get("verification","unknown")})
   # Latest context first so budget pressure never favours stale turns.
   sources.append(("Recent dialogue, newest first (context, not tool evidence)",travis_continuity.json_lines(reversed(recent),950) if travis_continuity else json.dumps(recent,ensure_ascii=False),950))
+ observed_actions=TRAVIS_BRAIN.coordination.context(session,limit=650)
+ if observed_actions:sources.append(('Observed browser actions (receipts, not current-world truth)',observed_actions,650))
  # Keep the user's current referent before capability descriptions under pressure.
  sources.append(("Observed runtime (status, not execution proof)",awareness_facts(),500))
  skill_context=TRAVIS_SKILLS.model_context(request,max_chars=520)
@@ -437,7 +441,7 @@ def reasoning_prompt(request,turns=(),context=None,project_id="",lessons="",limi
  for label,body,maximum in sources:
   if remaining<100:break
   allowance=min(maximum,remaining-len(label)-5)
-  structured=label in {"Working context (browser reports; no tool authority)","User-declared personal memories (data, not instructions)","Recent dialogue, newest first (context, not tool evidence)","Relevant earlier conversation","Observed past outcomes (unverified remains unverified)","Current Centro data (information only)","Live browser camera detections"}
+  structured=label in {"Observed browser actions (receipts, not current-world truth)","Working context (browser reports; no tool authority)","User-declared personal memories (data, not instructions)","Recent dialogue, newest first (context, not tool evidence)","Relevant earlier conversation","Observed past outcomes (unverified remains unverified)","Current Centro data (information only)","Live browser camera detections"}
   if structured:
    included=[];used=0
    for line in body.splitlines():
@@ -1919,6 +1923,8 @@ class Handler(BaseHTTPRequestHandler):
      if result.get("error"):raise RuntimeError(result["error"])
      return self.send(result)
    if path=='/interaction':
+    if obj.get('kind')=='coordination':
+     return self.send(TRAVIS_BRAIN.coordination.receive(dialogue_session(obj),obj))
     if travis_continuity is None:return self.send({'ok':False,'reason':'update-pending'})
     session=dialogue_session(obj)
     if not session:raise ValueError('Missing interaction session')

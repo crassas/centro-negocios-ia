@@ -6,6 +6,7 @@ or a consciousness detector. Dream records never become verified facts or tools.
 from __future__ import annotations
 import contextlib, datetime, fcntl, json, math, os, re, shutil, sqlite3, threading, time, unicodedata
 from pathlib import Path
+from travis_coordination import Coordinator
 
 REGIONS = {
     'attention': ('Tálamo', 'Entrada e encaminhamento'),
@@ -56,6 +57,7 @@ class BrainRuntime:
             ''')
             c.execute("UPDATE brain_cycles SET status='interrupted',finished=?,error='Runtime restarted during cycle' WHERE status='running'", (clock(),))
         os.chmod(self.path, 0o600)
+        self.coordination = Coordinator(self.path.with_name('coordination.sqlite'), clock=clock)
 
     def _backup_before_learning_migration(self):
         """Consistent one-time WAL backup before the additive schema change."""
@@ -439,7 +441,7 @@ class BrainRuntime:
             active = self.active; last_user = self.last_user
         return {'ok': True, 'version': 1, 'kind': 'functional-cognitive-architecture', 'anatomy': 'inspired-functional-analogy',
                 'phase': self.phase, 'reason': self.reason, 'modules': modules, 'counts': counts, 'journal': journal,
-                'learning':learning,'heartbeatAt':self.heartbeat,
+                'learning':learning,'heartbeatAt':self.heartbeat,'coordination':self.coordination.status(),
                 'paused': self.paused(), 'automatic': bool(self.thread and self.thread.is_alive()), 'activeRequests': active,
                 'idleSeconds': max(0, int(now-last_user)), 'idleThreshold': self.idle_seconds, 'cycleInterval': self.interval_seconds,
                 'dailyLimit': self.daily_limit, 'lastCycle': dict(latest) if latest else None, 'lastError': self.last_error,
@@ -447,6 +449,7 @@ class BrainRuntime:
 
     def start(self, tick_seconds=10):
         if self.thread and self.thread.is_alive(): return
+        self.coordination.start(foreground=lambda:self.active>0, paused=self.paused)
         self.stop_event.clear()
         def loop():
             while not self.stop_event.wait(tick_seconds):
@@ -455,5 +458,6 @@ class BrainRuntime:
         self.thread = threading.Thread(target=loop, name='travis-autonomous-reflection', daemon=True); self.thread.start()
 
     def stop(self):
+        self.coordination.stop()
         self.stop_event.set(); self.wake_event.set()
         if self.thread: self.thread.join(timeout=1)

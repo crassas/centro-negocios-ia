@@ -19,6 +19,12 @@ def functions(*names, **env):
     return env
 
 class PreservationTests(unittest.TestCase):
+    def test_public_camera_receipts_do_not_request_the_phone_camera(self):
+        env=functions('vision_dialogue',re=re,norm=lambda s:s.lower())
+        for question in ['Explain the result of my last public camera request.',
+                         'Which CCTV source is connected?', 'Is camera playback verified?']:
+            self.assertIsNone(env['vision_dialogue'](question,{}))
+
     def test_restart_matches_the_process_not_shell_text_or_similar_names(self):
         script=Path(__file__).with_name('jarvisctl.sh').read_text()
         python=script.split("<<'PY'\n",1)[1].split('\nPY\n',1)[0]
@@ -90,7 +96,7 @@ class PreservationTests(unittest.TestCase):
             dialogue_session=lambda _:None,travis_continuity=None,
             TRAVIS_LIBRARY=NS(reading_context=lambda *a,**k:''),
             TRAVIS_STORE=NS(neural_context=lambda *a:''),
-            TRAVIS_BRAIN=NS(recall_context=lambda *a,**k:''),
+            TRAVIS_BRAIN=NS(recall_context=lambda *a,**k:'',coordination=NS(context=lambda *a,**k:'')),
             TRAVIS_COG=NS(planning_context=lambda *a:''))
         prompt=env['reasoning_prompt']('Explain which services are connected.',limit=2700)
         self.assertIn('Gods Eye observed_online',prompt)

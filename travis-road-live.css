@@ -1,0 +1,122 @@
+/* Travis / public road intelligence. Matte charcoal, warm brass, no cyan AI chrome. */
+#travis-hud #travis-road-live[hidden]{display:none!important}
+#travis-hud #travis-road-live{
+  position:absolute;z-index:68;box-sizing:border-box;
+  top:calc(225px + env(safe-area-inset-top));
+  right:clamp(10px,2.5vw,32px);
+  width:min(425px,calc(100vw - 20px));
+  max-height:min(54vh,590px);
+  display:flex;flex-direction:column;overflow:hidden;
+  border:1px solid rgba(211,170,115,.58);border-radius:14px;
+  background:linear-gradient(144deg,rgba(33,26,21,.985),rgba(7,9,11,.98) 44%,rgba(15,14,13,.985));
+  color:#eee1cb;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+  box-shadow:0 19px 62px #000b;
+}
+#travis-road-live *{box-sizing:border-box}
+#travis-road-live .travis-road-header{
+  display:flex;align-items:center;gap:10px;justify-content:space-between;
+  min-height:58px;padding:10px 13px;
+  border-bottom:1px solid rgba(212,170,110,.3);
+}
+#travis-road-live .travis-road-header div{display:flex;flex-direction:column;min-width:0;gap:4px}
+#travis-road-live .travis-road-header small{
+  color:#cfae84;font-size:9px;letter-spacing:.115em;font-weight:650;
+}
+#travis-road-live .travis-road-header strong{
+  color:#f4e7d3;font-size:13px;line-height:1.35;letter-spacing:.04em;
+}
+#travis-road-live button{
+  border:1px solid rgba(208,172,125,.39);border-radius:8px;
+  background:linear-gradient(130deg,rgba(65,49,35,.72),rgba(22,20,20,.82));
+  color:#f3dfbd;cursor:pointer;touch-action:manipulation;
+  font:650 10px/1.3 system-ui,sans-serif;letter-spacing:.05em;
+  min-height:34px;padding:8px 11px;
+}
+#travis-road-live button:focus-visible{
+  outline:2px solid #edcc9b;outline-offset:2px;
+}
+#travis-road-close{flex:none;font-size:20px!important;width:34px}
+#travis-road-live .travis-road-areas{
+  display:flex;gap:5px;overflow-x:auto;padding:9px 10px;
+  border-bottom:1px solid rgba(210,169,115,.18);scrollbar-width:none;
+}
+#travis-road-live .travis-road-areas button{white-space:nowrap;flex:0 0 auto}
+#travis-road-live #travis-road-status{
+  min-height:33px;padding:7px 12px;color:#ead1ac;
+  font-size:10.5px;line-height:1.45;letter-spacing:.02em;
+  border-bottom:1px solid rgba(210,169,115,.18);
+}
+#travis-road-live .travis-road-list{
+  min-height:0;flex:1;overflow-y:auto;overscroll-behavior:contain;
+  scrollbar-width:thin;scrollbar-color:#6d5540 transparent;
+}
+#travis-road-live .travis-road-row{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;
+  gap:7px;align-items:center;padding:10px 11px;
+  border-bottom:1px solid rgba(222,190,150,.13);
+  background:linear-gradient(90deg,rgba(126,90,52,.08),transparent);
+}
+#travis-road-live .travis-road-copy{
+  display:flex;flex-direction:column;gap:4px;min-width:0;
+}
+#travis-road-live .travis-road-copy strong{
+  font-size:11.5px;font-weight:650;color:#f3e9d8;overflow-wrap:anywhere;
+}
+#travis-road-live .travis-road-copy span{
+  font:650 10.8px/1.35 system-ui,sans-serif;color:#e8c28f;
+}
+#travis-road-live .travis-road-copy small{
+  font:430 10px/1.45 system-ui,sans-serif;color:#beb4aa;
+}
+#travis-road-live .travis-road-copy time{
+  font:400 9.5px/1.3 system-ui,sans-serif;color:#ad9f8f;
+}
+#travis-road-live .travis-road-credit{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  min-height:43px;padding:6px 12px;
+  border-top:1px solid rgba(211,172,115,.25);
+}
+#travis-road-live .travis-road-credit a{
+  color:#e0c69e;font:600 10px/1.25 system-ui,sans-serif;
+  text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere;
+}
+#travis-road-live .travis-road-disclaimer{
+  color:#a69a8d;font:400 9px/1.4 system-ui,sans-serif;
+  margin:0;padding:6px 12px 10px;
+}
+#travis-gev-official #travis-road-toggle{
+  color:#f5d5a4;border-color:rgba(240,194,132,.52);
+}
+#travis-gev-official #travis-cctv-video-auto{
+  color:#f8e5ca;border-color:rgba(246,194,125,.65);
+}
+#travis-gev-official #travis-cctv-auto[aria-busy="true"],
+#travis-gev-official #travis-cctv-video-auto[aria-busy="true"]{
+  opacity:.65;cursor:wait;
+}
+/* Genuine H.264/HLS streams get more space than operator photo snapshots. */
+#travis-hud #travis-cctv-viewer[data-mode="video"]{
+  width:min(455px,calc(100vw - 18px));
+}
+#travis-cctv-viewer[data-mode="video"] #cctv-video{
+  width:100%;max-height:min(35vh,325px);object-fit:contain;
+}
+@media(max-width:560px){
+  #travis-hud #travis-road-live{
+    top:calc(178px + env(safe-area-inset-top));
+    right:8px;left:8px;width:auto;
+    max-height:49vh;
+  }
+  #travis-road-live .travis-road-copy strong{font-size:12px}
+  #travis-road-live #travis-road-status{font-size:11px}
+  #travis-hud #travis-cctv-viewer[data-mode="video"]{
+    top:clamp(176px,18vh,275px);right:8px;left:8px;width:auto;
+  }
+}
+@media(max-height:670px){
+  #travis-hud #travis-road-live{top:142px;max-height:42vh}
+  #travis-road-live .travis-road-disclaimer{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+  #travis-road-live button{transition:none}
+}

@@ -1,0 +1,144 @@
+/* TRAVIS GOD'S EYE — GLOBAL PUBLIC CCTV CINEMA
+   Purposeful brass/gold over matte charcoal. No dashboard chrome.
+   Keeps the actual planet 3D visible behind a single small real camera pane.
+*/
+#travis-hud #travis-cctv-viewer[hidden],
+#travis-hud #travis-cctv-viewer [hidden]{display:none!important}
+#travis-hud #travis-cctv-viewer{
+  position:absolute;z-index:62;
+  top:clamp(109px,15.5vh,176px);
+  right:clamp(11px,3.4vw,44px);
+  width:min(345px,calc(100vw - 22px));
+  max-height:min(70vh,600px);
+  display:flex;flex-direction:column;
+  background:linear-gradient(160deg,rgba(45,31,21,.98),
+    rgba(7,8,11,.99) 34%,rgba(17,14,13,.98));
+  border:1px solid rgba(236,183,108,.78);
+  border-radius:14px;
+  color:#f4e2ca;
+  box-shadow:0 15px 50px rgba(0,0,0,.85),
+    0 0 0 1px rgba(225,176,103,.08),
+    inset 0 1px rgba(255,231,186,.13);
+  overflow:hidden;
+  pointer-events:auto!important;
+  font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+#travis-hud #travis-cctv-viewer::before{
+  content:'';position:absolute;inset:0;z-index:5;
+  pointer-events:none;
+  box-shadow:inset 0 0 16px rgba(228,174,99,.08);
+  border-radius:inherit;
+}
+#travis-cctv-viewer .cctv-head{
+  display:flex;align-items:center;gap:8px;
+  min-height:54px;padding:9px 10px 8px 13px;
+  background:linear-gradient(90deg,rgba(95,63,31,.25),transparent);
+  border-bottom:1px solid rgba(217,170,106,.31);
+}
+#travis-cctv-viewer .cctv-head>div{
+  flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;
+}
+#travis-cctv-viewer .cctv-head small{
+  font-size:8px;font-weight:650;line-height:1.2;letter-spacing:.18em;
+  color:#c3a178;
+}
+#travis-cctv-viewer .cctv-head strong{
+  font:480 12px/1.25 system-ui,sans-serif;
+  color:#f6e6cd;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+#travis-cctv-viewer #cctv-indicator{
+  font:600 8px/1.1 system-ui,sans-serif;
+  letter-spacing:.09em;max-width:83px;
+  color:#e3c490;text-align:right;
+}
+#travis-cctv-viewer #cctv-close{
+  flex:none;display:grid;place-items:center;
+  width:32px;height:32px;min-height:32px;padding:0;
+  border-radius:50%;border:1px solid rgba(221,181,120,.38);
+  color:#f0d9b5;background:#0a0c0ff2;
+  font:300 22px/1 system-ui;cursor:pointer;
+}
+#travis-cctv-viewer .cctv-media{
+  position:relative;width:100%;min-height:169px;
+  background:radial-gradient(ellipse at center,#15130f,#030405 73%);
+  overflow:hidden;
+}
+#travis-cctv-viewer .cctv-media::after{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(90deg,#0004,transparent 15%,transparent 85%,#0004);
+}
+#travis-cctv-viewer :is(#cctv-image,#cctv-video){
+  display:block;width:100%;height:auto;
+  aspect-ratio:16/9;max-height:240px;object-fit:contain;
+  border:0;background:#020405;
+}
+#travis-cctv-viewer #cctv-empty{
+  display:flex;gap:8px;flex-direction:column;
+  justify-content:center;align-items:center;text-align:center;
+  min-height:175px;padding:15px 20px;
+}
+#travis-cctv-viewer #cctv-empty strong{
+  font:560 10px/1.35 system-ui,sans-serif;letter-spacing:.13em;
+  color:#e0bf8b;
+}
+#travis-cctv-viewer #cctv-empty span{
+  font:11px/1.55 system-ui,sans-serif;color:#aea49a;
+}
+#travis-cctv-viewer .cctv-control{
+  display:flex;gap:7px;flex-direction:column;
+  padding:12px 13px 11px;
+  min-height:0;overflow:auto;
+  border-top:1px solid rgba(219,165,101,.24);
+}
+#travis-cctv-viewer label{
+  color:#c1a075;
+  font:650 8px/1.2 system-ui,sans-serif;letter-spacing:.14em;
+}
+#travis-cctv-viewer :is(select,input){
+  box-sizing:border-box;display:block;width:100%;min-height:35px;
+  padding:7px 9px;
+  color:#eaddcd;background:#101216;
+  border:1px solid rgba(200,153,91,.37);
+  border-radius:7px;font:450 11px/1.3 system-ui,sans-serif;
+}
+#travis-cctv-viewer input::placeholder{color:#8f8a85;opacity:1}
+#travis-cctv-viewer .cctv-commands{display:flex;gap:7px}
+#travis-cctv-viewer .cctv-commands button{
+  flex:1;min-height:36px;
+  border:1px solid rgba(215,177,119,.43);
+  border-radius:7px;
+  background:linear-gradient(145deg,#3a2a1d,#161413 70%);
+  color:#edd1a8;font:600 9px/1.2 system-ui,sans-serif;
+  letter-spacing:.045em;cursor:pointer;
+}
+#travis-cctv-viewer #cctv-origin{
+  color:#bfa990;font:10px/1.42 system-ui,sans-serif;
+  min-height:15px;
+}
+#travis-cctv-viewer #cctv-status{
+  color:#b3aca3;font:10px/1.5 system-ui,sans-serif;
+  margin:0;min-height:27px;
+}
+#travis-cctv-viewer #cctv-status[data-good="true"]{color:#f0d3a7}
+#travis-cctv-viewer :is(button,select,input):focus-visible{
+  outline:2px solid #e8be85;outline-offset:2px;
+}
+@media(max-width:560px){
+  #travis-hud #travis-cctv-viewer{
+    top:clamp(100px,13vh,146px);
+    right:clamp(8px,3vw,16px);
+    width:min(306px,calc(100vw - 19px));
+    max-height:min(65vh,535px);
+  }
+  #travis-cctv-viewer .cctv-head{min-height:49px;padding:7px 9px}
+  #travis-cctv-viewer .cctv-media{min-height:137px}
+  #travis-cctv-viewer :is(#cctv-image,#cctv-video){max-height:28vh}
+  #travis-cctv-viewer #cctv-empty{min-height:146px}
+  #travis-cctv-viewer .cctv-control{padding:9px 10px}
+  #travis-cctv-viewer :is(select,input){min-height:32px}
+}
+@media(max-height:640px){
+  #travis-hud #travis-cctv-viewer{top:76px;max-height:calc(100vh - 228px)}
+  #travis-cctv-viewer .cctv-media{min-height:112px}
+}
