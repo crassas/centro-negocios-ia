@@ -2,11 +2,19 @@
 
 ## Index
 
+- [2026-10-11: Durable requested checks](#2026-10-11-durable-requested-checks)
+
 - [2026-10-11: Obsidian shared vault](#2026-10-11-obsidian-shared-vault)
 
 - [2026-10-11: Automatic project context](#2026-10-11-automatic-project-context)
 
 - [2026-10-11: Road panel, world recovery and resource rest](#2026-10-11-road-panel-world-recovery-and-resource-rest)
+
+## 2026-10-11: Durable requested checks
+
+Context summary: Requested read-only multi-tool checks now commit bounded step summaries to private SQLite and resume unfinished steps after a router restart. Obsidian provides indexed context independently of its UI process. This does not add unrestricted goal execution or restart Android apps.
+
+See [service map and recovery policy](service.content.md). Validation evidence is recorded in [durable workflow proof](travis-workflow-recovery-proof.json). Verification: nine workflow and fourteen context tests passed; the real English request completed both checks. The deployed runner resumed a separate interrupted test process without repeating its committed first step. SQLite checks passed. Android exit logs are unavailable in this Ubuntu connection; the cause of Obsidian closures remains unverified.
 
 ## 2026-10-11: Obsidian shared vault
 

@@ -59,6 +59,7 @@ TRAVIS_COG=travis_cognitive.CognitiveKernel(ROOT/"cognitive.sqlite")
 TRAVIS_QUANTUM=travis_quantum.QuantumTravisBridge()
 TRAVIS_SKILLS=travis_skillbook.SkillBook()
 TRAVIS_CONTEXT=travis_context.ContextBook()
+TRAVIS_WORKFLOWS=travis_workflow.DurableWorkflows(ROOT/"workflows.sqlite")
  # TRAVIS_QUANTUM_SKILLBOOK_V1 — skill descriptions are not execution permission.
 TRAVIS_DECISIONS=travis_decision.DecisionGovernor(ROOT)
 TRAVIS_BRAIN=travis_brain.BrainRuntime(ROOT/"brain.sqlite",TRAVIS_STORE,TRAVIS_COG)
@@ -837,7 +838,10 @@ def execute(tool,args):
  if tool=="brain_status":return TRAVIS_BRAIN.status()
  if tool=="brain_journal":return {"journal":TRAVIS_BRAIN.status()["journal"]}
  if tool=="brain_pause":return TRAVIS_BRAIN.pause(args.get("paused"))
- if tool=='agent_workflow':return travis_workflow.run(args['request'],args['steps'],execute)
+ if tool=='agent_workflow':
+  workflow_id=getattr(INFERENCE_INFO,'workflow_id',None)
+  if workflow_id:return TRAVIS_WORKFLOWS.advance(workflow_id,execute)
+  return TRAVIS_WORKFLOWS.run(clean(args['request']),args['steps'],execute)
  if tool=='web_search':return {'query':args['query'],'results':travis_web_tools.search(args['query'],8)}
  if tool=="web_research":return web_research_answer(args["query"])
  if tool=="web_read":return web_read_answer(args["url"])
@@ -1347,7 +1351,7 @@ def restore_voice_jobs():
   with VOICE_JOB_LOCK:
    for key,value in list(data.items())[-22:]:
     if not re.fullmatch(r"travis-job-[0-9a-f]{16}",key) or not isinstance(value,dict):continue
-    if value.get("status") in {"queued","running"}:value.update(status="failed",error="Travis restarted before confirming the result. The Centro may still hold the task, so it will not be repeated without verification.")
+    if value.get("status") in {"queued","running"} and not value.get("workflowId"):value.update(status="failed",error="Travis restarted before confirming the result. The Centro may still hold the task, so it will not be repeated without verification.")
     VOICE_JOBS[key]=value
    save_voice_jobs_locked()
  except (OSError,ValueError):pass
@@ -1360,16 +1364,19 @@ def start_voice_job(text,context=None):
    raise RuntimeError("I’m already handling two requests. Try again when one finishes.")
   task_id="travis-job-"+secrets.token_hex(8)
   VOICE_JOBS[task_id]={"taskId":task_id,"status":"queued","tool":tool,"createdAt":time.time()}
+  if tool=="agent_workflow":VOICE_JOBS[task_id]["workflowId"]=TRAVIS_WORKFLOWS.submit(clean(args["request"]),args["steps"])
   completed=[k for k,j in VOICE_JOBS.items() if j["status"] in {"completed","failed"}]
   for key in completed[:-20]:VOICE_JOBS.pop(key,None)
   save_voice_jobs_locked()
  def work():
   with VOICE_JOB_LOCK:VOICE_JOBS[task_id]["status"]="running"
   try:
+   INFERENCE_INFO.workflow_id=VOICE_JOBS[task_id].get("workflowId")
    result=route(text,context)
    with VOICE_JOB_LOCK:VOICE_JOBS[task_id].update(status="completed",answer=result);save_voice_jobs_locked()
   except Exception as exc:
    with VOICE_JOB_LOCK:VOICE_JOBS[task_id].update(status="failed",error=clean(str(exc))[:500]);save_voice_jobs_locked()
+  finally:INFERENCE_INFO.workflow_id=None
  thread=threading.Thread(target=work,daemon=True,name=task_id);thread.start()
  prefs=dialogue_preferences(dialogue_session(context));language=prefs['language']
  if language=='auto':language=travis_dialogue.detect_language(text,prefs['lastLanguage'])
@@ -1379,7 +1386,17 @@ def start_voice_job(text,context=None):
 def voice_job_status(task_id):
  with VOICE_JOB_LOCK:
   if task_id not in VOICE_JOBS:raise ValueError("Voice task not found.")
-  return dict(VOICE_JOBS[task_id])
+  job=dict(VOICE_JOBS[task_id])
+ if job.get('workflowId'):
+  try:result=TRAVIS_WORKFLOWS.result(job['workflowId'])
+  except ValueError:return {**job,'status':'failed','error':'Workflow checkpoint is no longer available.'}
+  if result['state']=='expired':return {**job,'status':'failed','error':'Interrupted checks expired after 24 hours; request a fresh check.'}
+  if result['state']!='complete':return {**job,'status':result['state'],'completionStatus':'pending'}
+  if not job.get('answer') or job['answer'].get('result',{}).get('state')!='complete':
+   reply='I checked '+str(result['completed'])+' of '+str(result['total'])+' requested areas. '+'; '.join(x['title']+': '+x['detail'] for x in result['steps'])
+   job.update(status='completed',answer={'ok':True,'tool':'agent_workflow','reply':reply,'language':'en','result':result,'ui':result_cards('agent_workflow',{},result),'recoveredFromCheckpoint':True})
+  else:job['status']='completed'
+ return job
 
 class VoiceWorker:
  def __init__(self,kind,model=None):self.kind=kind;self.model=Path(model) if model else None;self.process=None;self.buffer=b"";self.lock=threading.RLock();self.last_used=time.monotonic()
@@ -1850,7 +1867,7 @@ class Handler(BaseHTTPRequestHandler):
     page='<meta charset="utf-8"><title>Travis · Gmail</title><p>Conta autorizada. Volta ao Travis e abre o Gmail para confirmar a leitura.</p><a href="/?travis=1">Voltar ao Travis</a>'
    except Exception:page='<meta charset="utf-8"><p>A autorização não foi concluída. Volta ao Travis e tenta novamente.</p><a href="/?travis=1">Voltar ao Travis</a>'
    return self.send(page.encode(),"text/html; charset=utf-8")
-  if path=="/health":return self.send({"ok":True,"service":"jarvis","cloud":False,"busy":ACTIVE_REQUESTS>0,"ui":CENTRO_UI.is_dir(),"memoryLearning":"continuous-context-v2" if travis_continuity is not None else "continuity-update-pending","liveStt":os.environ.get('TRAVIS_LIVE_STT')=='1',"voiceProtocol":"ndjson-audio-v1","pid":os.getpid(),"resources":VOICE_RESOURCES.snapshot(),"projectContext":TRAVIS_CONTEXT.status()})
+  if path=="/health":return self.send({"ok":True,"service":"jarvis","cloud":False,"busy":ACTIVE_REQUESTS>0,"ui":CENTRO_UI.is_dir(),"memoryLearning":"continuous-context-v2" if travis_continuity is not None else "continuity-update-pending","liveStt":os.environ.get('TRAVIS_LIVE_STT')=='1',"voiceProtocol":"ndjson-audio-v1","pid":os.getpid(),"resources":VOICE_RESOURCES.snapshot(),"projectContext":TRAVIS_CONTEXT.status(),"workflows":TRAVIS_WORKFLOWS.status()})
   if path=="/voice":return self.send(Path(__file__).with_name("jarvis_voice.html").read_text().replace("__KEY__","").encode(),"text/html; charset=utf-8")
   return self.serve_ui_file(self.path)
  def stream_reply(self,text,context,tool):
@@ -2021,8 +2038,10 @@ def main():
    VOICE_RESOURCES.start()
    threading.Thread(target=warm_voice,daemon=True).start()
    TRAVIS_BRAIN.start()
+   TRAVIS_WORKFLOWS.start(execute,lambda:ACTIVE_REQUESTS>0 or TRAVIS_BRAIN.active>0 or TRAVIS_BRAIN.paused() or TRAVIS_BRAIN.phase=="reflecting")
    try:ThreadingHTTPServer(("127.0.0.1",8770),Handler).serve_forever()
    finally:
+    TRAVIS_WORKFLOWS.stop()
     VOICE_RESOURCES.stop()
     TRAVIS_BRAIN.stop()
     SHERPA_STT_WORKER.stop();FAST_STT_WORKER.stop();PT_STT_WORKER.stop();STT_WORKER.stop();TTS_WORKER.stop();TTS_EN_WORKER.stop();TURN_WORKER.stop()

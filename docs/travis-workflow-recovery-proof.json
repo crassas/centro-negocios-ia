@@ -1,0 +1,277 @@
+{
+  "recordedAt": "2026-10-11T15:32:07.670444+00:00",
+  "workflowTests": {
+    "passed": 9,
+    "failed": 0,
+    "realChildProcessExit": 23
+  },
+  "contextTests": {
+    "passed": 14,
+    "failed": 0
+  },
+  "http": {
+    "taskId": "travis-job-2737bd105db6f38d",
+    "status": "completed",
+    "tool": "agent_workflow",
+    "createdAt": 1791732598.689164,
+    "workflowId": "322e614d09ad4b84bf80bb4f9306ed99",
+    "answer": {
+      "ok": true,
+      "ui": {
+        "kind": "agents",
+        "title": "Travis \u00b7 checked areas",
+        "items": [
+          {
+            "title": "Centro",
+            "detail": "Centro online",
+            "available": true
+          },
+          {
+            "title": "Memory",
+            "detail": "23 memory nodes",
+            "available": true
+          }
+        ]
+      },
+      "provider": "local",
+      "tool": "agent_workflow",
+      "result": {
+        "id": "322e614d09ad4b84bf80bb4f9306ed99",
+        "scope": "read_only",
+        "requested": "Check system status and memory.",
+        "state": "complete",
+        "completed": 2,
+        "total": 2,
+        "steps": [
+          {
+            "tool": "system_status",
+            "title": "Centro",
+            "status": "returned",
+            "detail": "Centro online",
+            "durationMs": 810,
+            "observedAt": 1791732601.1851866
+          },
+          {
+            "tool": "neural_status",
+            "title": "Memory",
+            "status": "returned",
+            "detail": "23 memory nodes",
+            "durationMs": 75,
+            "observedAt": 1791732601.4795187
+          }
+        ],
+        "partial": false,
+        "verified": false
+      },
+      "verification": {
+        "verdict": "unknown",
+        "scope": "unverified_result",
+        "code": "no_verifier",
+        "cause": "No independent postcondition verifier for this result.",
+        "correction": ""
+      },
+      "reflexion": {
+        "recalledLessons": 0,
+        "usedLessons": 0
+      },
+      "learning": {
+        "ok": true,
+        "runId": "cog-10e5e23c38cdc26d",
+        "verdict": "unknown",
+        "usedMemories": 0,
+        "updates": [],
+        "duplicate": false
+      },
+      "reply": "I checked 2 of 2 requested areas. Centro: Centro online; Memory: 23 memory nodes",
+      "correlationId": "travis-64c2b74b6e1e7415",
+      "completionStatus": "IMPLEMENTED_NOT_VERIFIED",
+      "durationMs": 3752,
+      "quantum": {
+        "strategy": "IMPLEMENTATION",
+        "phase": "RESEARCH",
+        "tier": "T1",
+        "returnStatus": "IMPLEMENTED_NOT_VERIFIED"
+      },
+      "language": "en",
+      "preferences": {
+        "language": "en",
+        "lastLanguage": "en",
+        "proactive": true,
+        "standby": false
+      }
+    }
+  },
+  "interruption": {
+    "before": {
+      "id": "9f3b3b42fede4f39bc5cb7cd68137903",
+      "scope": "read_only",
+      "requested": "Recovery verification: check system and memory",
+      "state": "running",
+      "completed": 1,
+      "total": 2,
+      "steps": [
+        {
+          "tool": "system_status",
+          "title": "Centro",
+          "status": "returned",
+          "detail": "Centro online",
+          "durationMs": 68,
+          "observedAt": 1791732637.0802495
+        }
+      ],
+      "partial": true,
+      "verified": false
+    },
+    "after": {
+      "id": "9f3b3b42fede4f39bc5cb7cd68137903",
+      "scope": "read_only",
+      "requested": "Recovery verification: check system and memory",
+      "state": "complete",
+      "completed": 2,
+      "total": 2,
+      "steps": [
+        {
+          "tool": "system_status",
+          "title": "Centro",
+          "status": "returned",
+          "detail": "Centro online",
+          "durationMs": 68,
+          "observedAt": 1791732637.0802495
+        },
+        {
+          "tool": "neural_status",
+          "title": "Memory",
+          "status": "returned",
+          "detail": "23 memory nodes",
+          "durationMs": 29,
+          "observedAt": 1791732640.7365658
+        }
+      ],
+      "partial": false,
+      "verified": false
+    },
+    "sameFirstCheckpoint": true,
+    "productionRouterInterrupted": false
+  },
+  "health": {
+    "ok": true,
+    "service": "jarvis",
+    "cloud": false,
+    "busy": false,
+    "ui": true,
+    "memoryLearning": "continuous-context-v2",
+    "liveStt": false,
+    "voiceProtocol": "ndjson-audio-v1",
+    "pid": 4539,
+    "resources": {
+      "policy": "on-demand-with-idle-release",
+      "idleTimeoutSeconds": 180,
+      "sweepIntervalSeconds": 30,
+      "residentWorkers": 4,
+      "workerRssKiB": 764696,
+      "releasedWorkers": 0,
+      "errors": {},
+      "workers": [
+        {
+          "name": "stt-precise",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-fast",
+          "resident": true,
+          "rssKiB": 167868,
+          "idleSeconds": 0.1
+        },
+        {
+          "name": "stt-pt",
+          "resident": true,
+          "rssKiB": 141712,
+          "idleSeconds": 129.4
+        },
+        {
+          "name": "stt-sherpa",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "turn",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "tts-pt",
+          "resident": true,
+          "rssKiB": 130196,
+          "idleSeconds": 133.8
+        },
+        {
+          "name": "tts-en",
+          "resident": true,
+          "rssKiB": 324920,
+          "idleSeconds": 13.5
+        }
+      ]
+    },
+    "projectContext": {
+      "available": true,
+      "policy": "startup-and-on-demand; no-background-loop",
+      "revision": "9f649852c088",
+      "checkedAt": 1791732627,
+      "topics": 12,
+      "cachedNotes": 5,
+      "cachedBytes": 12389,
+      "cacheLimitBytes": 196608,
+      "diskReads": 6,
+      "lastSources": [
+        "docs/travis-session-journal.md",
+        "MEMORY.md"
+      ],
+      "lastContextChars": 587,
+      "errors": {},
+      "obsidian": {
+        "configured": true,
+        "available": true,
+        "indexedTopics": 4
+      }
+    },
+    "workflows": {
+      "policy": "requested-read-only-checkpoints",
+      "states": {
+        "complete": 2
+      },
+      "runnerAlive": true,
+      "lastError": "",
+      "maxPending": 16,
+      "retainedCompleted": 101,
+      "expirySeconds": 86400,
+      "automaticWriteReplay": false,
+      "requiresObsidianOpen": false
+    }
+  },
+  "sqliteQuickCheck": {
+    "memory.sqlite": "ok",
+    "coordination.sqlite": "ok",
+    "workflows.sqlite": "ok"
+  },
+  "cinematicShell": {
+    "count": 1,
+    "version": "voice-first-cinema-2"
+  },
+  "preservedOtherSessionChange": "webcam-discovery endpoint and allowlist remain in live router",
+  "android": {
+    "exitLogsAccessible": false,
+    "closureCause": "unverified",
+    "communityPluginsListPresent": false,
+    "settingsChanged": false
+  },
+  "limits": [
+    "Child-process death and actual recovery runner tested; no deliberate production router crash",
+    "Voice-task recovered-status branch tested with extracted actual function and isolated checkpoint; real HTTP task completed normally",
+    "Read-only recovery only; no unrestricted goal executor, AGI score or physical audio/GPU test",
+    "Android may kill the host as well; checkpoints cannot execute while the host is stopped"
+  ]
+}

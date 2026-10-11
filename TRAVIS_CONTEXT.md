@@ -4,6 +4,7 @@ Read this index first, then open only the row relevant to the current request. T
 
 | Need | Canonical context | Evidence / implementation |
 | --- | --- | --- |
+| Services / service context / autonomous workflow / resume tasks / serviços | [Service context and recovery](docs/service.content.md) | [Service entry](SERVICE_CONTEXT.md), [checkpoints](operit-agent/travis_workflow.py) |
 | Obsidian vault connection | [Shared Android vault](docs/travis-obsidian.md) | [Starter notes](obsidian-vault-template/TRAVIS_VAULT_INDEX.md), [reader](operit-agent/travis_context.py); live private vault edits stay on the device |
 | Automatic context / memory / index / contexto / memória | [Automatic context](docs/travis-automatic-context.md) | [Memory pointer](MEMORY.md), [agent rules](CLAUDE.md), [loader](operit-agent/travis_context.py) |
 | Idle resources and wake on demand | [Resource rest](docs/travis-resource-rest.md) | [Measured proof](docs/travis-resource-rest-proof.json), [worker policy](operit-agent/travis_resources.py), [browser lifecycle](travis-resource-rest.mjs) |
