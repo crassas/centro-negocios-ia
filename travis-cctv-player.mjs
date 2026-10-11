@@ -4,6 +4,7 @@
  * Reuses only vetted camera IDs supplied by the original CCTV catalog.
  * Genuine upstream snapshots or source-provided HLS; no simulated video.
  */
+import {registerRestResource} from './travis-resource-rest.mjs?v=rest-1';
 const HUD=document.getElementById('travis-hud');
 const regionCoords=Object.freeze({
   earth:[30.2672,-97.7431],newyork:[40.758,-73.9855],
@@ -18,15 +19,32 @@ const regions=Object.freeze({
   estonia:'tallinn',australia:'nsw'
 });
 const nodes={};
+let suspended=false,pendingFetch=null;
 let open=false,selected=null,mode='picker',seq=0,refreshTimer=null;
 let hls=null,lease=null,activeVideoId=null,blobUrl=null,playing=false;
 let lastFetchEpoch=0,searchTimer=null,hlsLoader=null;
+const frameRequests=new Map();
+async function waitForFrameSlot(id,signal){
+ const delay=Math.max(0,(frameRequests.get(id)||0)+10500-Date.now());
+ signal.throwIfAborted();
+ if(delay){
+   message('Camera resuming shortly · respecting the source refresh interval.');
+   await new Promise((resolve,reject)=>{
+     const cancel=()=>{clearTimeout(timer);reject(signal.reason||new Error('Cancelled'));};
+     const timer=setTimeout(()=>{signal.removeEventListener('abort',cancel);resolve();},delay);
+     signal.addEventListener('abort',cancel,{once:true});
+   });
+ }
+ signal.throwIfAborted();
+ frameRequests.delete(id);frameRequests.set(id,Date.now());
+ while(frameRequests.size>32)frameRequests.delete(frameRequests.keys().next().value);
+}
 function cleanText(t){return String(t??'').normalize('NFD')
  .replace(/[\u0300-\u036f]/g,'').toLowerCase()
  .replace(/[’‘']/g,'').replace(/[.,!?;:]+/g,' ').replace(/\s+/g,' ').trim();}
 function snap(){
  const source=window.TravisCctv?.get?.(selected);
- return {open,mode,sourceId:selected,sourceName:source?.name||'',city:source?.city||'',playingVerified:playing,
+ return {open,suspended,mode,sourceId:selected,sourceName:source?.name||'',city:source?.city||'',playingVerified:playing,
    catalogue:window.TravisCctv?.status?.()||null};
 }
 function report(){window.dispatchEvent(new CustomEvent('travis:cctv-player',{detail:snap()}));}
@@ -34,6 +52,7 @@ function message(t,good=false){
  if(nodes.status){nodes.status.textContent=t;nodes.status.dataset.good=String(good);}
 }
 function clearVideo(){
+ pendingFetch?.abort();pendingFetch=null;
  clearTimeout(refreshTimer);refreshTimer=null;
  playing=false;
  if(hls){try{hls.destroy();}catch{}hls=null;}
@@ -135,7 +154,7 @@ function mount(){
    if(selected)void showImage(selected,{manual:true});
  });
  nodes.video.addEventListener('playing',()=>{
-   if(mode==='video'){
+   if(mode==='video'&&!suspended&&!document.hidden&&activeVideoId){
      playing=true;
      nodes.indicator.textContent='VIDEO PLAYING';
      message('Public video is playing. Stream is provided by the registered operator.',true);
@@ -152,13 +171,7 @@ function mount(){
    if(e.detail?.id)void openCamera(String(e.detail.id));
  });
  window.addEventListener('travis:close',close);
- window.addEventListener('pagehide',close);
- document.addEventListener('visibilitychange',()=>{
-   if(document.hidden&&open){
-     if(mode==='video')nodes.video.pause();
-     clearTimeout(refreshTimer);refreshTimer=null;
-   }
- });
+ registerRestResource('public-camera',{suspend,resume});
  document.addEventListener('keydown',e=>{
    if(e.key==='Escape'&&open){e.stopImmediatePropagation();close();}
  },true);
@@ -205,6 +218,8 @@ function listChoices(){
  }
 }
 async function openPicker({region=null,search=null}={}){
+ if(document.hidden)return false;
+ suspended=false;
  mount();
  if(!nodes.wrap)return false;
  if(HUD?.getAttribute('aria-hidden')==='true')window.TravisVisual?.open?.();
@@ -218,8 +233,24 @@ async function openPicker({region=null,search=null}={}){
  report();
  return true;
 }
+function suspend(){
+ if(!open||suspended)return false;
+ suspended=true;seq++;
+ clearTimeout(searchTimer);clearVideo();
+ nodes.indicator.textContent='CAMERA RESTING';
+ message('Camera paused while Travis is in the background. Source selection saved.');
+ report();return true;
+}
+function resume(){
+ if(!open||!suspended||document.hidden)return false;
+ suspended=false;
+ if(selected)void openCamera(selected);
+ else {listChoices();report();}
+ return true;
+}
 function close(){
  if(!open)return;
+ suspended=false;
  seq++;
  clearTimeout(searchTimer);
  clearVideo();
@@ -243,7 +274,7 @@ function hlsLibrary(){
 }
 async function showImage(cameraId,{reason='',manual=false,timeoutMs=20000}={}){
  const net=window.TravisCctv,camera=net?.get?.(cameraId);
- if(!camera||!open)return {ok:false,error:'Camera not registered'};
+ if(!camera||!open||suspended||document.hidden)return {ok:false,error:'Camera unavailable or resting'};
  seq++;
  const mine=seq;
  clearVideo();lastFetchEpoch=0;
@@ -253,8 +284,14 @@ async function showImage(cameraId,{reason='',manual=false,timeoutMs=20000}={}){
  const url=net.frameUrl(cameraId);
  if(!url)return {ok:false};
  try{
-   const res=await fetch(url,{credentials:'omit',cache:'no-store',
-     signal:AbortSignal.timeout(Math.max(3000,Math.min(20000,timeoutMs)))});
+   pendingFetch=new AbortController();
+   const signal=pendingFetch.signal;
+   await waitForFrameSlot(cameraId,signal);
+   const request=()=>fetch(url,{credentials:'omit',cache:'no-store',
+     signal:AbortSignal.any([signal,AbortSignal.timeout(Math.max(3000,Math.min(20000,timeoutMs)))])});
+   let res=await request();
+   // Another tab can have used the same gateway slot. Retry once after its fixed cooldown.
+   if(res.status===429){await waitForFrameSlot(cameraId,signal);res=await request();}
    if(seq!==mine||!open)return {ok:false,cancelled:true};
    const realSource=res.headers.get('X-CCTV-Source');
    const type=res.headers.get('Content-Type')||'';
@@ -288,15 +325,16 @@ async function showImage(cameraId,{reason='',manual=false,timeoutMs=20000}={}){
 }
 async function showVideo(cameraId){
  const camera=window.TravisCctv?.get?.(cameraId);
- if(!camera)return {ok:false};
+ if(!camera||!open||suspended||document.hidden)return {ok:false};
  seq++;
  const mine=seq;
  clearVideo();changeMode('video',camera);
  message('Checking the operator’s HLS stream; not confirmed live.');
  try{
    const net=window.TravisCctv;
+   pendingFetch=new AbortController();
    const infoRes=await fetch(net.streamInfoUrl(cameraId),{
-     credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(15000)});
+     credentials:'omit',cache:'no-store',signal:AbortSignal.any([pendingFetch.signal,AbortSignal.timeout(15000)])});
    if(!infoRes.ok)throw new Error('Stream description unavailable');
    const meta=await infoRes.json();
    if(mine!==seq||!open)return {ok:false,cancelled:true};
@@ -347,7 +385,7 @@ async function showVideo(cameraId){
  }
 }
 async function openCamera(id,options={}){
- await openPicker();
+ if(!await openPicker())return {ok:false,cancelled:true};
  const mine=++seq;
  message('Finding the selected registered camera…');
  const net=window.TravisCctv;

@@ -1,0 +1,409 @@
+{
+  "browser": {
+    "scope": "real DOM/controllers + TfL HTTP; fixture GEV renderer; simulated visibility",
+    "checks": [
+      {
+        "name": "road-and-commanded-view-survive-sleep",
+        "passed": true,
+        "records": 60,
+        "annotations": 18
+      },
+      {
+        "name": "camera-frees-image-and-reloads-same-source",
+        "passed": true,
+        "sourceId": "tfl-00001.06502",
+        "width": 352
+      },
+      {
+        "name": "closed-features-do-not-reopen-on-wake",
+        "passed": true
+      }
+    ],
+    "errors": [],
+    "images": [
+      {
+        "status": 200,
+        "source": "upstream-image",
+        "type": "image/jpeg"
+      },
+      {
+        "status": 200,
+        "source": "upstream-image",
+        "type": "image/jpeg"
+      }
+    ],
+    "ok": true
+  },
+  "voice": {
+    "scope": "actual local voice HTTP + worker residency; no microphone/speaker verification",
+    "ok": true,
+    "startup": {
+      "policy": "on-demand-with-idle-release",
+      "idleTimeoutSeconds": 180,
+      "sweepIntervalSeconds": 30,
+      "residentWorkers": 1,
+      "workerRssKiB": 21236,
+      "releasedWorkers": 0,
+      "errors": {},
+      "workers": [
+        {
+          "name": "stt-precise",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-fast",
+          "resident": true,
+          "rssKiB": 21236,
+          "idleSeconds": 0.7
+        },
+        {
+          "name": "stt-pt",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-sherpa",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "turn",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "tts-pt",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "tts-en",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        }
+      ]
+    },
+    "warmOrInitialVoice": {
+      "bytes": 117804,
+      "seconds": 2.67,
+      "sampleRate": 22050,
+      "latencySeconds": 5.01
+    },
+    "beforeIdle": {
+      "policy": "on-demand-with-idle-release",
+      "idleTimeoutSeconds": 180,
+      "sweepIntervalSeconds": 30,
+      "residentWorkers": 3,
+      "workerRssKiB": 265040,
+      "releasedWorkers": 0,
+      "errors": {},
+      "workers": [
+        {
+          "name": "stt-precise",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-fast",
+          "resident": true,
+          "rssKiB": 101844,
+          "idleSeconds": 5.7
+        },
+        {
+          "name": "stt-pt",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-sherpa",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "turn",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "tts-pt",
+          "resident": true,
+          "rssKiB": 6964,
+          "idleSeconds": 0.1
+        },
+        {
+          "name": "tts-en",
+          "resident": true,
+          "rssKiB": 156232,
+          "idleSeconds": 0.1
+        }
+      ]
+    },
+    "afterIdle": {
+      "policy": "on-demand-with-idle-release",
+      "idleTimeoutSeconds": 180,
+      "sweepIntervalSeconds": 30,
+      "residentWorkers": 0,
+      "workerRssKiB": 0,
+      "releasedWorkers": 4,
+      "errors": {},
+      "workers": [
+        {
+          "name": "stt-precise",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-fast",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-pt",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-sherpa",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "turn",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "tts-pt",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "tts-en",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        }
+      ]
+    },
+    "coldVoice": {
+      "bytes": 125484,
+      "seconds": 2.84,
+      "sampleRate": 22050,
+      "latencySeconds": 4.28
+    },
+    "afterWake": {
+      "policy": "on-demand-with-idle-release",
+      "idleTimeoutSeconds": 180,
+      "sweepIntervalSeconds": 30,
+      "residentWorkers": 1,
+      "workerRssKiB": 162456,
+      "releasedWorkers": 4,
+      "errors": {},
+      "workers": [
+        {
+          "name": "stt-precise",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-fast",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-pt",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-sherpa",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "turn",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "tts-pt",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "tts-en",
+          "resident": true,
+          "rssKiB": 162456,
+          "idleSeconds": 0.0
+        }
+      ]
+    },
+    "workerRssReductionKiB": 265040
+  },
+  "served": {
+    "ok": true,
+    "servedModules": {
+      "travis-resource-rest.mjs": true,
+      "travis-road-live.mjs": true,
+      "travis-gev-bridge.mjs": true,
+      "travis-cctv-player.mjs": true
+    },
+    "cinemaModuleInstances": 1,
+    "serviceWorker": "v116-resource-rest",
+    "health": {
+      "ok": true,
+      "service": "jarvis",
+      "cloud": false,
+      "busy": false,
+      "ui": true,
+      "memoryLearning": "continuous-context-v2",
+      "liveStt": false,
+      "voiceProtocol": "ndjson-audio-v1",
+      "pid": 28249,
+      "resources": {
+        "policy": "on-demand-with-idle-release",
+        "idleTimeoutSeconds": 180,
+        "sweepIntervalSeconds": 30,
+        "residentWorkers": 3,
+        "workerRssKiB": 423572,
+        "releasedWorkers": 1,
+        "errors": {},
+        "workers": [
+          {
+            "name": "stt-precise",
+            "resident": false,
+            "rssKiB": 0,
+            "idleSeconds": null
+          },
+          {
+            "name": "stt-fast",
+            "resident": false,
+            "rssKiB": 0,
+            "idleSeconds": null
+          },
+          {
+            "name": "stt-pt",
+            "resident": true,
+            "rssKiB": 140008,
+            "idleSeconds": 182.1
+          },
+          {
+            "name": "stt-sherpa",
+            "resident": false,
+            "rssKiB": 0,
+            "idleSeconds": null
+          },
+          {
+            "name": "turn",
+            "resident": false,
+            "rssKiB": 0,
+            "idleSeconds": null
+          },
+          {
+            "name": "tts-pt",
+            "resident": true,
+            "rssKiB": 129196,
+            "idleSeconds": 185.9
+          },
+          {
+            "name": "tts-en",
+            "resident": true,
+            "rssKiB": 154368,
+            "idleSeconds": 185.9
+          }
+        ]
+      }
+    }
+  },
+  "sqliteQuickCheck": {
+    "memory.sqlite": "ok",
+    "coordination.sqlite": "ok"
+  },
+  "finalHealth": {
+    "ok": true,
+    "service": "jarvis",
+    "cloud": false,
+    "busy": false,
+    "ui": true,
+    "memoryLearning": "continuous-context-v2",
+    "liveStt": false,
+    "voiceProtocol": "ndjson-audio-v1",
+    "pid": 28249,
+    "resources": {
+      "policy": "on-demand-with-idle-release",
+      "idleTimeoutSeconds": 180,
+      "sweepIntervalSeconds": 30,
+      "residentWorkers": 1,
+      "workerRssKiB": 164240,
+      "releasedWorkers": 4,
+      "errors": {},
+      "workers": [
+        {
+          "name": "stt-precise",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-fast",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-pt",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-sherpa",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "turn",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "tts-pt",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "tts-en",
+          "resident": true,
+          "rssKiB": 164240,
+          "idleSeconds": 83.3
+        }
+      ]
+    }
+  }
+}

@@ -30,15 +30,18 @@ test("God's Eye road panel renders measured sources and annotates ONLY verified 
   const hud=new FakeNode('section','travis-hud');
   hud.getAttribute=()=> 'false';
   const toolbar=new FakeNode('nav');
+  const events=new Map();
+  const listen=(type,fn)=>{if(!events.has(type))events.set(type,[]);events.get(type).push(fn);};
+  const emit=(type)=>{for(const fn of events.get(type)||[])fn({type});};
   const document={
     hidden:false,
     getElementById:id=>nodes.get(id)||null,
     createElement:tag=>new FakeNode(tag),
     querySelector:selector=>selector==='#travis-gev-official .travis-gev-toolbar'?toolbar:null,
-    addEventListener(){}
+    addEventListener:listen
   };
   const window={
-    dispatchEvent(){},addEventListener(){},
+    dispatchEvent(event){for(const fn of events.get(event.type)||[])fn(event);},addEventListener:listen,
     TravisProjection:{dismiss(){calls.dismiss++;}},
     TravisCctvAutopilot:{cancel(){calls.cancel++;}},
     TravisGevBridge:{
@@ -102,6 +105,21 @@ test("God's Eye road panel renders measured sources and annotates ONLY verified 
     toolbar.children[0].onclick();
     assert.equal(hud.children[0].hidden,true,'The toolbar toggles only the panel');
     assert.equal(calls.annotations.at(-1),markers);
+    document.hidden=true;emit('visibilitychange');
+    assert.equal(window.TravisRoadLive.status().suspended,true);
+    assert.equal(window.TravisRoadLive.status().open,true);
+    assert.equal(calls.annotations.at(-1),markers);
+    document.hidden=false;emit('visibilitychange');
+    assert.equal(window.TravisRoadLive.status().suspended,false);
+    assert.equal(calls.fetch.length,requests,'fresh data resumes without another request');
+    assert.equal(window.TravisRoadLive.status().panelOpen,false);
+    const goodFetch=globalThis.fetch;
+    globalThis.fetch=async()=>new Response('offline',{status:503});
+    nodes.get('travis-road-refresh').onclick();
+    await new Promise(r=>setTimeout(r,30));
+    assert.equal(calls.annotations.at(-1),markers,'a failed refresh keeps last-known map points');
+    assert.match(nodes.get('travis-road-status').textContent,/LAST KNOWN DATA/);
+    globalThis.fetch=goodFetch;
     const prev=calls.fetch.length;
     const porto=window.TravisRoadLive.routeCommand('Travis mostra trânsito real em Porto');
     assert.equal(porto.handled,true);
@@ -111,6 +129,19 @@ test("God's Eye road panel renders measured sources and annotates ONLY verified 
     assert.equal(window.TravisRoadLive.status().area,'porto');
     assert.equal(calls.annotations.at(-1)[0].latitude,41.15);
     assert.match(nodes.get('travis-road-status').textContent,/14\/10\/2026/);
+    let aborted=false;
+    globalThis.fetch=(_url,{signal})=>new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>{aborted=true;reject(new Error('aborted'));},{once:true}));
+    window.TravisRoadLive.show({area:'london'});
+    assert.equal(window.TravisRoadLive.status().busy,true);
+    document.hidden=true;emit('visibilitychange');
+    await new Promise(r=>setTimeout(r,10));
+    assert.equal(aborted,true,'backgrounding aborts an in-flight source fetch');
+    assert.equal(window.TravisRoadLive.status().busy,false);
+    globalThis.fetch=goodFetch;
+    document.hidden=false;emit('visibilitychange');
+    await new Promise(r=>setTimeout(r,30));
+    assert.equal(window.TravisRoadLive.status().area,'london');
+    assert.equal(calls.annotations.at(-1)[0].latitude,51.5,'interrupted area change resumes even when previous-area data is recent');
     assert.equal(window.TravisRoadLive.routeCommand('Travis mostra trânsito simulado').handled,false);
     assert.equal(window.TravisRoadLive.routeCommand('Road Live in London',{language:'en'}).handled,true);
     await new Promise(r=>setTimeout(r,30));

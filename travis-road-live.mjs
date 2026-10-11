@@ -3,6 +3,7 @@
  * These are independent of God's Eye's simulated moving vehicle dots.
  * Lazy requests while Road Live is active; the list can be hidden independently.
  */
+import {registerRestResource} from './travis-resource-rest.mjs?v=rest-1';
 const HUD=document.getElementById('travis-hud');
 const HOST=['127.0.0.1','localhost'].includes(location.hostname)?location.hostname:'127.0.0.1';
 const API='http://'+HOST+':4187/api/road-live/';
@@ -25,7 +26,7 @@ const within=(x,a,b)=>Number.isFinite(x)&&x>=a&&x<=b;
 const short=(x,n=145)=>String(x??'').slice(0,n);
 let panel=null,contentList=null,notice=null,subtitle=null,source=null,button=null;
 let activeArea='london',busy=false,open=false,pending=null,epoch=0,refreshes=0;
-let refreshTimer=0,lastData=null;
+let refreshTimer=0,lastData=null,suspended=false,lastLoadedAt=0,lastError=null,refreshOnResume=false;
 const btn=(label,id)=>{
   const b=document.createElement('button');b.type='button';b.textContent=label;b.dataset.roadArea=id;return b;
 };
@@ -42,7 +43,7 @@ function showPanel(){
   return true;
 }
 function close(){
-  epoch++;open=false;busy=false;stopTimer();pending?.abort?.();pending=null;
+  epoch++;open=false;suspended=false;busy=false;stopTimer();pending?.abort?.();pending=null;
   hidePanel();
   button?.removeAttribute('aria-busy');button?.setAttribute('aria-pressed','false');
   window.TravisGevBridge?.setExternalAnnotations?.([]);
@@ -153,7 +154,7 @@ function focusArea(region){
 }
 async function loadArea(area,{refresh=false,applyToGlobe=true}={}){
   const region=AREA[area];
-  if(!region||!open)return false;
+  if(!region||!open||suspended||document.hidden)return false;
   const token=++epoch;activeArea=area;busy=true;
   if(!refresh)focusArea(region);
   if(button)button.setAttribute('aria-busy','true');
@@ -176,22 +177,49 @@ async function loadArea(area,{refresh=false,applyToGlobe=true}={}){
     const data=await res.json();
     if(token!==epoch||!open)return false;
     if(data?.schema!=='travis-public-road-observations/v1')throw new Error('Fonte de dados inesperada');
+    lastLoadedAt=Date.now();lastError=null;
     renderItems(data,region,{applyToGlobe});
     if(refresh)showStatus((data.cache==='hit'?'CACHE DO OPERADOR · ':'ACTUALIZADO · ')
       +(data.items?.length||0)+' medições / ocorrências de '+region.source);
     return true;
   }catch(error){
     if(token!==epoch||!open)return false;
-    window.TravisGevBridge?.setExternalAnnotations?.([]);
-    contentList.replaceChildren();lastData=null;
-    showStatus('SOURCE UNAVAILABLE · '+short(error?.message||'Network',100)+' · Try London, Finland or New York.');
+    lastError=short(error?.message||'Network',100);
+    if(!refresh||!lastData){
+      window.TravisGevBridge?.setExternalAnnotations?.([]);
+      contentList.replaceChildren();lastData=null;
+    }
+    showStatus((lastData?'LAST KNOWN DATA · REFRESH FAILED · ':'SOURCE UNAVAILABLE · ')+lastError);
     return false;
   }finally{
     if(token===epoch){busy=false;if(button)button.removeAttribute('aria-busy');}
   }
 }
+function armRefresh(){
+  stopTimer();
+  if(!open||suspended||document.hidden)return;
+  refreshTimer=setInterval(()=>{
+    if(!open||suspended||document.hidden||++refreshes>10){stopTimer();return;}
+    if(!busy)void loadArea(activeArea,{refresh:true,applyToGlobe:false});
+  },180000);
+}
+function suspend(){
+  if(!open||suspended)return false;
+  refreshOnResume=busy||!lastData;
+  suspended=true;epoch++;pending?.abort();pending=null;busy=false;stopTimer();
+  button?.removeAttribute('aria-busy');return true;
+}
+function resume(){
+  if(!open||!suspended||document.hidden)return false;
+  suspended=false;refreshes=0;armRefresh();
+  if(refreshOnResume||!lastData||Date.now()-lastLoadedAt>=180000)
+    void loadArea(activeArea,{refresh:true,applyToGlobe:true});
+  refreshOnResume=false;
+  return true;
+}
 function show({area=null}={}){
-  if(!panel)return false;
+  if(!panel||document.hidden)return false;
+  suspended=false;
   window.TravisProjection?.dismiss?.();
   window.TravisCctvAutopilot?.cancel?.();
   if(HUD?.getAttribute('aria-hidden')==='true')window.TravisVisual?.open?.();
@@ -206,11 +234,7 @@ function show({area=null}={}){
     return true;
   }
   void loadArea(chosen,{applyToGlobe:true});
-  stopTimer();
-  refreshTimer=setInterval(()=>{
-    if(!open||document.hidden||++refreshes>10){stopTimer();return;}
-    if(!busy)void loadArea(activeArea,{refresh:true,applyToGlobe:false});
-  },180000);
+  armRefresh();
   return true;
 }
 function areaFromText(text){
@@ -289,11 +313,10 @@ function mount(){
   window.addEventListener('travis:close',close);
   window.addEventListener('travis:gev',event=>{if(open && event.detail?.open===false)close();});
   window.addEventListener('travis:cctv-player',event=>{if(open && event.detail?.open===true)close();});
-  window.addEventListener('pagehide',close);
-  document.addEventListener('visibilitychange',()=>{if(document.hidden)close();});
+  registerRestResource('road-data',{suspend,resume});
 }
 mount();
 window.TravisRoadLive=Object.freeze({show,close,hidePanel,showPanel,routeCommand,status:()=>({
-  open,panelOpen:open&&!!panel&&!panel.hidden,area:activeArea,busy,count:lastData?.items?.length||0,
+  open,suspended,lastLoadedAt,lastError,panelOpen:open&&!!panel&&!panel.hidden,area:activeArea,busy,count:lastData?.items?.length||0,
   source:lastData?.source||null,state:lastData?.state||'unloaded'
 })});

@@ -20,6 +20,7 @@ import travis_skillbook
 import travis_decision
 import travis_speech_response
 import jarvis_sherpa
+from travis_resources import IdleWorkerPool, idle_timeout
 import travis_library
 import travis_web_tools
 import travis_dialogue
@@ -760,7 +761,9 @@ def connections_snapshot():
   for name,ok in pool.map(probe,[("Laya","http://127.0.0.1:18790/health"),("Modelo local de reserva","http://127.0.0.1:8771/health")]):add(name,ok,"Serviço a responder.","Serviço sem resposta.")
  voice=voice_runtime_snapshot()
  for name,key in [("Transcrição EN","sttEnReady"),("Transcrição PT","sttPtReady"),("Voz portuguesa","ttsPtReady"),("English voice","ttsEnReady")]:
-  add(name,voice[key],"Motor selecionado ativo; entrada/saída física não verificada.","Motor selecionado ainda não iniciou ou terminou.")
+  installed=voice.get(key.replace('Ready','Installed'),False)
+  rows.append({'name':name,'state':'connected' if voice[key] else 'standby' if installed else 'attention',
+               'detail':'Engine active. Microphone/speaker playback not verified.' if voice[key] else 'Installed; wakes on demand. Microphone/speaker playback not verified.' if installed else 'Required voice model is unavailable.'})
  gmail=snapshot["gmail"]
  rows.append({"name":"Gmail","state":"configured" if gmail["authorized"] else "attention","detail":"Autorização guardada; abre a caixa para confirmar a leitura." if gmail["authorized"] else "Falta autorizar a conta Google." if gmail["configured"] else "Falta carregar o JSON OAuth da Google.","action":"gmail"})
  rows.append({"name":"Search Console","state":"configured" if (ROOT/"gsc.token").is_file() else "attention","detail":"Autorização guardada; consulta as posições para validar o acesso." if (ROOT/"gsc.token").is_file() else "Liga os dados do Centro no painel de pesquisa."})
@@ -1375,8 +1378,9 @@ def voice_job_status(task_id):
   return dict(VOICE_JOBS[task_id])
 
 class VoiceWorker:
- def __init__(self,kind,model=None):self.kind=kind;self.model=Path(model) if model else None;self.process=None;self.buffer=b"";self.lock=threading.RLock()
+ def __init__(self,kind,model=None):self.kind=kind;self.model=Path(model) if model else None;self.process=None;self.buffer=b"";self.lock=threading.RLock();self.last_used=time.monotonic()
  def start(self):
+  self.last_used=time.monotonic()
   if self.process is not None and self.process.poll() is None:return
   piper_python=False
   if self.kind=="stt-sherpa":args=[str(ROOT/"conversation-v2-stage/venv/bin/python"),str(Path(__file__).with_name("jarvis_sherpa.py")),"--worker"]
@@ -1423,7 +1427,9 @@ class VoiceWorker:
    self.start();self.process.stdin.write((json.dumps(payload,ensure_ascii=False)+"\n").encode());self.process.stdin.flush()
    return self.line(16 if self.kind=="stt-sherpa" else 23 if self.kind=="stt-fast" else 30 if self.kind=="stt-pt" else 48 if self.kind=="stt" else 4 if self.kind=="turn" else 45)
   except Exception:self.stop();raise
-  finally:self.lock.release()
+  finally:
+   self.last_used=time.monotonic()
+   self.lock.release()
  def stop(self):
   if self.process is not None:
    try:
@@ -1441,6 +1447,10 @@ SHERPA_STT_WORKER=VoiceWorker("stt-sherpa")
 TURN_WORKER=VoiceWorker('turn')
 TTS_WORKER=VoiceWorker("tts",MODELS/"tts/pt_PT-tugao-medium.onnx")
 TTS_EN_WORKER=VoiceWorker("tts",MODELS/"tts/en_GB-northern_english_male-medium.onnx")
+VOICE_RESOURCES=IdleWorkerPool({
+ 'stt-precise':STT_WORKER,'stt-fast':FAST_STT_WORKER,'stt-pt':PT_STT_WORKER,
+ 'stt-sherpa':SHERPA_STT_WORKER,'turn':TURN_WORKER,'tts-pt':TTS_WORKER,'tts-en':TTS_EN_WORKER
+},idle_seconds=idle_timeout(os.environ.get('TRAVIS_VOICE_IDLE_SECONDS',180)))
 def voice_runtime_snapshot():
  def ready(worker):return worker.process is not None and worker.process.poll() is None
  precise=os.environ.get('TRAVIS_STT_MODE','fast').strip().lower()=='precise'
@@ -1448,7 +1458,9 @@ def voice_runtime_snapshot():
  pt=STT_WORKER if precise else PT_STT_WORKER if PT_STT_WORKER.model.is_file() else en
  return {'sttEnReady':ready(en),'sttPtReady':ready(pt),'sttEnEngine':en.kind,'sttPtEngine':pt.kind,
          'ttsEnReady':ready(TTS_EN_WORKER),'ttsPtReady':ready(TTS_WORKER),
-         'microphoneVerified':False,'speakerPlaybackVerified':False}
+         'sttEnInstalled':en.model.is_file(),'sttPtInstalled':pt.model.is_file(),
+         'ttsEnInstalled':TTS_EN_WORKER.model.is_file(),'ttsPtInstalled':TTS_WORKER.model.is_file(),
+         'microphoneVerified':False,'speakerPlaybackVerified':False,'resources':VOICE_RESOURCES.snapshot()}
 DEFAULT_ENGLISH_TERMS=(
  "Mr. Richards","Mr Richards","Mister Richards","Richards","Mister Richard","Mr. Richard","Mr Richard","Richard","Travis","GitHub","Google","YouTube","WhatsApp","Cloudflare Pages",
  "Cloudflare Workers","Cloudflare","JavaScript","WordPress","Gmail","Search Console","Workers AI","OpenAI",
@@ -1832,7 +1844,7 @@ class Handler(BaseHTTPRequestHandler):
     page='<meta charset="utf-8"><title>Travis · Gmail</title><p>Conta autorizada. Volta ao Travis e abre o Gmail para confirmar a leitura.</p><a href="/?travis=1">Voltar ao Travis</a>'
    except Exception:page='<meta charset="utf-8"><p>A autorização não foi concluída. Volta ao Travis e tenta novamente.</p><a href="/?travis=1">Voltar ao Travis</a>'
    return self.send(page.encode(),"text/html; charset=utf-8")
-  if path=="/health":return self.send({"ok":True,"service":"jarvis","cloud":False,"busy":ACTIVE_REQUESTS>0,"ui":CENTRO_UI.is_dir(),"memoryLearning":"continuous-context-v2" if travis_continuity is not None else "continuity-update-pending","liveStt":os.environ.get('TRAVIS_LIVE_STT')=='1',"voiceProtocol":"ndjson-audio-v1","pid":os.getpid()})
+  if path=="/health":return self.send({"ok":True,"service":"jarvis","cloud":False,"busy":ACTIVE_REQUESTS>0,"ui":CENTRO_UI.is_dir(),"memoryLearning":"continuous-context-v2" if travis_continuity is not None else "continuity-update-pending","liveStt":os.environ.get('TRAVIS_LIVE_STT')=='1',"voiceProtocol":"ndjson-audio-v1","pid":os.getpid(),"resources":VOICE_RESOURCES.snapshot()})
   if path=="/voice":return self.send(Path(__file__).with_name("jarvis_voice.html").read_text().replace("__KEY__","").encode(),"text/html; charset=utf-8")
   return self.serve_ui_file(self.path)
  def stream_reply(self,text,context,tool):
@@ -2000,10 +2012,12 @@ def main():
    fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
    def shutdown(*args):raise SystemExit(0)
    signal.signal(signal.SIGTERM,shutdown)
+   VOICE_RESOURCES.start()
    threading.Thread(target=warm_voice,daemon=True).start()
    TRAVIS_BRAIN.start()
    try:ThreadingHTTPServer(("127.0.0.1",8770),Handler).serve_forever()
    finally:
+    VOICE_RESOURCES.stop()
     TRAVIS_BRAIN.stop()
     SHERPA_STT_WORKER.stop();FAST_STT_WORKER.stop();PT_STT_WORKER.stop();STT_WORKER.stop();TTS_WORKER.stop();TTS_EN_WORKER.stop();TURN_WORKER.stop()
  elif a.action=="doctor":print(json.dumps(doctor(),indent=2,ensure_ascii=False))

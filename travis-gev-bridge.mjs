@@ -4,6 +4,7 @@
  * postMessage view contract is used. Existing Travis voice and native globe
  * remain operational as a fallback. No key or server management in the browser.
  */
+import {registerRestResource} from './travis-resource-rest.mjs?v=rest-1';
 import {GEO_LAYERS,GEO_PLACES,interpretGeoRequest} from './travis-gev-intents.mjs?v=world-repair-1';
 
 const hud=document.getElementById('travis-hud');
@@ -14,7 +15,7 @@ const frameUrl=targetOrigin+'/?embed=1&welcome=0';
 const originalToggle=document.getElementById('travis-world-toggle');
 const groups=new Map(GEO_LAYERS.map(x=>[x.key,x]));
 const state={
-  mode:'closed',ready:false,place:'earth',coordinates:null,
+  mode:'closed',suspended:false,ready:false,place:'earth',coordinates:null,
   layers:new Set(['earthquakes']),annotations:[],style:'normal',map:'esri-imagery', 
   changed:0,sent:0,ack:0,inFlight:false,pending:false,
   frame:null,panel:null,drawer:null,status:null,placeName:null,more:null,
@@ -58,7 +59,7 @@ function view(){
   };
 }
 function sendView(){
-  if(!active()||!state.ready||!state.frame?.contentWindow)return;
+  if(!active()||state.suspended||!state.ready||!state.frame?.contentWindow)return;
   if(state.inFlight){state.pending=true;return;}
   state.pending=false;state.inFlight=true;
   state.sent=++state.changed;
@@ -81,7 +82,7 @@ function sendView(){
   }
 }
 function queue(){
-  if(!active())return;
+  if(!active()||state.suspended)return;
   setMessage(state.ready?'PREPARING SCENE':'CONNECTING TO GLOBE');
   clearTimeout(state.queueTimer);
   state.queueTimer=setTimeout(sendView,200);
@@ -102,12 +103,26 @@ function fallback(reason){
   emit();
 }
 function reloadFrame(){
-  if(!active())return;
+  if(!active()||state.suspended)return;
   clearTimeout(state.ackTimer);clearTimeout(state.bootTimer);
   state.ready=false;state.inFlight=false;state.pending=false;
   setMessage('RECONNECTING WORLD ENGINE');
   state.frame.src=frameUrl+'&retry='+Date.now();
   state.bootTimer=setTimeout(()=>{if(active()&&!state.ready)fallback('World engine did not reconnect');},45000);
+}
+function suspend(){
+  if(!active()||state.suspended)return false;
+  state.suspended=true;
+  clearTimeout(state.ackTimer);clearTimeout(state.bootTimer);clearTimeout(state.queueTimer);
+  state.ackTimer=state.bootTimer=state.queueTimer=0;
+  state.ready=false;state.inFlight=false;state.pending=false;
+  state.frame.src='about:blank';
+  setMessage('WORLD ENGINE RESTING · VIEW SAVED');emit();return true;
+}
+function resume(){
+  if(!active()||!state.suspended||document.hidden)return false;
+  state.suspended=false;state.recoveries=0;state.error=null;
+  reloadFrame();emit();return true;
 }
 function leaveProjection(){window.TravisProjection?.dismiss?.();}
 function teardown(closeNative=true){
@@ -125,7 +140,7 @@ function teardown(closeNative=true){
     hud.dataset.world='closed';hud.dataset.worldEngine='none';
     hud.dataset.eyeMode='disabled';
   }
-  state.mode='closed';
+  state.mode='closed';state.suspended=false;
   originalToggle?.setAttribute('aria-pressed','false');
   if(closeNative)original?.close?.();
 }
@@ -135,7 +150,7 @@ function close(){
   emit();
 }
 function open(place='earth'){
-  if(!hud || !state.panel)return false;
+  if(!hud || !state.panel || document.hidden)return false;
   leaveProjection();
   if(!local){
     original?.open?.(place in GEO_PLACES?place:'earth');
@@ -150,6 +165,7 @@ function open(place='earth'){
     state.place=place;state.coordinates=null;
   }
   if(active()){
+    if(state.suspended&&!document.hidden)resume();
     queue();
     return true;
   }
@@ -224,7 +240,7 @@ function setExternalAnnotations(rows=[]){
 }
 function status(){
   if(state.mode==='native')return {...(original?.status?.()||{}),engine:'native-fallback',officialError:state.error};
-  return {open:active(),ready:state.ready,engine:'gods-eye-official',
+  return {open:active(),suspended:state.suspended,ready:state.ready,engine:'gods-eye-official',
     place:state.place,coordinates:state.coordinates,layers:activeIds(),
     keylessCategories:17,available:local,mode:state.mode,error:state.error,
     lastApplied:state.lastOk,inFlight:state.inFlight,pending:state.pending,recoveries:state.recoveries,externalAnnotationCount:state.annotations.length,origin:targetOrigin};
@@ -275,7 +291,7 @@ function routeCommand(raw){
   return {handled:false};
 }
 function onMessage(event){
-  if(!active()||!state.frame||event.source!==state.frame.contentWindow||event.origin!==targetOrigin)return;
+  if(!active()||state.suspended||!state.frame||event.source!==state.frame.contentWindow||event.origin!==targetOrigin)return;
   const message=event.data;
   if(message?.type==='gev:ready'){
     state.ready=true;clearTimeout(state.bootTimer);state.bootTimer=0;
@@ -376,7 +392,7 @@ function mount(){
   }
   window.addEventListener('message',onMessage);
   window.addEventListener('travis:close',()=>{teardown(false);emit();});
-  window.addEventListener('pagehide',()=>{teardown(false);emit();});
+  registerRestResource('world-engine',{suspend,resume,delayMs:30000});
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape'&&active()){
       if(!state.drawer.hidden){
@@ -386,7 +402,7 @@ function mount(){
     }
   },true);
   state.frame.addEventListener('error',()=>{
-    if(active()&&!state.ready)fallback('Frame failed to load');
+    if(active()&&!state.suspended&&!state.ready)fallback('Frame failed to load');
   });
   sync();
 }
