@@ -9,10 +9,15 @@ if [ ! -f "$DEFAULT_SOURCE/jarvis_local.py" ] && [ -f "$HOME/repos/centro-negoci
 SOURCE="${JARVIS_SOURCE:-$DEFAULT_SOURCE}"
 mkdir -p "$STATE"
 stop_router() {
-  /usr/bin/python3 - "$STATE/router.pid" <<'PY'
+  /usr/bin/python3 - "$STATE/router.pid" "$SOURCE/jarvis_local.py" <<'PY'
 import os,signal,sys,time
 from pathlib import Path
 pidfile=Path(sys.argv[1])
+expected_script=Path(sys.argv[2]).resolve()
+def owns_router(raw):
+ argv=[os.fsdecode(x) for x in raw.split(b'\0') if x]
+ return (len(argv)>=3 and Path(argv[0]).name.startswith('python')
+         and Path(argv[1]).resolve()==expected_script and argv[2]=='serve')
 pids=set()
 try:
  pids.add(int(pidfile.read_text()))
@@ -24,12 +29,12 @@ for proc in Path("/proc").iterdir():
   cmd=Path(proc/"cmdline").read_bytes()
  except OSError:
   continue
- if b"jarvis_local.py" in cmd and b"serve" in cmd:
+ if owns_router(cmd):
   pids.add(int(proc.name))
 for pid in sorted(pids):
  try:
   cmd=Path(f"/proc/{pid}/cmdline").read_bytes()
-  if b"jarvis_local.py" in cmd and b"serve" in cmd:os.kill(pid,signal.SIGTERM)
+  if owns_router(cmd):os.kill(pid,signal.SIGTERM)
  except OSError:
   pass
 deadline=time.monotonic()+8
@@ -38,7 +43,7 @@ while time.monotonic()<deadline:
  for pid in pids:
   try:
    cmd=Path(f"/proc/{pid}/cmdline").read_bytes()
-   if b"jarvis_local.py" in cmd and b"serve" in cmd:alive.append(pid)
+   if owns_router(cmd):alive.append(pid)
   except OSError:
    pass
  if not alive:break
@@ -50,6 +55,10 @@ PY
 }
 case "${1:-doctor}" in
  start)
+  # TRAVIS_QUANTUM_SKILLBOOK_STARTUP_V1: install local advisory skill references before Jarvis boots.
+  if [ -f "$STATE/travis-skillbook-install.py" ]; then
+    /usr/bin/python3 "$STATE/travis-skillbook-install.py" apply >/dev/null 2>&1 || true
+  fi
   if /usr/bin/python3 - <<'PYHEALTH'
 import json,sys,urllib.request
 try:

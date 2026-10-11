@@ -33,6 +33,47 @@ def _feature(id, label_pt, label_en, state, evidence, caution=""):
     return {"id": id, "title_pt": label_pt, "title_en": label_en,
             "state": state, "evidence": evidence, "caution": caution}
 
+def fresh_state(path, timestamp, max_age=90, clock=time.time):
+    """A stale watcher receipt cannot establish a current connection."""
+    try:
+        path = Path(path)
+        if path.stat().st_size > 65536:
+            return {}
+        data = json.loads(path.read_text(encoding="utf-8"))
+        age = float(clock()) - float(data[timestamp])
+        return data if 0 <= age <= max_age else {}
+    except (OSError, ValueError, TypeError, KeyError):
+        return {}
+
+def integration_status(home, check=_check, clock=time.time):
+    """Bounded local evidence; never open a camera or request an external feed."""
+    home = Path(home)
+    station = fresh_state(home/".centro-station/status.json", "timestamp", clock=clock)
+    world = fresh_state(home/".centro-extensions/travis-world-status.json", "checkedEpoch", clock=clock)
+    globe = fresh_state(home/".local/state/travis-gev/watch-status.json", "lastCheckEpoch", clock=clock)
+    cctv = world.get("cctv") if isinstance(world.get("cctv"), dict) else {}
+    claw = station.get("openclaw") if isinstance(station.get("openclaw"), dict) else {}
+    rows = [
+        _feature("supervisor", "Recuperação automática", "Automatic recovery",
+                 "observed_online" if station.get("ok") is True else "unknown",
+                 "Estado recente do supervisor" if station else "Sem estado recente do supervisor"),
+        _feature("gods_eye", "God's Eye", "God's Eye",
+                 "observed_online" if globe.get("enabled") is True and globe.get("healthy") is True else "unknown",
+                 "Resposta local observada pelo supervisor" if globe else "Sem observação recente",
+                 "Não comprova a renderização no navegador nem a atualização de cada fonte"),
+        _feature("public_cameras", "Serviço de câmaras públicas", "Public camera service",
+                 "observed_online" if cctv.get("healthy") is True else "unknown",
+                 "Estado recente do gateway CCTV" if world else "Sem observação recente",
+                 "Cada imagem ou vídeo requer confirmação própria de disponibilidade e data"),
+        _feature("roads", "Serviço de trânsito", "Road observation service",
+                 "service_online" if check("http://127.0.0.1:4187/api/road-live/status") else "unknown",
+                 "Verificação da rota local de trânsito",
+                 "Não comprova medições atuais; não representa posições reais de todos os carros"),
+    ]
+    return {"observedAt": float(clock()), "features": rows,
+            "openclawDisabled": claw.get("state") == "disabled-by-operator",
+            "sourceUpdatesHeld": (home/".centro-station/maintenance").is_file()}
+
 def build(*, registry, brain, store, ui_root, model_root, repo_root, projects,
           gmail=None, quantum=None, planner_enabled=False, check=_check, clock=time.time):
     now = float(clock())
@@ -80,11 +121,14 @@ def build(*, registry, brain, store, ui_root, model_root, repo_root, projects,
         _feature("quantum", "Orquestração Quantum", "Quantum orchestration", "verified" if quantum.get("ok") else "unavailable", "Runtime verificado" if quantum.get("ok") else "Runtime não confirmado", "O estado de desenvolvimento e o estado canónico podem diferir"),
         _feature("gmail", "Leitura do Gmail", "Gmail read access", "authorization_saved" if gmail.get("authorized") else "requires_configuration" if not gmail.get("configured") else "permission_required", "Token OAuth guardado" if gmail.get("authorized") else "Configuração de autorização pendente", "Token guardado não comprova acesso atual à caixa"),
     ]
+    integrations = integration_status(root.parent, check=check, clock=clock)
+    features.extend(integrations["features"])
     return {
-        "ok": True, "kind": "operational-awareness", "version": 1,
+        "ok": True, "kind": "operational-awareness", "version": 2,
         "observedAt": now, "registeredTools": len(ids),
         "toolIds": sorted(x for x in ids if isinstance(x,str)),
         "features": features,
+        "integrations": integrations,
         "memory": {"neurons": stored.get("neurons",0), "synapses":stored.get("synapses",0),
                    "episodes":counts.get("episodes",0),"cycles":counts.get("cycles",0),
                    "feedbackEvents":learning.get("feedbackEvents",0)},
@@ -111,30 +155,32 @@ def reply(data, language="pt"):
     m = data.get("memory", {})
     n, links, cycles = m.get("neurons",0),m.get("synapses",0),m.get("cycles",0)
     vision_ready = features.get("vision",{}).get("state") != "unavailable"
+    linked = [features[name]["title_pt" if pt else "title_en"] for name in
+              ("quantum", "gods_eye", "public_cameras", "roads")
+              if features.get(name,{}).get("state") in {"verified", "observed_online", "service_online"}]
     if pt:
         parts = [
             f"Tenho {n} memórias, {links} ligações e {cycles} ciclos de reflexão registados.",
             "Uso os resultados das tarefas e o teu feedback para melhorar as próximas decisões."
         ]
         if vision_ready:parts.append("Com a câmara ligada, acompanho rostos, gestos e objetos reconhecidos.")
+        if linked:parts.append("Serviços observados: "+", ".join(linked)+". Cada fonte requer confirmação própria.")
         return " ".join(parts)
     parts = [
         f"I have {n} stored memories, {links} links and {cycles} recorded reflection cycles.",
         "I learn from recorded task outcomes and feedback to improve future decisions."
     ]
     if vision_ready:parts.append("With the camera on, I can track faces, gestures and recognized objects.")
+    if linked:parts.append("Observed services: "+", ".join(linked)+". Each feed still needs its own verification.")
     return " ".join(parts)
 
 def model_facts(data):
     states = {f["id"]:f["state"] for f in data.get("features",[])}
     m=data.get("memory",{})
-    return (
-        "LIVE TRAVIS RUNTIME: "
-        f"{m.get('neurons',0)} persistent memories, {m.get('synapses',0)} links, "
-        f"{m.get('cycles',0)} reflection cycles, {m.get('feedbackEvents',0)} feedback events. "
-        f"Local model: {states.get('local_model','unknown')}. "
-        f"Browser vision: {states.get('vision','unknown')}. "
-        "Outcome-based learning retains useful memories, corrections and improved plans. "
-        "Live camera observations are available when the browser shares current face, gesture and object labels. "
-        "Speak directly, using actual observations. Never invent completed actions."
-    )
+    links = "; ".join(name+"="+states.get(name,"unknown") for name in
+                      ("quantum", "gods_eye", "public_cameras", "roads", "voice"))
+    return (f"Observed Travis: memory={m.get('neurons',0)}, links={m.get('synapses',0)}, "
+            f"cycles={m.get('cycles',0)}. "+links+". "
+            "Service online does not prove a live feed or completed action. "
+            "Camera/microphone activity requires current browser observations. "
+            "No consciousness or model-weight learning is established.")
