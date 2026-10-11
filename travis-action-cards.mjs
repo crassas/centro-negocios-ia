@@ -21,6 +21,13 @@ let narration=null,storyEpoch=0,wideScene=null,selectedVisual=null;
 const caption=document.createElement('div');caption.className='travis-visual-caption';caption.hidden=true;hud?.append(caption);
 const sources=createVisualSources(hud,{onInteract:touchProjection});
 function cancelNarration(){narration=null;storyEpoch++;window.dispatchEvent(new CustomEvent('travis:visual-timeline',{detail:null}));}
+function dismissProjection(){
+  sources.close();cancelNarration();caption.hidden=true;clearTimeout(returnTimer);returnTimer=0;
+  renderVersion++;closeYouTube();cancelAnimationFrame(frame);frame=0;
+  projection.reset();wasVisible=false;current=null;wideScene=null;selectedVisual=null;pinned=false;
+  updatePin();paint();
+  window.dispatchEvent(new CustomEvent('travis:illustration',{detail:{scene:null}}));
+}
 function awaitReference(){cancelNarration();clearTimeout(returnTimer);returnTimer=0;renderVersion++;}
 function visualAsset(scene,title){
   if(['text','reference'].includes(scene))return null;
@@ -247,6 +254,7 @@ if(deck){
     closeYouTube();cancelAnimationFrame(frame);frame=0;projection.reset();wasVisible=false;current=null;wideScene=null;selectedVisual=null;pinned=false;paint();
   });
   window.TravisProjection=Object.freeze({
+    dismiss:dismissProjection,
     media:youtubeState,
     presentDiscoveryChapter(chapter,index,total){
       if(current?.discovery?.id===chapter.id&&current.explaining&&!pinned)return;

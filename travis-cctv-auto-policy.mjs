@@ -4,7 +4,7 @@
  */
 export const normalizeCctvText=value=>String(value??'').normalize('NFD')
   .replace(/[\u0300-\u036f]/g,'').toLowerCase()
-  .replace(/[’‘']/g,'').replace(/[,!?;:.]+/g,' ').replace(/\s+/g,' ').trim();
+  .replace(/[’‘']/g,'').replace(/["“”]/g,' ').replace(/[,!?;:.]+/g,' ').replace(/\s+/g,' ').trim();
 
 export const AREA_REFERENCES=Object.freeze([
   {name:'Londres',match:/\b(?:londres|london)\b/,lat:51.5072,lon:-.1276,city:'london',pack:'tfl',radiusKm:100},
@@ -12,7 +12,8 @@ export const AREA_REFERENCES=Object.freeze([
   {name:'Califórnia',match:/\b(?:california|california)\b/,pack:'caltrans'},
   {name:'Delaware',match:/\bdelaware\b/,pack:'deldot'},
   {name:'Finlândia',match:/\b(?:finlandia|finland)\b/,pack:'fintraffic'},
-  {name:'Noruega',match:/\b(?:noruega|norway|oslo)\b/,pack:'vegvesen'},
+  {name:'Oslo',match:/\boslo\b/,lat:59.9139,lon:10.7522,city:'oslo',pack:'vegvesen',radiusKm:75},
+  {name:'Noruega',match:/\b(?:noruega|norway)\b/,pack:'vegvesen'},
   {name:'Estónia',match:/\b(?:estonia|estonia|tallinn)\b/,pack:'tallinn'},
   {name:'Calgary',match:/\bcalgary\b/,city:'calgary',lat:51.0447,lon:-114.0719,pack:'calgary',radiusKm:90},
   {name:'Canadá',match:/\b(?:canada|british columbia|columbia britanica)\b/,pack:'drivebc'},
@@ -28,8 +29,8 @@ export const AREA_REFERENCES=Object.freeze([
 ]);
 const CAMERA=/\b(?:camera|cameras|camara|camaras|cctv|webcam|webcams|public feeds?|live feeds?|videos? publicos?|public videos?|live videos?|transmissao publica|cam)\b/;
 const DEVICE=/\b(?:camara (?:do |de )?(?:telemovel|telefone|phone)|camera (?:of |on )?(?:my |the )?phone|selfie|camara frontal|front camera|rear camera|camera traseira)\b/;
-const START=/\b(?:mostra|mostrar|abre|abrir|liga|ligar|seleciona|selecionar|escolhe|escolher|procura|procurar|encontra|encontrar|quero ver|podes mostrar|show|open|watch|find|choose|pick|select|connect|activate|look for|take me|go to|vejo|ver|auto|automatic)\b/;
-const STOP=/\b(?:para|parar|termina|terminar|stop|stop touring|stop tour|desliga|desligar|fecha|fechar|close|cancel|cancela)\b/;
+const START=/\b(?:mostra|mostrar|abre|abrir|liga|ligar|seleciona|selecionar|escolhe|escolher|procura|procurar|encontra|encontrar|quero ver|podes mostrar|show|open|watch|find|choose|pick|select|connect|activate|enable|bring|give|check|see|look for|take me|go to|vejo|ver|auto|automatic)\b/;
+const STOP=/\b(?:para|parar|termina|terminar|stop|stop touring|stop tour|desliga|desligar|fecha|fechar|close|disable|deactivate|cancel|cancela)\b/;
 const NEXT=/\b(?:outra|outro|proxima|proximo|seguinte|next|another|different)\b/;
 const TOUR=/\b(?:explora|explorar|passeia|passear|tour|roda|rotacao|ciclo|circular|automatica|automatico|cycle)\b/;
 const LIVE=/\b(?:ao vivo|em direto|direto|directo|live|stream|streaming|video)\b/;
@@ -45,21 +46,26 @@ function remainingArea(s){
   return area.slice(0,42);
 }
 
-export function cameraIntent(raw){
-  const s=normalizeCctvText(raw);
-  if(!s||DEVICE.test(s)||!CAMERA.test(s)||QUESTION.test(s))return null;
-  const lang=/\b(?:mostra|abre|liga|seleciona|escolhe|procura|encontra|quero|camara|camaras|publicas|qualquer|proxima|outra|podes)\b/.test(s)?'pt':ENGLISH.test(s)?'en':'pt';
+export function cameraIntent(raw,{cameraActive=false}={}){
+  const s=normalizeCctvText(raw).replace(/^travis\s+/,'');
+  if(!s||DEVICE.test(s))return null;
+  if(/\b(?:where|which cities|which places|what cities|what places|onde|que cidades)\b/.test(s)&&CAMERA.test(s))return {action:'coverage',lang:/\b(?:onde|cidades)\b/.test(s)?'pt':'en'};
+  const streetView=/\b(?:see|show(?: me)?|check(?: out)?|look at|ver|mostra) (?:what(?:s| is) (?:going on|happening)|the streets?|street view|o que se passa) (?:in|around|near|em|no|na)\b/.test(s);
+  const follow=cameraActive&&/^(?:(?:show|bring|give|try)(?: me)? )?(?:another one|a different one|somewhere else|one more|outra|mais uma)(?: please)?$/.test(s);
+  if(follow)return {action:'next',lang:/outra|mais/.test(s)?'pt':'en',global:true,random:true,live:false,scope:null};
+  if((!CAMERA.test(s)&&!streetView)||QUESTION.test(s))return null;
+  const lang=/\b(?:mostra|abre|liga|seleciona|escolhe|procura|encontra|quero|camara|camaras|publicas|qualquer|proxima|outra|podes)\b/.test(s)?'pt':(ENGLISH.test(s)||streetView)?'en':'pt';
   const location=AREA_REFERENCES.find(x=>x.match.test(s))||null;
   const unknown=NOAREA.test(s)?null:location?null:remainingArea(s);
   const scope=location||unknown?{...location||{},...(unknown?{name:unknown,city:unknown}:{}),explicit:true}:null;
-  const global=NOAREA.test(s)&&!scope;
+  const global=!scope&&!/\b(?:here|nearby|this area|this city|aqui|nesta zona|nesta cidade)\b/.test(s);
   const random=/\b(?:random|aleatoria|aleatorio)\b/.test(s);
   const live=LIVE.test(s);
   if(STOP.test(s)&&TOUR.test(s))return {action:'stopTour',lang};
   if(NEXT.test(s)&&(!scope||START.test(s)||s.includes('camara')))return {action:'next',lang,live,scope,global,random};
   if(TOUR.test(s)&&!STOP.test(s))return {action:'tour',lang,live,scope};
   if(STOP.test(s)&&!START.test(s))return {action:'close',lang};
-  if(START.test(s)||live||global)return {action:'select',lang,live,scope,global,random};
+  if(START.test(s)||streetView||live||NOAREA.test(s))return {action:'select',lang,live,scope,global,random};
   return null;
 }
 

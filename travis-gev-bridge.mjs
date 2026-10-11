@@ -4,7 +4,7 @@
  * postMessage view contract is used. Existing Travis voice and native globe
  * remain operational as a fallback. No key or server management in the browser.
  */
-import {GEO_LAYERS,GEO_PLACES,interpretGeoRequest} from './travis-gev-intents.mjs?v=gev-17';
+import {GEO_LAYERS,GEO_PLACES,interpretGeoRequest} from './travis-gev-intents.mjs?v=world-repair-1';
 
 const hud=document.getElementById('travis-hud');
 const original=window.TravisWorld;
@@ -18,7 +18,7 @@ const state={
   layers:new Set(['earthquakes']),annotations:[],style:'normal',map:'esri-imagery', 
   changed:0,sent:0,ack:0,inFlight:false,pending:false,
   frame:null,panel:null,drawer:null,status:null,placeName:null,more:null,
-  bootTimer:0,queueTimer:0,openedAt:0,error:null,lastOk:null
+  bootTimer:0,queueTimer:0,ackTimer:0,recoveries:0,openedAt:0,error:null,lastOk:null
 };
 const t=(text)=>document.createTextNode(text);
 const labelOf=()=>state.coordinates?.label||GEO_PLACES[state.place]?.label||'Planet Earth';
@@ -64,6 +64,14 @@ function sendView(){
   state.sent=++state.changed;
   try {
     state.frame.contentWindow.postMessage({type:'gev:view',id:state.sent,view:view()},targetOrigin);
+    clearTimeout(state.ackTimer);
+    const sent=state.sent;
+    state.ackTimer=setTimeout(()=>{
+      if(!active()||!state.inFlight||state.sent!==sent)return;
+      state.inFlight=false;state.lastOk=false;state.error='World view acknowledgement timed out';
+      if(state.recoveries++<1)reloadFrame();
+      else{setMessage('WORLD UPDATE TIMED OUT · TAP RETRY');emit();}
+    },30000);
     setMessage('UPDATING WORLD VIEW');
     sync();
   } catch(err) {
@@ -93,7 +101,17 @@ function fallback(reason){
   }
   emit();
 }
+function reloadFrame(){
+  if(!active())return;
+  clearTimeout(state.ackTimer);clearTimeout(state.bootTimer);
+  state.ready=false;state.inFlight=false;state.pending=false;
+  setMessage('RECONNECTING WORLD ENGINE');
+  state.frame.src=frameUrl+'&retry='+Date.now();
+  state.bootTimer=setTimeout(()=>{if(active()&&!state.ready)fallback('World engine did not reconnect');},45000);
+}
+function leaveProjection(){window.TravisProjection?.dismiss?.();}
 function teardown(closeNative=true){
+  clearTimeout(state.ackTimer);state.ackTimer=0;
   clearTimeout(state.bootTimer);state.bootTimer=0;
   clearTimeout(state.queueTimer);state.queueTimer=0;
   if(state.frame){
@@ -112,11 +130,13 @@ function teardown(closeNative=true){
   if(closeNative)original?.close?.();
 }
 function close(){
+  leaveProjection();window.TravisCctvAutopilot?.cancel?.();window.TravisRoadLive?.close?.();window.TravisCctvPlayer?.close?.();
   teardown(true);
   emit();
 }
 function open(place='earth'){
   if(!hud || !state.panel)return false;
+  leaveProjection();
   if(!local){
     original?.open?.(place in GEO_PLACES?place:'earth');
     state.mode='native';
@@ -134,7 +154,7 @@ function open(place='earth'){
     return true;
   }
   state.mode='official';state.ready=false;state.error=null;state.lastOk=null;
-  state.openedAt=Date.now();
+  state.openedAt=Date.now();state.recoveries=0;
   hud.dataset.world='open';
   hud.dataset.worldEngine='official';
   hud.dataset.eyeMode='enabled';
@@ -147,20 +167,23 @@ function open(place='earth'){
   // Load on demand only; no Cesium WebGL while Travis is being used normally.
   state.frame.src=frameUrl;
   state.bootTimer=setTimeout(()=>{
-    if(active()&&!state.ready)fallback('No GEV ready message within 28 seconds');
-  },28000);
+    if(active()&&!state.ready)fallback('No GEV ready message within 45 seconds');
+  },45000);
   return true;
 }
 function navigate(place,coordinates=null){
+  leaveProjection();
   if(place in GEO_PLACES){state.place=place;state.coordinates=null;}
   if(coordinates && within(coordinates.lat,-90,90) && within(coordinates.lon,-180,180)){
-    state.place='earth';state.coordinates={...coordinates,alt:45000};
+    state.place='earth';state.coordinates={...coordinates,alt:Math.max(500,Math.min(18000000,Number(coordinates.alt)||45000))};
   }
   if(!active())open(state.place);
   else queue();
 }
 function toggleLayer(key,on){
   const g=groups.get(key);if(!g)return false;
+  leaveProjection();
+  if(key!=='cctv'){window.TravisCctvAutopilot?.cancel?.();window.TravisRoadLive?.close?.();window.TravisCctvPlayer?.close?.();}
   if(on===false)state.layers.delete(key);
   else if(on===true)state.layers.add(key);
   else if(state.layers.has(key))state.layers.delete(key);
@@ -204,7 +227,7 @@ function status(){
   return {open:active(),ready:state.ready,engine:'gods-eye-official',
     place:state.place,coordinates:state.coordinates,layers:activeIds(),
     keylessCategories:17,available:local,mode:state.mode,error:state.error,
-    lastApplied:state.lastOk,externalAnnotationCount:state.annotations.length,origin:targetOrigin};
+    lastApplied:state.lastOk,inFlight:state.inFlight,pending:state.pending,recoveries:state.recoveries,externalAnnotationCount:state.annotations.length,origin:targetOrigin};
 }
 function routeCommand(raw){
   const intent=interpretGeoRequest(raw,{active:active()});
@@ -217,8 +240,9 @@ function routeCommand(raw){
     close();return {handled:true,language:intent.language,reply:en?'Returning to Travis.':'A regressar ao Travis.'};
   }
   if(intent.type==='open'){
-    open();return {handled:true,language:intent.language,reply:en?
-      "Opening God's Eye View inside Travis.":'A abrir o globo oficial dentro do Travis.'};
+    open();return {handled:true,language:intent.language,reply:intent.cue==='take-me-there'
+      ? 'Of course, sir.' : en
+      ? "Opening God's Eye View inside Travis." : 'A abrir o globo oficial dentro do Travis.'};
   }
   if(intent.type==='help'){
     return {handled:true,language:intent.language,reply:en?
@@ -258,6 +282,7 @@ function onMessage(event){
     setMessage('WORLD ENGINE READY · LOADING DATA');
     state.inFlight=false;state.pending=false;sendView();
   } else if(message?.type==='gev:view-applied' && message.id===state.sent){
+    clearTimeout(state.ackTimer);state.ackTimer=0;
     state.inFlight=false;state.ack=message.id;
     state.lastOk=message.ok===true;
     state.error=message.ok===false?String(message.error||'Some requested layers unavailable'):null;
@@ -283,6 +308,7 @@ function mount(){
     '<button type="button" data-gev-layer="flights">FLIGHTS</button>',
     '<button type="button" data-gev-layer="satellites">SATELLITES</button>',
     '<button type="button" data-gev-layer="earthquakes">QUAKES</button>',
+    '<button type="button" id="travis-gev-retry" title="Reconnect the world view">RETRY</button>',
     '<button type="button" id="travis-gev-more" aria-expanded="false" aria-controls="travis-gev-drawer">LAYERS 17</button>',
     '</nav>',
     '<div class="travis-gev-drawer" id="travis-gev-drawer" hidden>',
@@ -324,6 +350,7 @@ function mount(){
     if(b.dataset.gevLayer){toggleLayer(b.dataset.gevLayer);return;}
     if(b.dataset.gevPlace){navigate(b.dataset.gevPlace);return;}
     if(b.id==='travis-gev-return'){close();return;}
+    if(b.id==='travis-gev-retry'){state.recoveries=0;reloadFrame();return;}
     if(b.id==='travis-gev-more'){
       state.drawer.hidden=!state.drawer.hidden;
       state.more.setAttribute('aria-expanded',String(!state.drawer.hidden));

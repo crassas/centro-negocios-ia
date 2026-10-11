@@ -31,7 +31,7 @@ function status(){
   return {state,error,count:cameras.length,updated:lastLoaded,packs:{...packs},
     service:BASE,canSelect:cameras.length>0};
 }
-async function load({force=false}={}){
+async function load({force=false,timeoutMs=45000}={}){
   if(!force && state==='ready' && cameras.length && Date.now()-lastLoaded<TTL){
     publish();return status();
   }
@@ -40,7 +40,7 @@ async function load({force=false}={}){
   state='loading';error='';publish();
   inflight=(async()=>{
     const ctrl=new AbortController();
-    const timer=setTimeout(()=>ctrl.abort(),45000);
+    const timer=setTimeout(()=>ctrl.abort(),Math.max(5000,Math.min(45000,timeoutMs)));
     try{
       const response=await fetch(BASE+'/api/cctv/sources',{
         credentials:'omit',cache:'no-store',signal:ctrl.signal
@@ -109,12 +109,14 @@ window.TravisCctv=Object.freeze({
   frameUrl,streamInfoUrl,mediaUrl,
   base:BASE
 });
-window.addEventListener('travis:world',e=>{
-  worldOpen=Boolean(e.detail?.open);
+function observeWorld(e){
+  const wasOpen=worldOpen;worldOpen=Boolean(e.detail?.open);
   if(!worldOpen){clearRetry();return;}
   // A previous outage must not make the globe permanently unable to retry.
-  if(!inflight){retries=0;void load();}
-});
+  if(!inflight&&(!wasOpen||state==='error'||state==='stale')){retries=0;void load();}
+}
+window.addEventListener('travis:world',observeWorld);
+window.addEventListener('travis:gev',observeWorld);
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){clearRetry();return;}
   if(worldOpen&&!inflight){retries=0;void load();}

@@ -4,8 +4,10 @@
  * Never accesses private feeds, scans networks or runs unattended monitoring.
  */
 import {cameraIntent,rankPublicCameras,AREA_REFERENCES,normalizeCctvText}
-  from './travis-cctv-auto-policy.mjs?v=coordination-1';
+  from './travis-cctv-auto-policy.mjs?v=world-repair-1';
 let selected=null, candidates=[], operation=0, busy=false, lastResult=null;
+const failedUntil=new Map();
+const cancel=()=>{operation++;busy=false;};
 const tr=(l,pt,en)=>l==='en'?en:pt;
 const status=()=>({busy,selected:selected?.id||null,choices:candidates.length,lastResult});
 function contextScope(){
@@ -24,7 +26,7 @@ const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function verified(camera,token){
   const player=window.TravisCctvPlayer;
   const at=Date.now();
-  const result=await player.openCamera(camera.id);
+  const result=await player.openCamera(camera.id,{timeoutMs:8000});
   if(token!==operation||!result?.ok)return null;
   if(result.type==='snapshot'){
     const s=player.status();
@@ -58,11 +60,16 @@ async function select(intent){
     reply:tr(lang,'As fontes públicas não estão ligadas.','Public sources are not connected.')};
   busy=true;
   try{
-    await net.load();
+    let catalogue=await net.load();
+    if(!net.locations().length&&token===operation)catalogue=await net.load({force:true,timeoutMs:10000});
+    if(!net.locations().length)return {handled:true,language:lang,verified:false,reason:'catalogue-unavailable',
+      reply:tr(lang,'O catálogo de câmaras não respondeu. Volta a tentar daqui a pouco.',
+        'The camera catalogue is unavailable right now. Please try again shortly.')};
     if(token!==operation)return {handled:true,language:lang,
       reply:tr(lang,'Pedido de câmara interrompido.','Camera request interrupted.')};
     const scope=intent.global?null:intent.scope||contextScope();
-    const exclude=new Set(intent.action==='next'&&selected?[selected.id]:[]);
+    const exclude=new Set([...failedUntil].filter(([,until])=>until>Date.now()).map(([id])=>id));
+    if(intent.action==='next'&&selected)exclude.add(selected.id);
     const ranked=rankPublicCameras(net.locations().filter(c=>!intent.live||c.feedType==='hls'),{
       scope,preferVideo:!!intent.live,exclude,limit:25,random:intent.random?Math.random:null});
     // An explicit video request MUST NOT fall back silently to a JPEG.
@@ -80,18 +87,19 @@ async function select(intent){
     if(intent.action!=='next'||!candidates.length||intent.scope)candidates=pool;
     const choices=(intent.action==='next'&&candidates.length
       ? [...candidates.filter(c=>c.id!==selected?.id),...pool]
-      : pool).filter((c,i,a)=>a.findIndex(x=>x.id===c.id)===i).slice(0,intent.live?2:3);
+      : pool).filter((c,i,a)=>a.findIndex(x=>x.id===c.id)===i).slice(0,intent.live?2:6);
     if(!choices.length)return {handled:true,language:lang,verified:false,
       reply:tr(lang,
         intent.live?'Não encontrei fontes HLS públicas de vídeo nesta zona. As fotografias não são transmissões.':
           'Não encontrei câmaras públicas registadas nesta zona.',
         intent.live?'No registered public HLS video sources were found in this area. Still images are not video.':
-          'No registered public cameras were found in this area.')};
+          'No registered public cameras were found in this area. Ask where cameras are available, or say show any public camera.')};
     for(const camera of choices){
       if(token!==operation)return {handled:true,language:lang,
         reply:tr(lang,'Pedido interrompido.','Request interrupted.')};
       const kind=await verified(camera,token);
-      if(!kind || (intent.live && kind!=='video'))continue;
+      if(!kind || (intent.live && kind!=='video')){failedUntil.set(camera.id,Date.now()+60000);continue;}
+      failedUntil.delete(camera.id);
       selected=camera;
       lastResult={verified:true,kind,sourceId:camera.id,source:camera.name,city:camera.city,at:Date.now()};
       focus(camera);
@@ -127,9 +135,21 @@ async function routeCommand(raw,options={}){
     const kind=view.mode==='video'&&view.playingVerified?'video':view.mode==='image'&&view.updatedFrame?'a still image':'an unverified camera source';
     return {handled:true,language:'en',reply:'You are viewing '+kind+' from '+(view.sourceName||view.sourceId)+(view.city?', '+view.city:'')+'. This identifies the source; I have not analysed the objects in the image.'};
   }
-  const intent=cameraIntent(raw);
+  const intent=cameraIntent(raw,{cameraActive:!!view?.open||busy});
   if(!intent)return {handled:false};
   if(['en','pt'].includes(options.language))intent.lang=options.language;
+  if(intent.action==='coverage'){
+    const net=window.TravisCctv;
+    if(!net?.load)return {handled:true,language:intent.lang,reply:'The public camera catalogue is not connected.'};
+    await net.load();
+    const locations=net.locations(),packs=new Set(locations.map(c=>c.pack));
+    const names={tfl:'London',austin:'Austin',caltrans:'California',fintraffic:'Finland',vegvesen:'Norway',drivebc:'British Columbia',txdot:'Texas',tallinn:'Tallinn',tarktee:'Estonia',nsw:'New South Wales',calgary:'Calgary',deldot:'Delaware',warendorf:'Warendorf'};
+    const places=[...packs].map(pack=>names[pack]||pack).slice(0,12);
+    return {handled:true,language:intent.lang,reply:locations.length
+      ?tr(intent.lang,'O catálogo tem '+locations.length+' câmaras em '+places.join(', ')+'. A disponibilidade de cada imagem ainda precisa de confirmação.',
+        'The catalogue lists '+locations.length+' cameras across '+places.join(', ')+'. Say see what is going on in a place, or show any public camera. Each image still needs verification.')
+      :tr(intent.lang,'O catálogo de câmaras não respondeu. Tenta novamente.','The camera catalogue is unavailable. Please try again.')};
+  }
   if(intent.action==='close'){
     operation++;busy=false;window.TravisCctvPlayer?.close?.();
     return {handled:true,language:intent.lang,
@@ -194,5 +214,5 @@ function setup(){
   bar.appendChild(videoButton);
 }
 setup();
-window.TravisCctvAutopilot=Object.freeze({routeCommand,select,status});
+window.TravisCctvAutopilot=Object.freeze({routeCommand,select,status,cancel});
 window.addEventListener('travis:close',()=>{operation++;busy=false;});

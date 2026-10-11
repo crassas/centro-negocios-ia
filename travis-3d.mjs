@@ -5,7 +5,7 @@ import { readVoiceReply } from './travis-voice-stream.mjs?v=continuity-1';
 import {createMotionAudio} from './travis-motion-audio.mjs?v=motion-1';
 import {playDiscovery} from './travis-discovery.mjs?v=figures-1';
 import { createConceptProjection } from './travis-concept-projection.mjs?v=figures-1';
-import './travis-action-cards.mjs?v=figures-1';
+import './travis-action-cards.mjs?v=world-repair-1';
 import { createVoiceInput } from './travis-voice-input.mjs?v=continuity-1';
 import { automaticTravisForm, nextFormBlend, MANUAL_PREVIEW_MS, visibleProjectionAmount } from './travis-form-director.mjs?v=motion-1';
 import { INTERFACE_COPY, interfaceLanguage, applyInterfaceLanguage, languageFromInterfaceCommand } from './travis-interface-language.mjs?v=1';
@@ -1060,6 +1060,26 @@ if (!hud || !launcher || !canvas) {
       // The general language model remains available for every other request.
       // Concrete camera controls never pass through the LLM.
       // Public worldwide CCTV operates separately from the device camera.
+      // Fictional London traffic exercise, sourced public images and road reports.
+      // Deterministic voice command, before ordinary CCTV and LLM routing.
+      const londonMission=window.TravisLondonMission?.routeCommand?.(text);
+      if(londonMission?.handled){
+        if(!opened||session!==voiceSession||controller.signal.aborted)return;
+        const spoken=String(londonMission.reply||'London public traffic exercise ready.');
+        observeLocal(interactionId,text,spoken);
+        const locale=londonMission.language||'en';
+        replyLanguage=locale;
+        setState('thinking',spoken);
+        const speech=await localFetch('/speak',{
+          body:{text:spoken,language:locale},signal:controller.signal
+        });
+        if(speech.ok){
+          await playVoiceArrayBuffer(await speech.arrayBuffer(),session,spoken);
+        }else{
+          voiceBusy=false;setState('ready',spoken);scheduleListening(session,180);
+        }
+        return;
+      }
       const autoPublicCamera=await window.TravisCctvAutopilot?.routeCommand?.(text,{requestId:interactionId,language:preferredLanguage==='pt'?'pt':'en'});
       if(autoPublicCamera?.handled){
         if(!opened||session!==voiceSession||controller.signal.aborted)return;
@@ -1115,7 +1135,7 @@ if (!hud || !launcher || !canvas) {
       }
       // Live road observations come from named public providers. They are NOT
       // the simulated moving vehicle layer in the official God's Eye View.
-      const liveRoadIntent=window.TravisRoadLive?.routeCommand?.(text);
+      const liveRoadIntent=window.TravisRoadLive?.routeCommand?.(text,{language:preferredLanguage==='pt'?'pt':'en'});
       if(liveRoadIntent?.handled){
         const spoken=String(liveRoadIntent.reply||'Public road information requested.');
         observeLocal(interactionId,text,spoken);

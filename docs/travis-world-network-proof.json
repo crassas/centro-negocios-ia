@@ -1,0 +1,100 @@
+{
+  "scope": "real DOM and public network; fixture globe adapter and projection",
+  "checks": [
+    {
+      "name": "real-road-DOM",
+      "status": {
+        "open": true,
+        "area": "london",
+        "busy": false,
+        "count": 60,
+        "source": "Transport for London \u00b7 Road Disruptions",
+        "state": "current"
+      },
+      "projection": null,
+      "visible": true,
+      "text": "[A23] PURLEY WAY (CR0 ) (Croydon)TfLTraffic is slow moving northbound on Purley Way with tailbacks from Epsom Road. Expect delays.Actualiza\u00e7\u00e3o: 11/10/26, 10:03VER[A4202] PARK LANE (W1J ,W1K ) (Westminster)TfLUse alternative routes and be aware of higher pedestrian volumes in the area before and afte"
+    },
+    {
+      "name": "real-camera-image-decoded",
+      "camera": {
+        "handled": true,
+        "language": "en",
+        "verified": true,
+        "kind": "snapshot",
+        "sourceId": "tfl-00001.06502",
+        "source": "Trafalgar Square",
+        "city": "London",
+        "at": 1791713671881,
+        "reply": "I found a real public camera image from Trafalgar Square, London. This is a still frame, not live video.",
+        "id": "affc5f0f-0d34-4f1b-847d-2c107747feed",
+        "cancelled": false
+      },
+      "decoded": {
+        "width": 352,
+        "height": 288,
+        "visible": true,
+        "state": {
+          "open": true,
+          "mode": "image",
+          "sourceId": "tfl-00001.06502",
+          "sourceName": "Trafalgar Square",
+          "city": "London",
+          "playingVerified": false,
+          "catalogue": {
+            "state": "ready",
+            "error": "",
+            "count": 3517,
+            "updated": 1791713671162,
+            "packs": {
+              "austin": 250,
+              "caltrans": 300,
+              "tfl": 250,
+              "fintraffic": 300,
+              "drivebc": 250,
+              "txdot": 414,
+              "tallinn": 255,
+              "tarktee": 176,
+              "warendorf": 1,
+              "nsw": 248,
+              "calgary": 215,
+              "vegvesen": 858
+            },
+            "service": "http://127.0.0.1:4187",
+            "canSelect": true
+          },
+          "updatedFrame": 1791713671879
+        }
+      }
+    },
+    {
+      "name": "road-camera-transition-and-close",
+      "passed": true
+    }
+  ],
+  "errors": [],
+  "coverage": {
+    "handled": true,
+    "language": "en",
+    "reply": "The catalogue lists 3517 cameras across Austin, California, London, Finland, British Columbia, Texas, Tallinn, Estonia, Warendorf, New South Wales, Calgary, Norway. Say see what is going on in a place, or show any public camera. Each image still needs verification."
+  },
+  "london": {
+    "handled": true,
+    "language": "en",
+    "verified": true,
+    "kind": "snapshot",
+    "sourceId": "tfl-00001.06502",
+    "source": "Trafalgar Square",
+    "city": "London",
+    "at": 1791713671881,
+    "reply": "I found a real public camera image from Trafalgar Square, London. This is a still frame, not live video.",
+    "id": "affc5f0f-0d34-4f1b-847d-2c107747feed",
+    "cancelled": false
+  },
+  "followup": {
+    "handled": true,
+    "language": "en",
+    "reply": "You are viewing a still image from Trafalgar Square, London. This identifies the source; I have not analysed the objects in the image."
+  },
+  "ok": true
+}

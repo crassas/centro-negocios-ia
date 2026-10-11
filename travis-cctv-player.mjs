@@ -113,7 +113,9 @@ function mount(){
   '</div>'
  ].join('');
  HUD.appendChild(section);
- const ids={wrap:'travis-cctv-viewer',headline:'cctv-title',
+ // querySelector searches descendants, so the section cannot find itself.
+ nodes.wrap=section;
+ const ids={headline:'cctv-title',
   indicator:'cctv-indicator',image:'cctv-image',video:'cctv-video',
   empty:'cctv-empty',region:'cctv-region',list:'cctv-list',search:'cctv-search',
   origin:'cctv-origin',status:'cctv-status',refresh:'cctv-refresh'};
@@ -239,7 +241,7 @@ function hlsLibrary(){
  }).catch(e=>{hlsLoader=null;throw e;});
  return hlsLoader;
 }
-async function showImage(cameraId,{reason='',manual=false}={}){
+async function showImage(cameraId,{reason='',manual=false,timeoutMs=20000}={}){
  const net=window.TravisCctv,camera=net?.get?.(cameraId);
  if(!camera||!open)return {ok:false,error:'Camera not registered'};
  seq++;
@@ -252,7 +254,7 @@ async function showImage(cameraId,{reason='',manual=false}={}){
  if(!url)return {ok:false};
  try{
    const res=await fetch(url,{credentials:'omit',cache:'no-store',
-     signal:AbortSignal.timeout(20000)});
+     signal:AbortSignal.timeout(Math.max(3000,Math.min(20000,timeoutMs)))});
    if(seq!==mine||!open)return {ok:false,cancelled:true};
    const realSource=res.headers.get('X-CCTV-Source');
    const type=res.headers.get('Content-Type')||'';
@@ -344,7 +346,7 @@ async function showVideo(cameraId){
    return showImage(cameraId,{reason:'Video unavailable; requesting a real snapshot.'});
  }
 }
-async function openCamera(id){
+async function openCamera(id,options={}){
  await openPicker();
  const mine=++seq;
  message('Finding the selected registered camera…');
@@ -358,7 +360,7 @@ async function openCamera(id){
    return {ok:false,error:'Unknown camera'};
  }
  nodes.list.value=id;
- return camera.feedType==='hls'?showVideo(id):showImage(id);
+ return camera.feedType==='hls'?showVideo(id):showImage(id,{timeoutMs:options.timeoutMs});
 }
 function routeCommand(raw){
  const t=cleanText(raw),worldOpen=Boolean(window.TravisWorld?.status?.()?.open);

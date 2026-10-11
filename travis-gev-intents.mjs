@@ -71,16 +71,20 @@ export const GEO_LAYERS=Object.freeze([
   {key:'weather',pt:'Radar, nuvens e relâmpagos',en:'Observed weather',ids:['weather-radar','weather-satellite','weather-lightning'],words:/\b(?:weather|meteorologia|radar|chuva|rain|nuvens?|clouds?|relampagos?|lightning|tempestades?)\b/},
   {key:'cyclones',pt:'Ciclones',en:'Cyclones',ids:['weather-cyclones'],words:/\b(?:cyclones?|ciclones?|furacoes?|hurricanes?|tuf(ao|oes)|typhoons?)\b/}
 ]);
-export const normalizeGeoText=(value)=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[’']/g,'').replace(/[,!?;:.]+/g,' ').replace(/\s+/g,' ').trim();
+export const normalizeGeoText=(value)=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[’']/g,'').replace(/["“”]/g,' ').replace(/[,!?;:.]+/g,' ').replace(/\s+/g,' ').trim();
+// Distinct, exact spoken cue for cinematic activation; avoids the LLM and broad "take me" matching.
+// Standby wake-word stripping may leave only "take me there". Homophones allow narrow ASR recovery.
+const TAKE_ME_THERE=/^(?:travis\s+)?take me (?:there|their|theyre)(?: please)?$/;
 const NAMED=/\b(?:gods?\s+(?:eye|eyes|ai)(?:\s+view)?|eye of god|godseye|globo|mapa(?:\s+do travis)?|world view)\b/;
 const COMMAND=/\b(?:activate|deactivate|engage|start|open|show|take|fly|go|navigate|turn|switch|enable|disable|close|hide|stop|mostra|mostrar|abre|abrir|ativa|ativar|activa|activar|liga|ligar|ir|vai|voa|voar|leva|navega|desliga|desligar|fecha|fechar|oculta|esconde|mete|poe|poer)\b/;
 const NEGATIVE=/\b(?:hide|disable|deactivate|remove|off|desliga|desligar|esconde|oculta|ocultar|retira|retirar|tira)\b/;
-const EXIT=/\b(?:back to travis|return to travis|voltar ao travis|regressa ao travis|fecha o mapa|fechar o globo|close the globe|exit gods eye|sair do globo)\b/;
+const EXIT=/\b(?:back to (?:travis|(?:the )?core)|return to (?:travis|(?:the )?core)|close (?:the )?map|voltar ao travis|regressa ao travis|fecha o mapa|fechar o globo|close the globe|exit gods eye|sair do globo)\b/;
 const ENGLISH=/\b(?:please|activate|deactivate|engage|show|fly|take|open|close|enable|disable|earth|globe|flight|flights|satellite|satellites|weather|back|return|switch|map|show me|on|off|to)\b/;
 
 export function interpretGeoRequest(raw,{active=false}={}){
   const text=normalizeGeoText(raw);
   if(!text)return null;
+  if(TAKE_ME_THERE.test(text))return {type:'open',language:'en',cue:'take-me-there'};
   const language=ENGLISH.test(text)?'en':'pt';
   const named=NAMED.test(text);
   const action=COMMAND.test(text);
@@ -101,7 +105,7 @@ export function interpretGeoRequest(raw,{active=false}={}){
   if(active && /\b(?:osm|openstreetmap|esri|satellite imagery|imagem satelite)\b/.test(text)){
     return {type:'map',map:/\b(?:osm|openstreetmap)\b/.test(text)?'osm':'esri-imagery',language};
   }
-  if(layers.length && (active||action||named)){
+  if(layers.length && (active||action||named||/^(?:travis )?(?:flights?|planes?|satellites?|weather|earthquakes?)$/.test(text))){
     return {type:'layers',layers:layers.map(layer=>layer.key),enable:!NEGATIVE.test(text),place,coordinates,language};
   }
   if((place||coordinates) && (active||action||named)){

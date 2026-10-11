@@ -1506,7 +1506,10 @@ def _merge_wavs(paths,out):
    wav.writeframes(chunk)
 def warm_voice():
  # Prioritise the fast STT worker; semantic turn is deferred until explicitly used.
- workers=[FAST_STT_WORKER,TTS_EN_WORKER,TTS_WORKER,SHERPA_STT_WORKER,PT_STT_WORKER]
+ workers=[FAST_STT_WORKER,TTS_EN_WORKER,TTS_WORKER,PT_STT_WORKER]
+ # Keep the optional ~1 GB Sherpa model available on demand, not resident
+ # when Whisper is selected and live transcription is disabled.
+ if os.environ.get('TRAVIS_STT_BACKEND','whisper').strip().lower()=='sherpa' or os.environ.get('TRAVIS_LIVE_STT')=='1':workers.append(SHERPA_STT_WORKER)
  for worker in workers:
   try:
    with worker.lock:worker.start()

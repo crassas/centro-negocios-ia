@@ -32,8 +32,9 @@ const btn=(label,id)=>{
 function showStatus(message){if(notice)notice.textContent=short(message,200);}
 function stopTimer(){clearInterval(refreshTimer);refreshTimer=0;}
 function close(){
-  epoch++;open=false;stopTimer();pending?.abort?.();pending=null;
+  epoch++;open=false;busy=false;stopTimer();pending?.abort?.();pending=null;
   if(panel)panel.hidden=true;
+  button?.removeAttribute('aria-busy');button?.setAttribute('aria-pressed','false');
   window.TravisGevBridge?.setExternalAnnotations?.([]);
 }
 function nearestArea(){
@@ -171,7 +172,8 @@ async function loadArea(area,{refresh=false,applyToGlobe=true}={}){
   }catch(error){
     if(token!==epoch||!open)return false;
     window.TravisGevBridge?.setExternalAnnotations?.([]);
-    showStatus('DADOS INDISPONÍVEIS · '+short(error?.message||'Rede',100));
+    contentList.replaceChildren();lastData=null;
+    showStatus('SOURCE UNAVAILABLE · '+short(error?.message||'Network',100)+' · Try London, Finland or New York.');
     return false;
   }finally{
     if(token===epoch){busy=false;if(button)button.removeAttribute('aria-busy');}
@@ -179,10 +181,12 @@ async function loadArea(area,{refresh=false,applyToGlobe=true}={}){
 }
 function show({area=null}={}){
   if(!panel)return false;
+  window.TravisProjection?.dismiss?.();
+  window.TravisCctvAutopilot?.cancel?.();
   if(HUD?.getAttribute('aria-hidden')==='true')window.TravisVisual?.open?.();
   if(!window.TravisGevBridge?.status?.()?.open)window.TravisGevBridge?.open?.('earth');
   window.TravisCctvPlayer?.close?.();
-  open=true;panel.hidden=false;
+  open=true;panel.hidden=false;button?.setAttribute('aria-pressed','true');
   refreshes=0;
   const chosen=area||nearestArea();
   if(chosen==='unsupported'){
@@ -208,27 +212,29 @@ function areaFromText(text){
   if(Object.values(KNOWN_UNSUPPORTED).some(exp=>exp.test(text)))return 'unsupported';
   return null;
 }
-function routeCommand(raw){
-  const t=normalize(raw);
-  if(!t||!/\b(?:transito|trafego|traffic|congestionamento|engarrafamento|roadworks?|traffic jams?|incidentes rodoviarios|velocidades? nas estradas)\b/.test(t))
-    return {handled:false};
-  if(/\b(?:simulacao|simulado|simulation|simulated)\b/.test(t))
-    return {handled:false}; // Allow God's Eye simulated traffic, clearly labelled.
-  if(!/\b(?:mostra|mostrar|quero|abre|abrir|ver|estado|esta|estao|agora|real|ao vivo|em direto|show|open|check|current|live|real|how is|what is)\b/.test(t))
-    return {handled:false};
-  const en=/\b(?:show|open|check|current|live|how is|what is)\b/.test(t);
-  const area=areaFromText(t);
-  if(area==='unsupported'){
-    return {handled:true,language:en?'en':'pt',reply:en
-      ?'I cannot verify keyless measured traffic there. The 3D moving cars are a simulation.'
-      :'Ainda não tenho medições de trânsito abertas nessa zona. Os carros do globo 3D são simulados.'};
+function routeCommand(raw,options={}){
+  const t=normalize(raw).replace(/[’']/g,'').replace(/["“”!?.,]/g,' ').replace(/\s+/g,' ').trim();
+  const named=/\b(?:road (?:live|life)|live roads?|road intelligence)\b/.test(t);
+  const traffic=/\b(?:transito|trafego|traffic|congestionamento|engarrafamento|roadworks?|traffic jams?|incidentes rodoviarios|velocidades? nas estradas)\b/.test(t);
+  if(!t||(!named&&!traffic)||/\b(?:air traffic|flights?|planes?|avioes|voos|simulacao|simulado|simulation|simulated)\b/.test(t))return {handled:false};
+  const en=options.language==='en'||(options.language!=='pt'&&/\b(?:road|show|open|check|current|live|how|what|close|stop|disable)\b/.test(t));
+  if(/\b(?:close|stop|disable|deactivate|hide|off|fecha|desliga|para)\b/.test(t)){
+    close();return {handled:true,language:en?'en':'pt',reply:en?'Road Live closed.':'Road Live fechado.'};
   }
-  show({area:area||null});
-  const place=area&&AREA[area]?AREA[area].title:'zona seleccionada';
-  return {handled:true,language:en?'en':'pt',reply:en
-    ?'I am checking actual public road observations for '+place+'. The map will show the source and timestamps.'
-    :'Vou consultar ocorrências ou medições rodoviárias reais para '+place+'. O mapa indicará a fonte e a hora dos dados.'};
+  if(!named&&!/\b(?:mostra|mostrar|quero|abre|abrir|ver|estado|esta|estao|agora|real|ao vivo|em direto|show|open|check|current|live|how is|what is)\b/.test(t))return {handled:false};
+  const area=areaFromText(t);
+  if(area==='unsupported')return {handled:true,language:en?'en':'pt',reply:en
+    ?'I do not have a connected provider of measured road data there. You can ask for Road Live in London, Finland or New York.'
+    :'Não tenho um fornecedor de medições rodoviárias ligado nessa zona. Podes pedir Road Live em Londres, na Finlândia ou em Nova Iorque.'};
+  const shown=show({area:area||null});
+  const chosen=area||nearestArea();
+  const names={london:'London',finland:'Finland',helsinki:'Helsinki',nyc:'New York',porto:'Porto',lisboa:'Lisbon'};
+  return {handled:true,language:en?'en':'pt',reply:!shown
+    ?(en?'The Road Live panel is unavailable. Reload Travis and try again.':'O painel Road Live não está disponível. Recarrega o Travis e tenta de novo.')
+    :en?'Opening Road Live for '+(names[chosen]||'the selected area')+'. I will show the source, timestamps and any connection error.'
+    :'A abrir Road Live para '+(names[chosen]||'a zona selecionada')+'. O painel indicará a fonte, a hora e qualquer erro de ligação.'};
 }
+
 function mount(){
   if(!HUD||document.getElementById('travis-road-live'))return;
   panel=document.createElement('section');panel.id='travis-road-live';panel.hidden=true;
