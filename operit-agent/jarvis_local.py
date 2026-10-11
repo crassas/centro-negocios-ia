@@ -2036,7 +2036,8 @@ def main():
    def shutdown(*args):raise SystemExit(0)
    signal.signal(signal.SIGTERM,shutdown)
    VOICE_RESOURCES.start()
-   threading.Thread(target=warm_voice,daemon=True).start()
+   # Voice models stay asleep until an actual request; preload is explicitly opt-in.
+   if os.environ.get("TRAVIS_WARM_VOICE_STARTUP")=="1":threading.Thread(target=warm_voice,daemon=True).start()
    TRAVIS_BRAIN.start()
    TRAVIS_WORKFLOWS.start(execute,lambda:ACTIVE_REQUESTS>0 or TRAVIS_BRAIN.active>0 or TRAVIS_BRAIN.paused() or TRAVIS_BRAIN.phase=="reflecting")
    try:ThreadingHTTPServer(("127.0.0.1",8770),Handler).serve_forever()

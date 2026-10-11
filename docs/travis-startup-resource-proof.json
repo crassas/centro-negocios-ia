@@ -1,0 +1,223 @@
+{
+  "backup": "/root/.centro-jarvis/backups/on-demand-startup-20261011T153830Z",
+  "before": {
+    "ok": true,
+    "service": "jarvis",
+    "cloud": false,
+    "busy": false,
+    "ui": true,
+    "memoryLearning": "continuous-context-v2",
+    "liveStt": false,
+    "voiceProtocol": "ndjson-audio-v1",
+    "pid": 9946,
+    "resources": {
+      "policy": "on-demand-with-idle-release",
+      "idleTimeoutSeconds": 180,
+      "sweepIntervalSeconds": 30,
+      "residentWorkers": 3,
+      "workerRssKiB": 518592,
+      "releasedWorkers": 0,
+      "errors": {},
+      "workers": [
+        {
+          "name": "stt-precise",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-fast",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-pt",
+          "resident": true,
+          "rssKiB": 140420,
+          "idleSeconds": 142.1
+        },
+        {
+          "name": "stt-sherpa",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "turn",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "tts-pt",
+          "resident": true,
+          "rssKiB": 129172,
+          "idleSeconds": 149.1
+        },
+        {
+          "name": "tts-en",
+          "resident": true,
+          "rssKiB": 249000,
+          "idleSeconds": 0.7
+        }
+      ]
+    },
+    "projectContext": {
+      "available": true,
+      "policy": "startup-and-on-demand; no-background-loop",
+      "revision": "d2932cc5b87e",
+      "checkedAt": 1791733046,
+      "topics": 12,
+      "cachedNotes": 6,
+      "cachedBytes": 17879,
+      "cacheLimitBytes": 196608,
+      "diskReads": 6,
+      "lastSources": [
+        "docs/travis-session-journal.md",
+        "MEMORY.md"
+      ],
+      "lastContextChars": 587,
+      "errors": {},
+      "obsidian": {
+        "configured": true,
+        "available": true,
+        "indexedTopics": 4
+      }
+    },
+    "workflows": {
+      "policy": "requested-read-only-checkpoints",
+      "states": {
+        "complete": 2
+      },
+      "runnerAlive": true,
+      "lastError": "",
+      "maxPending": 16,
+      "retainedCompleted": 101,
+      "expirySeconds": 86400,
+      "automaticWriteReplay": false,
+      "requiresObsidianOpen": false
+    }
+  },
+  "optInEnvironment": "TRAVIS_WARM_VOICE_STARTUP=1",
+  "default": "models-start-on-request",
+  "androidLogsAccessible": false,
+  "closureCause": "unverified",
+  "vaultBytes": 13861,
+  "startupGuardChecks": {
+    "passed": 3,
+    "scope": "actual AST guard with default, opt-in and explicit disabled environments"
+  },
+  "afterStartup": {
+    "ok": true,
+    "service": "jarvis",
+    "cloud": false,
+    "busy": true,
+    "ui": true,
+    "memoryLearning": "continuous-context-v2",
+    "liveStt": false,
+    "voiceProtocol": "ndjson-audio-v1",
+    "pid": 12079,
+    "resources": {
+      "policy": "on-demand-with-idle-release",
+      "idleTimeoutSeconds": 180,
+      "sweepIntervalSeconds": 30,
+      "residentWorkers": 2,
+      "workerRssKiB": 325380,
+      "releasedWorkers": 0,
+      "errors": {},
+      "workers": [
+        {
+          "name": "stt-precise",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-fast",
+          "resident": true,
+          "rssKiB": 167792,
+          "idleSeconds": 1.2
+        },
+        {
+          "name": "stt-pt",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "stt-sherpa",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "turn",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "tts-pt",
+          "resident": false,
+          "rssKiB": 0,
+          "idleSeconds": null
+        },
+        {
+          "name": "tts-en",
+          "resident": true,
+          "rssKiB": 157588,
+          "idleSeconds": 0.6
+        }
+      ]
+    },
+    "projectContext": {
+      "available": true,
+      "policy": "startup-and-on-demand; no-background-loop",
+      "revision": "9a80bcd6229d",
+      "checkedAt": 1791733144,
+      "topics": 12,
+      "cachedNotes": 6,
+      "cachedBytes": 18401,
+      "cacheLimitBytes": 196608,
+      "diskReads": 6,
+      "lastSources": [
+        "docs/travis-world-repair.md"
+      ],
+      "lastContextChars": 400,
+      "errors": {},
+      "obsidian": {
+        "configured": true,
+        "available": true,
+        "indexedTopics": 4
+      }
+    },
+    "workflows": {
+      "policy": "requested-read-only-checkpoints",
+      "states": {
+        "complete": 2
+      },
+      "runnerAlive": true,
+      "lastError": "",
+      "maxPending": 16,
+      "retainedCompleted": 101,
+      "expirySeconds": 86400,
+      "automaticWriteReplay": false,
+      "requiresObsidianOpen": false
+    }
+  },
+  "coldVoiceProbe": {
+    "executed": false,
+    "reason": "A concurrent user voice request had already started stt-fast; no request was interrupted and no extra model test was injected."
+  },
+  "sqliteQuickCheck": {
+    "memory.sqlite": "ok",
+    "coordination.sqlite": "ok",
+    "workflows.sqlite": "ok"
+  },
+  "limits": [
+    "Live voice activity prevents measuring a pristine zero-worker startup or isolated cold synthesis in this turn.",
+    "No Android exit log or OS setting was accessible; Obsidian closure cause remains unverified.",
+    "No claim that this resource change fixes the Android app crash."
+  ]
+}

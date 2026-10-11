@@ -32,3 +32,7 @@ Recovery branch: `rescue/travis-preserve-20261011`.
 
 - https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API
 - https://docs.python.org/3/library/threading.html#rlock-objects
+
+## On-demand startup — 2026-10-11
+
+Automatic voice preloading is now opt-in via TRAVIS_WARM_VOICE_STARTUP=1. By default, a router restart does not load the four voice workers before any actual request. Each selected worker still starts on demand and follows the existing 180-second idle policy. The first voice request after rest may include model startup time. This reduces unnecessary voice residency; it does not establish the cause of Android Obsidian closures. The vault inspected during this change was about 14 KB with no community-plugin list. Android exit logs were inaccessible from the available Ubuntu session. See travis-startup-resource-proof.json for observed startup and wake behaviour.
