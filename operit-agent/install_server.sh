@@ -20,6 +20,9 @@ fetch_to() {
   fi
 }
 
+fetch_to "$RAW/travis_context.py" "$HOME_DIR/travis_context.py"
+chmod 600 "$HOME_DIR/travis_context.py"
+
 fetch_to "$RAW/centro_server.py" "$SERVER"
 chmod 700 "$SERVER"
 

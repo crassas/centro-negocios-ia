@@ -1,0 +1,113 @@
+{
+  "recordedAt": "2026-10-11T13:54:00Z",
+  "tests": {
+    "count": 22,
+    "passed": true,
+    "scope": "isolated loader, prompt capture, Claude routing and conversation continuity"
+  },
+  "liveTextQuery": {
+    "query": "What do your project notes say about hiding the Road Live list compared with turning Road Live off?",
+    "seconds": 5.46,
+    "ok": true,
+    "tool": "local_llm",
+    "reply": "According to the project notes from \"docs/travis-road-panel-repair.md\", hiding the Road Live list and turning Road Live off are two distinct actions. Hiding the list can be done by selecting a row's map button, which focuses the coordinates, or by using the card close button, which only hides the list. The Road Live toolbar button can also be used to reopen or hide the list without requesting data again or moving the map.\n\nOn the other hand, explicitly turning off Road Live has more significant consequences, such as aborting pending requests, stopping refreshes, and removing annotations. This suggests that turning off Road Live is a more drastic action compared to simply hiding the list.\n\nIt's worth noting that the project notes mention that existing mode-exit callers will keep the full \"close()\" behavior, implying that there may be some legacy or compatibility considerations when deciding whether to hide the list or turn off Road Live entirely.",
+    "inference": null
+  },
+  "returnChecks": [
+    {
+      "ok": true,
+      "mode": "generated",
+      "speak": true,
+      "projectContext": {
+        "available": true,
+        "policy": "startup-and-on-demand; no-background-loop",
+        "revision": "99cdf384f925",
+        "checkedAt": 1791726837,
+        "topics": 6,
+        "cachedNotes": 5,
+        "cachedBytes": 11007,
+        "cacheLimitBytes": 196608,
+        "diskReads": 6,
+        "lastSources": [
+          "docs/travis-road-panel-repair.md"
+        ],
+        "lastContextChars": 536,
+        "errors": {}
+      }
+    },
+    {
+      "ok": true,
+      "mode": "rapid-return",
+      "speak": false,
+      "projectContext": {
+        "available": true,
+        "policy": "startup-and-on-demand; no-background-loop",
+        "revision": "99cdf384f925",
+        "checkedAt": 1791726840,
+        "topics": 6,
+        "cachedNotes": 5,
+        "cachedBytes": 11007,
+        "cacheLimitBytes": 196608,
+        "diskReads": 6,
+        "lastSources": [
+          "docs/travis-road-panel-repair.md"
+        ],
+        "lastContextChars": 407,
+        "errors": {}
+      }
+    }
+  ],
+  "health": {
+    "8770": {
+      "ok": true,
+      "projectContext": {
+        "available": true,
+        "policy": "startup-and-on-demand; no-background-loop",
+        "revision": "99cdf384f925",
+        "checkedAt": 1791726840,
+        "topics": 6,
+        "cachedNotes": 5,
+        "cachedBytes": 11007,
+        "cacheLimitBytes": 196608,
+        "diskReads": 6,
+        "lastSources": [
+          "docs/travis-road-panel-repair.md"
+        ],
+        "lastContextChars": 407,
+        "errors": {}
+      }
+    },
+    "8765": {
+      "ok": true,
+      "projectContext": {
+        "available": true,
+        "policy": "startup-and-on-demand; no-background-loop",
+        "revision": "fb7e3bef4e69",
+        "checkedAt": 1791726634,
+        "topics": 6,
+        "cachedNotes": 4,
+        "cachedBytes": 8794,
+        "cacheLimitBytes": 196608,
+        "diskReads": 4,
+        "lastSources": [],
+        "lastContextChars": 0,
+        "errors": {}
+      }
+    }
+  },
+  "sourceMatches": {
+    "operit-agent/travis_context.py": true,
+    "operit-agent/jarvis_local.py": true,
+    "operit-agent/centro_server.py": true,
+    "operit-agent/centro_station.py": true
+  },
+  "sqliteIntegrity": {
+    "memory.sqlite": "ok",
+    "coordination.sqlite": "ok"
+  },
+  "limits": [
+    "Claude provider invocation was captured with a mock; no remote coding task was executed for this check.",
+    "Actual HTTP text response was tested; physical audio and Cesium rendering were not part of this change.",
+    "Project-note retrieval may be omitted when higher-priority conversational context exhausts the existing prompt budget."
+  ]
+}

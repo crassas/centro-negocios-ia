@@ -4,6 +4,7 @@ Read this index first, then open only the row relevant to the current request. T
 
 | Need | Canonical context | Evidence / implementation |
 | --- | --- | --- |
+| Automatic context / memory / index / contexto / memória | [Automatic context](docs/travis-automatic-context.md) | [Memory pointer](MEMORY.md), [agent rules](CLAUDE.md), [loader](operit-agent/travis_context.py) |
 | Idle resources and wake on demand | [Resource rest](docs/travis-resource-rest.md) | [Measured proof](docs/travis-resource-rest-proof.json), [worker policy](operit-agent/travis_resources.py), [browser lifecycle](travis-resource-rest.mjs) |
 | Camera discovery and world commands | [World repair](docs/travis-world-repair.md) | [Network proof](docs/travis-world-network-proof.json), [catalogue](travis-cctv-network.mjs), [player](travis-cctv-player.mjs) |
 | Road list versus map markers | [Road panel behaviour](docs/travis-road-panel-repair.md) | [Panel proof](docs/travis-road-panel-proof.json), [controller](travis-road-live.mjs); resource-rest adds background retention |

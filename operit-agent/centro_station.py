@@ -184,6 +184,7 @@ RUNTIME_FILES = {
     "centro_station.py": SUPERVISOR_PATH,
     "centro_soak.py": HOME / "centro_soak.py",
     "travis_core.py": HOME / "travis_core.py",
+    "travis_context.py": HOME / "travis_context.py",
     "travis_scene.py": HOME / "travis_scene.py",
     "travis_visual_semantics.py": HOME / "travis_visual_semantics.py",
     "travis_visual_research.py": HOME / "travis_visual_research.py",
@@ -987,9 +988,9 @@ def main():
                 if ui_changed:
                     actions.append({"service":"autoupdate/travis-client","ok":not update_errors,"output":"módulos atualizados: "+", ".join(ui_changed)})
                 if changed:
-                    if any(name in changed for name in ("travis_continuity.py", "travis_world_knowledge.py", "travis_library.py", "travis_library_seed.py", "travis_dialogue.py", "travis_stream.py", "jarvis_sherpa.py", "jarvis_piper.py", "jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh", "travis_brain.py", "travis_scene.py", "travis_visual_research.py")):
+                    if any(name in changed for name in ("travis_context.py", "travis_continuity.py", "travis_world_knowledge.py", "travis_library.py", "travis_library_seed.py", "travis_dialogue.py", "travis_stream.py", "jarvis_sherpa.py", "jarvis_piper.py", "jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh", "travis_brain.py", "travis_scene.py", "travis_visual_research.py")):
                         pending_jarvis_restart = True
-                    if any(name in changed for name in ("centro_server.py", "business_db.py", "travis_core.py")):
+                    if any(name in changed for name in ("centro_server.py", "business_db.py", "travis_core.py", "travis_context.py")):
                         pending_server_restart = True
                         actions.append({"service": "autoupdate/server", "ok": True, "output": "actualização validada e preparada"})
                     if "centro_agent.py" in changed:

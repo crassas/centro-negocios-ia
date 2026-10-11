@@ -2,7 +2,17 @@
 
 ## Index
 
+- [2026-10-11: Automatic project context](#2026-10-11-automatic-project-context)
+
 - [2026-10-11: Road panel, world recovery and resource rest](#2026-10-11-road-panel-world-recovery-and-resource-rest)
+
+## 2026-10-11: Automatic project context
+
+Context summary: Project notes now enter startup, return and reasoning through a bounded loader. MEMORY.md points to the index; CLAUDE.md gives maintenance instructions. SQLite conversation memory is unchanged. Road list close still preserves map markers; explicit Road Live off removes them.
+
+The previous index was documentation only. This change adds explicit runtime retrieval, metadata-based refresh, at most two relevant topics and a bounded cache, plus context for the existing Claude analysis route. See [integration details](travis-automatic-context.md) and [verification evidence](travis-automatic-context-proof.json). Notes remain historical context, never execution permission or proof of current service health.
+
+Verification: 22 context/continuity tests passed in an isolated home. Both live services loaded the book with no read errors. An actual English request to `/jarvis` used `docs/travis-road-panel-repair.md` and correctly distinguished hiding the incident list from explicit Road Live off; response time 5.46 seconds. This verifies text retrieval and response, not physical voice or 3D rendering.
 
 ## 2026-10-11: Road panel, world recovery and resource rest
 

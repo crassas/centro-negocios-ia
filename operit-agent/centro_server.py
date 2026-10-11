@@ -17,6 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 import travis_core
+import travis_context
 try:
     import business_db
 except ImportError:
@@ -48,6 +49,7 @@ OLLAMA_KEY_FILE = HOME / ".centro-agent" / "ollama_api_key"
 WORKTREE_ROOT = STATE_DIR / "worktrees"
 CLOUD_BASE = "https://centro-negocios-ai.travisthejarvis.workers.dev"
 AGENT_TOKEN_FILE = HOME / ".centro-agent" / "token"
+TRAVIS_CONTEXT = travis_context.ContextBook()
 TRAVIS_STORE = travis_core.RuntimeStore(STATE_DIR / "runtime.sqlite")
 TRAVIS_UTEF = travis_core.UnifiedExecutionFramework(TRAVIS_STORE)
 BUSINESS_DB = business_db.BusinessDB(STATE_DIR / "negocio.db") if business_db else None
@@ -1065,6 +1067,8 @@ def run_claude_repo_executor(worktree, prompt):
     env["OLLAMA_API_KEY"] = key
     env.pop("ANTHROPIC_API_KEY", None)
 
+    if (Path(worktree) / "TRAVIS_CONTEXT.md").is_file():
+        prompt = travis_context.ContextBook(worktree).augment(prompt, max_chars=len(prompt)+1100)
     model = os.environ.get("CENTRO_CLAUDE_MODEL", "").strip() or "gpt-oss:120b"
     system_note = (
         "Estás a executar uma alteração pedida pelo dono através do Centro de Negócios. "
@@ -2429,6 +2433,9 @@ def execute_action(task):
             if repo_error:
                 return repo_error
 
+        if target in {"local", "centro-negocios-ia"}:
+            prompt = TRAVIS_CONTEXT.augment(prompt, max_chars=4000)
+
         claude = shutil.which("claude")
         if not claude:
             candidates = [
@@ -2462,8 +2469,8 @@ def execute_action(task):
         env.pop("ANTHROPIC_API_KEY", None)
 
         system_note = (
-            "Estás a responder através do Centro de Negócios no Telegram. "
-            "Responde em português de Portugal, de forma directa e curta. "
+            "Estás a responder através do Centro de Negócios. " +
+            ("Reply in concise English. " if reply_language == "en" else "Responde em português de Portugal, de forma directa e curta. ") +
             "Esta chamada está em modo de análise: não alteres ficheiros nem executes acções destrutivas."
         )
 
@@ -2521,6 +2528,8 @@ class Handler(BaseHTTPRequestHandler):
                     "port": PORT,
                     "private": True,
                     "uptimeSeconds": int(time.time() - STARTED_AT),
+                    "busy": EXECUTION_LOCK.locked(),
+                    "projectContext": TRAVIS_CONTEXT.status(),
                 },
             )
             return
