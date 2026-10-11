@@ -1,0 +1,29 @@
+{
+  "scope": "real DOM, CSS, TfL data and cinema controls; map annotation adapter fixture",
+  "checks": [
+    {
+      "name": "select-event-hides-list-keeps-markers",
+      "passed": true,
+      "markerCount": 18
+    },
+    {
+      "name": "close-card-keeps-markers",
+      "passed": true,
+      "markerCount": 18
+    },
+    {
+      "name": "focus-globe-keeps-markers",
+      "passed": true,
+      "markerCount": 18
+    },
+    {
+      "name": "explicit-off-removes-markers",
+      "passed": true
+    }
+  ],
+  "errors": [],
+  "source": "Transport for London \u00b7 Road Disruptions",
+  "records": 60,
+  "markerCount": 18,
+  "ok": true
+}

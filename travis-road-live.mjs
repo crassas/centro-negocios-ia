@@ -1,7 +1,7 @@
 /**
  * Travis × God's Eye View: ACTUAL public road incidents and measured speeds.
  * These are independent of God's Eye's simulated moving vehicle dots.
- * Lazy requests only while the operator has the panel open.
+ * Lazy requests while Road Live is active; the list can be hidden independently.
  */
 const HUD=document.getElementById('travis-hud');
 const HOST=['127.0.0.1','localhost'].includes(location.hostname)?location.hostname:'127.0.0.1';
@@ -31,9 +31,19 @@ const btn=(label,id)=>{
 };
 function showStatus(message){if(notice)notice.textContent=short(message,200);}
 function stopTimer(){clearInterval(refreshTimer);refreshTimer=0;}
+function hidePanel(){
+  if(panel)panel.hidden=true;
+  button?.setAttribute('aria-expanded','false');
+}
+function showPanel(){
+  if(!open||!panel)return false;
+  panel.hidden=false;
+  button?.setAttribute('aria-expanded','true');
+  return true;
+}
 function close(){
   epoch++;open=false;busy=false;stopTimer();pending?.abort?.();pending=null;
-  if(panel)panel.hidden=true;
+  hidePanel();
   button?.removeAttribute('aria-busy');button?.setAttribute('aria-pressed','false');
   window.TravisGevBridge?.setExternalAnnotations?.([]);
 }
@@ -122,6 +132,7 @@ function renderItems(payload,zone,{applyToGlobe=true}={}){
         lat:item.lat,lon:item.lon,alt:4800,label:short(item.label,55)
       });
       showStatus('LOCALIZAÇÃO CARTOGRAFADA · '+short(item.label,85));
+      hidePanel();
     };
     div.append(info,focus);contentList.appendChild(div);
   }
@@ -186,7 +197,7 @@ function show({area=null}={}){
   if(HUD?.getAttribute('aria-hidden')==='true')window.TravisVisual?.open?.();
   if(!window.TravisGevBridge?.status?.()?.open)window.TravisGevBridge?.open?.('earth');
   window.TravisCctvPlayer?.close?.();
-  open=true;panel.hidden=false;button?.setAttribute('aria-pressed','true');
+  open=true;showPanel();button?.setAttribute('aria-pressed','true');
   refreshes=0;
   const chosen=area||nearestArea();
   if(chosen==='unsupported'){
@@ -242,7 +253,7 @@ function mount(){
   panel.innerHTML=[
     '<header class="travis-road-header"><div><small>TRAVIS · PUBLIC ROAD INTELLIGENCE</small>',
     '<strong id="travis-road-subtitle">DADOS RODOVIÁRIOS REAIS</strong></div>',
-    '<button type="button" id="travis-road-close" aria-label="Fechar trânsito real">×</button></header>',
+    '<button type="button" id="travis-road-close" aria-label="Hide incident list; keep map markers" title="Hide list · keep map markers">×</button></header>',
     '<nav class="travis-road-areas" aria-label="Fontes rodoviárias">',
     '<button type="button" data-road-area="porto">PORTO</button>',
     '<button type="button" data-road-area="lisboa">LISBON</button>',
@@ -261,7 +272,7 @@ function mount(){
   subtitle=panel.querySelector('#travis-road-subtitle');
   notice=panel.querySelector('#travis-road-status');
   source=panel.querySelector('#travis-road-source');
-  panel.querySelector('#travis-road-close').onclick=close;
+  panel.querySelector('#travis-road-close').onclick=hidePanel;
   panel.querySelector('#travis-road-refresh').onclick=()=>void loadArea(activeArea,{refresh:true});
   for(const b of panel.querySelectorAll('[data-road-area]')){
     b.onclick=()=>void loadArea(b.dataset.roadArea,{applyToGlobe:true});
@@ -270,7 +281,9 @@ function mount(){
   if(toolbar){
     button=btn('ROAD LIVE','toggle');button.id='travis-road-toggle';
     button.title='Ocorrências públicas: Porto/Lisboa (até 14/10), TfL; velocidades medidas: Fintraffic/NYC.';
-    button.onclick=()=>open?close():show();
+    button.setAttribute('aria-controls','travis-road-live');
+    button.setAttribute('aria-expanded','false');
+    button.onclick=()=>open?(panel.hidden?showPanel():hidePanel()):show();
     toolbar.appendChild(button);
   }
   window.addEventListener('travis:close',close);
@@ -280,7 +293,7 @@ function mount(){
   document.addEventListener('visibilitychange',()=>{if(document.hidden)close();});
 }
 mount();
-window.TravisRoadLive=Object.freeze({show,close,routeCommand,status:()=>({
-  open,area:activeArea,busy,count:lastData?.items?.length||0,
+window.TravisRoadLive=Object.freeze({show,close,hidePanel,showPanel,routeCommand,status:()=>({
+  open,panelOpen:open&&!!panel&&!panel.hidden,area:activeArea,busy,count:lastData?.items?.length||0,
   source:lastData?.source||null,state:lastData?.state||'unloaded'
 })});

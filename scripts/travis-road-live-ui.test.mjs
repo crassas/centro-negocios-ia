@@ -83,6 +83,25 @@ test("God's Eye road panel renders measured sources and annotates ONLY verified 
     assert.ok(calls.fetch[0].includes('/api/road-live/london'));
     assert.equal(calls.annotations.at(-1)[0].latitude,51.5);
     assert.equal(nodes.get('travis-road-list').children.length,1);
+    const markers=calls.annotations.at(-1),requests=calls.fetch.length;
+    const focus=nodes.get('travis-road-list').children[0].children[1];
+    focus.onclick();
+    assert.equal(hud.children[0].hidden,true,'Selecting a road event reveals the map');
+    assert.equal(window.TravisRoadLive.status().open,true,'Road observations remain active');
+    assert.equal(window.TravisRoadLive.status().panelOpen,false);
+    assert.equal(calls.annotations.at(-1),markers,'Focusing must keep the yellow markers');
+    toolbar.children[0].onclick();
+    assert.equal(hud.children[0].hidden,false,'Road Live reopens the same incident list');
+    assert.equal(calls.fetch.length,requests,'Reopening the list does not reload or move the map');
+    assert.equal(toolbar.children[0].attributes.get('aria-expanded'),'true');
+    nodes.get('travis-road-close').onclick();
+    assert.equal(hud.children[0].hidden,true);
+    assert.equal(window.TravisRoadLive.status().open,true,'Panel close is not Road Live off');
+    assert.equal(calls.annotations.at(-1),markers,'Closing the card preserves mapped observations');
+    toolbar.children[0].onclick();
+    toolbar.children[0].onclick();
+    assert.equal(hud.children[0].hidden,true,'The toolbar toggles only the panel');
+    assert.equal(calls.annotations.at(-1),markers);
     const prev=calls.fetch.length;
     const porto=window.TravisRoadLive.routeCommand('Travis mostra trânsito real em Porto');
     assert.equal(porto.handled,true);
@@ -98,8 +117,9 @@ test("God's Eye road panel renders measured sources and annotates ONLY verified 
     assert.equal(window.TravisRoadLive.status().area,'london');
     assert.ok(calls.dismiss>=3);assert.ok(calls.cancel>=3);
     assert.equal(window.TravisRoadLive.routeCommand('Show air traffic').handled,false);
-    assert.equal(window.TravisRoadLive.routeCommand('Close Road Live').handled,true);
+    assert.equal(window.TravisRoadLive.routeCommand('Turn off Road Live').handled,true);
     assert.equal(window.TravisRoadLive.status().open,false);
+    assert.equal(window.TravisRoadLive.status().panelOpen,false);
     assert.equal(window.TravisRoadLive.status().busy,false);
     assert.deepEqual(calls.annotations.at(-1),[]);
   }finally{window.TravisRoadLive?.close();globalThis.fetch=originalFetch;}
