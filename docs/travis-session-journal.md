@@ -2,9 +2,17 @@
 
 ## Index
 
+- [2026-10-11: Obsidian shared vault](#2026-10-11-obsidian-shared-vault)
+
 - [2026-10-11: Automatic project context](#2026-10-11-automatic-project-context)
 
 - [2026-10-11: Road panel, world recovery and resource rest](#2026-10-11-road-panel-world-recovery-and-resource-rest)
+
+## 2026-10-11: Obsidian shared vault
+
+Context summary: The user-created Cofre Travis in Android Documents now supplements project context with indexed goal, procedure and journal notes. Canonical repository context and SQLite conversation memory remain in place. The 70% target means fourteen verified tasks out of twenty; no fresh autonomy score or AGI percentage is claimed.
+
+The vault name's trailing space is preserved in its operator-owned configuration. Topic retrieval shares the existing bounded cache and reads at most two relevant notes from both sources together. See [connection details](travis-obsidian.md) and [verification evidence](travis-obsidian-proof.json). The actual Obsidian app created its configuration directory; a text-route probe checks active note retrieval separately. Verification passed: 26 context/continuity tests; an actual English HTTP request recovered a fresh temporary marker from the Android journal in 2.19 seconds without another restart. The marker was then removed. Both SQLite checks passed.
 
 ## 2026-10-11: Automatic project context
 

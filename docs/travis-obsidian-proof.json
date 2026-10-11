@@ -1,0 +1,49 @@
+{
+  "recordedAt": "2026-10-11T15:14:53.330742+00:00",
+  "tests": {
+    "passed": true,
+    "count": 26,
+    "scope": "context retrieval, continuity, vault edits/isolation and trailing-space path"
+  },
+  "vaultConfigurationObserved": true,
+  "activeHttpProbe": {
+    "ok": true,
+    "tool": "local_llm",
+    "seconds": 2.19,
+    "markerRecovered": true,
+    "reply": "The verification marker written in the Obsidian daily journal is VAULT-LINK-635E9ED91B, according to the operator note in the Obsidian docs.",
+    "projectContext": {
+      "available": true,
+      "policy": "startup-and-on-demand; no-background-loop",
+      "revision": "4b6a2ea6f798",
+      "checkedAt": 1791731645,
+      "topics": 10,
+      "cachedNotes": 7,
+      "cachedBytes": 14620,
+      "cacheLimitBytes": 196608,
+      "diskReads": 7,
+      "lastSources": [
+        "obsidian/docs/Daily-2026-10-11.md",
+        "docs/travis-obsidian.md"
+      ],
+      "lastContextChars": 596,
+      "errors": {},
+      "obsidian": {
+        "configured": true,
+        "available": true,
+        "indexedTopics": 3
+      }
+    }
+  },
+  "temporaryMarkerRemoved": true,
+  "sqliteIntegrity": {
+    "memory.sqlite": "ok",
+    "coordination.sqlite": "ok"
+  },
+  "limitations": [
+    "Obsidian app UI was not automated; the user-created vault configuration directory was observed.",
+    "No fresh twenty-task autonomy score or AGI percentage was measured.",
+    "Starter templates are generated technical content; future private vault notes must not be exported to Git automatically.",
+    "Physical microphone/speaker and globe GPU rendering were not retested."
+  ]
+}

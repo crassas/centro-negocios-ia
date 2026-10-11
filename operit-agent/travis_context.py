@@ -21,6 +21,7 @@ ALIASES = {
     "markers": "road", "marcadores": "road", "pontos": "road", "incident": "road",
     "incidents": "road", "card": "panel", "cartao": "panel",
     "memoria": "memory", "contexto": "context", "indice": "index",
+    "autonomia": "autonomy", "agente": "agent", "objetivos": "goals",
     "retoma": "context", "voz": "voice", "repouso": "idle", "ram": "resources",
     "desliga": "idle", "recursos": "resources", "conversas": "conversation",
     "mundo": "world", "mapa": "world", "globe": "world", "capacidades": "skills",
@@ -48,9 +49,21 @@ def default_root():
     return repo if (repo / "TRAVIS_CONTEXT.md").is_file() else Path.home() / ".centro-ui"
 
 
+def default_vault():
+    try:
+        with (Path.home() / ".centro-jarvis/context-vault").open() as handle:
+            value = handle.read(1024).rstrip("\r\n")
+        return Path(value).expanduser().resolve() if value else None
+    except OSError:
+        return None
+
+
 class ContextBook:
-    def __init__(self, root=None):
+    def __init__(self, root=None, vault=None):
         self.root = Path(root).resolve() if root is not None else default_root()
+        self.vault = Path(vault).resolve() if vault is not None else default_vault() if root is None else None
+        self.vault_index = ""
+        self.vault_topics = 0
         self.lock = threading.RLock()
         self.cache = OrderedDict()
         self.errors = {}
@@ -66,8 +79,14 @@ class ContextBook:
             rel = Path(name)
             if rel.is_absolute() or ".." in rel.parts or rel.suffix != ".md":
                 raise ValueError("invalid-note-path")
-            path = (self.root / rel).resolve()
-            path.relative_to(self.root)
+            base = self.root
+            if rel.parts and rel.parts[0] == "obsidian":
+                if self.vault is None:
+                    raise ValueError("vault-not-configured")
+                base = self.vault
+                rel = Path(*rel.parts[1:])
+            path = (base / rel).resolve()
+            path.relative_to(base)
             info = path.stat()
             if not stat.S_ISREG(info.st_mode):
                 raise ValueError("not-a-regular-note")
@@ -101,24 +120,28 @@ class ContextBook:
         with self.lock:
             self.core = {name: self._read(name) for name in CORE}
             topics = []
-            for line in self.core["TRAVIS_CONTEXT.md"].splitlines():
-                cells = line.split("|")
-                if len(cells) < 4:
-                    continue
-                match = re.search(r"\[([^]]+)\]\(([^)]+)\)", cells[2])
-                if not match:
-                    continue
-                name = match[2].split("#")[0]
-                # Only canonical Markdown topics, never evidence JSON, code or URLs.
-                if (not name.startswith("docs/") and name != "TRAVIS_READING_LIBRARY.md") or not name.endswith(".md"):
-                    continue
-                if name in CORE or ".." in Path(name).parts:
-                    continue
-                topics.append((name, cells[1].strip() + " " + match[1]))
-                if len(topics) == MAX_TOPICS:
-                    break
+            self.vault_index = self._read("obsidian/TRAVIS_VAULT_INDEX.md") if self.vault else ""
+            self.vault_topics = 0
+            for prefix, index in (("", self.core["TRAVIS_CONTEXT.md"]), ("obsidian/", self.vault_index)):
+                for line in index.splitlines():
+                    cells = line.split("|")
+                    if len(cells) < 4:
+                        continue
+                    match = re.search(r"\[([^]]+)\]\(([^)]+)\)", cells[2])
+                    if not match:
+                        continue
+                    name = match[2].split("#")[0]
+                    if (not name.startswith("docs/") and name != "TRAVIS_READING_LIBRARY.md") or not name.endswith(".md"):
+                        continue
+                    if name in CORE or ".." in Path(name).parts:
+                        continue
+                    if len(topics) >= MAX_TOPICS:
+                        break
+                    topics.append((prefix + name, cells[1].strip() + " " + match[1]))
+                    if prefix:
+                        self.vault_topics += 1
             self.topics = topics
-            self.revision = hashlib.sha256("\n".join(self.core.values()).encode()).hexdigest()[:12]
+            self.revision = hashlib.sha256(("\n".join(self.core.values()) + self.vault_index).encode()).hexdigest()[:12]
             self.checked_at = int(time.time())
 
     @staticmethod
@@ -139,7 +162,7 @@ class ContextBook:
             tokens = words(str(query)[:6000])
             ranked = sorted(self.topics, key=lambda row: -len(words(row[1]) & tokens))
             chosen = [row for row in ranked if words(row[1]) & tokens][:2]
-            candidates = [(name, self._read(name), "project-note") for name, _ in chosen]
+            candidates = [(name, self._read(name), "operator-note-unverified" if name.startswith("obsidian/") else "project-note") for name, _ in chosen]
             # Newest entries live first, with a concise Context summary paragraph.
             journal = self.core["docs/travis-session-journal.md"]
             summaries = re.findall(r"^Context summary: (.+)$", journal, re.M)
@@ -189,7 +212,9 @@ class ContextBook:
                     "cachedNotes": len(self.cache), "cachedBytes": sum(len(row[1].encode()) for row in self.cache.values()),
                     "cacheLimitBytes": MAX_BYTES * MAX_CACHE, "diskReads": self.disk_reads,
                     "lastSources": list(self.last_sources), "lastContextChars": self.last_chars,
-                    "errors": dict(self.errors)}
+                    "errors": dict(self.errors),
+                    "obsidian": {"configured": self.vault is not None, "available": bool(self.vault_index),
+                                 "indexedTopics": self.vault_topics}}
 
 
 if __name__ == "__main__":
@@ -198,7 +223,8 @@ if __name__ == "__main__":
     parser.add_argument("query", nargs="?", default="")
     parser.add_argument("--root")
     parser.add_argument("--limit", type=int, default=700)
+    parser.add_argument("--vault")
     args = parser.parse_args()
-    book = ContextBook(args.root)
+    book = ContextBook(args.root, args.vault)
     print(book.context(args.query, args.limit))
     print(json.dumps(book.status(), ensure_ascii=False))

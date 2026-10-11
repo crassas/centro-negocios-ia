@@ -94,6 +94,50 @@ class ContextTests(unittest.TestCase):
         self.assertLessEqual(len(result), 4000)
 
 
+class VaultTests(unittest.TestCase):
+    def test_android_vault_name_preserves_trailing_space(self):
+        from travis_context import default_vault
+        with tempfile.TemporaryDirectory() as home:
+            home=Path(home);(home/'.centro-jarvis').mkdir()
+            target=home/'Cofre Travis ';target.mkdir()
+            (home/'.centro-jarvis/context-vault').write_text(str(target)+'\n')
+            with patch.object(Path,'home',return_value=home):
+                self.assertEqual(default_vault(),target)
+
+    def test_shared_android_style_notes_are_retrieved_and_refreshed(self):
+        with tempfile.TemporaryDirectory() as project, tempfile.TemporaryDirectory() as shared:
+            root=Path(project);fixture(root);vault=Path(shared)
+            (vault/'docs').mkdir()
+            (vault/'TRAVIS_VAULT_INDEX.md').write_text('| Need | Canonical | Evidence |\n| Obsidian autonomy goals | [Goals](docs/goals.md) | operator |\n')
+            note=vault/'docs/goals.md';note.write_text('Target autonomy is fourteen verified tasks out of twenty. Not a measure of AGI.')
+            book=ContextBook(root,vault)
+            text=book.context('Obsidian autonomia objetivos')
+            self.assertIn('fourteen verified',text);self.assertIn('operator-note-unverified',text)
+            reads=book.status()['diskReads'];book.context('Obsidian autonomy goals')
+            self.assertEqual(reads,book.status()['diskReads'])
+            note.write_text('Updated autonomy goal: collect fresh evidence before assigning a score.')
+            self.assertIn('collect fresh evidence',book.context('Obsidian autonomy goals'))
+            self.assertNotIn('fourteen verified',book.context('Obsidian autonomy goals'))
+            self.assertTrue(book.status()['obsidian']['available'])
+            self.assertLessEqual(book.status()['cachedBytes'],12*MAX_BYTES)
+
+    def test_unavailable_vault_never_disables_project_context(self):
+        with tempfile.TemporaryDirectory() as project:
+            root=Path(project);fixture(root)
+            book=ContextBook(root,root/'missing-vault')
+            self.assertTrue(book.status()['available'])
+            self.assertFalse(book.status()['obsidian']['available'])
+            self.assertIn('keeps map markers',book.context('road'))
+
+    def test_vault_links_cannot_escape_into_project_or_private_files(self):
+        with tempfile.TemporaryDirectory() as project, tempfile.TemporaryDirectory() as shared:
+            root=Path(project);fixture(root);vault=Path(shared)
+            (vault/'TRAVIS_VAULT_INDEX.md').write_text('| Need | Canonical | Evidence |\n| Private goal | [Goal](../MEMORY.md) | invalid |\n')
+            book=ContextBook(root,vault)
+            self.assertEqual(book.status()['obsidian']['indexedTopics'],0)
+            self.assertEqual(book._read('obsidian/../MEMORY.md'),'')
+
+
 class IntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
