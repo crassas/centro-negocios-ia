@@ -112,6 +112,15 @@ class Tests(unittest.TestCase):
    self.assertIn("github.com/rust-lang/book/blob/",outcome["reply"])
    self.assertEqual(outcome["result"]["engine"],"rust")
    self.assertEqual(outcome["ui"]["kind"],"research")
+   feed.request_sync.return_value={"accepted":True,"queuedSources":["pilot"],"readOnly":True}
+   sync=j.route("Travis, sincroniza o GitHub",{"language":"pt"})
+   self.assertEqual(sync["tool"],"github_knowledge_sync")
+   self.assertTrue(sync["result"]["accepted"])
+   self.assertIn("ainda não está concluída",sync["reply"])
+   feed.status.return_value={"enabled":True,"running":True,"busy":False,"sources":[]}
+   info=j.route("Travis, estado do GitHub",{"language":"pt"})
+   self.assertEqual(info["tool"],"github_knowledge_status")
+   self.assertIn("0 fontes GitHub",info["reply"])
   feed.recall.assert_called()
 
  def test_brain_control_is_local_and_requires_boolean(self):
