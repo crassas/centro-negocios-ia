@@ -14,6 +14,7 @@ with tempfile.TemporaryDirectory(prefix="travis-github-public-") as directory:
         assert feed.sync(source)["result"] == "unchanged"
     result = feed.recall("Rust ownership memória", limit=4, use_rust=True)
     assert result["results"], "No public references returned"
+    assert result["engine"] == "rust", "Public GitHub references did not use the native Rust scorer"
     assert all(x["url"].startswith("https://github.com/") for x in result["results"])
     assert all("/blob/" + x["revision"] + "/" in x["url"] for x in result["results"])
     assert not result["trainedWeights"]
