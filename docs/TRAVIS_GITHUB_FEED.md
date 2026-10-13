@@ -56,10 +56,58 @@ PYTHONPATH=operit-agent python3 operit-agent/travis_rust_memory_selftest.py
 Verificar também no ARM64 real: conectividade, compatibilidade de binários,
 paridade de resultados e latência total.
 
-**Ainda não está integrado na conversa ativa nem agendado para sincronização
-automática.** Essa etapa necessita de ligação ao processo Jarvis e de um
-agendamento controlado no supervisor, com modo sombra e reversão antes da
-ativação. Não é necessário OpenClaw.
+## Fase 2 — integrada na branch piloto, inativa por omissão
+
+A branch piloto inclui agora a ponte para o Jarvis e o controlador
+travis_github_runtime.py. Quando explicitamente ativado, o mesmo processo
+do Jarvis inicia UMA thread de consulta read-only. Apenas nos períodos
+sem pedidos em primeiro plano, verifica as três fontes aprovadas a cada
+12 horas (uma por vez); perante falhas volta a tentar após 1 hora.
+A última tentativa por fonte fica persistida num ficheiro local.
+
+A pesquisa da biblioteca não faz pedidos de rede durante a conversa.
+Consulta o índice SQLite e classifica até 500 passagens em memória
+através do motor Rust; se não estiver compilado, utiliza Python.
+Para perguntas técnicas, acrescenta referências e URLs imutáveis ao
+contexto do modelo, claramente identificadas como dados não fiáveis.
+
+### Comandos de voz preparados
+
+- "Travis, estado do GitHub" — lê o estado real, sem efetuar chamadas externas.
+- "Travis, sincroniza o GitHub" — agenda uma consulta em segundo plano.
+- "Travis, pesquisa no GitHub sobre Rust" — recupera passagens com fontes.
+- "Travis, o que aprendeste no GitHub sobre concorrência?" — mostra
+  as referências indexadas, não afirma aprendizagem de pesos.
+
+### Ativação controlada APÓS validação no dispositivo
+
+O instalador e o autoupdater passam a incluir os três ficheiros opcionais
+do GitHub/Rust. O controlador é desligado por omissão; não há atividade
+de rede nem base de dados nova no arranque normal.
+
+~~~sh
+# Na instalação ativa, depois de verificar os módulos e realizar backup:
+mkdir -p ~/.centro-jarvis
+touch ~/.centro-jarvis/github-feed-enabled
+jarvisctl reload
+jarvisctl doctor
+~~~
+
+Para desativar imediatamente as consultas futuras, apagar apenas
+o marcador (não apagar a base de dados):
+~~~sh
+rm -f ~/.centro-jarvis/github-feed-enabled
+~~~
+
+Também é possível controlar a opção por variável de ambiente:
+TRAVIS_GITHUB_FEED=1 ativa e TRAVIS_GITHUB_FEED=0 desativa (sobrepõe-se ao
+marcador). Para garantir a thread em segundo plano após alterar o
+marcador, efetuar reload controlado quando o serviço estiver livre.
+
+**Ainda não instalado nem testado no OPPO.** A quota de comandos remotos
+impediu executar essa etapa. A branch continua como PR em rascunho,
+sem merge em main e sem atualização forçada da instalação ativa.
+Não é necessário OpenClaw.
 
 ## Controlo e segurança
 
