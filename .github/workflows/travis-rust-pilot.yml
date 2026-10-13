@@ -60,3 +60,9 @@ jobs:
         run: |
           python3 operit-agent/travis_github_feed_selftest.py -v
           python3 operit-agent/travis_github_runtime_selftest.py -v
+      - name: Live approved public GitHub read-and-recall
+        if: github.event_name == 'push'
+        env:
+          PYTHONPATH: operit-agent
+          TRAVIS_RUST_MEMORY_LIB: ./rust/travis-memory/target/release/libtravis_memory.so
+        run: python3 operit-agent/travis_github_live_selftest.py
