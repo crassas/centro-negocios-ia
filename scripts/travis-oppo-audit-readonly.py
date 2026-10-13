@@ -156,6 +156,20 @@ def github_check():
     modules = {name: (HOME / name).is_file()
                for name in ("travis_github_feed.py", "travis_github_runtime.py",
                             "travis_rust_memory.py")}
+    installed_at = activation.get("installedAt")
+    modified_after = []
+    if isinstance(installed_at, (float, int)) and installed_at > 0:
+        tracked = [HOME / "jarvis_local.py", *[HOME / x for x in modules],
+                   STATE / "bin/libtravis_memory.so", UI / "index.html",
+                   UI / "sw.js"]
+        try:
+            tracked.extend(sorted(UI.glob("*.mjs"),
+                                  key=lambda p: p.stat().st_mtime, reverse=True)[:18])
+            for path in tracked:
+                if path.is_file() and path.stat().st_mtime > installed_at + 2:
+                    modified_after.append(path.name)
+        except OSError:
+            pass
     db = STATE / "github-feed.sqlite"
     indexed = {"present": db.is_file()}
     if db.is_file():
@@ -174,6 +188,7 @@ def github_check():
         "enabled": enabled,
         "activationState": str(activation.get("state", "unknown"))[:40],
         "modules": modules,
+        "filesModifiedAfterActivation": sorted(set(modified_after))[:22],
         "rustLibrary": file_info(STATE / "bin/libtravis_memory.so"),
         "index": indexed,
     }
@@ -227,7 +242,8 @@ def frontend_check():
                          reverse=True)
     except OSError:
         pass
-    result = {"files": base, "moduleCount": len(modules)}
+    result = {"files": base, "moduleCount": len(modules),
+              "recentModuleNames": [p.name for p in modules[:12]]}
     node = shutil.which("node")
     if not node:
         result["syntax"] = "node_unavailable"
