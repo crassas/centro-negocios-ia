@@ -21,7 +21,15 @@ def library_path() -> Path:
         return Path(override).expanduser().resolve()
     filename = ("libtravis_memory.dylib" if sys.platform == "darwin" else
                 "travis_memory.dll" if sys.platform == "win32" else "libtravis_memory.so")
-    return Path(__file__).resolve().parent.parent / "rust" / "travis-memory" / "target" / "release" / filename
+    home = Path.home()
+    # Station installs this module directly in $HOME. The library cannot be
+    # assumed to live beside its original repository source after installation.
+    candidates = (
+        home / ".centro-jarvis" / "bin" / filename,
+        Path(__file__).resolve().parent.parent / "rust" / "travis-memory" / "target" / "release" / filename,
+        home / "repos" / "centro-negocios-ia" / "rust" / "travis-memory" / "target" / "release" / filename,
+    )
+    return next((p for p in candidates if p.is_file()), candidates[0])
 
 @functools.lru_cache(maxsize=4)
 def _native(path: str):
