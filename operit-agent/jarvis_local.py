@@ -1244,29 +1244,29 @@ def _route(text,context=None):
  elif tool=="github_knowledge_status":
   if not result.get("enabled"):
    reply=("A biblioteca GitHub está desativada. O Travis continua a funcionar sem ela."
-          if language=="pt" else "The GitHub reference library is disabled. Travis continues without it.")
+          if getattr(DIALOGUE_INFO,"language","en")=="pt" else "The GitHub reference library is disabled. Travis continues without it.")
   else:
    entries=result.get("sources") or []
    pending="; ".join(x["source"]+": "+x["revision"][:8] for x in entries)
    reply=(f"Tenho {len(entries)} fontes GitHub indexadas. "+(pending or "A primeira consulta ainda não terminou.")+
-          (" Sincronização ativa." if result.get("busy") else " Sincronização em segundo plano pronta.") if language=="pt"
+          (" Sincronização ativa." if result.get("busy") else " Sincronização em segundo plano pronta.") if getattr(DIALOGUE_INFO,"language","en")=="pt"
           else f"I have {len(entries)} indexed GitHub sources. "+(pending or "Initial sync is pending.")+
           (" Background refresh active." if result.get("busy") else " Background refresh ready."))
  elif tool=="github_knowledge_sync":
   reply=("A consulta às fontes GitHub autorizadas foi colocada na fila; ainda não está concluída."
-         if language=="pt" else "The approved GitHub source refresh is queued, not yet complete.") if result.get("accepted") else (
-         "A consulta ao GitHub está desativada." if language=="pt" else "GitHub source retrieval is disabled.")
+         if getattr(DIALOGUE_INFO,"language","en")=="pt" else "The approved GitHub source refresh is queued, not yet complete.") if result.get("accepted") else (
+         "A consulta ao GitHub está desativada." if getattr(DIALOGUE_INFO,"language","en")=="pt" else "GitHub source retrieval is disabled.")
  elif tool=="github_knowledge_search":
   rows=result.get("results") or []
   if not result.get("enabled"):
-   reply="A biblioteca GitHub está desativada." if language=="pt" else "The GitHub reference library is disabled."
+   reply="A biblioteca GitHub está desativada." if getattr(DIALOGUE_INFO,"language","en")=="pt" else "The GitHub reference library is disabled."
   elif rows:
    details=" ".join(r["title"]+": "+r["excerpt"][:140].replace("\n"," ")+". "+r["url"] for r in rows[:3])
-   reply=(f"Encontrei {len(rows)} referências GitHub com versão identificada. "+details if language=="pt"
+   reply=(f"Encontrei {len(rows)} referências GitHub com versão identificada. "+details if getattr(DIALOGUE_INFO,"language","en")=="pt"
           else f"I found {len(rows)} version-pinned GitHub references. "+details)
   else:
    reply=("Ainda não encontrei documentação indexada sobre esse tema. Pede-me para sincronizar o GitHub."
-          if language=="pt" else "I have no indexed GitHub reference for this topic yet. Ask me to sync GitHub.")
+          if getattr(DIALOGUE_INFO,"language","en")=="pt" else "I have no indexed GitHub reference for this topic yet. Ask me to sync GitHub.")
  elif tool=="openclaw_status":reply=result["reply"]
  elif tool=="connections_status":reply="; ".join(r["name"]+": "+r["detail"] for r in result["connections"])
  elif tool=="brain_status":reply="The cognitive runtime is "+result["phase"]+". It has "+str(result["counts"]["episodes"])+" consolidated task experiences and "+str(result["counts"]["cycles"])+" completed automatic cycles. I use recorded feedback and outcomes to improve future decisions."
