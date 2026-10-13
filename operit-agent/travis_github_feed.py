@@ -163,7 +163,6 @@ class Feed:
         chosen = [row for _, row in sorted((x for x in candidates if x[0]),
                     key=lambda x: -x[0])[:500]]
         data = [{"title": row[5], "body": row[6]} for row in chosen]
-        scores = python_scores(query, data)
         engine = "python"
         if use_rust and chosen:
             try:
@@ -171,7 +170,10 @@ class Feed:
                 scores = score_overlaps(query, data)
                 engine = "rust"
             except (ImportError, OSError, RuntimeError, ValueError):
+                scores = python_scores(query, data)
                 engine = "python-fallback"
+        else:
+            scores = python_scores(query, data)
         ranked = sorted(range(len(chosen)), key=lambda i: (-scores[i], i))[:max(1, min(int(limit), 8))]
         results = []
         for i in ranked:
