@@ -14,6 +14,7 @@ on:
       - "docs/TRAVIS_GITHUB_FEED.md"
       - "docs/TRAVIS_RUST_TRANSITION.md"
       - "scripts/travis-rust-oppo.sh"
+      - "scripts/travis-rust-oppo-preflight.py"
       - ".github/workflows/travis-rust-pilot.yml"
   pull_request:
     paths:
@@ -27,6 +28,7 @@ on:
       - "docs/TRAVIS_GITHUB_FEED.md"
       - "docs/TRAVIS_RUST_TRANSITION.md"
       - "scripts/travis-rust-oppo.sh"
+      - "scripts/travis-rust-oppo-preflight.py"
       - ".github/workflows/travis-rust-pilot.yml"
   workflow_dispatch:
 
@@ -43,6 +45,7 @@ jobs:
         run: |
           bash -n scripts/travis-rust-oppo.sh
           bash scripts/travis-rust-oppo.sh status
+          python3 -m py_compile scripts/travis-rust-oppo-preflight.py
       - name: Toolchain
         run: rustc --version && cargo --version && python3 --version
       - name: Rust tests
