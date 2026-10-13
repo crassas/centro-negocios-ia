@@ -234,7 +234,7 @@ def snapshot(directory):
     return data
 
 
-def restore(directory):
+def restore(directory, *, keep_maintenance=True):
     path = directory / "manifest.json"
     info = json.loads(safe_bytes(path).decode("utf-8"))
     if info.get("schema") != 1 or info.get("patch") != PIN or len(info.get("files", [])) != len(FILES):
@@ -250,7 +250,7 @@ def restore(directory):
             atomic_write(target, raw, mode=entry["mode"] or 0o600)
         else:
             target.unlink(missing_ok=True)
-    if not info["maintenanceExisted"]:
+    if not keep_maintenance and not info["maintenanceExisted"]:
         MAINTENANCE.unlink(missing_ok=True)
     return info
 
@@ -352,10 +352,12 @@ def activate():
         note("Reversão imediata: python3 /tmp/travis-rust-activate.py rollback")
     except Exception as exc:
         note("Ativação falhou; a restaurar a instalação anterior...")
-        restore(backup)
+        restored = restore(backup, keep_maintenance=True)
         LATEST.unlink(missing_ok=True)
         try:
             reload_router(ctl)
+            if not restored["maintenanceExisted"]:
+                MAINTENANCE.unlink(missing_ok=True)
             note("ROLLBACK_AUTOMATICO=PASS")
         except Exception as recovery:
             note("ROLLBACK_AUTOMATICO=FICHEIROS_REPOSTOS, REARRANQUE_NAO_CONFIRMADO")
@@ -374,11 +376,14 @@ def rollback():
     # Ensure the updater cannot race the rollback until files are restored.
     MAINTENANCE.parent.mkdir(parents=True, exist_ok=True)
     MAINTENANCE.touch(exist_ok=True)
-    restore(directory)
+    restored = restore(directory, keep_maintenance=True)
     LATEST.unlink(missing_ok=True)
     ctl = shutil.which("jarvisctl")
-    if ctl:
-        reload_router(ctl)
+    if not ctl:
+        raise Abort("Ficheiros repostos, mas falta jarvisctl: mantém manutenção e reinicia manualmente.")
+    reload_router(ctl)
+    if not restored["maintenanceExisted"]:
+        MAINTENANCE.unlink(missing_ok=True)
     note("TRAVIS_RUST_GITHUB_ROLLBACK=PASS")
     note("Restauro concluído a partir de " + str(directory))
 
