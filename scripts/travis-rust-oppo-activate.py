@@ -117,11 +117,14 @@ def writable_target(path):
 
 
 def patch_source(base_text, candidate_text, live_text):
-    """Apply only upstream's additive pilot edits to *this* customised file.
+    """Apply only additive, unambiguous GitHub hooks to a customised Jarvis.
 
-    Each original fragment must match exactly once. Never replace entire
-    live source or silently overwrite local customisations.
+    First try exact surrounding context. If local code changed adjacent lines,
+    permit a single-line anchor ONLY when it is unique and still resides within
+    the same Python function as in the audited reference source.
     """
+    import ast
+
     original = base_text.splitlines(keepends=True)
     target = candidate_text.splitlines(keepends=True)
     different = difflib.SequenceMatcher(None, original, target, autojunk=False).get_opcodes()
@@ -130,33 +133,78 @@ def patch_source(base_text, candidate_text, live_text):
         raise Abort(f"Patch fora do intervalo esperado: {len(changes)} blocos")
     if sum(j2 - j1 for _, _, _, j1, j2 in changes) > 180:
         raise Abort("Patch com demasiadas linhas alteradas")
+    # The reviewed pilot is strictly additive: no local line may be deleted.
+    if any(tag != "insert" or i1 != i2 for tag, i1, i2, j1, j2 in changes):
+        raise Abort("O piloto contém alterações destrutivas; requer revisão manual")
 
-    def apply(text):
+    def function_at(tree, line):
+        found = [node for node in ast.walk(tree)
+                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                 and node.lineno <= line <= node.end_lineno]
+        if not found:
+            return None
+        found.sort(key=lambda node: (node.lineno, -node.end_lineno))
+        return found[-1].name
+
+    base_tree = ast.parse(base_text)
+
+    def unique_position(text, line):
+        if not line or text.count(line) != 1:
+            return None
+        return text.index(line)
+
+    def scoped(text, anchor, expected):
+        if anchor is None:
+            return False
+        line = text.count("\n", 0, anchor) + 1
+        return function_at(ast.parse(text), line) == expected
+
+    def apply(text, *, relaxed):
+        relaxed_count = 0
         for tag, i1, i2, j1, j2 in reversed(changes):
             new = "".join(target[j1:j2])
-            if tag == "insert":
-                preceding = "".join(original[max(0, i1 - 2):i1])
-                following = "".join(original[i1:i1 + 2])
-                needle = preceding + following
-                replacement = preceding + new + following
+            if not new or not new.endswith("\n") or new in text:
+                raise Abort(f"Bloco GitHub duplicado ou vazio na linha {i1+1}")
+            before = "".join(original[max(0, i1 - 2):i1])
+            after = "".join(original[i1:i1 + 2])
+            needle = before + after
+            if needle and text.count(needle) == 1:
+                text = text.replace(needle, before + new + after, 1)
+                continue
+            if not relaxed:
+                raise Abort(f"Reconstrução exata do GitHub falhou na linha {i1+1}")
+            preceding = original[i1 - 1] if i1 else ""
+            following = original[i1] if i1 < len(original) else ""
+            p_pos = unique_position(text, preceding)
+            f_pos = unique_position(text, following)
+            expected_scope = function_at(base_tree, i1) if i1 else None
+            valid_p = scoped(text, p_pos, expected_scope)
+            valid_f = scoped(text, f_pos, expected_scope)
+            if valid_p and valid_f:
+                between = text[p_pos + len(preceding):f_pos]
+                if p_pos >= f_pos or between.count("\n") > 25:
+                    raise Abort(f"Âncoras locais demasiado afastadas na linha {i1+1}")
+                text = text[:p_pos + len(preceding)] + new + text[p_pos + len(preceding):]
+            elif valid_p:
+                text = text[:p_pos + len(preceding)] + new + text[p_pos + len(preceding):]
+            elif valid_f:
+                text = text[:f_pos] + new + text[f_pos:]
             else:
-                needle = "".join(original[i1:i2])
-                replacement = new
-            if not needle or text.count(needle) != 1:
-                raise Abort("Conflito com código local: alteração não aplicada em " +
-                            str(i1 + 1) + " (" + tag + ")")
-            text = text.replace(needle, replacement, 1)
-        return text
+                raise Abort(
+                    f"Conflito real com código local: inserção na linha {i1+1}; "
+                    "sem âncora única dentro da função esperada")
+            relaxed_count += 1
+            compile(text, str(JARVIS), "exec")
+        return text, relaxed_count
 
-    # Assert our reconstruction is byte-for-byte the audited GitHub pilot.
-    if apply(base_text) != candidate_text:
-        raise Abort("Falha na reconstrução do patch de referência")
-    updated = apply(live_text)
+    reference, _ = apply(base_text, relaxed=False)
+    if reference != candidate_text:
+        raise Abort("Falha na reconstrução exata do patch de referência")
+    updated, relaxed_count = apply(live_text, relaxed=True)
     if updated == live_text or not all(x in updated for x in EXPECTED_ANCHORS):
         raise Abort("Integração GitHub incompleta ou já presente")
     compile(updated, str(JARVIS), "exec")
-    return updated, len(changes)
-
+    return updated, len(changes), relaxed_count
 
 def preflight():
     if platform.system() != "Linux" or platform.machine().lower() not in {"arm64", "aarch64"}:
@@ -298,8 +346,8 @@ def activate():
     current = JARVIS.read_text(encoding="utf-8")
     if "travis_github_runtime" in current:
         raise Abort("O Jarvis já contém uma integração GitHub. Estado manual exige revisão.")
-    new_text, blocks = patch_source(base, candidate, current)
-    note(f"Validação: {blocks} blocos exclusivos identificados; código local preservado.")
+    new_text, blocks, relaxed = patch_source(base, candidate, current)
+    note(f"Validação: {blocks} inserções verificadas ({relaxed} com âncoras locais); código preservado.")
     # Verify native ABI on the actual OPPO before touching running services.
     sys.path.insert(0, str(BRIDGE))
     import travis_rust_memory
