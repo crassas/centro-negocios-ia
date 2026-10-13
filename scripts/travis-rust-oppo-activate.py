@@ -444,6 +444,28 @@ def rollback():
     note("Restauro concluído a partir de " + str(directory))
 
 
+
+def check():
+    """Read-only compatibility check: no process stops, markers or file writes."""
+    if not (STAGE / ".verified-commit").is_file() or (STAGE / ".verified-commit").read_text().strip() != PIN:
+        raise Abort("A compilação ARM64 anterior não está validada")
+    if not JARVIS.is_file() or JARVIS.is_symlink():
+        raise Abort("O Jarvis local não é um ficheiro seguro")
+    if not COMPILED_LIB.is_file():
+        raise Abort("A biblioteca Rust ARM64 não está compilada")
+    current = JARVIS.read_text(encoding="utf-8")
+    if "travis_github_runtime" in current:
+        raise Abort("O Jarvis já contém uma integração GitHub; não alterar sem inspeção")
+    base = fetch_at(BASE, "operit-agent/jarvis_local.py")
+    pilot = fetch_at(PIN, "operit-agent/jarvis_local.py")
+    compiled, blocks, adapted = patch_source(base, pilot, current)
+    # Same syntax guard as activate(), but no execution of the imported modules.
+    compile(compiled, str(JARVIS), "exec")
+    note("RUST_OPPO_PATCH_CHECK=PASS")
+    note(f"BLOCOS_COMPATIVEIS={blocks}; ANCORAS_ADAPTADAS={adapted}")
+    note("JARVIS_ATUAL_SHA256=" + hashlib.sha256(current.encode()).hexdigest()[:16])
+    note("DADOS_E_SERVICOS_ATIVOS=INALTERADOS")
+
 def status():
     report = health("http://127.0.0.1:8770/health")
     print(json.dumps({
@@ -462,10 +484,10 @@ def status():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("activate", "rollback", "status"))
+    parser.add_argument("command", choices=("check", "activate", "rollback", "status"))
     args = parser.parse_args()
     try:
-        {"activate": activate, "rollback": rollback, "status": status}[args.command]()
+        {"check": check, "activate": activate, "rollback": rollback, "status": status}[args.command]()
     except Abort as exc:
         note("BLOQUEADO: " + str(exc))
         sys.exit(1)
