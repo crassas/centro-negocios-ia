@@ -15,14 +15,16 @@ const STOPWORDS: &[&str] = &[
 ];
 
 #[derive(Deserialize)]
-struct Batch<'a> {
-    query: &'a str,
-    rows: Vec<Candidate<'a>>,
+struct Batch {
+    // Owning strings is essential: GitHub documentation contains escaped quotes
+    // and newlines, which serde cannot always borrow as zero-copy &str.
+    query: String,
+    rows: Vec<Candidate>,
 }
 #[derive(Deserialize)]
-struct Candidate<'a> {
-    title: &'a str,
-    body: &'a str,
+struct Candidate {
+    title: String,
+    body: String,
 }
 
 fn tokens(text: &str) -> HashSet<String> {
@@ -36,12 +38,12 @@ fn tokens(text: &str) -> HashSet<String> {
         .collect()
 }
 
-fn overlaps(batch: &Batch<'_>) -> Vec<f64> {
-    let mut requested = tokens(batch.query);
+fn overlaps(batch: &Batch) -> Vec<f64> {
+    let mut requested = tokens(&batch.query);
     requested.retain(|word| word.len() >= 3 && !STOPWORDS.contains(&word.as_str()));
     batch.rows.iter().map(|row| {
-        let title = tokens(row.title);
-        let body = tokens(row.body);
+        let title = tokens(&row.title);
+        let body = tokens(&row.body);
         (requested.intersection(&title).count() * 2 + requested.intersection(&body).count()) as f64
     }).collect()
 }
@@ -62,7 +64,7 @@ pub unsafe extern "C" fn travis_memory_overlap_batch(
         if input.is_null() || input_len == 0 { return Err(-1); }
         if input_len > MAX_BATCH_BYTES || out_capacity > MAX_ROWS { return Err(-2); }
         let input_bytes = unsafe { std::slice::from_raw_parts(input, input_len) };
-        let batch: Batch<'_> = serde_json::from_slice(input_bytes).map_err(|_| -3)?;
+        let batch: Batch = serde_json::from_slice(input_bytes).map_err(|_| -3)?;
         if batch.rows.len() > MAX_ROWS { return Err(-2); }
         if batch.rows.len() > out_capacity || (!batch.rows.is_empty() && output.is_null()) {
             return Err(-4);
@@ -83,7 +85,10 @@ pub unsafe extern "C" fn travis_memory_overlap_batch(
 mod tests {
     use super::*;
     fn one(query: &str, title: &str, body: &str) -> f64 {
-        overlaps(&Batch { query, rows: vec![Candidate { title, body }] })[0]
+        overlaps(&Batch {
+            query: query.to_owned(),
+            rows: vec![Candidate { title: title.to_owned(), body: body.to_owned() }],
+        })[0]
     }
     #[test]
     fn accents_and_title_weight_match_reference() {
@@ -101,15 +106,25 @@ mod tests {
     #[test]
     fn batch_preserves_order_and_unique_tokens() {
         let batch = Batch {
-            query: "porto porto pizza",
+            query: "porto porto pizza".into(),
             rows: vec![
-                Candidate { title: "pizza", body: "porto" },
-                Candidate { title: "porto pizza", body: "porto pizza" },
-                Candidate { title: "lisboa", body: "almada" },
+                Candidate { title: "pizza".into(), body: "porto".into() },
+                Candidate { title: "porto pizza".into(), body: "porto pizza".into() },
+                Candidate { title: "lisboa".into(), body: "almada".into() },
             ]
         };
         assert_eq!(overlaps(&batch), vec![3.0, 6.0, 0.0]);
     }
+    #[test]
+    fn ffi_reads_escaped_newlines_and_quotes_from_github_documents() {
+        let data = br#"{"query":"memória Rust","rows":[{"title":"Rust\n documentação","body":"Memória com \"Rust\" no código."}]}"#;
+        let mut out = [0.0_f64];
+        assert_eq!(unsafe {
+            travis_memory_overlap_batch(data.as_ptr(), data.len(), out.as_mut_ptr(), 1)
+        }, 1);
+        assert_eq!(out, [4.0]);
+    }
+
     #[test]
     fn ffi_rejects_bad_buffers_without_writing() {
         let data = br#"{"query":"portugal","rows":[{"title":"portugal","body":""}]}"#;
