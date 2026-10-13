@@ -41,3 +41,8 @@ jobs:
           PYTHONPATH: operit-agent
           TRAVIS_RUST_MEMORY_LIB: ./rust/travis-memory/target/release/libtravis_memory.so
         run: python3 operit-agent/travis_rust_memory_benchmark.py --records 500 --repeats 40
+
+      - name: GitHub knowledge feed (offline tests)
+        env:
+          PYTHONPATH: operit-agent
+        run: python3 operit-agent/travis_github_feed_selftest.py -v
