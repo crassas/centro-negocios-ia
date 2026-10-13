@@ -6,12 +6,16 @@ on:
     paths:
       - "rust/travis-memory/**"
       - "operit-agent/travis_rust_memory*.py"
+      - "operit-agent/travis_github_feed*.py"
+      - "docs/TRAVIS_GITHUB_FEED.md"
       - "docs/TRAVIS_RUST_TRANSITION.md"
       - ".github/workflows/travis-rust-pilot.yml"
   pull_request:
     paths:
       - "rust/travis-memory/**"
       - "operit-agent/travis_rust_memory*.py"
+      - "operit-agent/travis_github_feed*.py"
+      - "docs/TRAVIS_GITHUB_FEED.md"
       - "docs/TRAVIS_RUST_TRANSITION.md"
       - ".github/workflows/travis-rust-pilot.yml"
   workflow_dispatch:
