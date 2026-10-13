@@ -180,6 +180,14 @@ def patch_source(base_text, candidate_text, live_text):
             expected_scope = function_at(base_tree, i1) if i1 else None
             valid_p = scoped(text, p_pos, expected_scope)
             valid_f = scoped(text, f_pos, expected_scope)
+            # These runtime lifecycle anchors are mandatory, not interchangeable.
+            # A different memory import, missing Brain.start or missing Brain.stop
+            # means that device code has new ownership semantics.
+            if ("import travis_github_runtime" in new or
+                    "TRAVIS_GITHUB.start(" in new) and not valid_p:
+                raise Abort(f"Âncora crítica anterior ausente na linha {i1+1}")
+            if "TRAVIS_GITHUB.stop()" in new and not valid_f:
+                raise Abort(f"Âncora crítica de encerramento ausente na linha {i1+1}")
             if valid_p and valid_f:
                 between = text[p_pos + len(preceding):f_pos]
                 if p_pos >= f_pos or between.count("\n") > 25:
