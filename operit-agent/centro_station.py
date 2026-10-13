@@ -201,6 +201,9 @@ RUNTIME_FILES = {
     "travis_world_knowledge.py": HOME / "travis_world_knowledge.py",
     "travis_library.py": HOME / "travis_library.py",
     "travis_library_seed.py": HOME / "travis_library_seed.py",
+    "travis_github_feed.py": HOME / "travis_github_feed.py",
+    "travis_github_runtime.py": HOME / "travis_github_runtime.py",
+    "travis_rust_memory.py": HOME / "travis_rust_memory.py",
     "travis_gmail.py": HOME / "travis_gmail.py",
     "travis_web_tools.py": HOME / "travis_web_tools.py",
     "business_db.py": HOME / "business_db.py",
@@ -987,7 +990,7 @@ def main():
                 if ui_changed:
                     actions.append({"service":"autoupdate/travis-client","ok":not update_errors,"output":"módulos atualizados: "+", ".join(ui_changed)})
                 if changed:
-                    if any(name in changed for name in ("travis_continuity.py", "travis_world_knowledge.py", "travis_library.py", "travis_library_seed.py", "travis_dialogue.py", "travis_stream.py", "jarvis_sherpa.py", "jarvis_piper.py", "jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh", "travis_brain.py", "travis_scene.py", "travis_visual_research.py")):
+                    if any(name in changed for name in ("travis_continuity.py", "travis_world_knowledge.py", "travis_library.py", "travis_library_seed.py", "travis_github_feed.py", "travis_github_runtime.py", "travis_rust_memory.py", "travis_dialogue.py", "travis_stream.py", "jarvis_sherpa.py", "jarvis_piper.py", "jarvis_local.py", "jarvis_whisper.py", "jarvisctl.sh", "travis_brain.py", "travis_scene.py", "travis_visual_research.py")):
                         pending_jarvis_restart = True
                     if any(name in changed for name in ("centro_server.py", "business_db.py", "travis_core.py")):
                         pending_server_restart = True
