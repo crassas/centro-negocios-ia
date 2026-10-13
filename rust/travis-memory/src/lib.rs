@@ -117,7 +117,7 @@ mod tests {
     }
     #[test]
     fn ffi_reads_escaped_newlines_and_quotes_from_github_documents() {
-        let data = br#"{"query":"memória Rust","rows":[{"title":"Rust\n documentação","body":"Memória com \"Rust\" no código."}]}"#;
+        let data = r#"{"query":"memória Rust","rows":[{"title":"Rust\n documentação","body":"Memória com \"Rust\" no código."}]}"#.as_bytes();
         let mut out = [0.0_f64];
         assert_eq!(unsafe {
             travis_memory_overlap_batch(data.as_ptr(), data.len(), out.as_mut_ptr(), 1)
