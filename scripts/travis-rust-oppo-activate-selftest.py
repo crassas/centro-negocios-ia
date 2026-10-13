@@ -19,7 +19,8 @@ class PatchTests(unittest.TestCase):
         cls.patch = activation.fetch_at(activation.PIN, "operit-agent/jarvis_local.py")
 
     def test_pinned_reconstruction_exact(self):
-        updated, blocks = activation.patch_source(self.base, self.patch, self.base)
+        updated, blocks, relaxed = activation.patch_source(self.base, self.patch, self.base)
+        self.assertEqual(relaxed, 0)
         self.assertEqual(updated, self.patch)
         self.assertGreaterEqual(blocks, 3)
 
@@ -27,12 +28,41 @@ class PatchTests(unittest.TestCase):
         source = self.base.replace(
             "#!/usr/bin/env python3\n",
             "#!/usr/bin/env python3\n# personal OPPO header (preserved)\n", 1)
-        merged, blocks = activation.patch_source(self.base, self.patch, source)
+        merged, blocks, relaxed = activation.patch_source(self.base, self.patch, source)
         self.assertIn("# personal OPPO header (preserved)\n", merged)
         self.assertIn("github_knowledge_search", merged)
         self.assertIn("TRAVIS_GITHUB.start", merged)
         self.assertGreaterEqual(blocks, 3)
         compile(merged, "merged-jarvis.py", "exec")
+
+    def test_custom_local_startup_and_cleanup_keep_the_owner_changes(self):
+        # The OPPO may have local startup hooks not reflected in GitHub/main.
+        source = self.base.replace(
+            '   try:ThreadingHTTPServer(("127.0.0.1",8770),Handler).serve_forever()\n',
+            '   try:\n    # device-local Android watchdog, unchanged by Rust\n'
+            '    ThreadingHTTPServer(("127.0.0.1",8770),Handler).serve_forever()\n',
+            1)
+        source = source.replace(
+            '    TRAVIS_BRAIN.stop()\n',
+            '    # device-local shutdown observer\n    TRAVIS_BRAIN.stop()\n',
+            1)
+        merged, blocks, relaxed = activation.patch_source(self.base, self.patch, source)
+        self.assertGreaterEqual(relaxed, 1)
+        self.assertIn("# device-local Android watchdog, unchanged by Rust", merged)
+        self.assertIn("# device-local shutdown observer", merged)
+        self.assertIn("TRAVIS_GITHUB.start(idle=", merged)
+        self.assertIn("TRAVIS_GITHUB.stop()", merged)
+        compile(merged, "merged-local-jarvis.py", "exec")
+
+    def test_scope_rejects_ambiguous_fake_startup_anchor(self):
+        source = self.base.replace(
+            '   TRAVIS_BRAIN.start()\n',
+            '   # device-local startup uses a different flow\n'
+            '   begin_cognitive_runtime()\n',
+            1)
+        # The original insertion target is absent: do not guess another hook.
+        with self.assertRaises(activation.Abort):
+            activation.patch_source(self.base, self.patch, source)
 
     def test_conflict_does_not_replace_unknown_local_code(self):
         source = self.base.replace(
