@@ -54,6 +54,35 @@ class PatchTests(unittest.TestCase):
         self.assertIn("TRAVIS_GITHUB.stop()", merged)
         compile(merged, "merged-local-jarvis.py", "exec")
 
+    def test_check_does_not_modify_active_files(self):
+        from unittest.mock import patch
+        from io import StringIO
+        from contextlib import redirect_stdout
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder)
+            stage = home / "staged"
+            (stage / "rust/travis-memory/target/release").mkdir(parents=True)
+            (stage / ".verified-commit").write_text(activation.PIN)
+            library = stage / "rust/travis-memory/target/release/libtravis_memory.so"
+            library.write_bytes(b"ELF" + bytes(1024))
+            target = home / "jarvis_local.py"
+            source = self.base.replace(
+                '   try:ThreadingHTTPServer(("127.0.0.1",8770),Handler).serve_forever()\n',
+                '   try:\n    # custom Android startup in live source\n'
+                '    ThreadingHTTPServer(("127.0.0.1",8770),Handler).serve_forever()\n',
+                1)
+            target.write_text(source)
+            with patch.object(activation, "STAGE", stage), \
+                    patch.object(activation, "JARVIS", target), \
+                    patch.object(activation, "COMPILED_LIB", library), \
+                    patch.object(activation, "fetch_at", side_effect=[
+                        self.base, self.patch]), redirect_stdout(StringIO()) as output:
+                activation.check()
+            self.assertIn("RUST_OPPO_PATCH_CHECK=PASS", output.getvalue())
+            self.assertEqual(target.read_text(), source)
+            self.assertEqual(sorted(p.name for p in home.iterdir()),
+                             ["jarvis_local.py", "staged"])
+
     def test_scope_rejects_ambiguous_fake_startup_anchor(self):
         source = self.base.replace(
             '   TRAVIS_BRAIN.start()\n',
