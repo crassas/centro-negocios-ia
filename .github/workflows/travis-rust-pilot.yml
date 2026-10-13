@@ -7,6 +7,10 @@ on:
       - "rust/travis-memory/**"
       - "operit-agent/travis_rust_memory*.py"
       - "operit-agent/travis_github_feed*.py"
+      - "operit-agent/travis_github_runtime*.py"
+      - "operit-agent/jarvis_local.py"
+      - "operit-agent/centro_station.py"
+      - "operit-agent/install_jarvis_local.sh"
       - "docs/TRAVIS_GITHUB_FEED.md"
       - "docs/TRAVIS_RUST_TRANSITION.md"
       - ".github/workflows/travis-rust-pilot.yml"
@@ -15,6 +19,10 @@ on:
       - "rust/travis-memory/**"
       - "operit-agent/travis_rust_memory*.py"
       - "operit-agent/travis_github_feed*.py"
+      - "operit-agent/travis_github_runtime*.py"
+      - "operit-agent/jarvis_local.py"
+      - "operit-agent/centro_station.py"
+      - "operit-agent/install_jarvis_local.sh"
       - "docs/TRAVIS_GITHUB_FEED.md"
       - "docs/TRAVIS_RUST_TRANSITION.md"
       - ".github/workflows/travis-rust-pilot.yml"
@@ -49,4 +57,6 @@ jobs:
       - name: GitHub knowledge feed (offline tests)
         env:
           PYTHONPATH: operit-agent
-        run: python3 operit-agent/travis_github_feed_selftest.py -v
+        run: |
+          python3 operit-agent/travis_github_feed_selftest.py -v
+          python3 operit-agent/travis_github_runtime_selftest.py -v
