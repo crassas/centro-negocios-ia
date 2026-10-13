@@ -196,6 +196,7 @@ class KnowledgeController:
                         self._last_result = verdict
                         self._last_error = error_type
                         self._busy = False
+                    continue  # Next approved source can sync immediately if still idle.
             self._wake.wait(timeout=POLL_SECONDS)
             self._wake.clear()
 
