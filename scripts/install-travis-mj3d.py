@@ -59,9 +59,11 @@ def clean_photo_overlay(source):
 
 def patch(source):
     text,removed=clean_photo_overlay(source)
-    if IMPORT in text and HOOK in text and "travis-michael-jackson-3d.glb" in text:
+    using_model=("travis-michael-jackson-3d.glb" in text or
+                 "loadAsync(MJ3D_ASSET)" in text)
+    if IMPORT in text and HOOK in text and using_model:
         return text,text!=source
-    if IMPORT in text or HOOK in text or "travis-michael-jackson-3d.glb" in text:
+    if IMPORT in text or HOOK in text or using_model:
         raise RuntimeError("Detected incomplete MJ3D integration; files unchanged")
     imports=[line for line in text.splitlines(True) if "travis-holographic-head.mjs" in line and line.lstrip().startswith("import ")]
     if len(imports)!=1: raise RuntimeError("Travis holographic face import could not be matched safely")
