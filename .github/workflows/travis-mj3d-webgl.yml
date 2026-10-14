@@ -1,0 +1,43 @@
+name: Travis MJ3D Mobile WebGL Smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'travis-3d.mjs'
+      - 'travis-michael-jackson-3d.mjs'
+      - 'scripts/travis-mj3d-browser-smoke.mjs'
+      - 'assets/travis/travis-michael-jackson-3d.glb'
+      - '.github/workflows/travis-mj3d-webgl.yml'
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Three and Playwright without altering Travis
+        run: |
+          npm install --prefix "$RUNNER_TEMP/mj3d" --no-save --no-audit --no-fund three@0.180.0 playwright-core@1.56.1
+          command -v google-chrome-stable || command -v google-chrome || command -v chromium
+      - name: Run real mobile WebGL and GPU shader check
+        run: |
+          set -euo pipefail
+          CHROME="$(command -v google-chrome-stable || command -v google-chrome || command -v chromium)"
+          mkdir -p "$RUNNER_TEMP/mj3d-evidence"
+          node scripts/travis-mj3d-browser-smoke.mjs \
+            "$RUNNER_TEMP/mj3d/node_modules/playwright-core" \
+            "$CHROME" \
+            "$RUNNER_TEMP/mj3d/node_modules/three" \
+            "$RUNNER_TEMP/mj3d-evidence"
+      - name: Preserve console logs and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: travis-mj3d-mobile-smoke
+          path: ${{ runner.temp }}/mj3d-evidence/
+          retention-days: 7
