@@ -1,0 +1,68 @@
+name: Build Travis Michael Jackson 3D
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/build_travis_mj_bust.py"
+      - ".github/workflows/travis-mj-3d.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: travis-mj3d-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - name: Checkout Travis source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Install Blender headless
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y blender
+          blender --version
+      - name: Create genuine 3D sculpt from original Travis CC0 bust
+        run: |
+          set -euo pipefail
+          blender -b -t 2 --python scripts/build_travis_mj_bust.py -- \
+            assets/travis/travis-face-bust.glb \
+            assets/travis/travis-michael-jackson-3d.glb | tee /tmp/travis-mj-build.log
+          grep -F "TRAVIS_MJ3D_BUILD_OK" /tmp/travis-mj-build.log
+      - name: Inspect GLB header and required facial mesh anchors
+        run: |
+          python3 - <<'PY'
+          import json,struct
+          from pathlib import Path
+          p=Path("assets/travis/travis-michael-jackson-3d.glb")
+          b=p.read_bytes()
+          assert b[:4]==b'glTF' and struct.unpack_from("<I",b,8)[0]==len(b)
+          size,ctype=struct.unpack_from("<II",b,12)
+          assert ctype==0x4e4f534a
+          j=json.loads(b[20:20+size].decode())
+          names={x.get('name') for x in j.get('nodes',[])}
+          must={'TravisFace_Bust','TravisMJ_HairBase','TravisMJ_Curls'}
+          must.update('TravisFace_'+part+'_'+side for part in ('Eye','Iris','Pupil') for side in ('L','R'))
+          assert not(must-names), 'Missing mesh nodes: '+str(must-names)
+          assert len(b)<12_000_000, 'GLB too heavy for Android'
+          print('TRAVIS_MJ3D_GLB_VALID',len(b),sorted(must))
+          PY
+      - name: Commit built GLB asset for standalone offline installation
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/travis/travis-michael-jackson-3d.glb
+          if git diff --cached --quiet; then
+            echo 'TRAVIS_MJ3D_ASSET_UNCHANGED=true'
+          else
+            git commit -m 'assets(travis): generated MJ3D bust in Blender'
+            git push
+          fi
