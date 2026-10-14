@@ -377,6 +377,9 @@ def diagnostic():
         "artemisRecognizesAndroidAction": (
             "android_control" in artemis_script and "open_app" in artemis_script),
         "jarvisUsesArtemis": "travis_artemis_bridge" in server,
+        "jarvisUsesAndroidParser": "travis_android_commands.intent" in server,
+        "jarvisMentionsAndroidTool": "android_control" in server,
+        "jarvisHasDedicatedCallRoute": "chatgpt_voice_call" in server,
         "jarvisHasNativeRoute": "/native-bridge/" in server,
         "installManaged": MARKER.is_file(),
         "handoffModule": HANDOFF.is_file(),
