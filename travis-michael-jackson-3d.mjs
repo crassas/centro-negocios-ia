@@ -5,7 +5,7 @@
  * Modifications: jacket cropped in Blender; glTF transformation, holographic
  * shader, dissolve and mouth motion. Unofficial artistic adaptation.
  */
-export const MJ3D_ASSET='./assets/travis/travis-michael-jackson-3d.glb?v=mj3d-2';
+export const MJ3D_ASSET='./assets/travis/travis-michael-jackson-3d.glb?v=mj3d-4';
 
 function licensedFaceMaterial(THREE,head,headUniforms){
   head.geometry.computeBoundingBox();
@@ -88,10 +88,45 @@ function licensedFaceMaterial(THREE,head,headUniforms){
   return shader;
 }
 
+/**
+ * Fault-tolerant genuine 3D face loader. A blocked GLB must never leave the
+ * Android stage blank. Preserve the shipped CC0 Blender head as fallback.
+ * The requested URL can be the MJ asset or the original URL (recursive
+ * fallback in some already-installed local Travis variants).
+ */
+export async function loadMJ3DOrOriginal(loader,requested=MJ3D_ASSET){
+  const original='./assets/travis/travis-face-bust.glb?v=1';
+  const target=String(requested||MJ3D_ASSET);
+  if(!target.includes('michael-jackson-3d.glb')){
+    const base=await loader.loadAsync(target);
+    base.scene.userData.mj3dAsset='original';
+    return base;
+  }
+  try{
+    const gltf=await loader.loadAsync(target);
+    const mesh=gltf.scene?.getObjectByName('TravisMJ_Licensed_Head');
+    const material=Array.isArray(mesh?.material)?mesh.material[0]:mesh?.material;
+    if(!mesh?.isMesh || !material?.map)
+      throw new Error('MJ3D model missing its real textured face');
+    gltf.scene.userData.mj3dAsset='licensed';
+    return gltf;
+  }catch(error){
+    console.warn('Travis MJ3D unavailable; restoring original Blender head:',error);
+    const gltf=await loader.loadAsync(original);
+    gltf.scene.userData.mj3dAsset='original';
+    gltf.scene.userData.mj3dLoadError=String(error?.message||error).slice(0,240);
+    return gltf;
+  }
+}
+
 export function styleMichaelJacksonHair(THREE,faceModel,headUniforms){
   if(!faceModel||!headUniforms)throw new Error('MJ3D: original Travis rig missing');
   const head=faceModel.getObjectByName('TravisMJ_Licensed_Head');
-  if(!head?.isMesh)throw new Error('MJ3D: real licensed Michael Jackson head missing');
+  if(!head?.isMesh) {
+    // loadMJ3DOrOriginal has supplied a real alternative head.
+    faceModel.userData.mj3dAsset='original';
+    return {meshes:[],fallback:true,geometry:'original Travis Blender 3D head'};
+  }
   const oldMaterial=head.material;
   head.material=licensedFaceMaterial(THREE,head,headUniforms);
   head.userData.michaelJacksonLicense='CC BY 3.0 France · free-3d.fr';
