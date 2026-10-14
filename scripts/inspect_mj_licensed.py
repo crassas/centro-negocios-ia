@@ -17,6 +17,8 @@ for o in mesh_objects:
         'shape_keys':list(o.data.shape_keys.key_blocks.keys())[:15] if o.data.shape_keys else [],
         'loc':[round(x,4) for x in o.location],
         'rotation':[round(x,4) for x in o.rotation_euler]})
+bpy.ops.file.pack_all()
+bpy.ops.wm.save_as_mainfile(filepath='/tmp/travis-mj-licensed-preview.blend',compress=True)
 print('MJ_LICENSED_GLTF_DIAGNOSTICS',json.dumps({
  'file':str(filename),'meshes':info,'other_nodes':[(o.name,o.type) for o in bpy.data.objects if o.type!='MESH'],
  'scene_world_bounds':[[
