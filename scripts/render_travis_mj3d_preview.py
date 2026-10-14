@@ -10,6 +10,12 @@ from mathutils import Vector
 if '--' not in sys.argv: raise SystemExit('Pass -- output-directory')
 dest=Path(sys.argv[sys.argv.index('--')+1]).resolve();dest.mkdir(parents=True,exist_ok=True)
 scene=bpy.context.scene
+# For the composite GLB, show ONLY the licensed physical 3D face.
+# Original Travis head/eye meshes remain inside the asset as animation anchors.
+if bpy.data.objects.get('TravisMJ_Licensed_Head'):
+    for obj in bpy.data.objects:
+        if obj.name.startswith('TravisFace_'):
+            obj.hide_render=True
 scene.render.engine='CYCLES'
 scene.cycles.device='CPU'
 scene.cycles.samples=12
