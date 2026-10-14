@@ -1,31 +1,44 @@
 /**
- * Native 3D Michael Jackson-inspired (Bad-era) hair/portrait shading.
- * Geometry is authored by Blender: scripts/build_travis_mj_bust.py.
- * This DOES NOT render photographs or a planar portrait. It preserves the
- * existing Travis facial animation, eye movement and assistant identity.
+ * Michael Jackson × Travis / TRUE licensed volumetric facial model.
+ * No photograph, billboard, or synthetic helmet.
+ * CC BY 3.0 France: https://www.free-3d.fr/model/michael-jackson-3d-avatar-portait-50676
+ * Modifications: jacket cropped in Blender; glTF transformation, holographic
+ * shader, dissolve and mouth motion. Unofficial artistic adaptation.
  */
-export const MJ3D_ASSET='./assets/travis/travis-michael-jackson-3d.glb?v=mj3d-1';
+export const MJ3D_ASSET='./assets/travis/travis-michael-jackson-3d.glb?v=mj3d-2';
 
-export function styleMichaelJacksonHair(THREE, faceModel, headUniforms) {
-  if (!faceModel || !headUniforms) throw new Error('MJ3D: missing face or animation uniforms');
-  const hairNames=['TravisMJ_HairBase','TravisMJ_Curls'];
-  const meshes=hairNames.map(name=>faceModel.getObjectByName(name));
-  if(meshes.some(x=>!x?.isMesh)) {
-    throw new Error('MJ3D: incomplete Blender hair meshes; expected '+hairNames.join(', '));
-  }
-  const u={
-    uTime:headUniforms.uTime,
-    uBuild:headUniforms.uBuild,
-    uDissolve:headUniforms.uDissolve,
-    uVoice:headUniforms.uState
+function licensedFaceMaterial(THREE,head,headUniforms){
+  head.geometry.computeBoundingBox();
+  const box=head.geometry.boundingBox;
+  const original=Array.isArray(head.material)?head.material[0]:head.material;
+  const originalTexture=original?.map||null;
+  if(!originalTexture) throw new Error('MJ3D: licensed source texture map missing');
+  const height=Math.max(.2,box.max.y-box.min.y);
+  const uniforms={
+    uMap:{value:originalTexture},
+    uTime:headUniforms.uTime,uBuild:headUniforms.uBuild,
+    uDissolve:headUniforms.uDissolve,uVoice:headUniforms.uState,
+    uBottom:{value:box.min.y},uTop:{value:box.max.y},
+    uFront:{value:box.max.z},
+    uMouthY:{value:box.min.y+height*.39},
+    uMouthX:{value:(box.min.x+box.max.x)*.5},
+    uWidth:{value:Math.max(.07,(box.max.x-box.min.x)*.16)}
   };
   const shader=new THREE.ShaderMaterial({
-    uniforms:u,
+    uniforms,
     vertexShader:`
+      varying vec2 vUv;
       varying vec3 vP,vN,vV;
+      uniform float uTime,uVoice,uFront,uMouthY,uMouthX,uWidth;
       void main(){
-        vP=position;
-        vec4 mv=modelViewMatrix*vec4(position,1.);
+        vUv=uv;vP=position;
+        vec3 p=position;
+        float mouth=exp(-pow((position.x-uMouthX)/uWidth,2.0)
+                        -pow((position.y-uMouthY)/.052,2.0))
+          *smoothstep(uFront-.20,uFront-.04,position.z);
+        p.y-=mouth*uVoice*.031;
+        p.z+=mouth*uVoice*.008;
+        vec4 mv=modelViewMatrix*vec4(p,1.);
         vN=normalize(normalMatrix*normal);
         vV=normalize(-mv.xyz);
         gl_Position=projectionMatrix*mv;
@@ -33,45 +46,61 @@ export function styleMichaelJacksonHair(THREE, faceModel, headUniforms) {
     `,
     fragmentShader:`
       precision highp float;
-      varying vec3 vP,vN,vV;
-      uniform float uTime,uBuild,uDissolve,uVoice;
+      varying vec2 vUv;varying vec3 vP,vN,vV;
+      uniform sampler2D uMap;
+      uniform float uTime,uBuild,uDissolve,uVoice,uBottom,uTop;
       void main(){
-        // Match the original Travis face's holographic assembly/dissolve.
-        vec3 cell=floor(vP*285.0);
-        float grain=fract(sin(dot(cell,vec3(12.9898,78.233,37.719)))*43758.5453);
-        float assemble=clamp((vP.y-.16)/1.18,0.,1.)*.73+grain*.27;
-        if(uBuild<.999 && assemble>uBuild)discard;
-        float field=clamp((vP.y-.12)/1.26,0.,1.)*.54+grain*.32
-          +(.5+.5*sin(vP.x*13.+vP.z*8.))*.14;
-        if(uDissolve>=.999 || (uDissolve>.001&&field<uDissolve))discard;
-        if(grain>.998)discard;
+        vec4 surface=texture2D(uMap,vUv);
+        if(surface.a<.035)discard;
+        float height=max(.01,uTop-uBottom);
+        float h=clamp((vP.y-uBottom)/height,0.,1.);
+        float hash=fract(sin(dot(floor(vP*284.),vec3(12.9898,78.233,37.719)))*43758.5453);
+        float assemble=1.-(h*.80+hash*.20);
+        if(uBuild<.999&&uBuild<assemble)discard;
+        float field=h*.51+hash*.35+(.5+.5*sin(vP.x*15.+vP.z*11.))*.14;
+        if(uDissolve>=.999||(uDissolve>.001&&field<uDissolve))discard;
         vec3 n=normalize(vN);
-        float face=max(0.,dot(n,normalize(vV)));
-        float edge=pow(1.-face,2.25);
-        float light=max(0.,dot(n,normalize(vec3(-.6,.7,1.))));
-        float scan=pow(.5+.5*sin(vP.y*520.-uTime*1.35),30.);
-        float sweep=exp(-pow(abs(vP.y-(.16+mod(uTime*.09,1.1)))/.015,2.));
-        float dissolveEdge=uDissolve>0.001?
-          (1.-smoothstep(0.,.075,field-uDissolve))*(1.-step(.999,uDissolve)):0.;
-        // Deep natural-blue black hair; fine gold and copper edge light;
-        // physically continuous geometry turns with the real 3D bust.
-        vec3 base=vec3(.011,.019,.028);
-        vec3 blue=vec3(.065,.13,.18);
-        vec3 copper=vec3(.40,.26,.15);
-        vec3 gold=vec3(.78,.59,.31);
-        vec3 colour=base+blue*(.38*light+.67*edge+scan*.13)
-          +copper*(edge*.31+scan*.055+uVoice*.08)
-          +gold*(dissolveEdge*.61+sweep*.16);
-        colour+=vec3(.035,.060,.074)*pow(light,3.)*.15;
-        gl_FragColor=vec4(colour,1.);
+        vec3 view=normalize(vV);
+        float fresnel=pow(1.-max(0.,dot(n,view)),2.6);
+        float key=max(0.,dot(n,normalize(vec3(-.55,.6,1.))));
+        float scan=pow(.5+.5*sin(vP.y*470.-uTime*1.4),21.);
+        float sweep=exp(-pow((h-mod(uTime*.08,1.0))/.017,2.));
+        float dissolveFront=(1.-smoothstep(0.,.065,field-uDissolve))
+          *step(.001,uDissolve)*(1.-step(.999,uDissolve));
+        vec3 source=surface.rgb;
+        vec3 face=source*(.67+.45*key);
+        face=mix(face,face*vec3(.67,.87,1.06),.27);
+        vec3 cool=vec3(.17,.60,.83);
+        vec3 gold=vec3(.83,.62,.38);
+        face+=cool*(fresnel*.19+scan*.018+sweep*.12);
+        face+=gold*(fresnel*.058+dissolveFront*.34);
+        face+=vec3(.12,.26,.32)*uVoice*.018;
+        float neck=smoothstep(0.,.19,h);
+        float opacity=surface.a*neck;
+        if(opacity<.016)discard;
+        gl_FragColor=vec4(face,opacity);
       }
     `,
-    depthWrite:true,depthTest:true,transparent:false,side:THREE.DoubleSide,
+    transparent:true,depthWrite:true,depthTest:true,side:THREE.FrontSide,
     toneMapped:false
   });
-  for(const mesh of meshes){
-    mesh.material=shader;
-    mesh.frustumCulled=true;
-  }
-  return {meshes:hairNames,material:shader,geometry:'native-blender-3d',animation:'shared-travis-face-uniforms'};
+  shader.name='TravisMichaelJacksonReal3DHologram';
+  return shader;
+}
+
+export function styleMichaelJacksonHair(THREE,faceModel,headUniforms){
+  if(!faceModel||!headUniforms)throw new Error('MJ3D: original Travis rig missing');
+  const head=faceModel.getObjectByName('TravisMJ_Licensed_Head');
+  if(!head?.isMesh)throw new Error('MJ3D: real licensed Michael Jackson head missing');
+  const oldMaterial=head.material;
+  head.material=licensedFaceMaterial(THREE,head,headUniforms);
+  head.userData.michaelJacksonLicense='CC BY 3.0 France · free-3d.fr';
+  head.frustumCulled=true;
+  return {
+    meshes:[head.name],material:head.material,
+    textured:Boolean((Array.isArray(oldMaterial)?oldMaterial[0]:oldMaterial)?.map),
+    geometry:'real Michael Jackson Blender 3D mesh',
+    animation:'original Travis face shader uniforms; subtle audio mouth motion',
+    source:'https://www.free-3d.fr/model/michael-jackson-3d-avatar-portait-50676'
+  };
 }
