@@ -14,7 +14,7 @@ import { buildSpeechEnvelope, speechEnvelopeLevel } from './travis-audio-sync.mj
 import { sceneSignature } from './travis-scene-tracker.mjs?v=1';
 import { cameraCommand } from './travis-vision-policy.mjs?v=objects-1';
 import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=sand-1';
-import {styleMichaelJacksonHair, MJ3D_ASSET} from './travis-michael-jackson-3d.mjs?v=mj3d-2';
+import {styleMichaelJacksonHair, MJ3D_ASSET, loadMJ3DOrOriginal} from './travis-michael-jackson-3d.mjs?v=mj3d-4';
 import { projectWebAnswer } from './travis-web-projection.mjs?v=agent-1';
 import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=motion-1';
 import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
@@ -568,7 +568,7 @@ if (!hud || !launcher || !canvas) {
     faceRoot.visible=false;
     hud.dataset.faceAsset='loading';
     try {
-      const gltf=await new GLTFLoader().loadAsync(asset);
+      const gltf=await loadMJ3DOrOriginal(new GLTFLoader(),asset);
       realFaceModel=gltf.scene;
       realFaceModel.name='TravisRealFace';
       const head=realFaceModel.getObjectByName('TravisFace_Bust');
@@ -645,9 +645,12 @@ if (!hud || !launcher || !canvas) {
       realFaceModel.position.set(-center.x,-.66,-center.z+.04);
       faceRoot.add(realFaceModel);realFaceReady=true;
 
-      hud.dataset.faceAsset=preferMJ?'mj-3d':'fallback-bust';
-      hud.dataset.avatarStyle=preferMJ?'michael-jackson-3d':'laser-hologram';
-      hud.dataset.visualFallback=preferMJ?'none':'original-blender-bust';
+      const realMJLoaded=Boolean(licensedMJHead?.isMesh);
+      hud.dataset.faceAsset=realMJLoaded?'mj-3d':'fallback-bust';
+      hud.dataset.avatarStyle=realMJLoaded?'michael-jackson-3d':'laser-hologram';
+      hud.dataset.visualFallback=realMJLoaded?'none':'original-blender-bust';
+      if(realFaceModel.userData?.mj3dLoadError)
+        hud.dataset.faceError=realFaceModel.userData.mj3dLoadError;
       console.info('Travis bust loaded',{meshes:realFaceModel.children.map(o=>o.name),
         bounds:size.toArray(),baseBloom:head.layers.isEnabled(BLOOM_LAYER),source:'Blender GLB'});
     } catch(error) {
