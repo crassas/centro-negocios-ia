@@ -14,7 +14,7 @@ import { buildSpeechEnvelope, speechEnvelopeLevel } from './travis-audio-sync.mj
 import { sceneSignature } from './travis-scene-tracker.mjs?v=1';
 import { cameraCommand } from './travis-vision-policy.mjs?v=objects-1';
 import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=sand-1';
-import {createMichaelJacksonHologram} from './travis-michael-jackson.mjs?v=mj-avatar-1';
+import {styleMichaelJacksonHair, MJ3D_ASSET} from './travis-michael-jackson-3d.mjs?v=mj3d-1';
 import { projectWebAnswer } from './travis-web-projection.mjs?v=agent-1';
 import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=motion-1';
 import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
@@ -97,7 +97,6 @@ if (!hud || !launcher || !canvas) {
   let realFaceIris=[];
   let realFaceBaseMaterial=null;
   let realFaceReady=false;
-  let michaelJacksonAvatar=null;
   let avatarMaterial;
   let activeForm='core';
   let manualFormUntil=0,lastAutoFormCheck=0;
@@ -566,7 +565,7 @@ if (!hud || !launcher || !canvas) {
     faceRoot.visible=false;
     hud.dataset.faceAsset='loading';
     try {
-      const gltf=await new GLTFLoader().loadAsync('./assets/travis/travis-face-bust.glb?v=1');
+      const gltf=await new GLTFLoader().loadAsync(MJ3D_ASSET);
       realFaceModel=gltf.scene;
       realFaceModel.name='TravisRealFace';
       const head=realFaceModel.getObjectByName('TravisFace_Bust');
@@ -592,6 +591,7 @@ if (!hud || !launcher || !canvas) {
       }
       realFaceBaseMaterial=createHolographicHeadMaterial(THREE);
       head.material=realFaceBaseMaterial;
+      styleMichaelJacksonHair(THREE,realFaceModel,realFaceBaseMaterial.uniforms);
       // Keep the projected face readable; only its light contours receive bloom.
       head.layers.disable(BLOOM_LAYER);
       const glowShell=new THREE.Mesh(head.geometry,faceShellShader());
@@ -630,13 +630,8 @@ if (!hud || !launcher || !canvas) {
       }
       realFaceModel.position.set(-center.x,-.66,-center.z+.04);
       faceRoot.add(realFaceModel);realFaceReady=true;
-      // Photo-based visual overlay; the 3D bust remains the no-image fallback.
-      void createMichaelJacksonHologram(THREE,realFaceModel,realFaceHead).then(avatar=>{
-        michaelJacksonAvatar=avatar;
-        hud.dataset.avatarStyle='michael-jackson-hologram';
-        hud.dataset.faceAsset='michael-jackson';
-      }).catch(error=>console.warn('Travis Michael Jackson portrait fallback:',error));
-      hud.dataset.faceAsset='bust';hud.dataset.avatarStyle='laser-hologram';
+
+      hud.dataset.faceAsset='mj-3d';hud.dataset.avatarStyle='michael-jackson-3d';
       console.info('Travis bust loaded',{meshes:realFaceModel.children.map(o=>o.name),
         bounds:size.toArray(),baseBloom:head.layers.isEnabled(BLOOM_LAYER),source:'Blender GLB'});
     } catch(error) {
@@ -2220,13 +2215,7 @@ if (!hud || !launcher || !canvas) {
 
     cinematicBacklight?.update(reducedMotion?0:t,state==='speaking'?speechLevel:0,conceptProjection?.state());
     faceRig?.update(state==='speaking'?speechLevel:0,null);
-    if(michaelJacksonAvatar){
-      michaelJacksonAvatar.update({
-        time:t,build:reducedMotion?1:clamp(t/2.4,0,1),
-        dissolve:Math.max(visibleProjection,Math.min(1,(1-formBlend.face)*.93)),
-        voice:state==='speaking'?speechLevel:0,opacity:Math.max(0,formBlend.face)
-      });
-    }
+
     hud.dataset.mouthLevel=speechLevel.toFixed(2);
     if (faceRoot) {
       const faceMix=Math.max(.001,formBlend.face);
