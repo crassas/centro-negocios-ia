@@ -217,7 +217,8 @@ export async function createMichaelJacksonHologram(THREE,parent,head) {
   // Parent is the same GLTF space as the original bust; the old 3D mesh remains
   // a low-light depth/backlight fallback, including when projection starts.
   parent.add(root);
-  return {
+  let disposed=false,animationFrame=0;
+  const avatar={
     root,
     update({time=0,build=1,dissolve=0,voice=0,opacity=1}={}){
       uniforms.uTime.value=time;
@@ -228,10 +229,29 @@ export async function createMichaelJacksonHologram(THREE,parent,head) {
       root.visible=opacity>.015;
     },
     dispose(){
+      disposed=true;
+      if(animationFrame)cancelAnimationFrame(animationFrame);
       root.parent?.remove(root);
       portrait.geometry.dispose();material.dispose();texture.dispose();
       root.getObjectByName('TravisMichaelJacksonSand')?.geometry.dispose();
       root.getObjectByName('TravisMichaelJacksonSand')?.material.dispose();
     }
   };
+  // Follow the original Travis face's shader uniforms. This avoids brittle
+  // hooks into specific versions of the local Android render loop.
+  // The existing face material drives build, dissolve and voice state.
+  function followFace(now){
+    if(disposed||!root.parent)return;
+    const facialUniforms=head.material?.uniforms||{};
+    avatar.update({
+      time:now/1000,
+      build:facialUniforms.uBuild?.value??1,
+      dissolve:facialUniforms.uDissolve?.value??0,
+      voice:facialUniforms.uState?.value??0,
+      opacity:1
+    });
+    animationFrame=requestAnimationFrame(followFace);
+  }
+  animationFrame=requestAnimationFrame(followFace);
+  return avatar;
 }
