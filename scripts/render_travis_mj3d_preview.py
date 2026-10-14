@@ -41,16 +41,23 @@ def area(name,location,power,size,color):
 area('SoftboxLeft',(-1.2,-2.0,1.9),280,2.1,(.84,.91,1.0))
 area('WarmRim',(1.2,.4,1.45),230,1.4,(1.0,.78,.49))
 area('FaceFill',(1.0,-1.9,.7),160,2.3,(.75,.86,1.0))
-bpy.ops.object.camera_add(location=(0,-3,.63))
+mesh_objects=[obj for obj in bpy.data.objects if obj.type=='MESH']
+if not mesh_objects:raise RuntimeError('No model to preview')
+extents=[obj.matrix_world@Vector(v) for obj in mesh_objects for v in obj.bound_box]
+center_x=(min(x.x for x in extents)+max(x.x for x in extents))*.5
+center_y=(min(x.y for x in extents)+max(x.y for x in extents))*.5
+center_z=(min(x.z for x in extents)+max(x.z for x in extents))*.5
+height=max(x.z for x in extents)-min(x.z for x in extents)
+bpy.ops.object.camera_add(location=(center_x,center_y-3.,center_z))
 camera=bpy.context.object;camera.name='TRAVIS_MJ3D_QA_CAMERA'
 camera.data.type='ORTHO'
-camera.data.ortho_scale=1.85
+camera.data.ortho_scale=max(1.0,height*1.15)
 scene.camera=camera
 
 outputs={}
-for name,position in [('front',(0,-3.0,.63)),('three-quarter',(1.75,-3.0,.68))]:
-    camera.location=position
-    direction=Vector((0,-.06,.57))-camera.location
+for name,offset in [('front',(0,-3.0,0)),('three-quarter',(1.4,-3.0,.05))]:
+    camera.location=Vector((center_x+offset[0],center_y+offset[1],center_z+offset[2]))
+    direction=Vector((center_x,center_y,center_z))-camera.location
     camera.rotation_euler=direction.to_track_quat('-Z','Y').to_euler()
     path=dest/('travis-mj3d-preview-'+name+'.png')
     scene.render.filepath=str(path)
