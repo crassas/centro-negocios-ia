@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "scripts/build_travis_mj_bust.py"
+      - "scripts/render_travis_mj3d_preview.py"
       - ".github/workflows/travis-mj-3d.yml"
 
 permissions:
