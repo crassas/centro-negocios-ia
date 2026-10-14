@@ -14,6 +14,7 @@ GLB=ROOT/"assets/travis/travis-michael-jackson-3d.glb"
 IMPORT="import {styleMichaelJacksonHair, MJ3D_ASSET} from './travis-michael-jackson-3d.mjs?v=mj3d-2';"
 OLD_MJ3D_IMPORT="import {styleMichaelJacksonHair, MJ3D_ASSET} from './travis-michael-jackson-3d.mjs?v=mj3d-1';"
 HOOK="      styleMichaelJacksonHair(THREE,realFaceModel,realFaceBaseMaterial.uniforms);"
+SAFE_HOOK="      if(preferMJ) styleMichaelJacksonHair(THREE,realFaceModel,realFaceBaseMaterial.uniforms);"
 LOADER=r"(['\"])\./assets/travis/travis-face-bust\.glb(?:\?[^'\"]*)?\1"
 LICENSE=ROOT/"assets/travis/MICHAEL_JACKSON_3D_CREDITS.md"
 OLD_PHOTO_IMPORT=r"(?m)^\s*import\s*\{\s*createMichaelJacksonHologram\s*\}\s*from\s*['\"][^'\"]+['\"];\s*\n"
@@ -118,7 +119,7 @@ def patch(source):
     using_model=("travis-michael-jackson-3d.glb" in text or
                  "loadAsync(MJ3D_ASSET)" in text)
     # Already migrated to the 3D model: only refresh its imported version.
-    if (HOOK in text and using_model and
+    if ((HOOK in text or SAFE_HOOK in text) and using_model and
             (IMPORT in text or OLD_MJ3D_IMPORT in text)):
         text=text.replace(OLD_MJ3D_IMPORT,IMPORT)
         # Older integrations used a literal path; keep the model loader canonical.
@@ -127,7 +128,7 @@ def patch(source):
             "MJ3D_ASSET")
         text=ensure_face_recovery(text)
         return text,text!=source
-    if IMPORT in text or OLD_MJ3D_IMPORT in text or HOOK in text or using_model:
+    if IMPORT in text or OLD_MJ3D_IMPORT in text or HOOK in text or SAFE_HOOK in text or using_model:
         raise RuntimeError("Integração 3D incompleta ou não reconhecida; não foram alterados ficheiros")
     imports=[line for line in text.splitlines(True)
              if "travis-holographic-head.mjs" in line and
