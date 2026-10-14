@@ -117,7 +117,8 @@ def ensure_face_recovery(source):
 def patch(source):
     text,removed=clean_photo_overlay(source)
     using_model=("travis-michael-jackson-3d.glb" in text or
-                 "loadAsync(MJ3D_ASSET)" in text)
+                 "loadAsync(MJ3D_ASSET)" in text or
+                 "createFaceAvatar({asset=MJ3D_ASSET" in text)
     # Already migrated to the 3D model: only refresh its imported version.
     if ((HOOK in text or SAFE_HOOK in text) and using_model and
             (IMPORT in text or OLD_MJ3D_IMPORT in text)):
