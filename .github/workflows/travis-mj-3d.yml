@@ -27,7 +27,8 @@ jobs:
       - name: Install Blender headless
         run: |
           sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y blender
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y blender python3-numpy
+          blender -b --python-expr "import sys; print('TRAVIS_BLENDER_PYTHON',sys.version); print('TRAVIS_BLENDER_PATHS',sys.path)"
           blender --version
       - name: Create genuine 3D sculpt from original Travis CC0 bust
         run: |
