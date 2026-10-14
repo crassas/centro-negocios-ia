@@ -103,6 +103,7 @@ def read(path):
 
 
 def request(url, data=None, timeout=4):
+    started = time.monotonic()
     body = json.dumps(data).encode() if data is not None else None
     headers = {"Content-Type": "application/json", "Origin": BASE_URL}
     req = urllib.request.Request(url, data=body, headers=headers)
@@ -112,7 +113,13 @@ def request(url, data=None, timeout=4):
             return (response.status, value if isinstance(value, dict) else {})
     except urllib.error.HTTPError as exc:
         return exc.code, {}
-    except (OSError, ValueError, TimeoutError):
+    except (OSError, ValueError, TimeoutError) as exc:
+        if url == BASE_URL + "/jarvis":
+            printline("TRAVIS_CHATGPT_HTTP_FAILURE", {
+                "exceptionType": type(exc).__name__,
+                "elapsedMs": round((time.monotonic() - started) * 1000),
+                "timeoutSeconds": timeout,
+            })
         return 0, {}
 
 
@@ -339,25 +346,69 @@ def rollback():
     printline("TRAVIS_CHATGPT_ROLLBACK", {"ok": True})
 
 
+def diagnostic():
+    """Only inspect local configuration, no Android command or LLM inference."""
+    import importlib.util
+    state = live()
+    if not state["jarvisOnline"]:
+        raise Stop("Jarvis não responde na porta 8770")
+    try:
+        script = read(INTENTS)
+        spec = importlib.util.spec_from_file_location("travis_call_parser_check", str(INTENTS))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        sample = module.intent("Travis, call ChatGPT") or {}
+        sample_open = module.intent("Travis, abre o ChatGPT") or {}
+        probe = {
+            "androidParser": sample.get("action"),
+            "androidParserApp": sample.get("app"),
+            "existingOpenApp": sample_open.get("action") == "open_app",
+            "parserHasHandoff": FLAG in script,
+        }
+    except (OSError, ValueError, RuntimeError, ImportError, SyntaxError) as exc:
+        probe = {"errorType": type(exc).__name__}
+    bridge_script = read(BROKER)
+    artemis_script = read(ARTEMIS)
+    server = read(JARVIS)
+    printline("TRAVIS_CHATGPT_ROUTE_DIAGNOSTIC", {
+        **probe,
+        "brokerHandoff": FLAG in bridge_script and "call_chatgpt_voice(self)" in bridge_script,
+        "artemisUsesAndroidParser": "travis_android_commands.intent" in artemis_script,
+        "artemisRecognizesAndroidAction": (
+            "android_control" in artemis_script and "open_app" in artemis_script),
+        "jarvisUsesArtemis": "travis_artemis_bridge" in server,
+        "jarvisHasNativeRoute": "/native-bridge/" in server,
+        "installManaged": MARKER.is_file(),
+        "handoffModule": HANDOFF.is_file(),
+        "noFilesChanged": True,
+    })
+
+
 def demo():
     state = live()
     if not state["jarvisOnline"] or not state["bridgeOnline"]:
         raise Stop("Jarvis ou ponte Android indisponível")
     if not MARKER.is_file():
         raise Stop("Integração ainda não instalada")
+    started = time.monotonic()
     status, data = request(BASE_URL + "/jarvis", {
         "text": "Travis, call ChatGPT", "language": "pt",
     }, timeout=55)
+    result = data.get("result") if isinstance(data.get("result"), dict) else {}
     printline("TRAVIS_CHATGPT_LIVE", {
         "http": status, "ok": data.get("ok"), "tool": data.get("tool"),
-        "verified": (data.get("result") or {}).get("verified") if isinstance(data.get("result"), dict) else None,
-        "voiceLiveVerified": (data.get("result") or {}).get("voiceLiveVerified") if isinstance(data.get("result"), dict) else None,
+        "verified": result.get("verified"),
+        "voiceLiveVerified": result.get("voiceLiveVerified"),
+        "elapsedMs": round((time.monotonic() - started) * 1000),
+        "transportConfirmed": status == 200,
     })
+    if status != 200:
+        raise Stop("Não foi possível confirmar resposta da rota /jarvis; não atribuir sucesso à chamada")
 
 
 def main():
-    if len(sys.argv) != 2 or sys.argv[1] not in {"check", "apply", "status", "rollback", "call"}:
-        print("Uso: travis-chatgpt-call.py check|apply|status|rollback|call")
+    if len(sys.argv) != 2 or sys.argv[1] not in {"check", "apply", "status", "rollback", "call", "diagnose"}:
+        print("Uso: travis-chatgpt-call.py check|apply|status|rollback|call|diagnose")
         return 2
     try:
         action = sys.argv[1]
@@ -371,6 +422,7 @@ def main():
                 "voiceIntent": "Travis, call ChatGPT",
             })
         elif action == "rollback": rollback()
+        elif action == "diagnose": diagnostic()
         else: demo()
         return 0
     except Stop as exc:
