@@ -31,6 +31,14 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y blender python3-numpy
           blender -b --python-expr "import sys; print('TRAVIS_BLENDER_PYTHON',sys.version); print('TRAVIS_BLENDER_PATHS',sys.path)"
           blender --version
+      - name: Inspect licensed Michael Jackson 3D reference (CC BY 3.0 FR)
+        run: |
+          set -euo pipefail
+          curl -fLSs --retry 3 --max-time 90 \
+            https://www.free-3d.fr/assets/3d/7c4d7e298625ee53d36f155dfe157277/7c4d7e298625ee53d36f155dfe157277.glb \
+            -o /tmp/travis-mj-licensed.glb
+          test "$(stat -c%s /tmp/travis-mj-licensed.glb)" -gt 1000000
+          blender -b -t 2 --python scripts/inspect_mj_licensed.py -- /tmp/travis-mj-licensed.glb | grep -F MJ_LICENSED_GLTF_DIAGNOSTICS
       - name: Create genuine 3D sculpt from original Travis CC0 bust
         run: |
           set -euo pipefail
