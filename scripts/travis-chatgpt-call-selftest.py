@@ -62,6 +62,39 @@ class FakeBridge:
 
 
 class Handoff(unittest.TestCase):
+    def test_live_route_without_artemis_import_is_accepted(self):
+        from unittest.mock import patch
+        from contextlib import redirect_stdout
+        from io import StringIO
+        sample_jarvis = (
+            "import travis_native_bridge\n"
+            "def http_route(path):\n"
+            '    if path.startswith("/native-bridge/"):\n'
+            "        return travis_native_bridge.BRIDGE.status()\n"
+        )
+        self.assertNotIn("travis_artemis_bridge", sample_jarvis)
+        artemis = "import travis_android_commands\nimport travis_native_bridge\n# open_app\n"
+        def mocked_read(path):
+            if path == module.JARVIS:
+                return sample_jarvis
+            if path == module.ARTEMIS:
+                return artemis
+            if path == module.INTENTS:
+                return MOCK_PARSER
+            if path == module.BROKER:
+                return MOCK_BROKER
+            raise AssertionError("Unexpected path")
+        with patch.object(module, "live", return_value={
+                 "jarvisOnline": True, "jarvisBusy": False,
+                 "bridgeHttp": 200, "bridgeOnline": True,
+                 "bridgePaired": True, "clientVersion": 4,
+             }), patch.object(module, "read", side_effect=mocked_read), \
+                patch.object(module.MARKER, "exists", return_value=False), \
+                redirect_stdout(StringIO()) as buffer:
+            stages = module.check()
+        self.assertEqual(len(stages), 2)
+        self.assertIn("TRAVIS_CHATGPT_CHECK", buffer.getvalue())
+
     def test_syntax_and_voice_alias(self):
         injected, bridge = module.staged(MOCK_PARSER, MOCK_BROKER)
         module.trial_parser(injected)
