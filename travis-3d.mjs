@@ -559,13 +559,16 @@ if (!hud || !launcher || !canvas) {
     return createHolographicHeadMaterial(THREE,true);
   }
 
-  async function createFaceAvatar() {
+  async function createFaceAvatar({asset=MJ3D_ASSET,preferMJ=true}={}) {
+    faceEyeGroups=[];
+    holographicEyeMaterials.length=0;
+    realFaceReady=false;
     faceRoot=new THREE.Group();
     faceRoot.name='TravisAnatomicalPortrait';
     faceRoot.visible=false;
     hud.dataset.faceAsset='loading';
     try {
-      const gltf=await new GLTFLoader().loadAsync(MJ3D_ASSET);
+      const gltf=await new GLTFLoader().loadAsync(asset);
       realFaceModel=gltf.scene;
       realFaceModel.name='TravisRealFace';
       const head=realFaceModel.getObjectByName('TravisFace_Bust');
@@ -591,7 +594,7 @@ if (!hud || !launcher || !canvas) {
       }
       realFaceBaseMaterial=createHolographicHeadMaterial(THREE);
       head.material=realFaceBaseMaterial;
-      styleMichaelJacksonHair(THREE,realFaceModel,realFaceBaseMaterial.uniforms);
+      if(preferMJ) styleMichaelJacksonHair(THREE,realFaceModel,realFaceBaseMaterial.uniforms);
       // Keep the projected face readable; only its light contours receive bloom.
       head.layers.disable(BLOOM_LAYER);
       const glowShell=new THREE.Mesh(head.geometry,faceShellShader());
@@ -642,14 +645,22 @@ if (!hud || !launcher || !canvas) {
       realFaceModel.position.set(-center.x,-.66,-center.z+.04);
       faceRoot.add(realFaceModel);realFaceReady=true;
 
-      hud.dataset.faceAsset='mj-3d';hud.dataset.avatarStyle='michael-jackson-3d';
+      hud.dataset.faceAsset=preferMJ?'mj-3d':'fallback-bust';
+      hud.dataset.avatarStyle=preferMJ?'michael-jackson-3d':'laser-hologram';
+      hud.dataset.visualFallback=preferMJ?'none':'original-blender-bust';
       console.info('Travis bust loaded',{meshes:realFaceModel.children.map(o=>o.name),
         bounds:size.toArray(),baseBloom:head.layers.isEnabled(BLOOM_LAYER),source:'Blender GLB'});
     } catch(error) {
-      hud.dataset.faceAsset='error';
       console.error('Travis anatomical bust failed:',error);
-      // Keep the real core available; never display a synthetic substitute head.
-      setLoading('Face unavailable · core online');
+      hud.dataset.faceError=String(error?.message||error).slice(0,240);
+      if(preferMJ){
+        console.warn('Travis: Michael Jackson asset failed. Using the original 3D Blender face.');
+        setLoading('Restoring the original 3D face…');
+        return createFaceAvatar({asset:'./assets/travis/travis-face-bust.glb?v=1',preferMJ:false});
+      }
+      hud.dataset.faceAsset='error';
+      // The original 3D face is also unavailable: preserve the rest of Travis.
+      setLoading('3D face unavailable · brain online');
       throw error;
     }
     scene.add(faceRoot);
@@ -2498,6 +2509,7 @@ if (!hud || !launcher || !canvas) {
     setState,
     diagnostics() {
       return {ready,opened,state,renderedFrames,contextLost:renderer?.getContext().isContextLost(),form:activeForm,faceAsset:hud.dataset.faceAsset,
+        faceError:hud.dataset.faceError||null,visualFallback:hud.dataset.visualFallback||null,
         avatar:{visible:Boolean(faceRoot?.visible),dissolve:realFaceBaseMaterial?.uniforms.uDissolve.value??0},
         baseBloom:realFaceHead?.layers.isEnabled(BLOOM_LAYER),lipSync:{engine:hud.dataset.lipSync,audioContext:audioContext?.state,playbackClock:speechClock?{elapsed:speechClock.context.currentTime-speechClock.start,duration:speechClock.envelope.duration}:null},
         neural:neuralField?.diagnostics(),
