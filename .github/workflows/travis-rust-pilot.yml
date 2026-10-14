@@ -19,6 +19,7 @@ on:
       - "scripts/travis-oppo-audit-readonly.py"
       - "scripts/travis-oppo-errors-readonly.py"
       - "scripts/travis-oppo-live-safe.py"
+      - "scripts/travis-oppo-ui-get-readonly.py"
       - ".github/workflows/travis-rust-pilot.yml"
   pull_request:
     paths:
@@ -37,6 +38,7 @@ on:
       - "scripts/travis-oppo-audit-readonly.py"
       - "scripts/travis-oppo-errors-readonly.py"
       - "scripts/travis-oppo-live-safe.py"
+      - "scripts/travis-oppo-ui-get-readonly.py"
       - ".github/workflows/travis-rust-pilot.yml"
   workflow_dispatch:
 
@@ -57,6 +59,7 @@ jobs:
           python3 -m py_compile scripts/travis-oppo-audit-readonly.py
           python3 -m py_compile scripts/travis-oppo-errors-readonly.py
           python3 -m py_compile scripts/travis-oppo-live-safe.py
+          python3 -m py_compile scripts/travis-oppo-ui-get-readonly.py
           python3 -m py_compile scripts/travis-rust-oppo-activate.py
           python3 -m py_compile scripts/travis-rust-oppo-activate-selftest.py
       - name: OPPO surgical activation and rollback dry-run
