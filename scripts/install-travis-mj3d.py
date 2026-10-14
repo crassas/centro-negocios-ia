@@ -207,6 +207,23 @@ def main():
             if item["had_original"]:shutil.copy2(saved,path)
             else:path.unlink(missing_ok=True)
         raise
+    # Check the actual HTTP paths used by the Android browser; a valid file
+    # on disk is not evidence that the 8770 service serves that file.
+    served={}
+    for name,route,start in (
+        ("model","/assets/travis/travis-michael-jackson-3d.glb?v=mj3d-2",b"glTF"),
+        ("material","/travis-michael-jackson-3d.mjs?v=mj3d-2",b"/**"),
+        ("interface","/travis-3d.mjs?v=continuous-2",b"import "),
+    ):
+        try:
+            req=urllib.request.Request("http://127.0.0.1:8770"+route,
+                headers={"Cache-Control":"no-store"})
+            with urllib.request.urlopen(req,timeout=5) as response:
+                head=response.read(24 if name!="interface" else 512)
+                served[name]=response.status==200 and head.lstrip().startswith(start)
+        except Exception as exc:
+            served[name]=type(exc).__name__
+    print("TRAVIS_MJ3D_HTTP="+json.dumps(served,sort_keys=True))
     print("TRAVIS_MJ3D_INSTALLED=true")
     print("TRAVIS_MJ3D="+json.dumps({"glb_bytes":size,"mesh_count":meshes,
         "photo_overlay_removed":"createMichaelJacksonHologram" in original,
