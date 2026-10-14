@@ -59,6 +59,60 @@ def clean_photo_overlay(source):
         raise RuntimeError("Remaining portrait hooks prevent safe migration")
     return source,source!=before
 
+def ensure_face_recovery(source):
+    # Installing assets alone is not enough: if a GLB fails or Android loses
+    # a response, restore Travis's original real 3D face rather than a black UI.
+    if "async function createFaceAvatar({asset=MJ3D_ASSET" in source:
+        return source
+    adaptations = [
+        (
+            "  async function createFaceAvatar() {\n    faceRoot=new THREE.Group();",
+            "  async function createFaceAvatar({asset=MJ3D_ASSET,preferMJ=true}={}) {\n"
+            "    faceEyeGroups=[];\n    holographicEyeMaterials.length=0;\n"
+            "    realFaceReady=false;\n    faceRoot=new THREE.Group();"
+        ),
+        (
+            "      const gltf=await new GLTFLoader().loadAsync(MJ3D_ASSET);",
+            "      const gltf=await new GLTFLoader().loadAsync(asset);"
+        ),
+        (
+            "      styleMichaelJacksonHair(THREE,realFaceModel,realFaceBaseMaterial.uniforms);",
+            "      if(preferMJ) styleMichaelJacksonHair(THREE,realFaceModel,realFaceBaseMaterial.uniforms);"
+        ),
+        (
+            "      hud.dataset.faceAsset='mj-3d';hud.dataset.avatarStyle='michael-jackson-3d';",
+            "      hud.dataset.faceAsset=preferMJ?'mj-3d':'fallback-bust';\n"
+            "      hud.dataset.avatarStyle=preferMJ?'michael-jackson-3d':'laser-hologram';\n"
+            "      hud.dataset.visualFallback=preferMJ?'none':'original-blender-bust';"
+        ),
+        (
+            "    } catch(error) {\n"
+            "      hud.dataset.faceAsset='error';\n"
+            "      console.error('Travis anatomical bust failed:',error);\n"
+            "      // Keep the real core available; never display a synthetic substitute head.\n"
+            "      setLoading('Face unavailable · core online');\n"
+            "      throw error;\n"
+            "    }",
+            "    } catch(error) {\n"
+            "      console.error('Travis anatomical bust failed:',error);\n"
+            "      hud.dataset.faceError=String(error?.message||error).slice(0,240);\n"
+            "      if(preferMJ){\n"
+            "        console.warn('Travis: MJ asset failed. Restoring the original Blender face.');\n"
+            "        setLoading('Restoring original 3D face…');\n"
+            "        return createFaceAvatar({asset:'./assets/travis/travis-face-bust.glb?v=1',preferMJ:false});\n"
+            "      }\n"
+            "      hud.dataset.faceAsset='error';\n"
+            "      setLoading('3D face unavailable · brain online');\n"
+            "      throw error;\n"
+            "    }"
+        )
+    ]
+    for before,after in adaptations:
+        if source.count(before)!=1:
+            raise RuntimeError("Reparação 3D não corresponde à versão local; sem alterações no Travis")
+        source=source.replace(before,after,1)
+    return source
+
 def patch(source):
     text,removed=clean_photo_overlay(source)
     using_model=("travis-michael-jackson-3d.glb" in text or
@@ -71,6 +125,7 @@ def patch(source):
         text=text.replace(
             "'./assets/travis/travis-michael-jackson-3d.glb?v=mj3d-1'",
             "MJ3D_ASSET")
+        text=ensure_face_recovery(text)
         return text,text!=source
     if IMPORT in text or OLD_MJ3D_IMPORT in text or HOOK in text or using_model:
         raise RuntimeError("Integração 3D incompleta ou não reconhecida; não foram alterados ficheiros")
@@ -90,6 +145,7 @@ def patch(source):
     text=text.replace(
         "hud.dataset.faceAsset='bust';hud.dataset.avatarStyle='laser-hologram';",
         "hud.dataset.faceAsset='mj-3d';hud.dataset.avatarStyle='michael-jackson-3d';",1)
+    text=ensure_face_recovery(text)
     return text,True
 
 def node_check(data,label):
