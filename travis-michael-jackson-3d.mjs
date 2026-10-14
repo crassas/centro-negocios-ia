@@ -96,6 +96,19 @@ export function styleMichaelJacksonHair(THREE,faceModel,headUniforms){
   head.material=licensedFaceMaterial(THREE,head,headUniforms);
   head.userData.michaelJacksonLicense='CC BY 3.0 France · free-3d.fr';
   head.frustumCulled=true;
+  // Support older installed Travis UIs: they may add the original hologram
+  // shell and eye pivots AFTER this function is called. Hide them at the end
+  // of the current loading turn, without touching animation geometry.
+  queueMicrotask(()=>{
+    faceModel.traverse(object=>{
+      if(object.name==='TravisFace_Bust' ||
+         object.name==='TravisFace_HologramShell' ||
+         object.name==='TravisLaserAssembly' ||
+         /^TravisFace_(Eye|Iris|Pupil|EyeAccent)_/.test(object.name)){
+        object.visible=false;
+      }
+    });
+  });
   return {
     meshes:[head.name],material:head.material,
     textured:Boolean((Array.isArray(oldMaterial)?oldMaterial[0]:oldMaterial)?.map),
