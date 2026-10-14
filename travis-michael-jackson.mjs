@@ -120,7 +120,7 @@ function makePortraitMaterial(THREE,texture) {
         colour*=.92+.08*sin(vUv.y*760.-uTime*2.0);
         colour*=1.+.06*sin(vUv.y*20.-uTime*.9);
         colour+=vec3(.08,.21,.29)*uVoice*.16;
-        float rim=smoothstep(.03,.0,photo.a);
+        float rim=1.-smoothstep(0.,.03,photo.a);
         float alpha=photo.a*(.89+.09*luma)*uOpacity*(1.-rim*.10);
         gl_FragColor=vec4(colour,alpha);
       }
