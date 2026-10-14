@@ -74,7 +74,7 @@ const schematic=(scene,title)=>{
   const names={anatomy:'ANATOMIA 3D',composition:'CENA 3D',science:'DISCOVERY',weather:'WEATHER',journey:'SPACE JOURNEY',model:'3D MODEL',mechanical:'ELECTRIC MOTOR · CUTAWAY',text:'TEXT',space:'SPACE',reference:'VISUAL REFERENCE',planet:'PLANETARY CONCEPT',map:'SCHEMATIC MAP',house:'ARCHITECTURAL WIREFRAME',
     person:'HUMAN FIGURE CONCEPT',vehicle:'VEHICLE CONCEPT',landscape:'NATURE CONCEPT',
     diagram:'CONCEPT DIAGRAM',object:'OBJECT WIREFRAME'};
-  const summaries={anatomy:'Anatomia humana de referência, derivada de BodyParts3D. Geometria simplificada para visualização educativa.',composition:'Cena construída com objetos 3D e animação procedural. Dimensões e trajetos ilustrativos, sem escala física.',science:'Educational illustration; scale, colour and motion are simplified.',weather:'Procedural animated illustration of a natural phenomenon.',journey:'Illustrative orbital transfer; sizes and time are compressed. No launch dynamics, ephemerides or gravity assists are calculated.',model:'Sourced three-dimensional geometry with Travis holographic material.',mechanical:'Generic educational electric motor cutaway; not measured CAD.',text:'Letterforms made of holographic light.',space:'Illustrative star field, not a live sky chart.',reference:'Holographic relief from a sourced image; not a recovered 3D model.',planet:'Illustrative orbital model, not NASA imagery.',
+  const summaries={anatomy:'Anatomia humana de referência, derivada de BodyParts3D. Geometria simplificada para visualização educativa.',composition:'Cena construída com objetos 3D e animação procedural. Dimensões e trajetos ilustrativos, sem escala física.',science:'Educational illustration; scale, colour and motion are simplified.',weather:'Procedural animated illustration of a natural phenomenon.',journey:'Illustrative orbital transfer; sizes and time are compressed. No launch dynamics, ephemerides or gravity assists are calculated.',model:'Sourced three-dimensional geometry with Travis holographic material.',mechanical:'Generic educational electric motor cutaway; not measured CAD.',text:'Letterforms made of holographic light.',space:'Illustrative star field, not a live sky chart.',reference:'',planet:'Illustrative orbital model, not NASA imagery.',
     map:'Illustrative route grid, not live geography or verified coordinates.',
     house:'Conceptual building geometry, not a survey or architectural plan.',
     person:'Generic holographic figure, not a reconstruction of a real person.',
@@ -130,11 +130,6 @@ function render(data,{story=false}={}){
   heading.textContent=String(data.title||'Your workspace');
   caption.replaceChildren();sources.remember(data);
   if(data.kind==='illustration'&&data.scene!=='text'){const title=document.createElement('span');title.className='travis-motion-title';caption.append(title);revealCaption(title,data.title||'',{reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches});}
-  if(data.scene==='reference'){
-    const note=document.createElement('small');note.textContent='FOTOGRAFIA · RELEVO';caption.append(note);
-    const model=document.createElement('button');model.type='button';model.className='travis-reference-photos';model.textContent='Procurar objeto 3D';
-    model.addEventListener('click',()=>window.TravisVisual?.ask('Mostra '+(data.gallery?.query||data.title)+' em 3D'));caption.append(model);
-  }
   if(data.gallery?.count>1){
     const navigation=document.createElement('div');navigation.className='travis-reference-navigation';
     navigation.setAttribute('aria-label',data.gallery.language==='pt'?'Imagens de referência':'Reference images');
@@ -150,7 +145,7 @@ function render(data,{story=false}={}){
   const rows=Array.isArray(data.items)?data.items.slice(0,30):[];
   items.replaceChildren();
   if(data.summary){const paragraph=document.createElement('p');paragraph.className='travis-projection-summary';paragraph.textContent=String(data.summary);items.append(paragraph);}
-  if(data.kind==='illustration'){const label=document.createElement('p');label.className='travis-projection-caption';label.textContent='CINEMATIC · CONCEPTUAL VIEW';items.append(label);}
+  if(data.kind==='illustration'&&data.scene!=='reference'){const label=document.createElement('p');label.className='travis-projection-caption';label.textContent='CINEMATIC · CONCEPTUAL VIEW';items.append(label);}
   if(data.kind==='youtube')mountYouTube(data,items);
   const entries=rows.length?rows:(data.kind==='youtube'||data.kind==='illustration')?[]:[{title:data.kind==='tasks'?'No pending tasks':'No results',detail:data.kind==='tasks'?'Tell me what you want to add.':'The tool returned no entries.'}];
   items.append(...entries.map((row,index)=>{
@@ -305,8 +300,8 @@ if(deck){
       render({...schematic(image?'reference':'text',title),reference:image?{image}:null,sourceUrl:image?(result.creditUrl||result.url):result.url,sourceName:image?(result.imageSource||result.source):result.source,imageAuthor:result.author,imageLicense:result.license,gallery,explaining:Boolean(intent.explain)});
       window.TravisVisual?.commands(true,{automatic:true});show();
       if(image&&intent.kind==='reference-next')return intent.language==='pt'?'Imagem '+(gallery.index+1)+' de '+gallery.count+'.':'Image '+(gallery.index+1)+' of '+gallery.count+'.';
-      if(image&&result.modelUnavailable)return intent.language==='pt'?'Não encontrei um modelo 3D compatível. Esta é uma fotografia de referência de '+title+'.':'I could not find a compatible 3D model. This is a reference photograph of '+title+'.';
-      return intent.language==='pt'?(image?'Encontrei uma imagem de referência de '+title+'.':'Encontrei informação sobre '+title+', mas sem imagem disponível.'):(image?'I found a visual reference for '+title+'.':'I found information about '+title+', but no image was available.');
+      if(image&&result.modelUnavailable)return intent.language==='pt'?'Aqui está '+title+'.':'Here is '+title+'.';
+      return intent.language==='pt'?(image?'Aqui está '+title+'.':'Encontrei informação sobre '+title+', mas sem imagem disponível.'):(image?'Here is '+title+'.':'I found information about '+title+', but no image was available.');
     },
     interpret(text){
       // The first-stage router is open-vocabulary for visual requests; unseen
