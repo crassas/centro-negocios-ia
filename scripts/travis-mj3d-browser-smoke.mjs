@@ -73,6 +73,29 @@ try{
   assert(result.frames>15,'WebGL frame loop not rendering');
   assert(!logs.some(x=>/WebGLProgram.*Shader Error|Shader Error.*VALIDATE_STATUS|shader.*compile failed/i.test(x)),
     'Holographic GPU shader compilation failed');
+  // Deliberately remove the MJ asset. The UI must NEVER become a black screen:
+  // load the original CC0 Blender bust while keeping the voice interface alive.
+  const failurePage=await browser.newPage({viewport:{width:390,height:844},
+    deviceScaleFactor:1.5,serviceWorkers:'block',permissions:[]});
+  const failureErrors=[];
+  failurePage.on('pageerror',e=>failureErrors.push(e.message));
+  await failurePage.route('https://**',route=>route.abort());
+  await failurePage.route('**/assets/travis/travis-michael-jackson-3d.glb*',
+    route=>route.fulfill({status:404,contentType:'text/plain',body:'Simulated missing MJ model'}));
+  await failurePage.goto('http://127.0.0.1:8770/?travis=1',{waitUntil:'domcontentloaded'});
+  await failurePage.waitForFunction(()=>{
+    const d=window.TravisVisual?.diagnostics();
+    return d?.ready && d.faceAsset==='fallback-bust' && d.avatar.visible && d.renderedFrames>5;
+  },{},{timeout:45000});
+  const failureResult=await failurePage.evaluate(()=>window.TravisVisual.diagnostics());
+  await failurePage.screenshot({path:path.join(out,'travis-mj3d-original-face-fallback.png')});
+  console.log('TRAVIS_MJ3D_FALLBACK_REPORT',JSON.stringify({
+    faceAsset:failureResult.faceAsset,ready:failureResult.ready,
+    visible:failureResult.avatar.visible,frames:failureResult.renderedFrames,
+    reason:failureResult.faceError,errors:failureErrors
+  }));
+  assert.equal(failureResult.visualFallback,'original-blender-bust');
+  assert.equal(failureErrors.length,0,'Fallback still has runtime errors');
   console.log('TRAVIS_MJ3D_BROWSER_SMOKE=PASS');
 }finally{
   await browser.close();
