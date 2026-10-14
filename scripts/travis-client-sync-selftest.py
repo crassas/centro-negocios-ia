@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory(prefix="travis-client-sync-") as temporary:
     with patch("pathlib.Path.home", return_value=task_root):
         spec.loader.exec_module(station)
 
-    sources = {name: (repo / name).read_bytes() for name in station.TRAVIS_CLIENT_FILES}
+    sources = {name: (repo / name).read_bytes() for name in (*station.TRAVIS_CLIENT_BINARY_FILES, *station.TRAVIS_CLIENT_FILES)}
 
     def download(request, timeout):
         assert timeout > 0
@@ -30,7 +30,7 @@ with tempfile.TemporaryDirectory(prefix="travis-client-sync-") as temporary:
     with patch.object(station.urllib.request, "urlopen", side_effect=download):
         changed, errors = station.sync_travis_client(ref)
         assert not errors, errors
-        assert changed == list(station.TRAVIS_CLIENT_FILES), changed
+        assert changed == [*station.TRAVIS_CLIENT_BINARY_FILES, *station.TRAVIS_CLIENT_FILES], changed
         assert all((installed / name).read_bytes() == data for name, data in sources.items())
         assert station.sync_travis_client(ref) == ([], []), "Unchanged clients must be preserved"
 
