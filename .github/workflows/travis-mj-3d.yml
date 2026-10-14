@@ -55,13 +55,23 @@ jobs:
           assert len(b)<12_000_000, 'GLB too heavy for Android'
           print('TRAVIS_MJ3D_GLB_VALID',len(b),sorted(must))
           PY
+      - name: Render genuine 3D front and oblique QC frames (Cycles CPU)
+        run: |
+          set -euo pipefail
+          blender -b assets/travis/travis-michael-jackson-3d.blend -t 2 --python \
+            scripts/render_travis_mj3d_preview.py -- assets/travis | tee /tmp/travis-mj-preview.log
+          grep -F 'TRAVIS_MJ3D_PREVIEW_OK' /tmp/travis-mj-preview.log
+          test -s assets/travis/travis-mj3d-preview-front.png
+          test -s assets/travis/travis-mj3d-preview-three-quarter.png
       - name: Commit built GLB asset for standalone offline installation
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           test -s assets/travis/travis-michael-jackson-3d.blend
-          git add assets/travis/travis-michael-jackson-3d.glb assets/travis/travis-michael-jackson-3d.blend
+          git add assets/travis/travis-michael-jackson-3d.glb assets/travis/travis-michael-jackson-3d.blend \
+            assets/travis/travis-mj3d-preview-front.png \
+            assets/travis/travis-mj3d-preview-three-quarter.png
           if git diff --cached --quiet; then
             echo 'TRAVIS_MJ3D_ASSET_UNCHANGED=true'
           else
