@@ -60,7 +60,8 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add assets/travis/travis-michael-jackson-3d.glb
+          test -s assets/travis/travis-michael-jackson-3d.blend
+          git add assets/travis/travis-michael-jackson-3d.glb assets/travis/travis-michael-jackson-3d.blend
           if git diff --cached --quiet; then
             echo 'TRAVIS_MJ3D_ASSET_UNCHANGED=true'
           else
