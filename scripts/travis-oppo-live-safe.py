@@ -151,6 +151,10 @@ def verify():
                     "replyPresent": bool(result.get("reply")),
                     "retrievalEngine": str(body.get("engine") or "")[:20],
                     "referenceCount": len(records),
+                    "feedWorkerRunning": body.get("running") is True if name == "github_status" else None,
+                    "feedBusy": body.get("busy") is True if name == "github_status" else None,
+                    "indexedSources": len(body.get("sources", [])) if name == "github_status" and isinstance(body.get("sources"), list) else None,
+                    "lastSyncResult": str(body.get("lastResult") or "")[:30] if name == "github_status" else None,
                     "elapsedMs": round((time.monotonic() - now) * 1000),
                 })
             except (OSError, ValueError, TimeoutError) as exc:
