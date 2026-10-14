@@ -1,234 +1,115 @@
 #!/usr/bin/env python3
-"""Blender 4+/5+: sculpt a volumetric Michael Jackson-inspired BAD-era head
-from the existing CC0 Travis anatomical bust. Keeps exact face/eye object names,
-coordinate system and editable mouth topology for the existing Three.js rig.
+"""Travis · Michael Jackson 3D, derived from a textured, true volumetric head.
 
-blender -b -t 2 --python scripts/build_travis_mj_bust.py -- \
- assets/travis/travis-face-bust.glb assets/travis/travis-michael-jackson-3d.glb
+Build:
+  blender -b -t 2 --python scripts/build_travis_mj_bust.py -- \
+    assets/travis/travis-face-bust.glb assets/travis/travis-michael-jackson-3d.glb \
+    /tmp/travis-mj-licensed.glb
+
+No plane/billboard/photo overlays. The original Travis CC0 rig/eye anchors
+remain in the GLB; the authentic CC-BY Michael Jackson geometry is the visible
+hologram. Attribution: free-3d.fr / "Michael Jackson 3D Avatar Portait",
+https://www.free-3d.fr/model/michael-jackson-3d-avatar-portait-50676,
+Creative Commons BY 3.0 France, modifications: lower torso crop, transform,
+retopology-free rig-compatible integration, holographic shader.
 """
-import bpy
-import json
-import math
-import random
-import sys
+import bpy,bmesh,sys,json,math
 from pathlib import Path
 from mathutils import Vector
 
 argv=sys.argv
-if '--' not in argv or len(argv[argv.index('--')+1:]) < 2:
-    raise SystemExit('Expected -- input.glb output.glb')
-source, dest=[Path(p).resolve() for p in argv[argv.index('--')+1:][:2]]
-if not source.is_file() or source.stat().st_size < 100000:
-    raise RuntimeError('Source bust missing or too small: '+str(source))
-if source == dest:
-    raise RuntimeError('Refusing to overwrite anatomical source')
-
+if "--" not in argv:raise RuntimeError("usage: -- original.glb output.glb authentic-mj.glb")
+args=argv[argv.index("--")+1:]
+if len(args)<3:raise RuntimeError("Authentic reference GLB is required; no generic fallback is acceptable")
+original,output,licensed=(Path(x).resolve() for x in args[:3])
+for p in (original,licensed):
+    if not p.exists() or p.stat().st_size<100000:raise RuntimeError("Missing imported GLB "+str(p))
+if original==output or licensed==output:raise RuntimeError("No in-place overwrites")
 bpy.ops.wm.read_factory_settings(use_empty=True)
-bpy.ops.import_scene.gltf(filepath=str(source))
-head=bpy.data.objects.get('TravisFace_Bust')
-if not head or head.type!='MESH' or not head.data.vertices:
-    raise RuntimeError('Cannot find original Blender bust: TravisFace_Bust')
-for side in ('L','R'):
-    for label in ('Eye','Iris','Pupil'):
-        if not bpy.data.objects.get('TravisFace_'+label+'_'+side):
-            raise RuntimeError('Missing original animation anchor '+label+'_'+side)
+bpy.ops.import_scene.gltf(filepath=str(original))
+rig=bpy.data.objects.get("TravisFace_Bust")
+if not rig or rig.type!="MESH":raise RuntimeError("No original CC0 rig mesh")
+anchors={"TravisFace_Bust"}
+for side in ("L","R"):
+    for part in ("Eye","Iris","Pupil"):anchors.add("TravisFace_"+part+"_"+side)
+if any(not bpy.data.objects.get(name) for name in anchors):
+    raise RuntimeError("Existing original Travis eye/rig nodes incomplete")
 
-rng=random.Random(1958)
-clamp=lambda x,lo=0.,hi=1.: max(lo,min(hi,x))
-gauss=lambda x,s: math.exp(-.5*(x/s)**2)
-verts=head.data.vertices
-orig=[v.co.copy() for v in verts]
-xmin=min(v.x for v in orig); xmax=max(v.x for v in orig)
-zmin=min(v.z for v in orig); zmax=max(v.z for v in orig)
-frontset=[v.y for v in orig if abs(v.x)<.17 and .68<v.z<.90]
-if not frontset:
-    raise RuntimeError('Anatomical bust landmarks could not be resolved.')
-forehead_y=min(frontset)
-back_y=max(v.y for v in orig if v.z>.58)
-head_rx=max(abs(xmin),abs(xmax))
-if not (0.20 < head_rx < 1.0 and zmax>.8 and -1.25<forehead_y<.0):
-    raise RuntimeError('Unexpected coordinate frame, not sculpting this bust: '+str((xmin,xmax,zmax,forehead_y)))
+# The licensed mesh has fully modeled cheeks, eyes, hair and jacket, in 3D.
+# Import only it, retaining the original rig and its tested runtime names.
+existing=set(bpy.data.objects)
+bpy.ops.import_scene.gltf(filepath=str(licensed))
+new=[o for o in bpy.data.objects if o not in existing and o.type=="MESH"]
+if len(new)!=1 or len(new[0].data.vertices)<6000:
+    raise RuntimeError("Expected one authentic dense, textured Michael Jackson mesh")
+avatar=new[0]
+avatar.name="TravisMJ_Licensed_Head"
+avatar.data.name="TravisMJ_MichaelJackson_ModelledFace"
+if not avatar.data.uv_layers or not avatar.data.materials:
+    raise RuntimeError("Licensed facial texture was not imported with its real 3D geometry")
 
-# Native *Blender* coordinates: x horizontal, -y towards the camera, z vertical.
-# Localized, smooth sculpt only on the frontal facial surface. We keep the eyes,
-# jaw, lips and mesh topology intact so the original Travis viseme rig still works.
-for v,p in zip(verts,orig):
-    x,y,z=p.x,p.y,p.z
-    face=clamp((-y-.14)/.29)
-    face*=clamp((z-.16)/.18)
-    upper=gauss(z-.75,.33)
-    lower=clamp((.59-z)/.35)
-    # Michael's elongated slender oval and finer lower jaw.
-    jaw=gauss(z-.33,.23)*face
-    nx=x*(1.-.065*jaw-.055*lower*face)
-    # Cheekbone definition and shallow submalar hollows.
-    zygo=gauss(abs(x)-.185,.075)*gauss(z-.54,.088)*face
-    hollow=gauss(abs(x)-.17,.076)*gauss(z-.405,.068)*face
-    dy=-.024*zygo+.013*hollow
-    # Slimmer narrow bridge, delicate tipped nose; avoid destroying nostril holes.
-    bridge=gauss(x,.069)*gauss(z-.51,.12)*clamp((-y-.39)/.11)
-    nx*=(1.-.105*bridge)
-    dy-=.022*gauss(x,.055)*gauss(z-.47,.058)*clamp((-y-.37)/.13)
-    # Distinctive raised outer brow and narrower refined chin.
-    brow=gauss(abs(x)-.16,.069)*gauss(z-.713,.032)*face
-    dy-=.008*brow
-    chin=gauss(x,.105)*gauss(z-.235,.055)*face
-    dy-=.014*chin
-    # Facial volume moves along camera-facing normal (negative Blender y).
-    v.co.x=nx
-    v.co.y=y+dy
-head.data.update()
-for polygon in head.data.polygons:
-    polygon.use_smooth=True
+# The source contains a jacket/shoulders that do not belong in the suspended
+# head hologram; crop just below the natural upper neck.
+# Source is Blender Z up, -Y forward; bounds measured in the workflow:
+# X -.500..+.500, Y -.354..+.354, Z -.499..+.499.
+world_verts=[avatar.matrix_world@v.co for v in avatar.data.vertices]
+lo=Vector(tuple(min(v[i] for v in world_verts) for i in range(3)))
+hi=Vector(tuple(max(v[i] for v in world_verts) for i in range(3)))
+dims=hi-lo
+if not(.8<dims.x<1.2 and .7<dims.z<1.2):
+    raise RuntimeError("Authentic mesh dimensions are unexpected: "+str(tuple(dims)))
+# Blender importer creates a no-transform mesh for this glb.
+if avatar.matrix_world.determinant()<.0:
+    raise RuntimeError("Unexpected flipped face handedness")
+# Keep all visible head/hair, cut jacket from original coordinate z < -0.245.
+cut_z=lo.z + dims.z*.255  # e.g. -.499+.255=-.244
+bm=bmesh.new();bm.from_mesh(avatar.data)
+geom=list(bm.verts)+list(bm.edges)+list(bm.faces)
+# Incoming points are in model local; source is identity transform as tested.
+if any(abs(v)>.01 for v in avatar.location) or any(abs(v-1.)>.01 for v in avatar.scale):
+    bpy.context.view_layer.objects.active=avatar
+    bpy.ops.object.transform_apply(location=True,rotation=True,scale=True)
+    bm.free();bm=bmesh.new();bm.from_mesh(avatar.data)
+    geom=list(bm.verts)+list(bm.edges)+list(bm.faces)
+bmesh.ops.bisect_plane(bm,geom=geom,dist=.00001,
+    plane_co=(0,0,cut_z),plane_no=(0,0,1),clear_inner=True,clear_outer=False)
+bm.to_mesh(avatar.data);bm.free();avatar.data.update()
+if len(avatar.data.vertices)<6000:
+    raise RuntimeError("Cropping destroyed facial geometry")
 
-# Controlled elliptical, asymmetric scalp volume. The cap and every lock below
-# are true 3D meshes, not billboards, images, or a photo texture.
-scalp_cx=(xmin+xmax)*.5
-scalp_front=forehead_y-.014
-scalp_back=back_y+.014
-scalp_cy=(scalp_front+scalp_back)*.5
-rx=max(.27,min(.50,head_rx*1.04))
-ry=clamp((scalp_back-scalp_front)*.54,.26,.52)
-cz=zmax-.435
-rz=.478
-lat_count=35; az_count=104
-cap_points=[];cap_faces=[]
-for ring in range(lat_count+1):
-    t=ring/lat_count
-    for k in range(az_count):
-        a=2*math.pi*k/az_count
-        # -Y is front. Scalp grows past ears and over the nape.
-        frontness=(1-math.sin(a))*.5
-        max_lat=(1.76-.44*frontness+.27*(1-frontness))
-        theta=t*max_lat
-        bump=.015*math.sin(a*7.+theta*8.)*math.sin(theta*3.)
-        x=scalp_cx+(rx+bump)*math.sin(theta)*math.cos(a)
-        y=scalp_cy+(ry+bump)*math.sin(theta)*math.sin(a)
-        z=cz+(rz+bump)*math.cos(theta)
-        cap_points.append((x,y,z))
-for ring in range(lat_count):
-    for k in range(az_count):
-        a=ring*az_count+k;b=ring*az_count+(k+1)%az_count
-        c=(ring+1)*az_count+(k+1)%az_count;d=(ring+1)*az_count+k
-        cap_faces.append((a,b,c,d))
+# Place face over the original Travis head in the SAME coordinate frame.
+# Original frontal nose is y=-.55, eyes z=.65, crown z=1.14.
+# New licensed front -Y => 3D positive Z after GLB Y-up export.
+# Source volume remains a real mesh and rotates with the existing Travis root.
+s=.92
+avatar.scale=(s,s,s)
+avatar.location=(.005,-.200,.675)
+bpy.context.view_layer.objects.active=avatar
+bpy.ops.object.transform_apply(location=True,rotation=True,scale=True)
+for poly in avatar.data.polygons:poly.use_smooth=True
+# Do not bake / flatten UVs. Keep true textured 3D surface from CC-BY source.
+tex=[material.name for material in avatar.data.materials]
+if not tex:raise RuntimeError("Authentic source material lost")
 
-def mesh_object(name,points,faces):
-    mesh=bpy.data.meshes.new(name+'_Mesh')
-    mesh.from_pydata(points,[],faces);mesh.update(calc_edges=True)
-    obj=bpy.data.objects.new(name,mesh)
-    bpy.context.collection.objects.link(obj)
-    for polygon in mesh.polygons:polygon.use_smooth=True
-    return obj
-
-def plain_material(name,color,rough=.45):
-    material=bpy.data.materials.new(name)
-    material.use_nodes=True
-    material.diffuse_color=(*color,1.)
-    bsdf=material.node_tree.nodes.get('Principled BSDF')
-    if bsdf:
-        bsdf.inputs['Base Color'].default_value=(*color,1.)
-        bsdf.inputs['Roughness'].default_value=rough
-    return material
-
-hair_base=mesh_object('TravisMJ_HairBase',cap_points,cap_faces)
-hair_base.data.materials.append(plain_material('TravisMJ_SatinBlueBlack',(.019,.028,.039),.37))
-
-# Spiral strands with five-sided tapered volume and a real circular cross section.
-# Combining all curls into ONE mesh minimizes GL draw calls on Android.
-strand_vertices=[];strand_faces=[];strand_counter=0
-
-def strand(points,radius=.0085,sides=5):
-    global strand_counter
-    if len(points)<3:return
-    base=len(strand_vertices)
-    for j,q in enumerate(points):
-        t=j/(len(points)-1)
-        d=(points[min(len(points)-1,j+1)]-points[max(0,j-1)]).normalized()
-        side=d.cross(Vector((0,1,0)))
-        if side.length<.001:side=d.cross(Vector((1,0,0)))
-        side.normalize();normal=d.cross(side).normalized()
-        thick=radius*(.14+.86*math.sin(math.pi*(.08+.85*t))**.68)*(1.-.45*t)
-        for k in range(sides):
-            angle=2*math.pi*k/sides
-            p=q+thick*(math.cos(angle)*side+math.sin(angle)*normal)
-            strand_vertices.append(tuple(p))
-    for j in range(len(points)-1):
-        for k in range(sides):
-            a=base+j*sides+k;b=base+j*sides+(k+1)%sides
-            c=base+(j+1)*sides+(k+1)%sides;d=base+(j+1)*sides+k
-            strand_faces.append((a,b,c,d))
-    strand_counter+=1
-
-def hair_lock(x,y,z,L=0.35,r=.0075,seed=0.0,lean=0.0):
-    turns=rng.uniform(1.35,3.2);phase=rng.uniform(-math.pi,math.pi)
-    step_count=15
-    points=[]
-    for i in range(step_count):
-        t=i/(step_count-1)
-        sway=math.sin(phase+2*math.pi*turns*t)
-        coil=rng.uniform(.010,.019)
-        # Spiral travels in XYZ; curvature visible in the profile.
-        px=x+lean*t+.010*sway
-        py=y+(coil*math.cos(phase+2*math.pi*turns*t))+.009*t
-        pz=z-L*t+.008*sway
-        points.append(Vector((px,py,pz)))
-    strand(points,r,sides=5)
-
-# Subtle short crown flyaways for micro silhouette and authentic curls.
-for i in range(55):
-    a=rng.random()*2*math.pi
-    polar=rng.uniform(.15,.94)
-    x=scalp_cx+rx*math.sin(polar)*math.cos(a)
-    y=scalp_cy+ry*math.sin(polar)*math.sin(a)
-    z=cz+rz*math.cos(polar)
-    hair_lock(x,y,z,rng.uniform(.075,.17),rng.uniform(.004,.007),lean=rng.uniform(-.07,.07))
-
-# Forehead ringlets: layered, off-centre and separated so both eyes remain visible.
-for i in range(54):
-    x=rng.uniform(-.245,.235)
-    x+=-.024*(i%3==0)
-    y=scalp_front-rng.uniform(.006,.027)
-    z=cz+rz*rng.uniform(.82,1.0)
-    length=rng.uniform(.12,.25)
-    hair_lock(x,y,z,length,rng.uniform(.004,.008),lean=rng.uniform(-.04,.035))
-
-# Cascading curls on both sides of the face, past the ears, never a rectangular cape.
-for side in (-1,1):
-    for i in range(62):
-        x=side*rng.uniform(rx*.79,rx*1.09)
-        y=rng.uniform(scalp_front+.03,scalp_back-.05)
-        z=rng.uniform(zmax-.35,zmax-.07)
-        length=rng.uniform(.21,.59)
-        hair_lock(x,y,z,length,rng.uniform(.0045,.0082),lean=side*rng.uniform(.008,.060))
-
-# Backside depth: the camera sees real mesh volume when the head turns.
-for i in range(51):
-    a=rng.uniform(.1*math.pi,.9*math.pi)
-    x=rx*rng.uniform(.66,1.02)*math.cos(a)
-    y=scalp_cy+ry*rng.uniform(.8,1.02)*math.sin(a)
-    z=rng.uniform(zmax-.32,zmax-.06)
-    hair_lock(x,y,z,rng.uniform(.25,.65),rng.uniform(.005,.009),lean=rng.uniform(-.05,.05))
-
-curls=mesh_object('TravisMJ_Curls',strand_vertices,strand_faces)
-curls.data.materials.append(plain_material('TravisMJ_DarkCurlyHair',(.018,.026,.035),.32))
-
-# Export native glTF Y-up, so Three.js sees the exact original x/y/z coordinate convention.
-# Existing core runtime locates TravisFace_Bust, Eye/ Iris/ Pupil meshes by name.
-dest.parent.mkdir(parents=True,exist_ok=True)
-bpy.ops.export_scene.gltf(filepath=str(dest),export_format='GLB',export_yup=True,export_apply=True,
-    export_normals=True,export_materials='EXPORT',export_cameras=False,export_lights=False)
-if not dest.exists() or dest.stat().st_size<150000:
-    raise RuntimeError('GLB export is invalid.')
-# Editable Blender source (original mesh + sculpted landmarks + individual hair meshes).
-blend=dest.with_suffix('.blend')
+# Preserve old hidden mesh for the original Travis lip rig (25k vertices).
+# The visible model gets shader-driven audio articulation at runtime, so
+# the old rig and eye pivots need not be discarded or rewritten.
+output.parent.mkdir(parents=True,exist_ok=True)
+bpy.ops.export_scene.gltf(filepath=str(output),export_format="GLB",
+    export_yup=True,export_apply=True,export_normals=True,
+    export_materials="EXPORT",export_cameras=False,export_lights=False)
+if not output.exists() or output.stat().st_size<500000:
+    raise RuntimeError("Blender did not export the MJ licensed composite head")
+blend=output.with_suffix(".blend")
 bpy.ops.wm.save_as_mainfile(filepath=str(blend),compress=True)
-if not blend.exists() or blend.stat().st_size<150000:
-    raise RuntimeError('Editable Blender file did not save.')
-print('TRAVIS_MJ3D_BUILD_OK',json.dumps({
-  'source':str(source),'output':str(dest),'bytes':dest.stat().st_size, 'blend_bytes':blend.stat().st_size,
-  'anatomy_vertices':len(head.data.vertices),
-  'hair_strands':strand_counter,'hair_vertices':len(strand_vertices),
-  'hair_triangles':2*len(strand_faces),'scalp_triangles':2*len(cap_faces),
-  'bounds':{'xmin':xmin,'xmax':xmax,'zmax':zmax,'forehead_y':forehead_y},
-  'meshes':[o.name for o in bpy.context.scene.objects if o.type=='MESH']
+if not blend.exists() or blend.stat().st_size<200000:
+    raise RuntimeError("No editable Blender scene")
+print("TRAVIS_MJ3D_BUILD_OK",json.dumps({
+    "asset":"Michael Jackson real textured 3D model, CC-BY 3.0 France",
+    "source":str(licensed),"source_mesh_verts":len(new[0].data.vertices),
+    "output":str(output),"bytes":output.stat().st_size,
+    "blend_bytes":blend.stat().st_size,"faces":len(avatar.data.polygons),
+    "name":avatar.name,"material":tex,"rig":sorted(anchors),
+    "cut_z":cut_z,"model_translation":list(avatar.location),
+    "model_dimensions":[round(d,3) for d in avatar.dimensions]
 }),flush=True)
