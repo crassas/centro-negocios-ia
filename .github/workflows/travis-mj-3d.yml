@@ -66,5 +66,15 @@ jobs:
             echo 'TRAVIS_MJ3D_ASSET_UNCHANGED=true'
           else
             git commit -m 'assets(travis): generated MJ3D bust in Blender'
-            git push
+            pushed=false
+            for attempt in 1 2 3 4 5; do
+              git fetch origin main
+              git rebase origin/main
+              if git push origin HEAD:main; then pushed=true; break; fi
+              sleep 3
+            done
+            if [ "$pushed" != true ]; then
+              echo 'Cannot push generated asset after five fast-forward retries' >&2
+              exit 1
+            fi
           fi
