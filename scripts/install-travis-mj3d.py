@@ -11,9 +11,11 @@ MAIN=ROOT/"travis-3d.mjs"
 SW=ROOT/"sw.js"
 MODULE=ROOT/"travis-michael-jackson-3d.mjs"
 GLB=ROOT/"assets/travis/travis-michael-jackson-3d.glb"
-IMPORT="import {styleMichaelJacksonHair, MJ3D_ASSET} from './travis-michael-jackson-3d.mjs?v=mj3d-1';"
+IMPORT="import {styleMichaelJacksonHair, MJ3D_ASSET} from './travis-michael-jackson-3d.mjs?v=mj3d-2';"
+OLD_MJ3D_IMPORT="import {styleMichaelJacksonHair, MJ3D_ASSET} from './travis-michael-jackson-3d.mjs?v=mj3d-1';"
 HOOK="      styleMichaelJacksonHair(THREE,realFaceModel,realFaceBaseMaterial.uniforms);"
-LOADER=r"\./assets/travis/travis-face-bust\.glb(?:\?[^'\"]*)?"
+LOADER=r"(['\"])\./assets/travis/travis-face-bust\.glb(?:\?[^'\"]*)?\1"
+LICENSE=ROOT/"assets/travis/MICHAEL_JACKSON_3D_CREDITS.md"
 OLD_PHOTO_IMPORT=r"(?m)^\s*import\s*\{\s*createMichaelJacksonHologram\s*\}\s*from\s*['\"][^'\"]+['\"];\s*\n"
 OLD_PHOTO_DECL=r"(?m)^[ \t]*let\s+michaelJacksonAvatar\s*=\s*null\s*;[ \t]*\n"
 OLD_PHOTO_BOOT=r"(?ms)^[ \t]*void\s+createMichaelJacksonHologram\(THREE,\s*realFaceModel,\s*realFaceHead\)\.then\(avatar=>\{.*?\}\)\.catch\(error=>console\.warn\([^\n]*?\)\);[ \t]*\n"
@@ -35,7 +37,7 @@ def inspect_glb(data):
         raise RuntimeError("Invalid 3D scene JSON chunk")
     scene=json.loads(data[20:20+size].decode("utf-8"))
     names={node.get("name") for node in scene.get("nodes",[])}
-    expected={"TravisFace_Bust","TravisMJ_HairBase","TravisMJ_Curls"}
+    expected={"TravisFace_Bust","TravisMJ_Licensed_Head"}
     expected.update("TravisFace_"+part+"_"+side for part in ("Eye","Iris","Pupil") for side in ("L","R"))
     if expected-names: raise RuntimeError("3D mesh missing animation anchors: "+str(sorted(expected-names)))
     return len(data),len(scene.get("meshes",[]))
@@ -61,20 +63,33 @@ def patch(source):
     text,removed=clean_photo_overlay(source)
     using_model=("travis-michael-jackson-3d.glb" in text or
                  "loadAsync(MJ3D_ASSET)" in text)
-    if IMPORT in text and HOOK in text and using_model:
+    # Already migrated to the 3D model: only refresh its imported version.
+    if (HOOK in text and using_model and
+            (IMPORT in text or OLD_MJ3D_IMPORT in text)):
+        text=text.replace(OLD_MJ3D_IMPORT,IMPORT)
+        # Older integrations used a literal path; keep the model loader canonical.
+        text=text.replace(
+            "'./assets/travis/travis-michael-jackson-3d.glb?v=mj3d-1'",
+            "MJ3D_ASSET")
         return text,text!=source
-    if IMPORT in text or HOOK in text or using_model:
-        raise RuntimeError("Detected incomplete MJ3D integration; files unchanged")
-    imports=[line for line in text.splitlines(True) if "travis-holographic-head.mjs" in line and line.lstrip().startswith("import ")]
-    if len(imports)!=1: raise RuntimeError("Travis holographic face import could not be matched safely")
+    if IMPORT in text or OLD_MJ3D_IMPORT in text or HOOK in text or using_model:
+        raise RuntimeError("Integração 3D incompleta ou não reconhecida; não foram alterados ficheiros")
+    imports=[line for line in text.splitlines(True)
+             if "travis-holographic-head.mjs" in line and
+             line.lstrip().startswith("import ")]
+    if len(imports)!=1:
+        raise RuntimeError("Importação da cabeça Travis não encontrada com segurança")
     text=text.replace(imports[0],imports[0]+IMPORT+"\n",1)
-    text,matched=re.subn(LOADER,"./assets/travis/travis-michael-jackson-3d.glb?v=mj3d-1",text,count=1)
-    if matched!=1: raise RuntimeError("Travis original Blender bust loading call not found")
+    text,matches=re.subn(LOADER,"MJ3D_ASSET",text,count=1)
+    if matches!=1:
+        raise RuntimeError("Busto GLB original não encontrado com segurança")
     base="head.material=realFaceBaseMaterial;"
-    if text.count(base)!=1: raise RuntimeError("Original face material is not uniquely identifiable")
+    if text.count(base)!=1:
+        raise RuntimeError("Material da cabeça original não encontrado com segurança")
     text=text.replace(base,base+"\n"+HOOK,1)
-    text=text.replace("hud.dataset.faceAsset='bust';hud.dataset.avatarStyle='laser-hologram';",
-                      "hud.dataset.faceAsset='mj-3d';hud.dataset.avatarStyle='michael-jackson-3d';",1)
+    text=text.replace(
+        "hud.dataset.faceAsset='bust';hud.dataset.avatarStyle='laser-hologram';",
+        "hud.dataset.faceAsset='mj-3d';hud.dataset.avatarStyle='michael-jackson-3d';",1)
     return text,True
 
 def node_check(data,label):
@@ -101,20 +116,22 @@ def main():
     model=fetch(REPO+"assets/travis/travis-michael-jackson-3d.glb",12_000_000)
     size,meshes=inspect_glb(model)
     shader=fetch(REPO+"travis-michael-jackson-3d.mjs",120_000)
+    licence=fetch(REPO+"assets/travis/MICHAEL_JACKSON_3D_CREDITS.md",80_000)
     if b"styleMichaelJacksonHair" not in shader or b"MJ3D_ASSET" not in shader:
         raise RuntimeError("Unexpected 3D material module")
     node_check(shader,"3D material")
     node_check(revised.encode(),"Travis native 3D and voice")
     sw_old=SW.read_text("utf-8") if SW.exists() else None
     sw_new=sw_old
-    if sw_old and not re.search(r"(?m)^const CACHE=['\"][^'\"]*-mj3d['\"]",sw_old):
+    if sw_old and not re.search(r"(?m)^const CACHE=['\"][^'\"]*-mj3d-v2['\"]",sw_old):
         sw_new,n=re.subn(r"(?m)^(const CACHE=['\"])([^'\"]+)(['\"])",
-            lambda m:m.group(1)+m.group(2)+"-mj3d"+m.group(3),sw_old,count=1)
+            lambda m:m.group(1)+re.sub(r"-mj3d(?:-v2)?$","",m.group(2))+"-mj3d-v2"+m.group(3),
+            sw_old,count=1)
         if n!=1: raise RuntimeError("Cannot safely refresh offline SW cache")
         node_check(sw_new.encode(),"Travis service worker")
     backup=Path.home()/".travis-backups"/("mj3d-"+datetime.datetime.now().strftime("%Y%m%dT%H%M%S"))
     backup.mkdir(parents=True,exist_ok=False)
-    targets=[(MAIN,revised.encode()),(MODULE,shader),(GLB,model)]
+    targets=[(MAIN,revised.encode()),(MODULE,shader),(GLB,model),(LICENSE,licence)]
     if sw_new is not None and sw_new!=sw_old: targets.append((SW,sw_new.encode()))
     manifest=[]
     for path,data in targets:
