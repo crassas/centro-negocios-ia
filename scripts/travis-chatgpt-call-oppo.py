@@ -172,10 +172,10 @@ def staged(intent_source, broker_source):
     pattern = repr(VOICE_PATTERN)
     original = "    if not 1 < len(s) <= 700:\n        return None\n"
     changed = original + (
-        f"    # {FLAG} — direct user request, no model or payment action.\\n"
-        f"    if re.fullmatch({pattern}, s, re.X):\\n"
-        '        return {"action": "open_app", "app": "chatgpt-voice"}\\n'
-    ).replace("\\n", "\n")
+        f"    # {FLAG} — direct user request, no model or payment action.\n"
+        f"    if re.fullmatch({pattern}, s, re.X):\n"
+        '        return {"action": "open_app", "app": "chatgpt-voice"}\n'
+    )
     new_intents = exactly(intent_source, original, changed, INTENTS.name)
     anchor = "        args = args or {}\n        if not self.allowed_command(kind, args):"
     replacement = (
