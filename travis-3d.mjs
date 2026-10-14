@@ -14,7 +14,7 @@ import { buildSpeechEnvelope, speechEnvelopeLevel } from './travis-audio-sync.mj
 import { sceneSignature } from './travis-scene-tracker.mjs?v=1';
 import { cameraCommand } from './travis-vision-policy.mjs?v=objects-1';
 import { createHolographicHeadMaterial, createAssemblyParticles } from './travis-holographic-head.mjs?v=sand-1';
-import {styleMichaelJacksonHair, MJ3D_ASSET} from './travis-michael-jackson-3d.mjs?v=mj3d-1';
+import {styleMichaelJacksonHair, MJ3D_ASSET} from './travis-michael-jackson-3d.mjs?v=mj3d-2';
 import { projectWebAnswer } from './travis-web-projection.mjs?v=agent-1';
 import { createPresenceMotion, hologramPresentation } from './travis-presence.mjs?v=motion-1';
 import { createSpeechFace } from './travis-speech-face.mjs?v=articulation-2';
@@ -606,6 +606,14 @@ if (!hud || !launcher || !canvas) {
       assemblyParticles=createAssemblyParticles(THREE,head.geometry);
       assemblyParticles.position.copy(head.position);assemblyParticles.quaternion.copy(head.quaternion);
       assemblyParticles.scale.copy(head.scale);markBloom(assemblyParticles);head.parent.add(assemblyParticles);
+      // Retain CC0 rig vertices for voice articulation, but only render the licensed
+      // actual 3D Michael Jackson face. Never show two faces at once.
+      const licensedMJHead=realFaceModel.getObjectByName('TravisMJ_Licensed_Head');
+      if(licensedMJHead?.isMesh){
+        head.visible=false;
+        glowShell.visible=false;
+        assemblyParticles.visible=false;
+      }
 
       for(const label of ['L','R']) {
         const sclera=realFaceModel.getObjectByName('TravisFace_Eye_'+label);
@@ -618,6 +626,9 @@ if (!hud || !launcher || !canvas) {
         }
         const eyeCenter=new THREE.Box3().setFromObject(sclera).getCenter(new THREE.Vector3());
         realFaceModel.worldToLocal(eyeCenter);
+        if(licensedMJHead?.isMesh){
+          sclera.visible=false;iris.visible=false;pupil.visible=false;
+        }
         const pivot=new THREE.Group();pivot.name='TravisFace_Gaze_'+label;
         realFaceModel.add(pivot);pivot.position.copy(eyeCenter);
         pivot.updateMatrixWorld(true);
@@ -642,7 +653,7 @@ if (!hud || !launcher || !canvas) {
       throw error;
     }
     scene.add(faceRoot);
-    faceHit=realFaceHead;
+    faceHit=realFaceModel?.getObjectByName('TravisMJ_Licensed_Head')||realFaceHead;
     faceHit.userData.core=true;
   }
 
