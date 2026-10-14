@@ -41,21 +41,14 @@ jobs:
             python3 -m py_compile "$file"
           done < <(find operit-agent -maxdepth 1 -type f -name '*.py' -print0)
 
-      - name: Blender Michael Jackson 3D installer preflight
+      - name: Blender Michael Jackson 3D v4 recovery regressions
         shell: bash
         run: |
-          python3 -m py_compile scripts/install-travis-mj3d.py
-          python3 - <<'PY'
-          import importlib.util
-          from pathlib import Path
-          spec=importlib.util.spec_from_file_location('mj3d','scripts/install-travis-mj3d.py')
-          m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
-          source=Path('travis-3d.mjs').read_text()
-          text,changed=m.patch(source)
-          assert not changed and text==source, 'Already installed integration must be idempotent'
-          assert 'TravisMJ_Licensed_Head' in Path('travis-michael-jackson-3d.mjs').read_text()
-          print('PASS TRAVIS MJ3D INSTALLER PATCH')
-          PY
+          set -euo pipefail
+          python3 -m py_compile scripts/install-travis-mj3d-v4.py
+          python3 scripts/test-install-travis-mj3d-v4.py
+          node --check travis-3d.mjs
+          node --check travis-michael-jackson-3d.mjs
 
       - name: Travis persisted graph and particle brain tests
         shell: bash
