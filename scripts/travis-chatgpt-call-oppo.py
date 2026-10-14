@@ -141,7 +141,11 @@ def check():
     if not isinstance(state["clientVersion"], int) or state["clientVersion"] < 2:
         raise Stop("Versão Android sem controlo de aplicações")
     code = read(JARVIS)
-    if not all(v in code for v in ("travis_native_bridge", "/native-bridge/", "travis_artemis_bridge")):
+    # The active Jarvis exposes /native-bridge/ directly. Android intents
+    # are delegated to /root/travis_artemis_bridge.py, which does NOT need
+    # to be imported by name in jarvis_local.py. A previous check required
+    # that unrelated literal and falsely rejected the healthy OPPO.
+    if "travis_native_bridge" not in code or "/native-bridge/" not in code:
         raise Stop("A rota Native Bridge do Jarvis não é reconhecida; alteração recusada")
     art = read(ARTEMIS)
     if not all(v in art for v in ("travis_android_commands", "open_app", "travis_native_bridge")):
