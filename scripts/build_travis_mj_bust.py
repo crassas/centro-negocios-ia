@@ -219,8 +219,13 @@ bpy.ops.export_scene.gltf(filepath=str(dest),export_format='GLB',export_yup=True
     export_normals=True,export_materials='EXPORT',export_cameras=False,export_lights=False)
 if not dest.exists() or dest.stat().st_size<150000:
     raise RuntimeError('GLB export is invalid.')
+# Editable Blender source (original mesh + sculpted landmarks + individual hair meshes).
+blend=dest.with_suffix('.blend')
+bpy.ops.wm.save_as_mainfile(filepath=str(blend),compress=True)
+if not blend.exists() or blend.stat().st_size<150000:
+    raise RuntimeError('Editable Blender file did not save.')
 print('TRAVIS_MJ3D_BUILD_OK',json.dumps({
-  'source':str(source),'output':str(dest),'bytes':dest.stat().st_size,
+  'source':str(source),'output':str(dest),'bytes':dest.stat().st_size, 'blend_bytes':blend.stat().st_size,
   'anatomy_vertices':len(head.data.vertices),
   'hair_strands':strand_counter,'hair_vertices':len(strand_vertices),
   'hair_triangles':2*len(strand_faces),'scalp_triangles':2*len(cap_faces),
