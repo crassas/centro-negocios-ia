@@ -84,12 +84,12 @@ class Handoff(unittest.TestCase):
             if path == module.BROKER:
                 return MOCK_BROKER
             raise AssertionError("Unexpected path")
-        with patch.object(module, "live", return_value={
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp, patch.object(module, "MARKER", Path(tmp) / "activated.json"), patch.object(module, "live", return_value={
                  "jarvisOnline": True, "jarvisBusy": False,
                  "bridgeHttp": 200, "bridgeOnline": True,
                  "bridgePaired": True, "clientVersion": 4,
              }), patch.object(module, "read", side_effect=mocked_read), \
-                patch.object(module.MARKER, "exists", return_value=False), \
                 redirect_stdout(StringIO()) as buffer:
             stages = module.check()
         self.assertEqual(len(stages), 2)
