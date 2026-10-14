@@ -39,6 +39,15 @@ jobs:
             -o /tmp/travis-mj-licensed.glb
           test "$(stat -c%s /tmp/travis-mj-licensed.glb)" -gt 1000000
           blender -b -t 2 --python scripts/inspect_mj_licensed.py -- /tmp/travis-mj-licensed.glb | grep -F MJ_LICENSED_GLTF_DIAGNOSTICS
+      - name: Independently preview CC BY licensed Michael Jackson 3D source
+        run: |
+          set -euo pipefail
+          blender -b /tmp/travis-mj-licensed-preview.blend -t 2 \
+            --python scripts/render_travis_mj3d_preview.py -- /tmp/travis-mj-reference
+          cp /tmp/travis-mj-reference/travis-mj3d-preview-front.png \
+            assets/travis/travis-mj3d-licensed-source-front.png
+          cp /tmp/travis-mj-reference/travis-mj3d-preview-three-quarter.png \
+            assets/travis/travis-mj3d-licensed-source-three-quarter.png
       - name: Create genuine 3D sculpt from original Travis CC0 bust
         run: |
           set -euo pipefail
@@ -80,7 +89,9 @@ jobs:
           test -s assets/travis/travis-michael-jackson-3d.blend
           git add assets/travis/travis-michael-jackson-3d.glb assets/travis/travis-michael-jackson-3d.blend \
             assets/travis/travis-mj3d-preview-front.png \
-            assets/travis/travis-mj3d-preview-three-quarter.png
+            assets/travis/travis-mj3d-preview-three-quarter.png \
+            assets/travis/travis-mj3d-licensed-source-front.png \
+            assets/travis/travis-mj3d-licensed-source-three-quarter.png
           if git diff --cached --quiet; then
             echo 'TRAVIS_MJ3D_ASSET_UNCHANGED=true'
           else
