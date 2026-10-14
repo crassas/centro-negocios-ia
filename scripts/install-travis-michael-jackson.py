@@ -28,18 +28,6 @@ BOOT = """
          hud.dataset.faceAsset='michael-jackson';
        }).catch(error=>console.warn('Travis Michael Jackson portrait fallback:',error));
 """
-FRAME = """
-    if(michaelJacksonAvatar){
-      michaelJacksonAvatar.update({
-        time:t,
-        build:reducedMotion?1:clamp(t/2.4,0,1),
-        dissolve:Math.max(visibleProjection,Math.min(1,(1-formBlend.face)*.93)),
-        voice:state==='speaking'?speechLevel:0,
-        opacity:Math.max(0,formBlend.face)
-      });
-    }
-"""
-
 def fetch(url, limit=4_000_000):
     request = urllib.request.Request(
         url, headers={"User-Agent": "TravisPortraitInstaller/1.0 (personal hologram)"}
@@ -51,10 +39,15 @@ def fetch(url, limit=4_000_000):
     return content
 
 def patch(source):
-    if "michaelJacksonAvatar.update({" in source and IMPORT in source:
+    # The overlay follows the original face uniforms by its own animation
+    # callback. No version-dependent faceRig/render-loop expression is needed.
+    installed = (IMPORT in source and DECLARATION in source and
+                 "michaelJacksonAvatar=avatar" in source)
+    if installed:
         return source, False
-    if "michaelJacksonAvatar.update({" in source or IMPORT in source:
-        raise RuntimeError("Foi encontrada uma instalação parcial. Não alterei o ficheiro.")
+    if (IMPORT in source or DECLARATION in source or
+            "michaelJacksonAvatar=avatar" in source):
+        raise RuntimeError("Instalação parcial detectada. Nada foi alterado.")
     lines=source.splitlines(keepends=True)
     candidates=[i for i,line in enumerate(lines)
                 if line.lstrip().startswith("import ") and
@@ -74,13 +67,6 @@ def patch(source):
     if len(matches)!=1:
         raise RuntimeError("Ponto de activação do busto não encontrado de forma inequívoca.")
     source=source[:matches[0].end()]+"\n"+BOOT+source[matches[0].end():]
-    matches=list(re.finditer(
-        r"faceRig\?\.update\(\s*state\s*===\s*'speaking'\s*\?\s*speechLevel\s*:\s*0\s*,\s*null\s*\)\s*;",
-        source
-    ))
-    if len(matches)!=1:
-        raise RuntimeError("Ciclo de animação facial não encontrado de forma inequívoca.")
-    source=source[:matches[0].end()]+"\n"+FRAME+source[matches[0].end():]
     return source, True
 
 def syntax_check(code, suffix, label):
