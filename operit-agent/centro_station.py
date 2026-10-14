@@ -173,10 +173,14 @@ TRAVIS_CLIENT_FILES = (
     "travis-vision-policy.mjs",
     "travis-face-rig.mjs",
     "travis-continuity.mjs",
+    "travis-michael-jackson-3d.mjs",
     "travis-3d.mjs",
     "sw.js",
     "index.html",
 )
+# The 3D asset is binary and must be installed BEFORE the client module.
+# Text-only updater would sync travis-3d.mjs without its GLB and blank the face.
+TRAVIS_CLIENT_BINARY_FILES = ("assets/travis/travis-michael-jackson-3d.glb",)
 MAIN_COMMIT_API = "https://api.github.com/repos/crassas/centro-negocios-ia/commits/main"
 RUNTIME_FILES = {
     "centro_server.py": HOME / "centro_server.py",
@@ -639,6 +643,30 @@ def sync_travis_client(ref):
             if not raw or len(raw) > 450000:
                 raise RuntimeError(f"{name}: resposta ausente ou demasiado grande")
             fetched[name] = raw.decode("utf-8")
+        # Stage and validate the real Blender GLB, never decode it as UTF-8.
+        binary_sources = {}
+        for name in TRAVIS_CLIENT_BINARY_FILES:
+            url = f"{RAW_REPO_BASE}/{ref}/{name}"
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "Centro-Travis-GLB-Sync/1.0",
+                "Cache-Control": "no-cache",
+            })
+            with urllib.request.urlopen(req, timeout=35) as response:
+                raw = response.read(12000001)
+            if not (150000 < len(raw) <= 12000000
+                    and raw[:4] == b"glTF"
+                    and int.from_bytes(raw[8:12], "little") == len(raw)
+                    and raw[16:20] == b"JSON"):
+                raise RuntimeError(name + ": MJ3D asset missing or invalid")
+            json_length = int.from_bytes(raw[12:16], "little")
+            gltf = json.loads(raw[20:20+json_length].decode("utf-8"))
+            names = {item.get("name") for item in gltf.get("nodes", [])}
+            if not {"TravisFace_Bust", "TravisMJ_Licensed_Head"}.issubset(names):
+                raise RuntimeError(name + ": missing facial model nodes")
+            binary_sources[name] = raw
+        if ("MJ3D_ASSET" not in fetched["travis-3d.mjs"]
+                or "styleMichaelJacksonHair" not in fetched["travis-michael-jackson-3d.mjs"]):
+            raise RuntimeError("Travis face: module and Blender asset are not in the same release")
         if "travis-aircraft.mjs?v=aircraft-1" not in fetched["travis-english-intents.mjs"] or "travis-aircraft.mjs?v=aircraft-1" not in fetched["sw.js"]:
             raise RuntimeError("Travis aircraft resolver disconnected")
         for asset, consumer in (("travis-figures.mjs", "travis-action-cards.mjs"), ("travis-figure-catalog.mjs", "travis-figures.mjs"), ("travis-scene-focus.mjs", "travis-concept-projection.mjs"), ("travis-anatomy.mjs", "travis-action-cards.mjs"), ("travis-anatomy-catalog.mjs", "travis-anatomy.mjs"), ("travis-scene-blueprint.mjs", "travis-scene-planner.mjs"), ("travis-scene-composer.mjs", "travis-concept-projection.mjs"), ("travis-atmosphere.mjs", "travis-3d.mjs"), ("travis-cinema-depth.css", "index.html")):
@@ -765,13 +793,31 @@ def sync_travis_client(ref):
     except (OSError,ValueError):
         return [], ["Travis client: invalid local manifest; installed files preserved"]
     fingerprints={name:hashlib.sha256(source.encode('utf-8')).hexdigest() for name,source in fetched.items()}
+    fingerprints.update({name:hashlib.sha256(source).hexdigest() for name,source in binary_sources.items()})
     observed={}
-    for name in TRAVIS_CLIENT_FILES:
+    for name in (*TRAVIS_CLIENT_BINARY_FILES,*TRAVIS_CLIENT_FILES):
         path=installed/name
         observed[name]=hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
         if observed[name] is not None and observed[name] not in {manifest.get(name),fingerprints[name]}:
             return [], ["Travis client: local modification preserved: "+name]
     changed=[]
+    # Binary dependencies are published before the JS that imports them.
+    # They are fingerprinted and protected against manual edits as above.
+    for name in TRAVIS_CLIENT_BINARY_FILES:
+        path=installed/name
+        try:
+            now=hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+            if now!=observed[name]:
+                return changed,["Travis client: concurrent modification preserved: "+name]
+            if now!=fingerprints[name]:
+                safe_mkdir(path.parent)
+                staged=path.with_name(path.name+".centro-new")
+                staged.write_bytes(binary_sources[name])
+                os.chmod(staged,0o600)
+                staged.replace(path)
+                changed.append(name)
+        except OSError as exc:
+            return changed, ["Travis client: " + name + ": " + str(exc)[:200]]
     for name in TRAVIS_CLIENT_FILES:
         path=installed/name
         try:
