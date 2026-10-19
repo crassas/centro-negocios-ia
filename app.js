@@ -180,8 +180,16 @@ function fmtNum(value,digits=0){
 function fmtMoney(value){return new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'}).format(Number(value)||0);}
 function humanMs(value){return value==null?'—':fmtNum(value,0)+' ms';}
 function siteResult(id){return (live.sites||[]).find(x=>x.id===id);}
-function allProjects(){return [...sites,...EXTRA_PROJECTS];}
-function projectById(id){return allProjects().find(project=>project.id===id);}
+function allProjects(){
+  const known=Array.isArray(sites)?sites:[];
+  // O antigo identificador "engomadoria" e o atual "engomadoria-beatriz"
+  // apontam para o mesmo site. Não duplicar a carteira ao carregar os sites.
+  return [...known,...EXTRA_PROJECTS.filter(extra=>!known.some(site=>site.repo&&extra.repo&&site.repo===extra.repo))];
+}
+function projectById(id){
+  const actual=id==='engomadoria'&&sites.some(site=>site.id==='engomadoria-beatriz')?'engomadoria-beatriz':id;
+  return allProjects().find(project=>project.id===actual);
+}
 function uid(prefix='id'){return prefix+'_'+Date.now().toString(36)+'_'+crypto.getRandomValues(new Uint32Array(1))[0].toString(36);}
 function toast(message){
   const el=$('toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2400);
@@ -203,6 +211,10 @@ function openPanel(id,options={}){
   if(!target)id=DEFAULT_PANEL;
   document.querySelectorAll('.panel-view').forEach(panel=>panel.classList.toggle('is-active',panel.dataset.panel===id));
   document.querySelectorAll('[data-panel-target]').forEach(control=>control.classList.toggle('active',control.dataset.panelTarget===id));
+  document.querySelectorAll('.command-nav a[data-panel-target]').forEach(link=>{
+    if(link.dataset.panelTarget===id)link.setAttribute('aria-current','page');
+    else link.removeAttribute('aria-current');
+  });
   if($('active-panel-name'))$('active-panel-name').textContent=PANEL_NAMES[id]||String(id).toUpperCase();
   if(location.hash!=='#'+id){
     if(options.history===false||options.instant)history.replaceState({panel:id},'','#'+id);
@@ -655,6 +667,10 @@ function renderPayments(){
   if(!Array.isArray(state.pendingPayments))state.pendingPayments=[];
   const totals=pendingPaymentTotals();
   if($('payment-pending-total'))$('payment-pending-total').textContent=fmtMoney(totals.total);
+  const remote=window.CentroBusinessNeon?.context?.();
+  if($('neon-finance-notice'))$('neon-finance-notice').textContent=remote
+    ? 'Neon: '+fmtMoney(remote.totals.pendingEur)+' por receber. A lista abaixo pertence apenas a este dispositivo; os valores NÃO são somados para evitar duplicações.'
+    : 'Sem leitura Neon neste momento. A lista abaixo pertence apenas a este dispositivo.';
   if($('payment-pending-count'))$('payment-pending-count').textContent=totals.count+' pendente'+(totals.count===1?'':'s');
   const tbody=$('payment-table');if(!tbody)return;
   if(!state.pendingPayments.length){tbody.innerHTML='<tr><td colspan="7" class="empty-cell">Sem pagamentos pendentes.</td></tr>';return;}
@@ -727,13 +743,14 @@ function companyFixedTotal(){
   return (state.company?.recurringCosts||[]).filter(c=>c.active!==false).reduce((sum,c)=>sum+Math.abs(Number(c.amount)||0),0);
 }
 function companyProjectMoney(projectId){
+  const legacyIds=projectId==='engomadoria-beatriz'?new Set([projectId,'engomadoria']):new Set([projectId]);
   const totals=state.transactions.reduce((a,row)=>{
-    if(row.projectId!==projectId)return a;
+    if(!legacyIds.has(row.projectId))return a;
     const amount=Math.abs(Number(row.amount)||0);
     if(row.type==='income')a.income+=amount;else a.expense+=amount;
     a.margin=a.income-a.expense;return a;
   },{income:0,expense:0,margin:0});
-  const pending=(state.pendingPayments||[]).filter(p=>p.projectId===projectId&&p.status==='pending').reduce((sum,p)=>sum+Math.abs(Number(p.amount)||0),0);
+  const pending=(state.pendingPayments||[]).filter(p=>legacyIds.has(p.projectId)&&p.status==='pending').reduce((sum,p)=>sum+Math.abs(Number(p.amount)||0),0);
   return {...totals,pending};
 }
 function companyFocusItems(){
@@ -797,14 +814,19 @@ function renderCompanyProjects(){
   const grid=$('company-project-grid');if(!grid)return;
   const projects=allProjects();
   grid.innerHTML=projects.map(project=>{
-    const crm=state.clients[project.id]||{stage:'Activo',note:''},money=companyProjectMoney(project.id);
+    const crm=state.clients[project.id]||(project.id==='engomadoria-beatriz'?state.clients.engomadoria:null)||{stage:'Sem estado',note:''};
+    const money=companyProjectMoney(project.id);
+    const neon=window.CentroBusinessNeon?.context?.();
+    const remote=(neon?.clients||[]).find(c=>c.repositoryUrl&&c.repositoryUrl===project.repo);
+    const displayedPending=remote?Math.max(0,Number(remote.pendingEur)||0):money.pending;
+    const displayedSource=remote?'Neon':'local';
     const openTasks=(state.company?.tasks||[]).filter(t=>t.projectId===project.id&&t.status!=='done').length;
     const repo=safeUrl(project.repo||'');
     const site=safeUrl(project.url||'');
     return '<article class="company-project-card">'+
       '<div class="company-project-head"><div><span>'+esc(crm.stage||'Activo')+'</span><h3>'+esc(project.name)+'</h3><small>'+esc(project.area||'')+'</small></div><b>'+openTasks+' '+(openTasks===1?'tarefa':'tarefas')+'</b></div>'+
       '<p>'+esc(crm.note||'Sem próxima ação registada no CRM.')+'</p>'+
-      '<div class="company-project-money"><span>Entradas <b>'+fmtMoney(money.income)+'</b></span><span>Custos <b>'+fmtMoney(money.expense)+'</b></span><span>Por receber <b>'+fmtMoney(money.pending)+'</b></span></div>'+
+      '<div class="company-project-money"><span>Entradas (local) <b>'+fmtMoney(money.income)+'</b></span><span>Custos (local) <b>'+fmtMoney(money.expense)+'</b></span><span>Por receber ('+displayedSource+') <b>'+fmtMoney(displayedPending)+'</b></span></div>'+
       '<div class="company-project-links">'+(site?'<a href="'+esc(site)+'" target="_blank" rel="noopener">Site ↗</a>':'')+(repo?'<a href="'+esc(repo)+'" target="_blank" rel="noopener">GitHub ↗</a>':'')+'<button type="button" data-panel-target="crm">CRM →</button></div>'+
     '</article>';
   }).join('');
@@ -838,8 +860,14 @@ function renderCompany(){
   $('company-month-income').textContent=fmtMoney(monthly.income);
   $('company-month-expense').textContent=fmtMoney(monthly.expense);
   $('company-month-margin').textContent=fmtMoney(monthly.margin);
-  $('company-pending').textContent=fmtMoney(pending.total);
-  $('company-pending-note').textContent=pending.count+' '+(pending.count===1?'pagamento':'pagamentos');
+  const neon=window.CentroBusinessNeon?.context?.();
+  const linked=Boolean(neon&&Array.isArray(neon.clients)&&neon.totals);
+  const remotePending=linked?Math.max(0,Number(neon.totals.pendingEur)||0):0;
+  $('company-pending').textContent=fmtMoney(linked?remotePending:pending.total);
+  $('company-pending-note').textContent=linked
+    ? 'Neon · local '+fmtMoney(pending.total)+' (não somado)'
+    : pending.count+' registo(s) neste dispositivo · Neon não consultada';
+  if($('company-pending-source'))$('company-pending-source').textContent=linked?'Por receber · Neon':'Por receber · local';
   $('company-open-tasks').textContent=tasks.open;
   $('company-overdue-tasks').textContent=tasks.overdue;
   const target=Math.max(0,Number(profile.monthlyTarget)||0),pct=target?Math.min(100,Math.max(0,monthly.income/target*100)):0;
@@ -1225,6 +1253,9 @@ function setupEvents(){
   $('prospect-analyse').addEventListener('click',captureOpportunity);
   $('prospect-capture').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();captureOpportunity();}});
   $('company-new-task')?.addEventListener('click',()=>{$('company-task-title')?.focus();$('company-task-form')?.scrollIntoView({behavior:'smooth',block:'center'});});
+  window.addEventListener('centro:business-updated',()=>{
+    renderCompany();renderPayments();
+  });
   $('company-profile-form')?.addEventListener('submit',e=>{
     e.preventDefault();
     state.company=normalizeCompany(state.company);
@@ -1337,7 +1368,10 @@ function setupPWA(){
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
-  seedCompanyDefaults();seedCRMDefaults();seedLeadDefaults();seedPaymentDefaults();setupEvents();setupDashboardChrome();setupPWA();
+  seedCompanyDefaults();
+  // Não criar automaticamente leads, dívidas ou tarefas fictícias em cada visita.
+  // Registos legados já existentes no browser são preservados sem os reescrever.
+  setupEvents();setupDashboardChrome();setupPWA();
   $('finance-date').value=new Date().toISOString().slice(0,10);
   renderLeads();renderPayments();renderFinance();renderCompany();renderGsc();renderAgentState();setupVaultState();renderSystem();renderAIStatus();refreshGscConnection();
   checkTelegramStatus(false);pollTelegramApprovals(false);loadExecutions();
