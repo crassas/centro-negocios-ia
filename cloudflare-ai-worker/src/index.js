@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { fetchBusinessOverview } from './business-neon.js';
 
 export class TaskQueue extends DurableObject {
   constructor(ctx,env){
@@ -849,6 +850,12 @@ async function requireGscDashboard(request,env){
   if(!token)return false;
   const hash=await sha256Hex(token);
   return taskQueue(env).authenticateGsc(hash);
+}
+async function requireBusinessDashboard(request,env){
+  const token=bearer(request);
+  if(!token)return false;
+  const hash=await sha256Hex(token);
+  return taskQueue(env).authenticateBusiness(hash);
 }
 
 function cleanContext(context){
@@ -2602,6 +2609,19 @@ async function handleTelegramUpdate(env,update,ctx){
       if(resolved.ok)await telegramSend(env,approved?'🟢 GPU Colab autorizado. O notebook pode ligar-se.':'GPU Colab recusado.');
       return {ok:true};
     }
+    const businessAction=data.match(/^business(approve|reject):(.+)$/);
+    if(businessAction){
+      const approved=businessAction[1]==='approve';
+      const resolved=await q.resolveBusinessPair(businessAction[2],approved);
+      await telegramApi(env,'answerCallbackQuery',{
+        callback_query_id:cb.id,
+        text:approved?'Centro autorizado para os dados da Quasi Norte.':'Ligação Neon recusada.'
+      });
+      if(resolved.ok)await telegramSend(env,approved
+        ?'Centro autorizado a consultar os dados comerciais da Neon neste dispositivo.'
+        :'Ligação aos dados comerciais recusada.');
+      return {ok:true};
+    }
     let gscm=data.match(/^gsc(approve|reject):(.+)$/);
     if(gscm){
       const approved=gscm[1]==='approve';
@@ -2696,6 +2716,59 @@ export default {
         operitQueue:Boolean(env.TASKS),
         telegramFront:'v3-deterministic-projects'
       },200,origin);
+    }
+
+    // Centro de Negócios ↔ Neon: acesso separado, aprovado no Telegram.
+    // Não se expõem dados financeiros através de /health nem endpoints públicos.
+    if(url.pathname==='/api/business/status'&&request.method==='GET'){
+      try{
+        const authorized=await requireBusinessDashboard(request,env);
+        return json({ok:true,configured:Boolean(env.NEON_DATABASE_URL),authorized},200,origin);
+      }catch{
+        return json({ok:false,configured:Boolean(env.NEON_DATABASE_URL),authorized:false},502,origin);
+      }
+    }
+
+    if(url.pathname==='/api/business/pair'&&request.method==='POST'){
+      if(!env.NEON_DATABASE_URL)return json({ok:false,error:'Base Neon ainda não ligada ao Worker.'},409,origin);
+      if(!env.TELEGRAM_BOT_TOKEN||!env.TELEGRAM_CHAT_ID)return json({ok:false,error:'Confirmação Telegram indisponível.'},409,origin);
+      try{
+        const pair=await taskQueue(env).createBusinessPair();
+        const sent=await telegramSend(env,'QUASI NORTE · CENTRO DE NEGÓCIOS\n\nAutorizar este dispositivo a consultar os clientes, os quatro websites e os pagamentos pendentes na Neon?',{
+          reply_markup:{inline_keyboard:[[
+            {text:'Autorizar Neon',callback_data:'businessapprove:'+pair.id},
+            {text:'Recusar',callback_data:'businessreject:'+pair.id}
+          ]]}
+        });
+        if(!sent.ok)return json({ok:false,error:'Não foi possível enviar a autorização por Telegram.'},502,origin);
+        return json({ok:true,pairId:pair.id,expiresAt:pair.expiresAt},200,origin);
+      }catch(error){
+        console.error('Falha de pairing de negócio',error);
+        return json({ok:false,error:'Falha ao iniciar autorização.'},502,origin);
+      }
+    }
+
+    if(url.pathname==='/api/business/pair-status'&&request.method==='GET'){
+      try{
+        const status=await taskQueue(env).businessPairStatus(String(url.searchParams.get('id')||''));
+        return json({ok:true,...status},200,origin);
+      }catch{
+        return json({ok:false,error:'Falha ao consultar a autorização.'},502,origin);
+      }
+    }
+
+    if(url.pathname==='/api/business/overview'&&request.method==='GET'){
+      if(!await requireBusinessDashboard(request,env)){
+        return json({ok:false,error:'Dispositivo não autorizado. Confirma no Telegram.'},401,origin);
+      }
+      if(!env.NEON_DATABASE_URL)return json({ok:false,error:'Ligação à Neon ainda por configurar.'},409,origin);
+      try{
+        const data=await fetchBusinessOverview(env.NEON_DATABASE_URL);
+        return json({ok:true,...data},200,origin);
+      }catch(error){
+        console.error('Falha Neon business overview',error);
+        return json({ok:false,error:'A Neon não respondeu. Verifica a configuração no Worker.'},502,origin);
+      }
     }
 
     if(url.pathname==='/api/office/status'&&request.method==='GET'){
