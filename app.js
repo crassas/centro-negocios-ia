@@ -662,6 +662,16 @@ function pendingPaymentTotals(){
   const pending=(state.pendingPayments||[]).filter(p=>p.status==='pending');
   return {count:pending.length,total:pending.reduce((sum,p)=>sum+Math.abs(Number(p.amount)||0),0)};
 }
+function clientKey(value){
+  return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-PT').replace(/[^a-z0-9]+/g,' ').trim();
+}
+function matchingNeonPending(row){
+  // Apenas indicação de provável duplicação visual. Não funde nem apaga dados.
+  const clients=window.CentroBusinessNeon?.context?.()?.clients||[];
+  const key=clientKey(row.client);
+  const amount=Math.abs(Number(row.amount)||0);
+  return key&&amount>0?clients.find(c=>clientKey(c.name)===key&&Math.abs((Number(c.pendingEur)||0)-amount)<0.01):null;
+}
 function renderPayments(){
   syncRoomFinance();
   if(!Array.isArray(state.pendingPayments))state.pendingPayments=[];
@@ -676,12 +686,14 @@ function renderPayments(){
   if(!state.pendingPayments.length){tbody.innerHTML='<tr><td colspan="7" class="empty-cell">Sem pagamentos pendentes.</td></tr>';return;}
   tbody.innerHTML=state.pendingPayments.slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).map(row=>{
     const idx=state.pendingPayments.indexOf(row),project=projectById(row.projectId);
+    const overlapping=row.status==='pending'&&Boolean(matchingNeonPending(row));
     const label=row.status==='received'?'Recebido':row.status==='cancelled'?'Cancelado':'Pendente';
-    return '<tr><td>'+esc(row.client||'—')+'</td><td>'+esc(project?project.name:'—')+'</td><td>'+esc(row.description||'—')+'</td><td>'+esc(row.dueDate?fmtDateOnly(row.dueDate):'—')+'</td><td>'+fmtMoney(row.amount)+'</td><td><b>'+label+'</b></td><td>'+(row.status==='pending'?'<button class="btn" data-payment-received="'+idx+'" type="button">Recebi</button> <button class="danger-btn" data-payment-cancel="'+idx+'" title="Cancelar">×</button>':'<button class="danger-btn" data-payment-delete="'+idx+'" title="Eliminar">×</button>')+'</td></tr>';
+    return '<tr><td>'+esc(row.client||'—')+'</td><td>'+esc(project?project.name:'—')+'</td><td>'+esc(row.description||'—')+'</td><td>'+esc(row.dueDate?fmtDateOnly(row.dueDate):'—')+'</td><td>'+fmtMoney(row.amount)+'</td><td><b>'+label+'</b></td><td>'+(overlapping?'<span class="payment-neon-managed" title="Este valor também está na Neon. Confirma antes de alterar registos financeiros.">Também na Neon · confirmar</span>':row.status==='pending'?'<button class="btn" data-payment-received="'+idx+'" type="button">Recebi</button> <button class="danger-btn" data-payment-cancel="'+idx+'" title="Cancelar">×</button>':'<button class="danger-btn" data-payment-delete="'+idx+'" title="Eliminar">×</button>')+'</td></tr>';
   }).join('');
   tbody.querySelectorAll('[data-payment-received]').forEach(btn=>btn.addEventListener('click',()=>{
     const row=state.pendingPayments[Number(btn.dataset.paymentReceived)];if(!row||row.status!=='pending')return;
-    if(!confirm('Confirmar que '+fmtMoney(row.amount)+' foi efectivamente recebido?'))return;
+    if(matchingNeonPending(row)){toast('Este valor também consta na Neon. Não o marques apenas no Caixa local.');return;}
+    if(!confirm('Confirmar que '+fmtMoney(row.amount)+' foi efectivamente recebido? O registo será apenas local.'))return;
     row.status='received';row.receivedAt=new Date().toISOString();
     state.transactions.push({id:uid('txn'),date:new Date().toISOString().slice(0,10),type:'income',amount:Math.abs(Number(row.amount)||0),category:'Pagamento recebido',projectId:row.projectId||'',description:(row.client||'Cliente')+(row.description?' · '+row.description:''),createdAt:new Date().toISOString()});
     saveState();renderPayments();renderFinance();toast('Pagamento marcado como recebido e adicionado ao Caixa.');
@@ -763,14 +775,22 @@ function companyFocusItems(){
     }
     return {kind:'task',title:t.title,meta:(t.area||'Tarefa')+(t.dueDate?' · '+(overdue?'atrasada · ':'')+fmtDateOnly(t.dueDate):''),priority:overdue?5:companyPriorityRank(t.priority),id:t.id};
   });
-  const payments=(state.pendingPayments||[]).filter(p=>p.status==='pending').map(p=>({
+  const remote=window.CentroBusinessNeon?.context?.()?.clients||[];
+  const neonPayments=remote.filter(c=>Number(c.pendingEur)>0).map(c=>({
     kind:'payment',
-    title:'Receber '+fmtMoney(p.amount)+' · '+(p.client||'Cliente'),
-    meta:(p.dueDate?'Previsto '+fmtDateOnly(p.dueDate):'Sem data prevista')+(p.description?' · '+p.description:''),
+    title:'Acompanhar '+fmtMoney(c.pendingEur)+' · '+c.name,
+    meta:'Neon · pendência real'+((state.pendingPayments||[]).some(p=>p.status==='pending'&&matchingNeonPending(p)&&clientKey(p.client)===clientKey(c.name))?' · também registada localmente':''),
+    priority:3,
+    id:'neon:'+clientKey(c.name)
+  }));
+  const payments=(state.pendingPayments||[]).filter(p=>p.status==='pending'&&!matchingNeonPending(p)).map(p=>({
+    kind:'payment',
+    title:'Confirmar '+fmtMoney(p.amount)+' · '+(p.client||'Cliente'),
+    meta:'Apenas neste dispositivo · '+(p.dueDate?'Previsto '+fmtDateOnly(p.dueDate):'sem prazo'),
     priority:p.dueDate&&p.dueDate<new Date().toISOString().slice(0,10)?4:2,
     id:p.id
   }));
-  return [...tasks,...payments].sort((a,b)=>b.priority-a.priority||a.title.localeCompare(b.title,'pt')).slice(0,7);
+  return [...tasks,...neonPayments,...payments].sort((a,b)=>b.priority-a.priority||a.title.localeCompare(b.title,'pt')).slice(0,7);
 }
 function renderCompanyFocus(){
   const list=$('company-focus-list');if(!list)return;
