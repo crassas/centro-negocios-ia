@@ -237,3 +237,50 @@ html.travis-entry .skip-link{display:none}
   #empresa *{scroll-behavior:auto!important;transition-duration:.01ms!important}
   .command-nav a{transition-duration:.01ms!important}
 }
+
+/* Leitura transversal: a mesma escala mínima para os outros módulos comerciais. */
+#visao .dashboard-card-head h2{font-size:19px;line-height:1.3}
+#visao .dashboard-card-head p,
+#visao .dashboard-heading p{font-size:13px!important;line-height:1.5!important}
+#visao .summary-body>span{font-size:13px}
+#visao .summary-body small{font-size:12px;line-height:1.4;white-space:normal}
+#visao .project-meta h3{font-size:16px;line-height:1.35;white-space:normal}
+#visao .project-meta span{font-size:12px;line-height:1.45;white-space:normal}
+#visao .project-next small{font-size:12px}
+#visao .project-next b{font-size:13px;line-height:1.45}
+#visao .priority-row{min-height:54px}
+#visao .priority-row b{font-size:13px;line-height:1.5;white-space:normal}
+#visao .priority-row small{font-size:11px}
+#visao .project-open,#visao .project-actions button{
+  min-height:44px;font-size:13px;min-width:85px;
+}
+#visao .text-link,#empresa .text-link,
+#seo .text-link,#caixa .text-link{
+  min-height:44px;display:inline-flex;align-items:center;font-size:13px;
+}
+#seo .seo-opportunity-card h3{font-size:17px;line-height:1.4}
+#seo .seo-opportunity-card p,
+#seo .seo-opportunity-card strong,
+#seo .seo-opportunity-card small{font-size:13px;line-height:1.55}
+#seo .seo-opportunity-metrics,
+#seo .seo-priority,
+#seo .seo-trend span{font-size:12px}
+#seo .seo-score-strip span,#seo .seo-score-strip small{font-size:12px;line-height:1.4}
+#seo .gsc-live-head p,
+#seo .gsc-live-state span{font-size:13px}
+#seo .gsc-live-state b{font-size:15px}
+#seo .search-context-field span{font-size:12px}
+#sites .site-card h3{font-size:17px;line-height:1.4}
+#sites .site-card a,#sites .site-card button{min-height:44px}
+#leads .panel-title p,#crm .panel-title p,#caixa .panel-title p{
+  font-size:14px!important;line-height:1.55!important;
+}
+@media(max-width:680px){
+  .command-bar .top-primary{min-height:44px;height:44px;font-size:12px;padding:0 12px}
+  .command-bar .icon-btn{min-width:44px!important;min-height:44px!important;height:44px!important;width:44px!important}
+  #visao .dashboard-main-grid,#visao .dashboard-bottom-grid{gap:16px}
+  #visao .project-media{height:120px}
+  #visao .project-card-body{padding:15px}
+  #visao .project-actions{gap:10px}
+  #visao .dashboard-heading h1{font-size:28px}
+}
