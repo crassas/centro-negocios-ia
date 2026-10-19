@@ -30,6 +30,7 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
   <script src="./agent-room.js?v=jarvis-1" defer></script>
   <script src="./app.js?v=travis-panel-2" defer></script>
+  <script src="./business-neon.js?v=20261019" defer></script>
   <link rel="stylesheet" href="./travis-hud.css?v=sand-1">
   <link rel="stylesheet" href="./travis-brain.css?v=3">
   <link rel="stylesheet" href="./travis-cinema.css?v=cinema-1">
@@ -370,6 +371,24 @@
           </div>
           <button class="btn primary" id="company-new-task" type="button">＋ Nova tarefa</button>
         </div>
+
+        <article class="module neon-company-panel" id="neon-company">
+          <div class="neon-company-head">
+            <div>
+              <span class="sys-label">CARTEIRA REAL · NEON POSTGRESQL</span>
+              <h2>Sites e valores por receber</h2>
+              <p id="neon-company-source">Ligação protegida, separada do Caixa local e dos agentes existentes.</p>
+            </div>
+            <div class="neon-company-actions">
+              <button class="btn" id="neon-company-authorize" type="button">Autorizar no Telegram</button>
+              <button class="btn" id="neon-company-refresh" type="button" disabled>Atualizar Neon</button>
+            </div>
+          </div>
+          <div class="neon-company-meta"><strong id="neon-company-total">—</strong>
+            <span id="neon-company-status" role="status" aria-live="polite">A verificar ligação…</span>
+          </div>
+          <ul id="neon-company-list" class="neon-company-list"></ul>
+        </article>
 
         <div class="company-scoreboard" aria-label="Estado da empresa">
           <article><span>Entradas este mês</span><b id="company-month-income">0,00 €</b><small>recebido e registado</small></article>
