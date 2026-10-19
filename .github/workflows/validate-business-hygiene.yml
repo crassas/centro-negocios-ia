@@ -1,0 +1,31 @@
+name: Validar higiene do Centro de Negócios
+on:
+  pull_request:
+    paths:
+      - "app.js"
+      - "business-neon.js"
+      - "business-hygiene.css"
+      - "index.html"
+      - "scripts/centro-hygiene-selftest.mjs"
+      - ".github/workflows/validate-business-hygiene.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-business:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Confirmar sintaxe
+        run: |
+          node --check app.js
+          node --check business-neon.js
+          node --check scripts/centro-hygiene-selftest.mjs
+      - name: Validar dados, segurança e acessibilidade
+        run: node --test scripts/centro-hygiene-selftest.mjs

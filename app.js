@@ -180,8 +180,16 @@ function fmtNum(value,digits=0){
 function fmtMoney(value){return new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'}).format(Number(value)||0);}
 function humanMs(value){return value==null?'—':fmtNum(value,0)+' ms';}
 function siteResult(id){return (live.sites||[]).find(x=>x.id===id);}
-function allProjects(){return [...sites,...EXTRA_PROJECTS];}
-function projectById(id){return allProjects().find(project=>project.id===id);}
+function allProjects(){
+  const known=Array.isArray(sites)?sites:[];
+  // O antigo identificador "engomadoria" e o atual "engomadoria-beatriz"
+  // apontam para o mesmo site. Não duplicar a carteira ao carregar os sites.
+  return [...known,...EXTRA_PROJECTS.filter(extra=>!known.some(site=>site.repo&&extra.repo&&site.repo===extra.repo))];
+}
+function projectById(id){
+  const actual=id==='engomadoria'&&sites.some(site=>site.id==='engomadoria-beatriz')?'engomadoria-beatriz':id;
+  return allProjects().find(project=>project.id===actual);
+}
 function uid(prefix='id'){return prefix+'_'+Date.now().toString(36)+'_'+crypto.getRandomValues(new Uint32Array(1))[0].toString(36);}
 function toast(message){
   const el=$('toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2400);
@@ -193,7 +201,7 @@ function ageLabel(value){
 }
 
 
-const DEFAULT_PANEL='agentes';
+const DEFAULT_PANEL='empresa';
 const PANEL_NAMES={
   agentes:'SALA DOS AGENTES',visao:'PAINEL',empresa:'EMPRESA',assistente:'AUTOMAÇÃO & IA',radar:'OPORTUNIDADES',sites:'SITES',crm:'CLIENTES',
   leads:'LEADS',caixa:'FINANCEIRO',seo:'OPORTUNIDADES SEO',cofre:'COFRE',ferramentas:'DEFINIÇÕES'
@@ -203,6 +211,10 @@ function openPanel(id,options={}){
   if(!target)id=DEFAULT_PANEL;
   document.querySelectorAll('.panel-view').forEach(panel=>panel.classList.toggle('is-active',panel.dataset.panel===id));
   document.querySelectorAll('[data-panel-target]').forEach(control=>control.classList.toggle('active',control.dataset.panelTarget===id));
+  document.querySelectorAll('.command-nav a[data-panel-target]').forEach(link=>{
+    if(link.dataset.panelTarget===id)link.setAttribute('aria-current','page');
+    else link.removeAttribute('aria-current');
+  });
   if($('active-panel-name'))$('active-panel-name').textContent=PANEL_NAMES[id]||String(id).toUpperCase();
   if(location.hash!=='#'+id){
     if(options.history===false||options.instant)history.replaceState({panel:id},'','#'+id);
@@ -347,11 +359,11 @@ function renderCRM(){
   const projects=allProjects();
   if(!projects.length){grid.innerHTML='<div class="empty">Sem projectos configurados.</div>';return;}
   grid.innerHTML=projects.map(s=>{
-    const c=state.clients[s.id]||{stage:'Activo',note:''};
+    const c=state.clients[s.id]||(s.id==='engomadoria-beatriz'?state.clients.engomadoria:null)||{stage:'Por confirmar',note:''};
     const location=s.url?'<a href="'+esc(s.url)+'" target="_blank" rel="noreferrer">'+esc(s.area||s.url)+'</a>':'<span class="section-meta">'+esc(s.area||'Sem morada')+'</span>';
     return '<article class="crm-card" data-client="'+esc(s.id)+'"><h3>'+esc(s.name)+'</h3>'+location+
-      '<div class="field"><label>Estado</label><select class="client-stage">'+['Activo','Prospecção','Pausado','Concluído'].map(v=>'<option '+(c.stage===v?'selected':'')+'>'+v+'</option>').join('')+'</select></div>'+
-      '<div class="field"><label>Próxima acção</label><textarea class="client-note" placeholder="Ex.: rever Search Console sexta-feira">'+esc(c.note||'')+'</textarea></div></article>';
+      '<div class="field"><label for="crm-stage-'+esc(s.id)+'">Estado do cliente</label><select id="crm-stage-'+esc(s.id)+'" class="client-stage">'+['Por confirmar','Activo','Prospecção','Pausado','Concluído'].map(v=>'<option '+(c.stage===v?'selected':'')+'>'+v+'</option>').join('')+'</select></div>'+
+      '<div class="field"><label for="crm-note-'+esc(s.id)+'">Próxima ação</label><textarea id="crm-note-'+esc(s.id)+'" class="client-note" placeholder="Ex.: rever Search Console sexta-feira">'+esc(c.note||'')+'</textarea></div></article>';
   }).join('');
   grid.querySelectorAll('.crm-card').forEach(card=>{
     const id=card.dataset.client;
@@ -364,7 +376,7 @@ function renderLeads(){
   if(!state.leads.length){tbody.innerHTML='<tr><td colspan="6" class="empty-cell">Sem leads registados.</td></tr>';renderLocalSummary();return;}
   tbody.innerHTML=state.leads.slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).map(l=>{
     const idx=state.leads.indexOf(l);const link=safeUrl(l.url);
-    return '<tr><td>'+esc(l.name)+'</td><td>'+(link?'<a href="'+esc(link)+'" target="_blank" rel="noreferrer">abrir ↗</a>':'—')+'</td><td>'+esc(l.contact||'—')+'</td><td><select class="inline-status" data-lead-status="'+idx+'">'+['Novo','Contactado','Interessado','Proposta','Fechado','Perdido'].map(v=>'<option '+(l.status===v?'selected':'')+'>'+v+'</option>').join('')+'</select></td><td>'+esc(l.createdAt?fmtDateOnly(l.createdAt.slice(0,10)):'—')+'</td><td><button class="danger-btn" data-remove-lead="'+idx+'" title="Eliminar">×</button></td></tr>';
+    return '<tr><td>'+esc(l.name)+'</td><td>'+(link?'<a href="'+esc(link)+'" target="_blank" rel="noreferrer">abrir ↗</a>':'—')+'</td><td>'+esc(l.contact||'—')+'</td><td><select class="inline-status" data-lead-status="'+idx+'" aria-label="Estado do contacto '+esc(l.name)+'">'+['Novo','Contactado','Interessado','Proposta','Fechado','Perdido'].map(v=>'<option '+(l.status===v?'selected':'')+'>'+v+'</option>').join('')+'</select></td><td>'+esc(l.createdAt?fmtDateOnly(l.createdAt.slice(0,10)):'—')+'</td><td><button class="danger-btn" data-remove-lead="'+idx+'" type="button" title="Eliminar" aria-label="Eliminar contacto '+esc(l.name)+'">×</button></td></tr>';
   }).join('');
   tbody.querySelectorAll('[data-lead-status]').forEach(sel=>sel.addEventListener('change',()=>{state.leads[Number(sel.dataset.leadStatus)].status=sel.value;saveState();renderLeads();}));
   tbody.querySelectorAll('[data-remove-lead]').forEach(btn=>btn.addEventListener('click',()=>{if(confirm('Eliminar este lead?')){state.leads.splice(Number(btn.dataset.removeLead),1);saveState();renderLeads();}}));
@@ -650,22 +662,38 @@ function pendingPaymentTotals(){
   const pending=(state.pendingPayments||[]).filter(p=>p.status==='pending');
   return {count:pending.length,total:pending.reduce((sum,p)=>sum+Math.abs(Number(p.amount)||0),0)};
 }
+function clientKey(value){
+  return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-PT').replace(/[^a-z0-9]+/g,' ').trim();
+}
+function matchingNeonPending(row){
+  // Apenas indicação de provável duplicação visual. Não funde nem apaga dados.
+  const clients=window.CentroBusinessNeon?.context?.()?.clients||[];
+  const key=clientKey(row.client);
+  const amount=Math.abs(Number(row.amount)||0);
+  return key&&amount>0?clients.find(c=>clientKey(c.name)===key&&Math.abs((Number(c.pendingEur)||0)-amount)<0.01):null;
+}
 function renderPayments(){
   syncRoomFinance();
   if(!Array.isArray(state.pendingPayments))state.pendingPayments=[];
   const totals=pendingPaymentTotals();
   if($('payment-pending-total'))$('payment-pending-total').textContent=fmtMoney(totals.total);
+  const remote=window.CentroBusinessNeon?.context?.();
+  if($('neon-finance-notice'))$('neon-finance-notice').textContent=remote
+    ? 'Neon: '+fmtMoney(remote.totals.pendingEur)+' por receber. A lista abaixo pertence apenas a este dispositivo; os valores NÃO são somados para evitar duplicações.'
+    : 'Sem leitura Neon neste momento. A lista abaixo pertence apenas a este dispositivo.';
   if($('payment-pending-count'))$('payment-pending-count').textContent=totals.count+' pendente'+(totals.count===1?'':'s');
   const tbody=$('payment-table');if(!tbody)return;
   if(!state.pendingPayments.length){tbody.innerHTML='<tr><td colspan="7" class="empty-cell">Sem pagamentos pendentes.</td></tr>';return;}
   tbody.innerHTML=state.pendingPayments.slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).map(row=>{
     const idx=state.pendingPayments.indexOf(row),project=projectById(row.projectId);
+    const overlapping=row.status==='pending'&&Boolean(matchingNeonPending(row));
     const label=row.status==='received'?'Recebido':row.status==='cancelled'?'Cancelado':'Pendente';
-    return '<tr><td>'+esc(row.client||'—')+'</td><td>'+esc(project?project.name:'—')+'</td><td>'+esc(row.description||'—')+'</td><td>'+esc(row.dueDate?fmtDateOnly(row.dueDate):'—')+'</td><td>'+fmtMoney(row.amount)+'</td><td><b>'+label+'</b></td><td>'+(row.status==='pending'?'<button class="btn" data-payment-received="'+idx+'" type="button">Recebi</button> <button class="danger-btn" data-payment-cancel="'+idx+'" title="Cancelar">×</button>':'<button class="danger-btn" data-payment-delete="'+idx+'" title="Eliminar">×</button>')+'</td></tr>';
+    return '<tr><td>'+esc(row.client||'—')+'</td><td>'+esc(project?project.name:'—')+'</td><td>'+esc(row.description||'—')+'</td><td>'+esc(row.dueDate?fmtDateOnly(row.dueDate):'—')+'</td><td>'+fmtMoney(row.amount)+'</td><td><b>'+label+'</b></td><td>'+(overlapping?'<span class="payment-neon-managed" title="Este valor também está na Neon. Confirma antes de alterar registos financeiros.">Também na Neon · confirmar</span>':row.status==='pending'?'<button class="btn" data-payment-received="'+idx+'" type="button">Recebi</button> <button class="danger-btn" data-payment-cancel="'+idx+'" title="Cancelar">×</button>':'<button class="danger-btn" data-payment-delete="'+idx+'" title="Eliminar">×</button>')+'</td></tr>';
   }).join('');
   tbody.querySelectorAll('[data-payment-received]').forEach(btn=>btn.addEventListener('click',()=>{
     const row=state.pendingPayments[Number(btn.dataset.paymentReceived)];if(!row||row.status!=='pending')return;
-    if(!confirm('Confirmar que '+fmtMoney(row.amount)+' foi efectivamente recebido?'))return;
+    if(matchingNeonPending(row)){toast('Este valor também consta na Neon. Não o marques apenas no Caixa local.');return;}
+    if(!confirm('Confirmar que '+fmtMoney(row.amount)+' foi efectivamente recebido? O registo será apenas local.'))return;
     row.status='received';row.receivedAt=new Date().toISOString();
     state.transactions.push({id:uid('txn'),date:new Date().toISOString().slice(0,10),type:'income',amount:Math.abs(Number(row.amount)||0),category:'Pagamento recebido',projectId:row.projectId||'',description:(row.client||'Cliente')+(row.description?' · '+row.description:''),createdAt:new Date().toISOString()});
     saveState();renderPayments();renderFinance();toast('Pagamento marcado como recebido e adicionado ao Caixa.');
@@ -727,13 +755,14 @@ function companyFixedTotal(){
   return (state.company?.recurringCosts||[]).filter(c=>c.active!==false).reduce((sum,c)=>sum+Math.abs(Number(c.amount)||0),0);
 }
 function companyProjectMoney(projectId){
+  const legacyIds=projectId==='engomadoria-beatriz'?new Set([projectId,'engomadoria']):new Set([projectId]);
   const totals=state.transactions.reduce((a,row)=>{
-    if(row.projectId!==projectId)return a;
+    if(!legacyIds.has(row.projectId))return a;
     const amount=Math.abs(Number(row.amount)||0);
     if(row.type==='income')a.income+=amount;else a.expense+=amount;
     a.margin=a.income-a.expense;return a;
   },{income:0,expense:0,margin:0});
-  const pending=(state.pendingPayments||[]).filter(p=>p.projectId===projectId&&p.status==='pending').reduce((sum,p)=>sum+Math.abs(Number(p.amount)||0),0);
+  const pending=(state.pendingPayments||[]).filter(p=>legacyIds.has(p.projectId)&&p.status==='pending').reduce((sum,p)=>sum+Math.abs(Number(p.amount)||0),0);
   return {...totals,pending};
 }
 function companyFocusItems(){
@@ -746,19 +775,50 @@ function companyFocusItems(){
     }
     return {kind:'task',title:t.title,meta:(t.area||'Tarefa')+(t.dueDate?' · '+(overdue?'atrasada · ':'')+fmtDateOnly(t.dueDate):''),priority:overdue?5:companyPriorityRank(t.priority),id:t.id};
   });
-  const payments=(state.pendingPayments||[]).filter(p=>p.status==='pending').map(p=>({
+  const remote=window.CentroBusinessNeon?.context?.()?.clients||[];
+  const neonPayments=remote.filter(c=>Number(c.pendingEur)>0).map(c=>({
     kind:'payment',
-    title:'Receber '+fmtMoney(p.amount)+' · '+(p.client||'Cliente'),
-    meta:(p.dueDate?'Previsto '+fmtDateOnly(p.dueDate):'Sem data prevista')+(p.description?' · '+p.description:''),
+    title:'Acompanhar '+fmtMoney(c.pendingEur)+' · '+c.name,
+    meta:'Neon · pendência real'+((state.pendingPayments||[]).some(p=>p.status==='pending'&&matchingNeonPending(p)&&clientKey(p.client)===clientKey(c.name))?' · também registada localmente':''),
+    priority:3,
+    id:'neon:'+clientKey(c.name)
+  }));
+  const payments=(state.pendingPayments||[]).filter(p=>p.status==='pending'&&!matchingNeonPending(p)).map(p=>({
+    kind:'payment',
+    title:'Confirmar '+fmtMoney(p.amount)+' · '+(p.client||'Cliente'),
+    meta:'Apenas neste dispositivo · '+(p.dueDate?'Previsto '+fmtDateOnly(p.dueDate):'sem prazo'),
     priority:p.dueDate&&p.dueDate<new Date().toISOString().slice(0,10)?4:2,
     id:p.id
   }));
-  return [...tasks,...payments].sort((a,b)=>b.priority-a.priority||a.title.localeCompare(b.title,'pt')).slice(0,7);
+  return [...tasks,...neonPayments,...payments].sort((a,b)=>b.priority-a.priority||a.title.localeCompare(b.title,'pt')).slice(0,7);
+}
+function renderDashboardPriorities(items){
+  const host=$('dashboard-priority-list');if(!host)return;
+  if(!items.length){
+    const empty=document.createElement('p');
+    empty.className='empty';
+    empty.textContent='Sem tarefas nem pendências registadas. Cria a primeira tarefa em Empresa.';
+    host.replaceChildren(empty);return;
+  }
+  const controls=items.slice(0,4).map(item=>{
+    const button=document.createElement('button');
+    button.type='button';button.className='priority-row';
+    const icon=document.createElement('span');
+    icon.className='priority-check';
+    icon.textContent=item.kind==='payment'?'€':'○';
+    const title=document.createElement('b');title.textContent=item.title;
+    const info=document.createElement('small');info.textContent=item.kind==='payment'?'Por receber':'Tarefa';
+    button.append(icon,title,info);
+    button.addEventListener('click',()=>openPanel(item.kind==='payment'?'caixa':'empresa'));
+    return button;
+  });
+  host.replaceChildren(...controls);
 }
 function renderCompanyFocus(){
   const list=$('company-focus-list');if(!list)return;
   const items=companyFocusItems();
   if($('company-focus-count'))$('company-focus-count').textContent=items.length+' '+(items.length===1?'item':'itens');
+  renderDashboardPriorities(items);
   list.innerHTML=items.length?items.map(item=>
     '<button type="button" class="company-focus-row '+(item.priority>=4?'hot':'')+'" data-company-focus="'+esc(item.kind)+'">'+
     '<span>'+(item.kind==='payment'?'€':'✓')+'</span><div><b>'+esc(item.title)+'</b><small>'+esc(item.meta)+'</small></div><i>→</i></button>'
@@ -777,8 +837,8 @@ function renderCompanyTasks(){
       return '<article class="company-task-card" data-priority="'+esc(t.priority||'normal')+'">'+
         '<div class="company-task-card-top"><span>'+esc(t.area||'Tarefa')+'</span><b>'+esc(priority)+'</b></div>'+
         '<h3>'+esc(t.title||'Tarefa')+'</h3><p>'+esc(project?project.name:'Sem projeto')+' · '+esc(due)+'</p>'+
-        '<div class="company-task-actions"><select data-company-task-status="'+esc(t.id)+'">'+Object.entries(COMPANY_TASK_LABELS).map(([value,label])=>'<option value="'+value+'" '+(status===value?'selected':'')+'>'+label+'</option>').join('')+'</select>'+
-        '<button type="button" class="danger-btn" data-company-task-delete="'+esc(t.id)+'" title="Eliminar">×</button></div></article>';
+        '<div class="company-task-actions"><select data-company-task-status="'+esc(t.id)+'" aria-label="Estado da tarefa '+esc(t.title)+'">'+Object.entries(COMPANY_TASK_LABELS).map(([value,label])=>'<option value="'+value+'" '+(status===value?'selected':'')+'>'+label+'</option>').join('')+'</select>'+
+        '<button type="button" class="danger-btn" data-company-task-delete="'+esc(t.id)+'" title="Eliminar" aria-label="Eliminar tarefa '+esc(t.title)+'">×</button></div></article>';
     }).join('');
     return '<section class="company-task-lane" data-status="'+status+'"><header><b>'+COMPANY_TASK_LABELS[status]+'</b><span>'+rows.length+'</span></header><div>'+(cards||'<div class="company-lane-empty">Sem tarefas</div>')+'</div></section>';
   }).join('');
@@ -797,14 +857,19 @@ function renderCompanyProjects(){
   const grid=$('company-project-grid');if(!grid)return;
   const projects=allProjects();
   grid.innerHTML=projects.map(project=>{
-    const crm=state.clients[project.id]||{stage:'Activo',note:''},money=companyProjectMoney(project.id);
+    const crm=state.clients[project.id]||(project.id==='engomadoria-beatriz'?state.clients.engomadoria:null)||{stage:'Sem estado',note:''};
+    const money=companyProjectMoney(project.id);
+    const neon=window.CentroBusinessNeon?.context?.();
+    const remote=(neon?.clients||[]).find(c=>c.repositoryUrl&&c.repositoryUrl===project.repo);
+    const displayedPending=remote?Math.max(0,Number(remote.pendingEur)||0):money.pending;
+    const displayedSource=remote?'Neon':'local';
     const openTasks=(state.company?.tasks||[]).filter(t=>t.projectId===project.id&&t.status!=='done').length;
     const repo=safeUrl(project.repo||'');
     const site=safeUrl(project.url||'');
     return '<article class="company-project-card">'+
       '<div class="company-project-head"><div><span>'+esc(crm.stage||'Activo')+'</span><h3>'+esc(project.name)+'</h3><small>'+esc(project.area||'')+'</small></div><b>'+openTasks+' '+(openTasks===1?'tarefa':'tarefas')+'</b></div>'+
       '<p>'+esc(crm.note||'Sem próxima ação registada no CRM.')+'</p>'+
-      '<div class="company-project-money"><span>Entradas <b>'+fmtMoney(money.income)+'</b></span><span>Custos <b>'+fmtMoney(money.expense)+'</b></span><span>Por receber <b>'+fmtMoney(money.pending)+'</b></span></div>'+
+      '<div class="company-project-money"><span>Entradas (local) <b>'+fmtMoney(money.income)+'</b></span><span>Custos (local) <b>'+fmtMoney(money.expense)+'</b></span><span>Por receber ('+displayedSource+') <b>'+fmtMoney(displayedPending)+'</b></span></div>'+
       '<div class="company-project-links">'+(site?'<a href="'+esc(site)+'" target="_blank" rel="noopener">Site ↗</a>':'')+(repo?'<a href="'+esc(repo)+'" target="_blank" rel="noopener">GitHub ↗</a>':'')+'<button type="button" data-panel-target="crm">CRM →</button></div>'+
     '</article>';
   }).join('');
@@ -838,8 +903,14 @@ function renderCompany(){
   $('company-month-income').textContent=fmtMoney(monthly.income);
   $('company-month-expense').textContent=fmtMoney(monthly.expense);
   $('company-month-margin').textContent=fmtMoney(monthly.margin);
-  $('company-pending').textContent=fmtMoney(pending.total);
-  $('company-pending-note').textContent=pending.count+' '+(pending.count===1?'pagamento':'pagamentos');
+  const neon=window.CentroBusinessNeon?.context?.();
+  const linked=Boolean(neon&&Array.isArray(neon.clients)&&neon.totals);
+  const remotePending=linked?Math.max(0,Number(neon.totals.pendingEur)||0):0;
+  $('company-pending').textContent=fmtMoney(linked?remotePending:pending.total);
+  $('company-pending-note').textContent=linked
+    ? 'Neon · local '+fmtMoney(pending.total)+' (não somado)'
+    : pending.count+' registo(s) neste dispositivo · Neon não consultada';
+  if($('company-pending-source'))$('company-pending-source').textContent=linked?'Por receber · Neon':'Por receber · local';
   $('company-open-tasks').textContent=tasks.open;
   $('company-overdue-tasks').textContent=tasks.overdue;
   const target=Math.max(0,Number(profile.monthlyTarget)||0),pct=target?Math.min(100,Math.max(0,monthly.income/target*100)):0;
@@ -1225,6 +1296,9 @@ function setupEvents(){
   $('prospect-analyse').addEventListener('click',captureOpportunity);
   $('prospect-capture').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();captureOpportunity();}});
   $('company-new-task')?.addEventListener('click',()=>{$('company-task-title')?.focus();$('company-task-form')?.scrollIntoView({behavior:'smooth',block:'center'});});
+  window.addEventListener('centro:business-updated',()=>{
+    renderCompany();renderPayments();
+  });
   $('company-profile-form')?.addEventListener('submit',e=>{
     e.preventDefault();
     state.company=normalizeCompany(state.company);
@@ -1337,7 +1411,10 @@ function setupPWA(){
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
-  seedCompanyDefaults();seedCRMDefaults();seedLeadDefaults();seedPaymentDefaults();setupEvents();setupDashboardChrome();setupPWA();
+  seedCompanyDefaults();
+  // Não criar automaticamente leads, dívidas ou tarefas fictícias em cada visita.
+  // Registos legados já existentes no browser são preservados sem os reescrever.
+  setupEvents();setupDashboardChrome();setupPWA();
   $('finance-date').value=new Date().toISOString().slice(0,10);
   renderLeads();renderPayments();renderFinance();renderCompany();renderGsc();renderAgentState();setupVaultState();renderSystem();renderAIStatus();refreshGscConnection();
   checkTelegramStatus(false);pollTelegramApprovals(false);loadExecutions();
