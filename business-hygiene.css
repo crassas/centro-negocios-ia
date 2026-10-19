@@ -1,0 +1,239 @@
+/* CENTRO · higiene operacional e legibilidade.
+   Prioridade: dados reais, navegação táctil e campos utilizáveis no Android.
+   Não altera a identidade do Travis, a lógica de agentes nem o armazenamento. */
+
+.skip-link{
+  position:fixed;left:16px;top:-90px;z-index:100001;
+  padding:12px 18px;border-radius:9px;background:#0d345e;color:#fff;
+  font:700 15px/1.4 system-ui;text-decoration:none;
+}
+.skip-link:focus{top:12px}
+html.travis-entry .skip-link{display:none}
+:where(button,a,input,select,textarea,summary,[tabindex]):focus-visible{
+  outline:3px solid #165dc8!important;
+  outline-offset:3px!important;
+}
+#main-content:focus{outline:none!important}
+.data-sources-note{
+  display:block;margin:0 0 18px;padding:13px 16px;
+  background:#f0f5fd;border:1px solid #cbdbee;border-left:4px solid #456b9c;
+  border-radius:10px;color:#284560;font-size:13px;line-height:1.6;
+}
+.data-sources-note strong{font-weight:800}
+#empresa .sys-label,#caixa .sys-label,
+#crm .sys-label,#leads .sys-label{
+  font-size:11px!important;line-height:1.4!important;letter-spacing:.055em!important;
+}
+#empresa .company-command h1{font-size:clamp(25px,3vw,34px);line-height:1.16;letter-spacing:-.025em}
+#empresa .company-command p{
+  max-width:68ch;font-size:14px;line-height:1.65;color:#425975;
+}
+#empresa .company-command .btn{min-height:44px!important;font-size:14px!important;padding:10px 14px!important}
+#empresa .module-head{align-items:flex-start;gap:12px;flex-wrap:wrap}
+#empresa .module-head h2{font-size:19px!important;line-height:1.3!important;max-width:100%}
+#empresa .status-tag,#empresa .section-meta{font-size:12px!important;line-height:1.4!important}
+
+/* Números sem truncações e com fonte dos dados perceptível. */
+#empresa .company-scoreboard article{display:flex;flex-direction:column;gap:6px;padding:18px 16px}
+#empresa .company-scoreboard span{font-size:13px;line-height:1.4;font-weight:750;color:#445a72}
+#empresa .company-scoreboard b{
+  margin:2px 0;font-size:clamp(20px,2.6vw,27px);
+  line-height:1.2;overflow:visible;white-space:normal;word-break:break-word;
+  font-variant-numeric:tabular-nums;
+}
+#empresa .company-scoreboard small{font-size:12px;line-height:1.5;color:#526b83;white-space:normal}
+#empresa .company-scoreboard{margin-bottom:14px}
+
+/* Carteira PostgreSQL. Os valores são apenas de leitura. */
+#empresa .neon-company-panel{padding:18px 20px}
+#empresa .neon-company-head h2{font-size:24px;line-height:1.2;margin:8px 0}
+#empresa .neon-company-head p{font-size:14px;line-height:1.55;max-width:75ch}
+#empresa .neon-company-actions{align-items:stretch}
+#empresa .neon-company-actions .btn{
+  min-height:46px;padding:10px 16px;
+  font-size:14px!important;font-weight:700;
+}
+#empresa .neon-company-meta{align-items:flex-start;gap:9px;padding:15px 0}
+#empresa .neon-company-meta strong{font-size:20px;line-height:1.4}
+#empresa #neon-company-status{
+  font-size:13px;line-height:1.5;color:#485e77;
+}
+#empresa #neon-company-status[data-state=ready]{color:#176344}
+#empresa #neon-company-status[data-state=error]{color:#a12d37}
+#empresa #neon-company-status[data-state=warning]{color:#835a1c}
+#empresa .neon-company-row{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;
+  padding:15px 0;gap:12px;align-items:center;
+}
+#empresa .neon-company-row strong{font-size:16px;line-height:1.45;color:#173b5a}
+#empresa .neon-company-row small{font-size:13px;line-height:1.55;color:#536b80;margin-top:4px}
+#empresa .neon-company-row a{
+  min-height:44px;display:inline-flex;align-items:center;
+  color:#115ab8;font-size:13px;font-weight:750;
+  text-decoration:underline;text-underline-offset:3px;
+}
+#empresa .neon-company-row>span{
+  font-size:14px;line-height:1.5;text-align:right;
+  white-space:normal;font-variant-numeric:tabular-nums;
+}
+#empresa .neon-company-row>span.neon-has-pending{color:#9b4529}
+#empresa #neon-company-total{font-variant-numeric:tabular-nums}
+
+/* Foco/etapas sem letras de sete píxeis. */
+#empresa .company-focus-row{min-height:60px;grid-template-columns:40px minmax(0,1fr) 20px;padding:12px 4px}
+#empresa .company-focus-row>span{width:34px;height:34px;font-size:17px}
+#empresa .company-focus-row b{font-size:14px;line-height:1.35}
+#empresa .company-focus-row small{font-size:12px;line-height:1.5}
+#empresa .company-task-lane>header{padding:12px}
+#empresa .company-task-lane>header b{font-size:13px}
+#empresa .company-task-lane>header span{font-size:12px;min-width:27px;min-height:27px}
+#empresa .company-task-card{padding:14px}
+#empresa .company-task-card h3{font-size:15px;line-height:1.4;word-break:break-word}
+#empresa .company-task-card p{font-size:13px;line-height:1.55}
+#empresa .company-task-card-top span,#empresa .company-task-card-top b{font-size:11px}
+#empresa .company-task-actions{grid-template-columns:minmax(0,1fr) 44px}
+#empresa .company-task-actions select{height:44px!important;font-size:14px!important}
+#empresa .company-task-actions .danger-btn{width:44px;height:44px}
+#empresa .company-lane-empty{font-size:13px;line-height:1.5}
+#empresa .company-project-grid{gap:12px}
+#empresa .company-project-card{padding:15px}
+#empresa .company-project-head{flex-wrap:wrap}
+#empresa .company-project-head span{font-size:12px;line-height:1.4}
+#empresa .company-project-head h3{font-size:17px;line-height:1.35;margin:4px 0}
+#empresa .company-project-head small{font-size:12px}
+#empresa .company-project-head>b{font-size:12px}
+#empresa .company-project-card>p{
+  min-height:0;max-height:none;display:block;overflow:visible;
+  -webkit-line-clamp:unset;margin:13px 0;font-size:13px;line-height:1.6;
+}
+#empresa .company-project-money{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:12px 0}
+#empresa .company-project-money span{font-size:11px;line-height:1.5}
+#empresa .company-project-money b{
+  font-size:14px;line-height:1.4;white-space:normal;overflow-wrap:anywhere;
+}
+#empresa .company-project-links{flex-wrap:wrap;gap:8px}
+#empresa .company-project-links a,#empresa .company-project-links button{
+  display:inline-flex;align-items:center;min-height:44px;
+  padding:8px 10px;font-size:13px;font-weight:700;
+}
+#empresa .company-cost-row{min-height:60px;gap:10px}
+#empresa .company-cost-row b{font-size:14px;white-space:normal}
+#empresa .company-cost-row small{font-size:12px;line-height:1.4}
+#empresa .company-cost-row strong{font-size:14px}
+#empresa .company-cost-row .danger-btn{width:44px;height:44px}
+#empresa .company-truth-note{font-size:12px;line-height:1.6}
+#empresa .company-profile-form label span,#empresa .company-progress-block span{font-size:12px}
+#empresa .company-progress-block b{font-size:15px}
+#empresa .company-progress-block small{font-size:12px;line-height:1.5}
+#empresa input,#empresa select,#empresa textarea,
+#caixa input,#caixa select,#leads input,#leads select{
+  min-height:44px;font-size:16px!important;line-height:1.35;
+}
+#empresa .company-task-form button,#empresa .company-cost-form button,
+#empresa .company-profile-form button,
+#caixa .finance-form button,#leads .lead-form button{
+  min-height:44px;padding:8px 13px;font-size:14px!important;
+}
+
+/* Local vs remoto: evitar interpretação de duplicações como receita adicional. */
+#caixa .finance-summary>div{min-width:0;padding:14px}
+#caixa .finance-summary span{font-size:12px!important;line-height:1.4}
+#caixa .finance-summary b{font-size:20px;line-height:1.3;overflow-wrap:anywhere}
+#caixa .module-head h2{font-size:19px;line-height:1.3}
+#caixa .payment-neon-managed{
+  color:#9b4529;font-size:13px;line-height:1.5;font-weight:700;
+  display:inline-block;max-width:210px;
+}
+#caixa .table-wrap,#leads .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+#caixa .table-wrap table{min-width:680px}
+#leads .table-wrap table{min-width:520px}
+#caixa th,#caixa td,#leads th,#leads td{font-size:13px;line-height:1.5;padding:12px 10px}
+#caixa .finance-form,#leads .lead-form{gap:10px}
+#caixa .finance-form,#leads .lead-form{grid-template-columns:repeat(2,minmax(0,1fr))}
+#caixa .finance-form input:first-child,#leads .lead-form input:first-child{grid-column:1/-1}
+#caixa .finance-form button,#leads .lead-form button{grid-column:1/-1}
+#crm .crm-card h3{font-size:17px!important}
+#crm .crm-card input,#crm .crm-card select,#crm .crm-card textarea{
+  font-size:16px!important;min-height:44px;
+}
+#crm .crm-card label{font-size:13px;line-height:1.55}
+
+/* Orientação visual consistente; os módulos continuam todos acessíveis. */
+@media(max-width:1080px){
+  #empresa .company-scoreboard{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:680px){
+  body{padding-bottom:calc(98px + env(safe-area-inset-bottom))!important}
+  .rail{
+    height:calc(84px + env(safe-area-inset-bottom))!important;
+    padding:5px 8px calc(7px + env(safe-area-inset-bottom))!important;
+    background:#fff!important;
+  }
+  .command-nav{scroll-snap-type:x proximity;scroll-padding:8px;gap:5px!important}
+  .command-nav a{
+    flex:0 0 auto;scroll-snap-align:start;
+    min-width:94px!important;max-width:118px!important;height:66px!important;
+    gap:2px!important;padding:6px 7px!important;
+    font-size:12px!important;line-height:1.15!important;
+  }
+  .command-nav a>span:not(.nav-icon):not(.nav-badge){
+    display:-webkit-box!important;max-width:105px!important;
+    white-space:normal!important;overflow:hidden!important;
+    text-overflow:clip!important;word-break:normal;
+    -webkit-line-clamp:2;-webkit-box-orient:vertical;
+    line-height:1.18;text-align:center;
+  }
+  .nav-icon{height:23px;width:29px;font-size:21px}
+  .command-nav a.active{box-shadow:inset 0 -3px #1768f2!important}
+  .panel-stage{padding:19px 13px calc(24px + env(safe-area-inset-bottom))!important}
+  #empresa .company-command{display:grid;grid-template-columns:1fr;gap:12px}
+  #empresa .company-command h1{font-size:29px}
+  #empresa .company-command p{font-size:14px}
+  #empresa .company-command .btn{width:100%;min-height:48px!important}
+  #empresa .neon-company-panel{padding:16px}
+  #empresa .neon-company-head h2{font-size:22px}
+  #empresa .neon-company-actions{gap:9px}
+  #empresa .neon-company-actions .btn{flex:1 1 100%;min-height:48px}
+  #empresa .neon-company-meta{display:grid;gap:8px}
+  #empresa #neon-company-status{text-align:left;font-size:13px}
+  #empresa .neon-company-list{grid-template-columns:1fr}
+  #empresa .neon-company-row{grid-template-columns:1fr;gap:5px}
+  #empresa .neon-company-row>span{text-align:left}
+  #empresa .company-scoreboard{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #empresa .company-scoreboard article{padding:14px 12px;gap:5px}
+  #empresa .company-scoreboard b{font-size:21px}
+  #empresa .company-scoreboard small{font-size:12px}
+  #empresa .company-task-form,
+  #empresa .company-cost-form{grid-template-columns:1fr;gap:10px}
+  #empresa .company-task-form > *,#empresa .company-cost-form > *{grid-column:1/-1}
+  #empresa .company-task-form button,#empresa .company-cost-form button{width:100%}
+  #empresa .company-task-board,#empresa .company-project-grid{grid-template-columns:1fr;gap:12px}
+  #empresa .company-project-money{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+  #empresa .company-project-money b{font-size:13px}
+  #empresa .company-project-head h3{font-size:16px}
+  #caixa .finance-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #caixa .finance-form,#leads .lead-form{grid-template-columns:1fr}
+  #caixa .finance-form > *,#leads .lead-form > *{grid-column:1/-1}
+  .data-sources-note{font-size:13px;padding:12px 14px}
+  /* Travis acessível mas compacto; não tapa as métricas financeiras. */
+  body:has(#empresa.is-active) #travis-launcher,
+  body:has(#caixa.is-active) #travis-launcher,
+  body:has(#leads.is-active) #travis-launcher{
+    right:12px!important;bottom:calc(94px + env(safe-area-inset-bottom))!important;
+    width:50px!important;height:50px!important;padding:0!important;
+    border-radius:50%!important;
+  }
+  body:has(#empresa.is-active) #travis-launcher .trv-launch-label,
+  body:has(#caixa.is-active) #travis-launcher .trv-launch-label,
+  body:has(#leads.is-active) #travis-launcher .trv-launch-label{
+    font-size:9px!important;letter-spacing:0!important;
+  }
+}
+@media(max-width:350px){
+  #empresa .company-scoreboard{grid-template-columns:1fr}
+  #empresa .company-project-money{grid-template-columns:1fr 1fr}
+}
+@media(prefers-reduced-motion:reduce){
+  #empresa *{scroll-behavior:auto!important;transition-duration:.01ms!important}
+  .command-nav a{transition-duration:.01ms!important}
+}
