@@ -76,6 +76,39 @@ export class TaskQueue extends DurableObject {
     const saved=await this.getJson('gsc:device:tokenHash','');
     return Boolean(saved&&hash&&saved===hash);
   }
+  async createBusinessPair(){
+    const active=await this.getJson('business:pair:active',null);
+    const now=Date.now();
+    if(active&&active.expiresAt>now&&active.status==='pending')return {id:active.id,expiresAt:active.expiresAt};
+    const id=crypto.randomUUID().replaceAll('-','').slice(0,16);
+    const bytes=crypto.getRandomValues(new Uint8Array(32));
+    const token=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
+    const pair={id,token,status:'pending',createdAt:now,expiresAt:now+10*60*1000};
+    await this.setJson('business:pair:active',pair);
+    return {id,expiresAt:pair.expiresAt};
+  }
+  async resolveBusinessPair(id,approved){
+    const pair=await this.getJson('business:pair:active',null);
+    if(!pair||pair.id!==id||pair.expiresAt<Date.now())return {ok:false};
+    pair.status=approved?'approved':'rejected';
+    if(approved){
+      const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pair.token));
+      pair.tokenHash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+      await this.setJson('business:device:tokenHash',pair.tokenHash);
+    }
+    await this.setJson('business:pair:active',pair);
+    return {ok:true,status:pair.status};
+  }
+  async businessPairStatus(id){
+    const pair=await this.getJson('business:pair:active',null);
+    if(!pair||pair.id!==id)return {status:'missing'};
+    if(pair.expiresAt<Date.now())return {status:'expired'};
+    return {status:pair.status,token:pair.status==='approved'?pair.token:undefined,expiresAt:pair.expiresAt};
+  }
+  async authenticateBusiness(hash){
+    const saved=await this.getJson('business:device:tokenHash','');
+    return Boolean(saved&&hash&&saved===hash);
+  }
   async getTelegramOffset(){return Number(await this.getJson('telegram:offset',0))||0;}
   async claimTelegramUpdate(id){
     const last=await this.getTelegramOffset();
