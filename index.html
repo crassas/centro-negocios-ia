@@ -29,14 +29,15 @@
   <link rel="stylesheet" href="./product.css?v=world-8">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
   <script src="./agent-room.js?v=jarvis-1" defer></script>
-  <script src="./app.js?v=travis-panel-2" defer></script>
-  <script src="./business-neon.js?v=20261019" defer></script>
+  <script src="./app.js?v=accessibility-20261019" defer></script>
+  <script src="./business-neon.js?v=readable-20261019" defer></script>
   <link rel="stylesheet" href="./travis-hud.css?v=sand-1">
   <link rel="stylesheet" href="./travis-brain.css?v=3">
   <link rel="stylesheet" href="./travis-cinema.css?v=cinema-1">
   <link rel="stylesheet" href="./travis-cinema-depth.css?v=figures-1">
   <link rel="stylesheet" href="./travis-gods-eye.css?v=eye-7-cctv">
   <link rel="stylesheet" href="./travis-camera-cinema.css?v=eye-7-cctv">
+  <link rel="stylesheet" href="./business-hygiene.css?v=20261019">
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
@@ -46,6 +47,7 @@
   <script type="module" src="./travis-camera-cinema.mjs?v=eye-7-cctv"></script>
 </head>
 <body>
+<a href="#main-content" class="skip-link">Saltar para o conteúdo principal</a>
 <section id="travis-hud" class="travis-hud" data-state="idle" data-ui-language="en" lang="en" aria-hidden="true" aria-label="Travis">
   <canvas id="travis-three-canvas" aria-label="Interactive 3D presence of Travis"></canvas>
 
@@ -130,7 +132,7 @@
       <div class="brand-mark" aria-hidden="true"><span></span></div>
       <div class="brand-copy"><strong>Centro de</strong><b>Negócios</b></div>
     </div>
-    <nav class="command-nav nav" aria-label="Módulos">
+    <nav class="command-nav nav" aria-label="Módulos do Centro. No telemóvel, desliza horizontalmente para mais opções.">
       <a class="active" href="#visao" data-panel-target="visao"><span class="nav-icon">⌂</span><span>Painel</span></a>
       <a href="#empresa" data-panel-target="empresa"><span class="nav-icon">▦</span><span>Empresa</span></a>
       <a href="#agentes" data-panel-target="agentes"><span class="nav-icon">♟</span><span>Sala dos Agentes</span></a>
@@ -154,7 +156,7 @@
     </div>
   </aside>
 
-  <main class="workspace">
+  <main class="workspace" id="main-content" tabindex="-1">
     
     <header class="command-bar">
       <div class="global-search">
@@ -168,10 +170,10 @@
       <div class="command-bar-actions">
         <button class="top-primary" data-panel-target="empresa" type="button"><span>＋</span>Organizar trabalho</button>
         <div class="rail-health" id="monitor-pill"><i></i><span id="monitor-label">A sincronizar</span></div>
-        <button class="icon-btn" id="nav-home" type="button" title="Voltar ao painel">⌂</button>
-        <button class="icon-btn" id="refresh-btn" type="button" title="Atualizar dados">↻</button>
-        <button class="icon-btn" id="install-btn" type="button" hidden title="Instalar aplicação">↓</button>
-        <button class="icon-btn" id="backup-top-btn" type="button" title="Criar backup">◫</button>
+        <button class="icon-btn" id="nav-home" type="button" title="Voltar ao painel" aria-label="Voltar ao painel">⌂</button>
+        <button class="icon-btn" id="refresh-btn" type="button" title="Atualizar dados" aria-label="Atualizar dados de auditoria">↻</button>
+        <button class="icon-btn" id="install-btn" type="button" hidden title="Instalar aplicação" aria-label="Instalar aplicação">↓</button>
+        <button class="icon-btn" id="backup-top-btn" type="button" title="Criar backup" aria-label="Exportar backup dos dados locais">◫</button>
       </div>
     </header>
 
@@ -387,18 +389,21 @@
           <div class="neon-company-meta"><strong id="neon-company-total">—</strong>
             <span id="neon-company-status" role="status" aria-live="polite">A verificar ligação…</span>
           </div>
-          <ul id="neon-company-list" class="neon-company-list"></ul>
+          <ul id="neon-company-list" class="neon-company-list" aria-label="Sites consultados na Neon"></ul>
         </article>
 
         <div class="company-scoreboard" aria-label="Estado da empresa">
           <article><span>Entradas este mês</span><b id="company-month-income">0,00 €</b><small>recebido e registado</small></article>
           <article><span>Saídas este mês</span><b id="company-month-expense">0,00 €</b><small>despesas registadas</small></article>
           <article><span>Margem registada</span><b id="company-month-margin">0,00 €</b><small>entradas − saídas</small></article>
-          <article><span>Por receber</span><b id="company-pending">0,00 €</b><small id="company-pending-note">0 pagamentos</small></article>
+          <article><span id="company-pending-source">Por receber · local</span><b id="company-pending">0,00 €</b><small id="company-pending-note">Neon ainda não consultada</small></article>
           <article><span>Trabalho aberto</span><b id="company-open-tasks">0</b><small>tarefas por concluir</small></article>
           <article><span>Atrasadas</span><b id="company-overdue-tasks">0</b><small>precisam de atenção</small></article>
         </div>
 
+        <div class="data-sources-note" role="note">
+          <strong>Fontes separadas:</strong> a Neon contém a carteira comercial; entradas, despesas, tarefas e registos antigos permanecem neste telemóvel. Valores iguais não são somados até serem conciliados.
+        </div>
         <div class="company-top-grid">
           <article class="module company-focus-module">
             <div class="module-head">
@@ -434,8 +439,8 @@
             <span class="section-meta">Sites · Apps · SEO · CRM · Financeiro · Administração</span>
           </div>
           <form id="company-task-form" class="company-task-form">
-            <input id="company-task-title" required placeholder="O que tem de ficar feito?">
-            <select id="company-task-project"><option value="">Sem projeto</option></select>
+            <input id="company-task-title" required aria-label="Descrição da tarefa" placeholder="O que tem de ficar feito?">
+            <select id="company-task-project" aria-label="Projeto associado à tarefa"><option value="">Sem projeto</option></select>
             <select id="company-task-area" aria-label="Área">
               <option>Site / App</option>
               <option>SEO</option>
@@ -470,9 +475,9 @@
               <b id="company-fixed-total">0,00 €</b>
             </div>
             <form id="company-cost-form" class="company-cost-form">
-              <input id="company-cost-name" required placeholder="Ex.: domínio, software, telefone">
-              <input id="company-cost-amount" type="number" min="0.01" step="0.01" required placeholder="Valor €">
-              <input id="company-cost-day" type="number" min="1" max="31" placeholder="Dia">
+              <input id="company-cost-name" required aria-label="Nome do custo fixo" placeholder="Ex.: domínio, software, telefone">
+              <input id="company-cost-amount" type="number" min="0.01" step="0.01" required aria-label="Valor do custo fixo em euros" placeholder="Valor €">
+              <input id="company-cost-day" type="number" min="1" max="31" aria-label="Dia previsto do custo fixo" placeholder="Dia">
               <button class="btn" type="submit">Adicionar custo</button>
             </form>
             <div id="company-cost-list" class="company-cost-list"><div class="empty">Sem custos fixos registados.</div></div>
@@ -482,16 +487,16 @@
       </section>
 
       <section class="panel-view" id="crm" data-panel="crm">
-        <div class="panel-title"><div><span class="sys-label">PROJECT MEMORY</span><h1>CRM</h1><p>Estado real e próxima acção de cada projecto.</p></div><span class="status-tag">AUTO-SAVE</span></div>
+        <div class="panel-title"><div><span class="sys-label">PROJECT MEMORY</span><h1>CRM</h1><p>Estado real e próxima acção de cada projecto.</p></div><span class="status-tag">GUARDADO NESTE DISPOSITIVO</span></div>
         <div id="crm-grid" class="crm-grid"></div>
       </section>
 
       <section class="panel-view" id="leads" data-panel="leads">
         <div class="panel-title"><div><span class="sys-label">COMMERCIAL PIPELINE</span><h1>LEADS</h1></div><span class="status-tag" id="lead-count">0 registos</span></div>
         <form id="lead-form" class="lead-form">
-          <input id="lead-name" required placeholder="Negócio">
-          <input id="lead-url" placeholder="Website / Maps">
-          <input id="lead-contact" placeholder="Contacto ou nota">
+          <input id="lead-name" required aria-label="Nome do negócio ou potencial cliente" placeholder="Negócio">
+          <input id="lead-url" aria-label="Website ou Google Maps do negócio" placeholder="Website / Maps">
+          <input id="lead-contact" aria-label="Contacto ou nota sobre o negócio" placeholder="Contacto ou nota">
           <select id="lead-status" aria-label="Estado"><option>Novo</option><option>Contactado</option><option>Interessado</option><option>Proposta</option><option>Fechado</option><option>Perdido</option></select>
           <button class="btn primary" type="submit">Adicionar</button>
         </form>
@@ -500,15 +505,16 @@
 
       <section class="panel-view" id="caixa" data-panel="caixa">
         <div class="panel-title"><div><span class="sys-label">FINANCE LEDGER</span><h1>CAIXA</h1></div><span class="section-meta" id="finance-period">Total registado</span></div>
-        <div class="finance-summary"><div><span>ENTRADAS</span><b id="finance-income">0,00 €</b></div><div><span>SAÍDAS</span><b id="finance-expense">0,00 €</b></div><div><span>SALDO</span><b id="finance-balance">0,00 €</b></div><div><span>PENDENTE</span><b id="payment-pending-total">0,00 €</b></div></div>
+        <div class="finance-summary"><div><span>ENTRADAS (LOCAL)</span><b id="finance-income">0,00 €</b></div><div><span>SAÍDAS (LOCAL)</span><b id="finance-expense">0,00 €</b></div><div><span>SALDO (LOCAL)</span><b id="finance-balance">0,00 €</b></div><div><span>PENDENTE (LOCAL)</span><b id="payment-pending-total">0,00 €</b></div></div>
 
+        <p class="data-sources-note" id="neon-finance-notice" role="note">A consultar a Neon… Os movimentos abaixo pertencem a este dispositivo.</p>
         <article class="module" style="margin-bottom:18px">
-          <div class="module-head"><div><span class="sys-label">A RECEBER</span><h2>Pagamentos pendentes</h2></div><span class="status-tag" id="payment-pending-count">0 pendentes</span></div>
+          <div class="module-head"><div><span class="sys-label">A RECEBER · LOCAL</span><h2>Pagamentos pendentes</h2></div><span class="status-tag" id="payment-pending-count">0 pendentes</span></div>
           <form id="payment-form" class="finance-form">
-            <input id="payment-client" required placeholder="Cliente / negócio">
-            <input id="payment-amount" type="number" min="0.01" step="0.01" required placeholder="Valor €">
-            <select id="payment-project"><option value="">Sem projecto</option></select>
-            <input id="payment-description" placeholder="Trabalho / nota">
+            <input id="payment-client" required aria-label="Cliente associado à pendência local" placeholder="Cliente / negócio">
+            <input id="payment-amount" type="number" min="0.01" step="0.01" required aria-label="Valor pendente em euros" placeholder="Valor €">
+            <select id="payment-project" aria-label="Projeto associado à pendência"><option value="">Sem projecto</option></select>
+            <input id="payment-description" aria-label="Descrição da pendência" placeholder="Trabalho / nota">
             <input id="payment-due-date" type="date" aria-label="Data prevista">
             <button class="btn primary" type="submit">Adicionar pendente</button>
           </form>
@@ -516,12 +522,12 @@
         </article>
 
         <form id="finance-form" class="finance-form">
-          <input id="finance-date" type="date" required>
-          <select id="finance-type"><option value="income">Entrada</option><option value="expense">Saída</option></select>
-          <input id="finance-amount" type="number" min="0" step="0.01" required placeholder="Valor €">
-          <input id="finance-category" required placeholder="Categoria">
-          <select id="finance-project"><option value="">Sem projecto</option></select>
-          <input id="finance-description" placeholder="Descrição">
+          <input id="finance-date" type="date" required aria-label="Data do movimento">
+          <select id="finance-type" aria-label="Tipo de movimento"><option value="income">Entrada</option><option value="expense">Saída</option></select>
+          <input id="finance-amount" type="number" min="0.01" step="0.01" required aria-label="Valor do movimento em euros" placeholder="Valor €">
+          <input id="finance-category" required aria-label="Categoria do movimento" placeholder="Categoria">
+          <select id="finance-project" aria-label="Projeto associado ao movimento"><option value="">Sem projecto</option></select>
+          <input id="finance-description" aria-label="Descrição do movimento" placeholder="Descrição">
           <button class="btn primary" type="submit">Registar</button>
         </form>
         <div class="table-wrap"><table><thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Projecto</th><th>Descrição</th><th>Valor</th><th></th></tr></thead><tbody id="finance-table"><tr><td colspan="7" class="empty-cell">Sem movimentos registados.</td></tr></tbody></table></div>
