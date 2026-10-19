@@ -201,7 +201,7 @@ function ageLabel(value){
 }
 
 
-const DEFAULT_PANEL='agentes';
+const DEFAULT_PANEL='empresa';
 const PANEL_NAMES={
   agentes:'SALA DOS AGENTES',visao:'PAINEL',empresa:'EMPRESA',assistente:'AUTOMAÇÃO & IA',radar:'OPORTUNIDADES',sites:'SITES',crm:'CLIENTES',
   leads:'LEADS',caixa:'FINANCEIRO',seo:'OPORTUNIDADES SEO',cofre:'COFRE',ferramentas:'DEFINIÇÕES'
@@ -792,10 +792,33 @@ function companyFocusItems(){
   }));
   return [...tasks,...neonPayments,...payments].sort((a,b)=>b.priority-a.priority||a.title.localeCompare(b.title,'pt')).slice(0,7);
 }
+function renderDashboardPriorities(items){
+  const host=$('dashboard-priority-list');if(!host)return;
+  if(!items.length){
+    const empty=document.createElement('p');
+    empty.className='empty';
+    empty.textContent='Sem tarefas nem pendências registadas. Cria a primeira tarefa em Empresa.';
+    host.replaceChildren(empty);return;
+  }
+  const controls=items.slice(0,4).map(item=>{
+    const button=document.createElement('button');
+    button.type='button';button.className='priority-row';
+    const icon=document.createElement('span');
+    icon.className='priority-check';
+    icon.textContent=item.kind==='payment'?'€':'○';
+    const title=document.createElement('b');title.textContent=item.title;
+    const info=document.createElement('small');info.textContent=item.kind==='payment'?'Por receber':'Tarefa';
+    button.append(icon,title,info);
+    button.addEventListener('click',()=>openPanel(item.kind==='payment'?'caixa':'empresa'));
+    return button;
+  });
+  host.replaceChildren(...controls);
+}
 function renderCompanyFocus(){
   const list=$('company-focus-list');if(!list)return;
   const items=companyFocusItems();
   if($('company-focus-count'))$('company-focus-count').textContent=items.length+' '+(items.length===1?'item':'itens');
+  renderDashboardPriorities(items);
   list.innerHTML=items.length?items.map(item=>
     '<button type="button" class="company-focus-row '+(item.priority>=4?'hot':'')+'" data-company-focus="'+esc(item.kind)+'">'+
     '<span>'+(item.kind==='payment'?'€':'✓')+'</span><div><b>'+esc(item.title)+'</b><small>'+esc(item.meta)+'</small></div><i>→</i></button>'
