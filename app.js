@@ -359,11 +359,11 @@ function renderCRM(){
   const projects=allProjects();
   if(!projects.length){grid.innerHTML='<div class="empty">Sem projectos configurados.</div>';return;}
   grid.innerHTML=projects.map(s=>{
-    const c=state.clients[s.id]||{stage:'Activo',note:''};
+    const c=state.clients[s.id]||(s.id==='engomadoria-beatriz'?state.clients.engomadoria:null)||{stage:'Por confirmar',note:''};
     const location=s.url?'<a href="'+esc(s.url)+'" target="_blank" rel="noreferrer">'+esc(s.area||s.url)+'</a>':'<span class="section-meta">'+esc(s.area||'Sem morada')+'</span>';
     return '<article class="crm-card" data-client="'+esc(s.id)+'"><h3>'+esc(s.name)+'</h3>'+location+
-      '<div class="field"><label>Estado</label><select class="client-stage">'+['Activo','Prospecção','Pausado','Concluído'].map(v=>'<option '+(c.stage===v?'selected':'')+'>'+v+'</option>').join('')+'</select></div>'+
-      '<div class="field"><label>Próxima acção</label><textarea class="client-note" placeholder="Ex.: rever Search Console sexta-feira">'+esc(c.note||'')+'</textarea></div></article>';
+      '<div class="field"><label for="crm-stage-'+esc(s.id)+'">Estado do cliente</label><select id="crm-stage-'+esc(s.id)+'" class="client-stage">'+['Por confirmar','Activo','Prospecção','Pausado','Concluído'].map(v=>'<option '+(c.stage===v?'selected':'')+'>'+v+'</option>').join('')+'</select></div>'+
+      '<div class="field"><label for="crm-note-'+esc(s.id)+'">Próxima ação</label><textarea id="crm-note-'+esc(s.id)+'" class="client-note" placeholder="Ex.: rever Search Console sexta-feira">'+esc(c.note||'')+'</textarea></div></article>';
   }).join('');
   grid.querySelectorAll('.crm-card').forEach(card=>{
     const id=card.dataset.client;
@@ -376,7 +376,7 @@ function renderLeads(){
   if(!state.leads.length){tbody.innerHTML='<tr><td colspan="6" class="empty-cell">Sem leads registados.</td></tr>';renderLocalSummary();return;}
   tbody.innerHTML=state.leads.slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).map(l=>{
     const idx=state.leads.indexOf(l);const link=safeUrl(l.url);
-    return '<tr><td>'+esc(l.name)+'</td><td>'+(link?'<a href="'+esc(link)+'" target="_blank" rel="noreferrer">abrir ↗</a>':'—')+'</td><td>'+esc(l.contact||'—')+'</td><td><select class="inline-status" data-lead-status="'+idx+'">'+['Novo','Contactado','Interessado','Proposta','Fechado','Perdido'].map(v=>'<option '+(l.status===v?'selected':'')+'>'+v+'</option>').join('')+'</select></td><td>'+esc(l.createdAt?fmtDateOnly(l.createdAt.slice(0,10)):'—')+'</td><td><button class="danger-btn" data-remove-lead="'+idx+'" title="Eliminar">×</button></td></tr>';
+    return '<tr><td>'+esc(l.name)+'</td><td>'+(link?'<a href="'+esc(link)+'" target="_blank" rel="noreferrer">abrir ↗</a>':'—')+'</td><td>'+esc(l.contact||'—')+'</td><td><select class="inline-status" data-lead-status="'+idx+'" aria-label="Estado do contacto '+esc(l.name)+'">'+['Novo','Contactado','Interessado','Proposta','Fechado','Perdido'].map(v=>'<option '+(l.status===v?'selected':'')+'>'+v+'</option>').join('')+'</select></td><td>'+esc(l.createdAt?fmtDateOnly(l.createdAt.slice(0,10)):'—')+'</td><td><button class="danger-btn" data-remove-lead="'+idx+'" type="button" title="Eliminar" aria-label="Eliminar contacto '+esc(l.name)+'">×</button></td></tr>';
   }).join('');
   tbody.querySelectorAll('[data-lead-status]').forEach(sel=>sel.addEventListener('change',()=>{state.leads[Number(sel.dataset.leadStatus)].status=sel.value;saveState();renderLeads();}));
   tbody.querySelectorAll('[data-remove-lead]').forEach(btn=>btn.addEventListener('click',()=>{if(confirm('Eliminar este lead?')){state.leads.splice(Number(btn.dataset.removeLead),1);saveState();renderLeads();}}));
@@ -837,8 +837,8 @@ function renderCompanyTasks(){
       return '<article class="company-task-card" data-priority="'+esc(t.priority||'normal')+'">'+
         '<div class="company-task-card-top"><span>'+esc(t.area||'Tarefa')+'</span><b>'+esc(priority)+'</b></div>'+
         '<h3>'+esc(t.title||'Tarefa')+'</h3><p>'+esc(project?project.name:'Sem projeto')+' · '+esc(due)+'</p>'+
-        '<div class="company-task-actions"><select data-company-task-status="'+esc(t.id)+'">'+Object.entries(COMPANY_TASK_LABELS).map(([value,label])=>'<option value="'+value+'" '+(status===value?'selected':'')+'>'+label+'</option>').join('')+'</select>'+
-        '<button type="button" class="danger-btn" data-company-task-delete="'+esc(t.id)+'" title="Eliminar">×</button></div></article>';
+        '<div class="company-task-actions"><select data-company-task-status="'+esc(t.id)+'" aria-label="Estado da tarefa '+esc(t.title)+'">'+Object.entries(COMPANY_TASK_LABELS).map(([value,label])=>'<option value="'+value+'" '+(status===value?'selected':'')+'>'+label+'</option>').join('')+'</select>'+
+        '<button type="button" class="danger-btn" data-company-task-delete="'+esc(t.id)+'" title="Eliminar" aria-label="Eliminar tarefa '+esc(t.title)+'">×</button></div></article>';
     }).join('');
     return '<section class="company-task-lane" data-status="'+status+'"><header><b>'+COMPANY_TASK_LABELS[status]+'</b><span>'+rows.length+'</span></header><div>'+(cards||'<div class="company-lane-empty">Sem tarefas</div>')+'</div></section>';
   }).join('');
