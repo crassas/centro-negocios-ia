@@ -949,6 +949,7 @@ function aiContext(){
     generatedAt:new Date().toISOString(),
     auditGeneratedAt:live.generatedAt||null,
     projects,
+    businessNeon:window.CentroBusinessNeon?.context?.()||null,
     leads:state.leads.slice(-50).map(lead=>({name:lead.name,status:lead.status,contact:lead.contact||'',createdAt:lead.createdAt||null})),
     finance:{...financeTotals(),movements:state.transactions.length,pending:pendingPaymentTotals(),pendingPayments:(state.pendingPayments||[]).filter(p=>p.status==='pending')},
     searchConsole:g?{summary:g,project:gscProjectHint(),topQueries:(state.gsc.rows||[]).slice().sort((a,b)=>b.clicks-a.clicks||b.impressions-a.impressions).slice(0,20),opportunities:gscOpportunityRows().slice(0,20)}:null,

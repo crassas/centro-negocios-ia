@@ -1100,3 +1100,34 @@ td{border-color:#edf0f4!important}
 #ai-voice-btn{min-width:54px;min-height:44px;font-size:12px}
 .travis-voice-tools button:focus-visible,.travis-voice-open:focus-visible{outline:3px solid #2869df;outline-offset:3px}
 @media(max-width:600px){.room-conversation input,.ai-question{font-size:16px!important}.ai-command-head{font-size:11px}.travis-voice-tools{gap:8px}.travis-voice-tools button{flex:1}.ai-command-head .travis-voice-open{width:100%}}
+
+
+/* Business OS · leitura autenticada da carteira Quasi Norte na Neon */
+.neon-company-panel{padding:16px;margin:0 0 16px;background:#fff;border:1px solid #dce4ee;border-left:3px solid #23476b;border-radius:10px}
+.neon-company-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.neon-company-head h2{margin:5px 0;font-size:18px;line-height:1.2;letter-spacing:-.025em;color:#142c4a}
+.neon-company-head p{margin:0;font-size:11px;line-height:1.5;color:#64758b}
+.neon-company-actions{display:flex;gap:8px;flex-wrap:wrap}
+.neon-company-actions .btn{min-height:38px}
+.neon-company-actions .btn:disabled{opacity:.48;cursor:not-allowed}
+.neon-company-meta{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid #e6ebf2}
+.neon-company-meta strong{color:#153b63;font-size:15px}
+#neon-company-status{font-size:10px;color:#61748b;max-width:430px;text-align:right}
+#neon-company-status[data-state=ready]{color:#176b4b}
+#neon-company-status[data-state=error]{color:#a84636}
+#neon-company-status[data-state=warning]{color:#795c28}
+.neon-company-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px 16px}
+.neon-company-row{min-width:0;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid #edf0f5}
+.neon-company-row strong{display:block;color:#163653;font-size:11px}
+.neon-company-row small{display:block;margin-top:4px;color:#7c8b9d;font-size:9px}
+.neon-company-row a{color:#365f8f;text-decoration:underline;text-underline-offset:2px}
+.neon-company-row>span{font-size:10px;white-space:nowrap;color:#5d6f83;font-weight:700}
+.neon-company-row>span.neon-has-pending{color:#ab5433}
+@media(max-width:750px){
+ .neon-company-panel{padding:12px}
+ .neon-company-head{display:grid;gap:10px}
+ .neon-company-actions{width:100%}
+ .neon-company-actions .btn{flex:1 1 130px}
+ .neon-company-list{grid-template-columns:1fr}
+ #neon-company-status{text-align:left}
+}

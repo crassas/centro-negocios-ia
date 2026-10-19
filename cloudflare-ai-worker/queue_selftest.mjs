@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 let source=await fs.readFile(new URL('./src/index.js',import.meta.url),'utf8');
 source=source.replace('import { DurableObject } from "cloudflare:workers";','class DurableObject { constructor(ctx,env){this.ctx=ctx;this.env=env;} }');
+// A suite avalia o Worker em data:URL; imports relativos precisam de um stub sem DB.
+source=source.replace("import { fetchBusinessOverview } from './business-neon.js';",
+  "const fetchBusinessOverview=async()=>{throw new Error('DB desativada no selftest');};");
 source+='\nexport {parseOperitInstruction,automaticRepoChange,assistSystem};';
 const {TaskQueue,default:worker,parseOperitInstruction,automaticRepoChange,assistSystem}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 assert.match(assistSystem('en','conversation'),/Answer in natural British English/);
