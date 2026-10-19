@@ -27,6 +27,7 @@ jobs:
       GSC_SERVICE_ACCOUNT_JSON: ${{ secrets.GSC_SERVICE_ACCOUNT_JSON }}
       GSC_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GSC_SERVICE_ACCOUNT_EMAIL }}
       GSC_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.GSC_SERVICE_ACCOUNT_PRIVATE_KEY }}
+      NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
     steps:
       - name: Verificar credenciais Cloudflare
         id: cloudflare
@@ -50,16 +51,34 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Install Worker dependencies
+        if: steps.cloudflare.outputs.ready == 'true'
+        working-directory: cloudflare-ai-worker
+        run: npm install --no-audit --no-fund
+
       - name: Test Worker before publication
         if: steps.cloudflare.outputs.ready == 'true'
         run: |
           node --check cloudflare-ai-worker/src/index.js
           node cloudflare-ai-worker/queue_selftest.mjs
+          npm test --prefix cloudflare-ai-worker
 
       - name: Deploy Worker
         if: steps.cloudflare.outputs.ready == 'true'
         working-directory: cloudflare-ai-worker
         run: npx --yes wrangler@latest deploy --var BUILD_SHA:$GITHUB_SHA
+
+      - name: Sincronizar ligação Neon protegida
+        if: steps.cloudflare.outputs.ready == 'true'
+        working-directory: cloudflare-ai-worker
+        shell: bash
+        run: |
+          if [ -n "$NEON_DATABASE_URL" ]; then
+            printf '%s' "$NEON_DATABASE_URL" | npx --yes wrangler@latest secret put NEON_DATABASE_URL > /tmp/neon-secret-sync.log
+            echo "Credencial Neon sincronizada com o Worker sem ser publicada no código."
+          else
+            echo "NEON_DATABASE_URL não definido: painel comercial mantém-se desligado."
+          fi
 
       - name: Sincronizar Telegram
         if: steps.cloudflare.outputs.ready == 'true'
