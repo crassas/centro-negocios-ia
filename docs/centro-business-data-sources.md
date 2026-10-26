@@ -8,7 +8,7 @@ Em Android, percorre o menu inferior com o dedo na horizontal. Tocar num módulo
 ## Fontes sem duplicação
 | Informação | Fonte atualmente usada | Escrita permitida? |
 |---|---|---|
-| Quatro clientes, quatro websites, valores por receber | Neon `quasi-norte-crm` através do Cloudflare Worker autenticado por Telegram | Não, nesta interface; somente leitura |
+| Clientes, websites e valores por receber | Neon `quasi-norte-crm` através do Cloudflare Worker autenticado por Telegram | Não, nesta interface; somente leitura |
 | Entradas, despesas, saldo, pendências e custos fixos antigos | `localStorage` deste navegador | Sim, apenas neste dispositivo |
 | Fichas CRM, leads e tarefas existentes | `localStorage` deste navegador | Sim, apenas neste dispositivo |
 | Auditorias dos sites | `data/sites.json` e `data/live.json` do GitHub | Não, pelo ecrã Empresa |
@@ -41,3 +41,13 @@ Apenas marcar um pagamento como recebido quando houver confirmação real. A int
 - Backend de escrita autenticado, com registos de alterações e validação de donos.
 - Revisão abrangente de permissões dos endpoints antigos e dos agentes.
 - Auditoria visual em vários dispositivos reais e avaliação formal WCAG.
+
+## TUNNEL BarberClub — 26 de outubro de 2026
+
+Quinto negócio acrescentado à carteira por instrução do utilizador.
+- Site de revisão: https://tunnel-barberclub.vercel.app/
+- Repositório: https://github.com/crassas/tunnel-barber-club
+- Área: Porto / Avenida Fernão de Magalhães.
+- Estado do website na Neon: `revisao`.
+- Monitorização técnica: entrada `tunnel` em `data/sites.json`; a auditoria automática alimenta `data/live.json`.
+- A inclusão não regista dívida, recebimento ou preço do trabalho. Os dados financeiros continuam na fonte própria.

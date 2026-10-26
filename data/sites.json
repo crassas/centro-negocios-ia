@@ -26,5 +26,12 @@
     "url": "https://engomadoriabeatriz.pt/",
     "area": "Porto",
     "repo": "https://github.com/crassas/engomadoria-beatriz"
+  },
+  {
+    "id": "tunnel",
+    "name": "TUNNEL BarberClub",
+    "url": "https://tunnel-barberclub.vercel.app/",
+    "area": "Porto / Avenida Fernão de Magalhães",
+    "repo": "https://github.com/crassas/tunnel-barber-club"
   }
 ]
