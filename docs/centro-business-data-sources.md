@@ -51,3 +51,6 @@ Quinto negócio acrescentado à carteira por instrução do utilizador.
 - Estado do website na Neon: `revisao`.
 - Monitorização técnica: entrada `tunnel` em `data/sites.json`; a auditoria automática alimenta `data/live.json`.
 - A inclusão não regista dívida, recebimento ou preço do trabalho. Os dados financeiros continuam na fonte própria.
+
+### Primeira leitura técnica da TUNNEL
+A auditoria automática de 26/10/2026, às 19:14 UTC, recebeu HTTP 200 do site. O catálogo técnico contém cinco sites. A leitura assinalou canonical, robots.txt, sitemap.xml e JSON-LD em falta; o estado `revisao` é mantido. Estes alertas técnicos não são uma medição de posições no Google.
