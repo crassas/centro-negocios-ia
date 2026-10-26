@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-26T18:56:42.960Z",
+  "generatedAt": "2026-10-26T19:14:27.014Z",
   "source": "github-actions",
   "intervalMinutes": 15,
   "sites": [
@@ -8,10 +8,10 @@
       "name": "Pentehouse",
       "url": "https://pentehouse.pt/",
       "area": "Marquês / Constituição",
-      "checkedAt": "2026-10-26T18:56:42.960Z",
+      "checkedAt": "2026-10-26T19:14:27.014Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 546,
+      "responseTimeMs": 283,
       "renderMode": "html",
       "finalUrl": "https://pentehouse.pt/",
       "title": "Barbearia no Marquês, Porto | Pentehouse",
@@ -59,10 +59,10 @@
       "name": "Best Pizza & Kebab",
       "url": "https://bestpizzaandkebab.pt/",
       "area": "Campanhã / São Roque",
-      "checkedAt": "2026-10-26T18:56:42.960Z",
+      "checkedAt": "2026-10-26T19:14:27.014Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 317,
+      "responseTimeMs": 256,
       "renderMode": "browser",
       "finalUrl": "https://bestpizzaandkebab.pt/",
       "title": "Kebab em Campanhã, Porto | Pizza e Takeaway | Best Pizza & Kebab",
@@ -98,9 +98,9 @@
         }
       ],
       "seoSignals": [],
-      "contentHash": "ebc524bfef5e02c69df0205f6af0fed6322fd72ab305d627addc251de71dcb30",
+      "contentHash": "bd9ea049c582424f369beae46c1bd5382bfd750f8fc772bcdddf1343662c3824",
       "changed": true,
-      "changedAt": "2026-10-26T18:56:42.960Z",
+      "changedAt": "2026-10-26T19:14:27.014Z",
       "robotsStatus": 200,
       "sitemapStatus": 200
     },
@@ -109,10 +109,10 @@
       "name": "Restaurante 2 Irmãos",
       "url": "https://restaurantedoisirmaos.pt/",
       "area": "Campanhã / São Roque",
-      "checkedAt": "2026-10-26T18:56:42.960Z",
+      "checkedAt": "2026-10-26T19:14:27.014Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 166,
+      "responseTimeMs": 319,
       "renderMode": "html",
       "finalUrl": "https://restaurantedoisirmaos.pt/",
       "title": "Restaurante em Campanhã, Porto | Comida Caseira · 2 Irmãos",
@@ -159,10 +159,10 @@
       "name": "Engomadoria Beatriz",
       "url": "https://engomadoriabeatriz.pt/",
       "area": "Porto",
-      "checkedAt": "2026-10-26T18:56:42.960Z",
+      "checkedAt": "2026-10-26T19:14:27.014Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 390,
+      "responseTimeMs": 264,
       "renderMode": "html",
       "finalUrl": "https://engomadoriabeatriz.pt/",
       "title": "Engomadoria no Porto | Praça das Flores e recolha | Beatriz",
@@ -199,10 +199,72 @@
       ],
       "seoSignals": [],
       "contentHash": "a3491716ebc5f74aa24e0d1556a83cc33f8ace9965a56ba1a0b1dbccbfdab373",
-      "changed": true,
+      "changed": false,
       "changedAt": "2026-10-26T18:56:42.960Z",
       "robotsStatus": 200,
       "sitemapStatus": 200
+    },
+    {
+      "id": "tunnel",
+      "name": "TUNNEL BarberClub",
+      "url": "https://tunnel-barberclub.vercel.app/",
+      "area": "Porto / Avenida Fernão de Magalhães",
+      "checkedAt": "2026-10-26T19:14:27.014Z",
+      "online": true,
+      "status": 200,
+      "responseTimeMs": 92,
+      "renderMode": "html",
+      "finalUrl": "https://tunnel-barberclub.vercel.app/",
+      "title": "TUNNEL® BarberClub",
+      "description": "TUNNEL® BarberClub — Avenida Fernão de Magalhães 652, 4050-150 Porto.",
+      "h1Count": 1,
+      "firstH1": "",
+      "canonical": "",
+      "robotsMeta": "",
+      "schemaCount": 0,
+      "sitemapUrls": null,
+      "httpVariant": {
+        "requestedUrl": "http://tunnel-barberclub.vercel.app/",
+        "status": 200,
+        "ok": true,
+        "finalUrl": "https://tunnel-barberclub.vercel.app/",
+        "redirected": true,
+        "redirectedToHttps": true
+      },
+      "checks": {
+        "title": true,
+        "description": true,
+        "h1": true,
+        "canonical": false,
+        "canonicalSelf": false,
+        "robots": false,
+        "sitemap": false,
+        "schema": false
+      },
+      "issues": [
+        {
+          "level": "warn",
+          "message": "Canonical em falta na homepage."
+        },
+        {
+          "level": "warn",
+          "message": "robots.txt não respondeu com sucesso."
+        },
+        {
+          "level": "warn",
+          "message": "sitemap.xml não respondeu com sucesso."
+        },
+        {
+          "level": "warn",
+          "message": "JSON-LD não detectado na homepage."
+        }
+      ],
+      "seoSignals": [],
+      "contentHash": "4cf9f4949d0ceb6bd424069f527a62ecb445618226a5595472bed817c4a6787f",
+      "changed": null,
+      "changedAt": null,
+      "robotsStatus": 404,
+      "sitemapStatus": 404
     }
   ]
 }
