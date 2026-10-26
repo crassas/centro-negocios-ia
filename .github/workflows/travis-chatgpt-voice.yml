@@ -1,0 +1,24 @@
+name: Travis ChatGPT Voice Bridge Pilot
+on:
+  push:
+    branches: [feature/travis-call-chatgpt-voice]
+    paths:
+      - "scripts/travis-chatgpt-call-*.py"
+      - ".github/workflows/travis-chatgpt-voice.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  handoff-safe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate scripts without activating Android
+        run: |
+          python3 -m py_compile scripts/travis-chatgpt-call-oppo.py
+          python3 -m py_compile scripts/travis-chatgpt-call-selftest.py
+          python3 scripts/travis-chatgpt-call-selftest.py
