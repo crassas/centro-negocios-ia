@@ -29,7 +29,7 @@
   <link rel="stylesheet" href="./product.css?v=world-8">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
   <script src="./agent-room.js?v=jarvis-1" defer></script>
-  <script src="./app.js?v=accessibility-20261019" defer></script>
+  <script src="./app.js?v=network-home-20261027" defer></script>
   <script src="./business-neon.js?v=readable-20261019" defer></script>
   <link rel="stylesheet" href="./travis-hud.css?v=sand-1">
   <link rel="stylesheet" href="./travis-brain.css?v=3">
@@ -38,6 +38,7 @@
   <link rel="stylesheet" href="./travis-gods-eye.css?v=eye-7-cctv">
   <link rel="stylesheet" href="./travis-camera-cinema.css?v=eye-7-cctv">
   <link rel="stylesheet" href="./business-hygiene.css?v=20261019">
+  <link rel="stylesheet" href="./network-home.css?v=20261027-1">
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
@@ -132,7 +133,7 @@
       <div class="brand-mark" aria-hidden="true"><span></span></div>
       <div class="brand-copy"><strong>Centro de</strong><b>Negócios</b></div>
     </div>
-    <nav class="command-nav nav" aria-label="Módulos do Centro. No telemóvel, desliza horizontalmente para mais opções.">
+    <nav class="command-nav nav" aria-label="Módulos do Centro">
       <a class="active" href="#visao" data-panel-target="visao"><span class="nav-icon">⌂</span><span>Painel</span></a>
       <a href="#empresa" data-panel-target="empresa"><span class="nav-icon">▦</span><span>Empresa</span></a>
       <a href="#agentes" data-panel-target="agentes"><span class="nav-icon">♟</span><span>Sala dos Agentes</span></a>
@@ -145,6 +146,7 @@
       <a href="#caixa" data-panel-target="caixa"><span class="nav-icon">▥</span><span>Financeiro</span></a>
       <a href="#cofre" data-panel-target="cofre"><span class="nav-icon">⌑</span><span>Cofre</span></a>
       <a href="#ferramentas" data-panel-target="ferramentas"><span class="nav-icon">⚙</span><span>Definições</span></a>
+      <button class="nav-more" id="nav-more" type="button" aria-expanded="false" aria-controls="mobile-more-menu"><span class="nav-icon" aria-hidden="true">☰</span><span>Mais</span></button>
     </nav>
     <div class="rail-growth">
       <div class="growth-crown">♛</div>
@@ -159,6 +161,7 @@
   <main class="workspace" id="main-content" tabindex="-1">
     
     <header class="command-bar">
+      <a class="mobile-network-brand" href="#visao" data-panel-target="visao"><b>QN</b><span>O teu centro</span></a>
       <div class="global-search">
         <span aria-hidden="true">⌕</span>
         <input id="global-search" type="search" placeholder="Pesquisar clientes, projetos, tarefas..." aria-label="Pesquisar">
@@ -181,48 +184,48 @@
       
       <section class="panel-view" id="visao" data-panel="visao">
         <div class="dashboard-heading">
-          <div><h1>Visão Geral</h1><p id="headline-status">Tudo o que precisa, num só lugar. Mais controlo, mais resultados.</p></div>
-          <button class="btn" data-panel-target="agentes" type="button">♟ Abrir sala dos agentes</button><div class="dashboard-date" id="dashboard-date">Hoje</div>
+          <div><span class="home-eyebrow">Quasi Norte · Porto</span><h1>A tua rede.</h1><p id="headline-status">A carregar a última verificação dos teus sites.</p></div>
+          <button class="btn" data-panel-target="agentes" type="button">Abrir equipa ↗</button><div class="dashboard-date" id="dashboard-date">Hoje</div>
         </div>
 
         <div class="dashboard-kpis" aria-label="Resumo da operação">
-          <article class="summary-card"><div class="summary-icon">◉</div><div class="summary-body"><span>Sites online</span><strong id="kpi-online">—</strong><small id="kpi-online-note">A verificar</small></div></article>
-          <article class="summary-card"><div class="summary-icon">✓</div><div class="summary-body"><span>Alertas técnicos</span><strong id="kpi-issues">—</strong><small id="kpi-issues-note">A verificar</small></div></article>
-          <article class="summary-card"><div class="summary-icon">◇</div><div class="summary-body"><span>Leads abertos</span><strong id="kpi-leads">0</strong><small id="kpi-leads-note">Pipeline local</small></div></article>
-          <article class="summary-card"><div class="summary-icon">€</div><div class="summary-body"><span>Saldo registado</span><strong class="money" id="kpi-balance">0,00 €</strong><small id="kpi-balance-note">Entradas − saídas</small></div></article>
+          <button class="summary-card" type="button" data-panel-target="sites" aria-label="Abrir os teus sites"><span class="summary-body"><span>Sites online</span><strong id="kpi-online">—</strong><small id="kpi-online-note">A verificar</small></span><span class="summary-arrow" aria-hidden="true">↗</span></button>
+          <button class="summary-card summary-attention" type="button" data-panel-target="sites" data-site-view="alerts" aria-label="Abrir os alertas dos sites"><span class="summary-body"><span>Alertas dos sites</span><strong id="kpi-issues">—</strong><small id="kpi-issues-note">A verificar</small></span><span class="summary-arrow" aria-hidden="true">↗</span></button>
+          <button class="summary-card" type="button" data-panel-target="leads" aria-label="Abrir contactos por acompanhar"><span class="summary-body"><span>Contactos abertos</span><strong id="kpi-leads">0</strong><small id="kpi-leads-note">Por acompanhar</small></span><span class="summary-arrow" aria-hidden="true">↗</span></button>
+          <button class="summary-card" type="button" data-panel-target="caixa" aria-label="Abrir os movimentos financeiros"><span class="summary-body"><span>Saldo registado</span><strong class="money" id="kpi-balance">0,00 €</strong><small id="kpi-balance-note">Entradas − saídas</small></span><span class="summary-arrow" aria-hidden="true">↗</span></button>
         </div>
 
         <div class="dashboard-main-grid">
           <article class="dashboard-card projects-panel">
             <div class="dashboard-card-head">
-              <div><h2>Clientes e Projetos</h2><p>Acompanhe o estado dos negócios e aceda rapidamente a cada projeto.</p></div>
+              <div><h2>Os teus negócios</h2><p>Cada site, uma porta aberta no Porto.</p></div>
               <button class="text-link" data-panel-target="crm" type="button">Ver todos →</button>
             </div>
             <div class="project-grid">
               <article class="project-card">
-                <div class="project-media"><img src="https://pentehouse.pt/og-image.jpg" alt="Pentehouse Barbearia, Marquês, Porto"><span class="project-status live">Publicado</span></div>
+                <a href="https://pentehouse.pt/" target="_blank" rel="noopener" aria-label="Abrir site: Pentehouse Barbearia" class="project-media"><img src="https://pentehouse.pt/og-image.jpg" alt="Pentehouse Barbearia, Marquês, Porto"><span class="project-status live">Publicado</span></a>
                 <div class="project-card-body"><div class="project-meta"><h3>Pentehouse Barbearia</h3><span>▣ Site + SEO Local</span><span>⌖ Marquês, Porto</span></div><div class="project-next"><small>Ponto a verificar</small><b>Conteúdos e contactos</b></div></div>
-                <div class="project-actions"><a class="project-open" href="https://pentehouse.pt/" target="_blank" rel="noopener">Aceder</a><button data-panel-target="crm" type="button" aria-label="Abrir CRM do cliente">Ver ficha</button></div>
+                <div class="project-actions"><a class="project-open" href="https://pentehouse.pt/" target="_blank" rel="noopener">Aceder</a><button data-panel-target="crm" data-client="pentehouse" type="button" aria-label="Abrir ficha: Pentehouse Barbearia">Ver ficha</button></div>
               </article>
               <article class="project-card">
-                <div class="project-media"><img src="https://bestpizzaandkebab.pt/og.jpg" alt="Best Pizza & Kebab, Campanhã, Porto"><span class="project-status live">Publicado</span></div>
+                <a href="https://bestpizzaandkebab.pt/" target="_blank" rel="noopener" aria-label="Abrir site: Best Pizza & Kebab" class="project-media"><img src="https://bestpizzaandkebab.pt/og.jpg" alt="Best Pizza & Kebab, Campanhã, Porto"><span class="project-status live">Publicado</span></a>
                 <div class="project-card-body"><div class="project-meta"><h3>Best Pizza & Kebab</h3><span>▣ Site + SEO Local</span><span>⌖ Campanhã, Porto</span></div><div class="project-next"><small>Ponto a verificar</small><b>Menu e encomendas</b></div></div>
-                <div class="project-actions"><a class="project-open" href="https://bestpizzaandkebab.pt/" target="_blank" rel="noopener">Aceder</a><button data-panel-target="crm" type="button" aria-label="Abrir CRM do cliente">Ver ficha</button></div>
+                <div class="project-actions"><a class="project-open" href="https://bestpizzaandkebab.pt/" target="_blank" rel="noopener">Aceder</a><button data-panel-target="crm" data-client="best-pizza" type="button" aria-label="Abrir ficha: Best Pizza & Kebab">Ver ficha</button></div>
               </article>
               <article class="project-card">
-                <div class="project-media"><img src="https://restaurantedoisirmaos.pt/assets/optimized/hero-restaurante-2-irmaos-v3-800.webp" alt="Restaurante 2 Irmãos, Campanhã, Porto"><span class="project-status live">Publicado</span></div>
+                <a href="https://restaurantedoisirmaos.pt/" target="_blank" rel="noopener" aria-label="Abrir site: Restaurante 2 Irmãos" class="project-media"><img src="https://restaurantedoisirmaos.pt/assets/optimized/hero-restaurante-2-irmaos-v3-800.webp" alt="Restaurante 2 Irmãos, Campanhã, Porto"><span class="project-status live">Publicado</span></a>
                 <div class="project-card-body"><div class="project-meta"><h3>Restaurante 2 Irmãos</h3><span>▣ Site + SEO Local</span><span>⌖ Campanhã, Porto</span></div><div class="project-next"><small>Ponto a verificar</small><b>Menu e horários</b></div></div>
-                <div class="project-actions"><a class="project-open" href="https://restaurantedoisirmaos.pt/" target="_blank" rel="noopener">Aceder</a><button data-panel-target="crm" type="button" aria-label="Abrir CRM do cliente">Ver ficha</button></div>
+                <div class="project-actions"><a class="project-open" href="https://restaurantedoisirmaos.pt/" target="_blank" rel="noopener">Aceder</a><button data-panel-target="crm" data-client="dois-irmaos" type="button" aria-label="Abrir ficha: Restaurante 2 Irmãos">Ver ficha</button></div>
               </article>
               <article class="project-card">
-                <div class="project-media beatriz-visual"><div><span>♧</span><b>Engomadoria</b><strong>Beatriz</strong><small>ROUPA COM MAIS VIDA</small></div><span class="project-status live">Publicado</span></div>
+                <a href="https://engomadoriabeatriz.pt/" target="_blank" rel="noopener" aria-label="Abrir site: Engomadoria Beatriz" class="project-media beatriz-visual"><div><span>♧</span><b>Engomadoria</b><strong>Beatriz</strong><small>ROUPA COM MAIS VIDA</small></div><span class="project-status live">Publicado</span></a>
                 <div class="project-card-body"><div class="project-meta"><h3>Engomadoria Beatriz</h3><span>▣ Site + SEO Local</span><span>⌖ Praça das Flores</span></div><div class="project-next"><small>Ponto a verificar</small><b>SEO local e presença Google</b></div></div>
-                <div class="project-actions"><a class="project-open" href="https://engomadoriabeatriz.pt/" target="_blank" rel="noopener">Aceder</a><button data-panel-target="crm" type="button" aria-label="Abrir CRM do cliente">Ver ficha</button></div>
+                <div class="project-actions"><a class="project-open" href="https://engomadoriabeatriz.pt/" target="_blank" rel="noopener">Aceder</a><button data-panel-target="crm" data-client="engomadoria-beatriz" type="button" aria-label="Abrir ficha: Engomadoria Beatriz">Ver ficha</button></div>
               </article>
               <article class="project-card" data-project="tunnel">
-                <div class="project-media"><img src="https://tunnel-barberclub.vercel.app/assets/hero-desktop-poster.webp" alt="Imagem de apresentação do site TUNNEL BarberClub, Porto" width="1600" height="640" loading="lazy"><span class="project-status build">Em revisão</span></div>
+                <a href="https://tunnel-barberclub.vercel.app/" target="_blank" rel="noopener" aria-label="Abrir site: TUNNEL BarberClub" class="project-media"><img src="https://tunnel-barberclub.vercel.app/assets/hero-desktop-poster.webp" alt="Imagem de apresentação do site TUNNEL BarberClub, Porto" width="1600" height="640" loading="lazy"><span class="project-status build">Em revisão</span></a>
                 <div class="project-card-body"><div class="project-meta"><h3>TUNNEL BarberClub</h3><span>▣ Site + Marcações</span><span>⌖ Fernão de Magalhães, Porto</span></div><div class="project-next"><small>Ponto a verificar</small><b>Marcações e agenda</b></div></div>
-                <div class="project-actions"><a class="project-open" href="https://tunnel-barberclub.vercel.app/" target="_blank" rel="noopener">Aceder</a><button data-panel-target="crm" type="button" aria-label="Abrir ficha da TUNNEL BarberClub">Ver ficha</button></div>
+                <div class="project-actions"><a class="project-open" href="https://tunnel-barberclub.vercel.app/" target="_blank" rel="noopener">Aceder</a><button data-panel-target="crm" data-client="tunnel" type="button" aria-label="Abrir ficha da TUNNEL BarberClub">Ver ficha</button></div>
               </article>
             </div>
           </article>
@@ -230,8 +233,8 @@
           <aside class="dashboard-side-stack">
             <article class="dashboard-card seo-local-card">
               <div class="dashboard-card-head compact"><div><h2>SEO Local · Porto</h2></div><button class="text-link" data-panel-target="seo" type="button">Ver relatório →</button></div>
-              <div class="seo-map-wrap"><iframe title="Mapa do Porto" src="https://www.openstreetmap.org/export/embed.html?bbox=-8.652%2C41.138%2C-8.566%2C41.185&amp;layer=mapnik" loading="lazy"></iframe><span class="map-pin pin-1">1</span><span class="map-pin pin-2">2</span><span class="map-pin pin-3">3</span><span class="map-pin pin-4">4</span><span class="map-pin pin-5" title="TUNNEL BarberClub · Avenida Fernão de Magalhães" aria-label="5 — TUNNEL BarberClub, zona da Avenida Fernão de Magalhães">5</span></div>
-              <div class="local-list"><div><span class="local-dot p"></span><b>Pentehouse Barbearia</b><small>Marquês</small></div><div><span class="local-dot b"></span><b>Best Pizza & Kebab</b><small>Campanhã</small></div><div><span class="local-dot d"></span><b>Restaurante 2 Irmãos</b><small>Campanhã</small></div><div><span class="local-dot e"></span><b>Engomadoria Beatriz</b><small>Praça das Flores</small></div><div><span class="local-dot t"></span><b><a href="https://www.google.com/maps/dir/?api=1&amp;destination=Avenida+Fern%C3%A3o+de+Magalh%C3%A3es+652,+Porto,+Portugal" target="_blank" rel="noopener noreferrer" aria-label="Ver a morada da TUNNEL BarberClub no Google Maps">TUNNEL BarberClub ↗</a></b><small>Fernão de Magalhães</small></div></div>
+              <details class="network-map-disclosure"><summary>Ver o mapa da rede</summary><div class="seo-map-wrap"><iframe title="Mapa do Porto" src="https://www.openstreetmap.org/export/embed.html?bbox=-8.652%2C41.138%2C-8.566%2C41.185&amp;layer=mapnik" loading="lazy"></iframe><span class="map-pin pin-1">1</span><span class="map-pin pin-2">2</span><span class="map-pin pin-3">3</span><span class="map-pin pin-4">4</span><span class="map-pin pin-5" title="TUNNEL BarberClub · Avenida Fernão de Magalhães" aria-label="5 — TUNNEL BarberClub, zona da Avenida Fernão de Magalhães">5</span></div></details>
+              <div class="local-list"><div><span class="local-dot p"></span><b><a href="https://pentehouse.pt/" target="_blank" rel="noopener">Pentehouse Barbearia ↗</a></b><small>Marquês</small></div><div><span class="local-dot b"></span><b><a href="https://bestpizzaandkebab.pt/" target="_blank" rel="noopener">Best Pizza & Kebab ↗</a></b><small>Campanhã</small></div><div><span class="local-dot d"></span><b><a href="https://restaurantedoisirmaos.pt/" target="_blank" rel="noopener">Restaurante 2 Irmãos ↗</a></b><small>Campanhã</small></div><div><span class="local-dot e"></span><b><a href="https://engomadoriabeatriz.pt/" target="_blank" rel="noopener">Engomadoria Beatriz ↗</a></b><small>Praça das Flores</small></div><div><span class="local-dot t"></span><b><a href="https://www.google.com/maps/dir/?api=1&amp;destination=Avenida+Fern%C3%A3o+de+Magalh%C3%A3es+652,+Porto,+Portugal" target="_blank" rel="noopener noreferrer" aria-label="Ver a morada da TUNNEL BarberClub no Google Maps">TUNNEL BarberClub ↗</a></b><small>Fernão de Magalhães</small></div></div>
               <p class="local-map-note">5 sites na rede · Zonas aproximadas no mapa.</p>
             </article>
             <article class="dashboard-card priority-card">
@@ -247,7 +250,7 @@
         </div>
 
         <div class="dashboard-bottom-grid">
-          <article class="dashboard-card"><div class="dashboard-card-head compact"><div><h2>Alertas Recentes</h2></div><button class="text-link" data-panel-target="sites" type="button">Ver sites →</button></div><div id="alerts-list" class="friendly-stack"><div class="empty">A analisar.</div></div></article>
+          <article class="dashboard-card"><div class="dashboard-card-head compact"><div><h2>A pedir atenção</h2></div><button class="text-link" data-panel-target="sites" data-site-view="alerts" type="button">Ver alertas →</button></div><div id="alerts-list" class="friendly-stack"><div class="empty">A analisar.</div></div></article>
           <article class="dashboard-card"><div class="dashboard-card-head compact"><div><h2>Conexões e Oportunidades</h2></div><button class="text-link" data-panel-target="radar" type="button">Abrir radar →</button></div><div id="connections-list" class="friendly-stack"><div class="empty">A cruzar sinais técnicos.</div></div></article>
           <article class="growth-banner"><div><span>PORTO · NEGÓCIOS LOCAIS</span><h2>Negócios locais<br>ganham mais longe.</h2><p>Sites, SEO e automação num só centro.</p><button data-panel-target="crm" type="button">Novo projeto →</button></div></article>
         </div>
@@ -367,7 +370,9 @@
       </section>
 
       <section class="panel-view" id="sites" data-panel="sites">
-        <div class="panel-title"><div><span class="sys-label">NETWORK OBSERVATORY</span><h1>SITES EM PRODUÇÃO</h1></div><div class="section-meta" id="audit-meta">Sem leitura</div></div>
+        <div class="panel-title"><div><span class="sys-label">A tua rede</span><h1>Os teus sites</h1><p>O estado de cada negócio e o que merece uma revisão.</p></div><div class="section-meta" id="audit-meta">Sem leitura</div></div>
+        <div class="site-view-controls" aria-label="Vista dos sites"><button id="site-view-all" type="button" data-panel-target="sites" aria-pressed="true">Todos os sites</button><button id="site-view-alerts" type="button" data-panel-target="sites" data-site-view="alerts" aria-pressed="false">Só alertas <span id="site-alert-count">—</span></button></div>
+        <div id="site-alerts" class="site-alerts" hidden><div class="empty">A obter a última verificação.</div></div>
         <div id="site-grid" class="site-grid"><div class="empty">A obter a última auditoria.</div></div>
       </section>
 
@@ -723,6 +728,19 @@
 </nav>
 
 <button class="return-command" id="return-top" type="button" title="Voltar ao comando">⌃</button>
+
+<button id="mobile-more-scrim" class="mobile-more-scrim" type="button" aria-label="Fechar menu" hidden></button>
+<section id="mobile-more-menu" class="mobile-more-menu" aria-label="Mais áreas do Centro" hidden>
+  <header><h2>O teu centro</h2><button id="mobile-more-close" type="button" aria-label="Fechar menu">×</button></header>
+  <button type="button" data-panel-target="agentes">Equipa e agentes<span aria-hidden="true">↗</span></button>
+  <button type="button" data-panel-target="seo">Pesquisa no Google<span aria-hidden="true">↗</span></button>
+  <button type="button" data-panel-target="assistente">Falar com o Travis<span aria-hidden="true">↗</span></button>
+  <button type="button" data-panel-target="leads">Contactos<span aria-hidden="true">↗</span></button>
+  <button type="button" data-panel-target="caixa">Financeiro<span aria-hidden="true">↗</span></button>
+  <button type="button" data-panel-target="radar">Oportunidades<span aria-hidden="true">↗</span></button>
+  <button type="button" data-panel-target="cofre">Cofre<span aria-hidden="true">↗</span></button>
+  <button type="button" data-panel-target="ferramentas">Definições<span aria-hidden="true">↗</span></button>
+</section>
 
 <button id="travis-launcher" type="button" aria-label="Abrir Travis" aria-controls="travis-hud" aria-expanded="false">
   <span class="trv-launch-ring" aria-hidden="true"></span>
