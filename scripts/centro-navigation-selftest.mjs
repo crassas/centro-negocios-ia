@@ -15,9 +15,10 @@ class Element{
   getAttribute(name){return this.attrs[name]??null;}
   focus(){this.focused=true;}
   querySelector(){return this.firstButton||null;}
+  querySelectorAll(){return [];}
 }
 function harness(){
-  const names=['site-grid','site-alerts','site-view-all','site-view-alerts','site-alert-count','alerts-list','active-panel-name','nav-more','mobile-more-menu','mobile-more-close','mobile-more-scrim'];
+  const names=['crm-grid','site-grid','site-alerts','site-view-all','site-view-alerts','site-alert-count','alerts-list','active-panel-name','nav-more','mobile-more-menu','mobile-more-close','mobile-more-scrim'];
   const els=Object.fromEntries(names.map(name=>[name,new Element()]));
   els['mobile-more-menu'].firstButton=els['mobile-more-close'];
   const panels=['visao','sites','leads','caixa'].map(panel=>new Element({panel}));
@@ -79,4 +80,17 @@ test('texto dos alertas é escapado e o menu Mais abre, fecha e devolve o foco',
   vm.runInContext('setMobileMenu(false,true)',h.ctx);
   assert.equal(h.els['mobile-more-menu'].hidden,true);
   assert.equal(h.els['nav-more'].focused,true);
+});
+
+test('a ficha mostra valores apenas da carteira ligada e não os transforma em recebimentos',()=>{
+  const h=harness();
+  vm.runInContext('sites=[{id:"example",name:"Exemplo",repo:"https://github.com/example/project",url:"https://example.test"}];renderCRM()',h.ctx);
+  assert.match(h.els['crm-grid'].innerHTML,/Liga a carteira/);
+  h.ctx.window.CentroBusinessNeon={context:()=>({clients:[{repositoryUrl:'https://github.com/example/project',pendingEur:12.75}]})};
+  vm.runInContext('renderCRM()',h.ctx);
+  assert.match(h.els['crm-grid'].innerHTML,/12,75/);
+  assert.match(h.els['crm-grid'].innerHTML,/Por receber/);
+  assert.equal(vm.runInContext('state.transactions.length',h.ctx),0);
+  assert.equal(vm.runInContext('state.pendingPayments.length',h.ctx),0,'não semear cópias locais');
+  assert.doesNotMatch(vm.runInContext('businessSprite("<script>bad()</script>")',h.ctx),/<script>/);
 });
