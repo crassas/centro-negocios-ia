@@ -29,7 +29,7 @@
   <link rel="stylesheet" href="./product.css?v=world-8">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
   <script src="./agent-room.js?v=jarvis-1" defer></script>
-  <script src="./app.js?v=network-home-20261027-2" defer></script>
+  <script src="./app.js?v=business-world-20261027-1" defer></script>
   <script src="./business-neon.js?v=readable-20261019" defer></script>
   <link rel="stylesheet" href="./travis-hud.css?v=sand-1">
   <link rel="stylesheet" href="./travis-brain.css?v=3">
@@ -39,6 +39,7 @@
   <link rel="stylesheet" href="./travis-camera-cinema.css?v=eye-7-cctv">
   <link rel="stylesheet" href="./business-hygiene.css?v=20261019">
   <link rel="stylesheet" href="./network-home.css?v=20261027-2">
+  <link rel="stylesheet" href="./business-world.css?v=20261027-1">
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
@@ -379,24 +380,36 @@
 
       <section class="panel-view company-panel" id="empresa" data-panel="empresa">
         <div class="company-command">
+          <div id="company-world-crew" class="company-world-crew" aria-hidden="true"></div>
           <div>
-            <span class="sys-label">QUASI NORTE · BUSINESS OS</span>
+            <span class="sys-label">Quasi Norte · A tua base</span>
             <h1 id="company-heading">A empresa, num só lugar</h1>
             <p>Clientes, dinheiro, trabalho e próximos passos. Só mostra dados que estejam realmente registados.</p>
           </div>
           <button class="btn primary" id="company-new-task" type="button">＋ Nova tarefa</button>
         </div>
 
+          <article class="module company-focus-module">
+            <div class="module-head">
+              <div><span class="sys-label">FOCO</span><h2>O que move a empresa</h2></div>
+              <span class="status-tag" id="company-focus-count">0 itens</span>
+            </div>
+            <div id="company-focus-list" class="company-focus-list">
+              <div class="empty">Ainda não há prioridades registadas.</div>
+            </div>
+          </article>
+
+        <details class="company-wallet-details"><summary>Carteira ligada · sites e valores por receber</summary>
         <article class="module neon-company-panel" id="neon-company">
           <div class="neon-company-head">
             <div>
-              <span class="sys-label">CARTEIRA REAL · NEON POSTGRESQL</span>
+              <span class="sys-label">CARTEIRA LIGADA</span>
               <h2>Sites e valores por receber</h2>
               <p id="neon-company-source">Ligação protegida, separada do Caixa local e dos agentes existentes.</p>
             </div>
             <div class="neon-company-actions">
               <button class="btn" id="neon-company-authorize" type="button">Autorizar no Telegram</button>
-              <button class="btn" id="neon-company-refresh" type="button" disabled>Atualizar Neon</button>
+              <button class="btn" id="neon-company-refresh" type="button" disabled>Atualizar carteira</button>
             </div>
           </div>
           <div class="neon-company-meta"><strong id="neon-company-total">—</strong>
@@ -404,6 +417,7 @@
           </div>
           <ul id="neon-company-list" class="neon-company-list" aria-label="Sites consultados na Neon"></ul>
         </article>
+        </details>
 
         <div class="company-scoreboard" aria-label="Estado da empresa">
           <article><span>Entradas este mês</span><b id="company-month-income">0,00 €</b><small>recebido e registado</small></article>
@@ -418,15 +432,7 @@
           <strong>Fontes separadas:</strong> a Neon contém a carteira comercial; entradas, despesas, tarefas e registos antigos permanecem neste telemóvel. Valores iguais não são somados até serem conciliados.
         </div>
         <div class="company-top-grid">
-          <article class="module company-focus-module">
-            <div class="module-head">
-              <div><span class="sys-label">FOCO</span><h2>O que move a empresa agora</h2></div>
-              <span class="status-tag" id="company-focus-count">0 itens</span>
-            </div>
-            <div id="company-focus-list" class="company-focus-list">
-              <div class="empty">Ainda não há prioridades registadas.</div>
-            </div>
-          </article>
+
 
           <article class="module company-control-module">
             <div class="module-head">
@@ -448,7 +454,7 @@
 
         <article class="module company-work-module">
           <div class="module-head">
-            <div><span class="sys-label">EXECUÇÃO</span><h2>Fila única de trabalho</h2></div>
+            <div><span class="sys-label">EXECUÇÃO</span><h2>O teu quadro de trabalho</h2></div>
             <span class="section-meta">Sites · Apps · SEO · CRM · Financeiro · Administração</span>
           </div>
           <form id="company-task-form" class="company-task-form">
@@ -500,7 +506,7 @@
       </section>
 
       <section class="panel-view" id="crm" data-panel="crm">
-        <div class="panel-title"><div><span class="sys-label">PROJECT MEMORY</span><h1>CRM</h1><p>Estado real e próxima acção de cada projecto.</p></div><span class="status-tag">GUARDADO NESTE DISPOSITIVO</span></div>
+        <div class="panel-title"><div><span class="sys-label">A tua rede no Porto</span><h1>Os teus clientes</h1><p>Cada negócio tem o seu lugar. Aqui guardas o estado e o próximo passo.</p></div><span class="status-tag">Notas guardadas neste dispositivo</span></div>
         <div id="crm-grid" class="crm-grid"></div>
       </section>
 
