@@ -236,6 +236,8 @@ function setupPanelNavigation(){
       if(card){card.setAttribute('tabindex','-1');card.focus({preventScroll:true});card.scrollIntoView({behavior:'smooth',block:'start'});}
     },80);
   }));
+  $('mobile-refresh')?.addEventListener('click',()=>{$('refresh-btn')?.click();setMobileMenu(false);});
+  $('mobile-backup')?.addEventListener('click',()=>{$('backup-top-btn')?.click();setMobileMenu(false);});
   $('nav-more')?.addEventListener('click',()=>setMobileMenu($('nav-more').getAttribute('aria-expanded')!=='true'));
   $('mobile-more-close')?.addEventListener('click',()=>setMobileMenu(false,true));
   $('mobile-more-scrim')?.addEventListener('click',()=>setMobileMenu(false,true));
@@ -245,7 +247,7 @@ function setupPanelNavigation(){
     setSiteView('alerts');openPanel('sites');
   });
   const map=document.querySelector('.network-map-disclosure');
-  if(map)map.open=window.matchMedia('(min-width:1000px)').matches;
+  if(map)map.open=false;
   $('nav-home')?.addEventListener('click',()=>openPanel('visao'));
   $('return-top')?.addEventListener('click',()=>openPanel('visao'));
   window.addEventListener('popstate',()=>{
@@ -1430,8 +1432,7 @@ function setupDashboardChrome(){
     const label=new Intl.DateTimeFormat('pt-PT',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(new Date());
     dateEl.textContent=label.charAt(0).toUpperCase()+label.slice(1);
   }
-  const search=$('global-search');
-  if(search){
+  document.querySelectorAll('#global-search,#mobile-global-search').forEach(search=>{
     search.addEventListener('keydown',event=>{
       if(event.key!=='Enter')return;
       event.preventDefault();
@@ -1439,7 +1440,8 @@ function setupDashboardChrome(){
       if(!q)return;
       const routes=[
         {terms:['empresa','tarefas','tarefa','objetivo','objectivo','meta','custos fixos','organizar trabalho'],panel:'empresa'},
-        {terms:['cliente','clientes','projeto','projecto','pentehouse','pizza','kebab','irmãos','irmaos','beatriz'],panel:'crm'},
+        {terms:['cliente','clientes','projeto','projecto','pentehouse','pizza','kebab','irmãos','irmaos','beatriz','tunnel','túnel'],panel:'crm'},
+        {terms:['alerta','alertas'],panel:'sites',alerts:true},
         {terms:['site','sites','online','auditoria'],panel:'sites'},
         {terms:['seo','google','search','posição','posicao','ranking'],panel:'seo'},
         {terms:['automação','automacao','ia','inteligência','inteligencia','agente'],panel:'assistente'},
@@ -1450,10 +1452,10 @@ function setupDashboardChrome(){
         {terms:['definições','definicoes','sistema','backup'],panel:'ferramentas'}
       ];
       const route=routes.find(item=>item.terms.some(term=>q.includes(term)));
-      if(route){openPanel(route.panel);search.blur();return;}
+      if(route){if(route.panel==='sites')setSiteView(route.alerts?'alerts':'all');openPanel(route.panel);setMobileMenu(false);search.blur();return;}
       toast('Não encontrei esse módulo. Pesquisa por cliente, site, SEO, IA, financeiro ou definições.');
     });
-  }
+  });
 }
 
 function setupPWA(){
