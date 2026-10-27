@@ -19,6 +19,7 @@ let vaultPassphrase=null;
 let vaultTimer=null;
 let installPrompt=null;
 let toastTimer=null;
+let siteView='all';
 let gscPairPollTimer=null;
 let jarvisConversationTask=sessionStorage.getItem('travis-pending-task')||'';
 let travisReply='';
@@ -201,7 +202,7 @@ function ageLabel(value){
 }
 
 
-const DEFAULT_PANEL='empresa';
+const DEFAULT_PANEL='visao';
 const PANEL_NAMES={
   agentes:'SALA DOS AGENTES',visao:'PAINEL',empresa:'EMPRESA',assistente:'AUTOMAÇÃO & IA',radar:'OPORTUNIDADES',sites:'SITES',crm:'CLIENTES',
   leads:'LEADS',caixa:'FINANCEIRO',seo:'OPORTUNIDADES SEO',cofre:'COFRE',ferramentas:'DEFINIÇÕES'
@@ -227,8 +228,24 @@ function openPanel(id,options={}){
 function setupPanelNavigation(){
   document.querySelectorAll('[data-panel-target]').forEach(control=>control.addEventListener('click',event=>{
     event.preventDefault();
+    if(control.dataset.panelTarget==='sites')setSiteView(control.dataset.siteView==='alerts'?'alerts':'all');
     openPanel(control.dataset.panelTarget,{focusDecisions:control.dataset.focusDecisions==='1'});
+    setMobileMenu(false);
+    if(control.dataset.client)setTimeout(()=>{
+      const card=document.querySelector('.crm-card[data-client="'+control.dataset.client+'"]');
+      if(card){card.setAttribute('tabindex','-1');card.focus({preventScroll:true});card.scrollIntoView({behavior:'smooth',block:'start'});}
+    },80);
   }));
+  $('nav-more')?.addEventListener('click',()=>setMobileMenu($('nav-more').getAttribute('aria-expanded')!=='true'));
+  $('mobile-more-close')?.addEventListener('click',()=>setMobileMenu(false,true));
+  $('mobile-more-scrim')?.addEventListener('click',()=>setMobileMenu(false,true));
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&$('nav-more')?.getAttribute('aria-expanded')==='true')setMobileMenu(false,true);});
+  $('alerts-list')?.addEventListener('click',event=>{
+    if(!event.target.closest('[data-open-alerts]'))return;
+    setSiteView('alerts');openPanel('sites');
+  });
+  const map=document.querySelector('.network-map-disclosure');
+  if(map)map.open=window.matchMedia('(min-width:1000px)').matches;
   $('nav-home')?.addEventListener('click',()=>openPanel('visao'));
   $('return-top')?.addEventListener('click',()=>openPanel('visao'));
   window.addEventListener('popstate',()=>{
@@ -237,6 +254,21 @@ function setupPanelNavigation(){
   });
   const initial=location.hash.replace('#','');
   openPanel(PANEL_NAMES[initial]?initial:DEFAULT_PANEL,{instant:true,history:false});
+}
+function setMobileMenu(open,returnFocus=false){
+  const menu=$('mobile-more-menu'),scrim=$('mobile-more-scrim'),button=$('nav-more');
+  if(!menu||!button)return;
+  menu.hidden=!open;if(scrim)scrim.hidden=!open;
+  button.setAttribute('aria-expanded',String(open));
+  if(open)menu.querySelector('button')?.focus();
+  else if(returnFocus)button.focus();
+}
+function setSiteView(view){
+  siteView=view==='alerts'?'alerts':'all';
+  if($('site-grid'))$('site-grid').hidden=siteView==='alerts';
+  if($('site-alerts'))$('site-alerts').hidden=siteView!=='alerts';
+  $('site-view-all')?.setAttribute('aria-pressed',String(siteView==='all'));
+  $('site-view-alerts')?.setAttribute('aria-pressed',String(siteView==='alerts'));
 }
 function startDictation(targetId){
   const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -288,7 +320,7 @@ function renderMonitorStatus(){
   meta.textContent=fmtDate(live.generatedAt)+' · '+ageLabel(live.generatedAt);
   const online=(live.sites||[]).filter(r=>r.online).length;
   const issues=(live.sites||[]).reduce((n,r)=>n+(r.issues||[]).length,0);
-  $('headline-status').textContent=online+'/'+(live.sites||[]).length+' sites online · '+issues+' alerta'+(issues===1?'':'s')+' · auditoria '+ageLabel(live.generatedAt)+'.';
+  $('headline-status').textContent=online+' site'+(online===1?'':'s')+' online. '+issues+' ponto'+(issues===1?'':'s')+' para rever. Leitura '+ageLabel(live.generatedAt)+'.';
 }
 function renderKpis(){
   const results=live.sites||[];
@@ -297,7 +329,8 @@ function renderKpis(){
   $('kpi-online').textContent=results.length?online+'/'+results.length:'—';
   $('kpi-issues').textContent=results.length?issues:'—';
   $('kpi-online-note').textContent=results.length?(online===results.length?'Todos responderam':(results.length-online)+' com falha'):'Sem auditoria';
-  $('kpi-issues-note').textContent=results.length?(issues?'Ver alertas abaixo':'Sem falhas nesta leitura'):'Sem auditoria';
+  $('kpi-issues-note').textContent=results.length?(issues?'Abrir '+issues+' alerta'+(issues===1?'':'s'):'Ver a última verificação'):'Sem auditoria';
+  document.querySelector('.summary-attention')?.classList.toggle('has-alerts',issues>0);
   renderLocalSummary();
 }
 function renderLocalSummary(){
@@ -319,21 +352,40 @@ function renderSites(){
     const c=r.checks||{};
     return '<article class="site-card">'+
       '<div class="site-top"><div><h3>'+esc(s.name)+'</h3><a href="'+esc(s.url)+'" target="_blank" rel="noreferrer">'+esc(s.area||s.url)+'</a></div><span class="status '+(r.online?'ok':'bad')+'">'+(r.online?'ONLINE':'FALHA')+'</span></div>'+
-      '<div class="fact-grid">'+
+      '<details class="site-diagnostics"><summary>Ver diagnóstico técnico</summary><div class="fact-grid">'+
       '<div class="fact"><span>HTTP</span><b>'+esc(r.status==null?'—':r.status)+'</b></div>'+
       '<div class="fact"><span>Resposta</span><b>'+humanMs(r.responseTimeMs)+'</b></div>'+
       '<div class="fact"><span>H1</span><b>'+esc(r.h1Count==null?'—':r.h1Count)+(r.firstH1?' · '+esc(r.firstH1):'')+'</b></div>'+
       '<div class="fact"><span>Sitemap</span><b>'+esc(r.sitemapUrls==null?'—':r.sitemapUrls)+' URL</b></div>'+
       '<div class="fact"><span>Alteração HTML</span><b>'+esc(r.changed===true?'detectada':r.changed===false?'não':'base inicial')+'</b></div>'+
       '<div class="fact"><span>Leitura</span><b>'+esc(ageLabel(r.checkedAt))+'</b></div></div>'+
-      '<div class="technical">'+yesNo(c.title,'title')+yesNo(c.description,'description')+yesNo(c.h1,'H1')+yesNo(c.canonical,'canonical')+yesNo(c.robots,'robots')+yesNo(c.sitemap,'sitemap')+yesNo(c.schema,'schema')+'</div></article>';
+      '<div class="technical">'+yesNo(c.title,'title')+yesNo(c.description,'description')+yesNo(c.h1,'H1')+yesNo(c.canonical,'canonical')+yesNo(c.robots,'robots')+yesNo(c.sitemap,'sitemap')+yesNo(c.schema,'schema')+'</div></details></article>';
   }).join('');
 }
+function readableIssue(issue){
+  const message=issue.message||String(issue);
+  if(/versão HTTP/i.test(message))return {title:'Confirmar a versão segura',text:'O endereço HTTP não encaminhou automaticamente para HTTPS nesta verificação. Vale a pena confirmar os redirecionamentos.'};
+  if(/canonical/i.test(message))return {title:'Identificar o endereço principal',text:'A página não declarou qual é o seu endereço principal. É um ponto a rever para evitar versões duplicadas.'};
+  if(/robots\.txt/i.test(message))return {title:'Rever as instruções de acesso',text:'O ficheiro robots.txt não respondeu como esperado. Esta leitura, por si só, não prova que o Google esteja bloqueado.'};
+  if(/sitemap/i.test(message))return {title:'Rever a lista de páginas',text:'O sitemap não respondeu como esperado. Confirma se a lista de páginas existe e está acessível.'};
+  if(/JSON-LD|schema/i.test(message))return {title:'Descrever melhor o negócio',text:'A verificação não detetou dados estruturados na página inicial. Confirma o HTML antes de alterar o site.'};
+  return {title:issue.level==='danger'?'Verificação com falha':'Ponto a rever',text:message};
+}
 function renderAlerts(){
-  const rows=[];
-  (live.sites||[]).forEach(r=>(r.issues||[]).forEach(issue=>rows.push({name:r.name,text:issue.message||String(issue),level:issue.level||'warn'})));
-  if(!rows.length){$('alerts-list').innerHTML=live.generatedAt?'<div class="stack-item good"><b>Sem alertas técnicos</b><p>A última auditoria não encontrou falhas nas verificações activas.</p></div>':'<div class="empty">Sem auditoria.</div>';return;}
-  $('alerts-list').innerHTML=rows.map(x=>'<div class="stack-item '+(x.level==='danger'?'danger':'warn')+'"><b>'+esc(x.name)+'</b><p>'+esc(x.text)+'</p></div>').join('');
+  const groups=(live.sites||[]).filter(r=>(r.issues||[]).length);
+  const count=groups.reduce((n,r)=>n+r.issues.length,0);
+  if($('site-alert-count'))$('site-alert-count').textContent=live.generatedAt?count:'—';
+  const empty=live.generatedAt?'<div class="empty">Sem alertas na última verificação.</div>':'<div class="empty">Ainda não há uma verificação disponível.</div>';
+  $('alerts-list').innerHTML=groups.length?groups.map(r=>'<button type="button" class="alert-overview-row" data-open-alerts><span><b>'+esc(r.name)+'</b><small>'+r.issues.length+' ponto'+(r.issues.length===1?'':'s')+' a rever</small></span><span aria-hidden="true">↗</span></button>').join(''):empty;
+  if(!$('site-alerts'))return;
+  $('site-alerts').innerHTML=groups.length?'<p class="alert-reading-note">'+count+' alerta'+(count===1?'':'s')+' em '+groups.length+' site'+(groups.length===1?'':'s')+' · leitura '+esc(ageLabel(live.generatedAt))+'. São pontos de uma verificação automática; confirma cada um antes de alterar o site.</p>'+groups.map(r=>{
+    const site=sites.find(s=>s.id===r.id),url=safeUrl(site?.url||r.url);
+    return '<article class="alert-site-group"><header><div><h2>'+esc(r.name)+'</h2><p>'+r.issues.length+' ponto'+(r.issues.length===1?'':'s')+' a rever</p></div>'+(url?'<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Abrir site ↗</a>':'')+'</header><ol>'+r.issues.map(issue=>{
+      const friendly=readableIssue(issue);
+      return '<li><h3>'+esc(friendly.title)+'</h3><p>'+esc(friendly.text)+'</p><details><summary>Ver detalhe técnico</summary><p>'+esc(issue.message||String(issue))+'</p></details></li>';
+    }).join('')+'</ol></article>';
+  }).join(''):empty;
+  setSiteView(siteView);
 }
 function renderConnections(){
   const signals=[];
