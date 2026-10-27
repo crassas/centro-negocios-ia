@@ -29,7 +29,7 @@
   <link rel="stylesheet" href="./product.css?v=world-8">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
   <script src="./agent-room.js?v=jarvis-1" defer></script>
-  <script src="./app.js?v=network-home-20261027" defer></script>
+  <script src="./app.js?v=network-home-20261027-2" defer></script>
   <script src="./business-neon.js?v=readable-20261019" defer></script>
   <link rel="stylesheet" href="./travis-hud.css?v=sand-1">
   <link rel="stylesheet" href="./travis-brain.css?v=3">
@@ -38,7 +38,7 @@
   <link rel="stylesheet" href="./travis-gods-eye.css?v=eye-7-cctv">
   <link rel="stylesheet" href="./travis-camera-cinema.css?v=eye-7-cctv">
   <link rel="stylesheet" href="./business-hygiene.css?v=20261019">
-  <link rel="stylesheet" href="./network-home.css?v=20261027-1">
+  <link rel="stylesheet" href="./network-home.css?v=20261027-2">
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
@@ -232,7 +232,7 @@
 
           <aside class="dashboard-side-stack">
             <article class="dashboard-card seo-local-card">
-              <div class="dashboard-card-head compact"><div><h2>SEO Local · Porto</h2></div><button class="text-link" data-panel-target="seo" type="button">Ver relatório →</button></div>
+              <div class="dashboard-card-head compact"><div><h2>A rede no Porto</h2></div><button class="text-link" data-panel-target="seo" type="button">Ver relatório →</button></div>
               <details class="network-map-disclosure"><summary>Ver o mapa da rede</summary><div class="seo-map-wrap"><iframe title="Mapa do Porto" src="https://www.openstreetmap.org/export/embed.html?bbox=-8.652%2C41.138%2C-8.566%2C41.185&amp;layer=mapnik" loading="lazy"></iframe><span class="map-pin pin-1">1</span><span class="map-pin pin-2">2</span><span class="map-pin pin-3">3</span><span class="map-pin pin-4">4</span><span class="map-pin pin-5" title="TUNNEL BarberClub · Avenida Fernão de Magalhães" aria-label="5 — TUNNEL BarberClub, zona da Avenida Fernão de Magalhães">5</span></div></details>
               <div class="local-list"><div><span class="local-dot p"></span><b><a href="https://pentehouse.pt/" target="_blank" rel="noopener">Pentehouse Barbearia ↗</a></b><small>Marquês</small></div><div><span class="local-dot b"></span><b><a href="https://bestpizzaandkebab.pt/" target="_blank" rel="noopener">Best Pizza & Kebab ↗</a></b><small>Campanhã</small></div><div><span class="local-dot d"></span><b><a href="https://restaurantedoisirmaos.pt/" target="_blank" rel="noopener">Restaurante 2 Irmãos ↗</a></b><small>Campanhã</small></div><div><span class="local-dot e"></span><b><a href="https://engomadoriabeatriz.pt/" target="_blank" rel="noopener">Engomadoria Beatriz ↗</a></b><small>Praça das Flores</small></div><div><span class="local-dot t"></span><b><a href="https://www.google.com/maps/dir/?api=1&amp;destination=Avenida+Fern%C3%A3o+de+Magalh%C3%A3es+652,+Porto,+Portugal" target="_blank" rel="noopener noreferrer" aria-label="Ver a morada da TUNNEL BarberClub no Google Maps">TUNNEL BarberClub ↗</a></b><small>Fernão de Magalhães</small></div></div>
               <p class="local-map-note">5 sites na rede · Zonas aproximadas no mapa.</p>
@@ -732,6 +732,9 @@
 <button id="mobile-more-scrim" class="mobile-more-scrim" type="button" aria-label="Fechar menu" hidden></button>
 <section id="mobile-more-menu" class="mobile-more-menu" aria-label="Mais áreas do Centro" hidden>
   <header><h2>O teu centro</h2><button id="mobile-more-close" type="button" aria-label="Fechar menu">×</button></header>
+  <label class="mobile-menu-search" for="mobile-global-search">Procurar no Centro<input id="mobile-global-search" type="search" placeholder="Sites, clientes, alertas…"></label>
+  <button id="mobile-refresh" type="button">Atualizar leitura<span aria-hidden="true">↻</span></button>
+  <button id="mobile-backup" type="button">Exportar os meus dados<span aria-hidden="true">↗</span></button>
   <button type="button" data-panel-target="agentes">Equipa e agentes<span aria-hidden="true">↗</span></button>
   <button type="button" data-panel-target="seo">Pesquisa no Google<span aria-hidden="true">↗</span></button>
   <button type="button" data-panel-target="assistente">Falar com o Travis<span aria-hidden="true">↗</span></button>
