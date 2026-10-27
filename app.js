@@ -413,6 +413,14 @@ function businessSprite(key='team'){
   const color=colors[key]||colors.team;
   return '<svg class="business-sprite" viewBox="0 0 24 32" aria-hidden="true" shape-rendering="crispEdges"><ellipse cx="12" cy="30" rx="9" ry="2" fill="#293d36" opacity=".14"/><g><path d="M7 2h10v3h3v9h-3v3H7v-3H4V5h3z" fill="#e7b99a"/><path d="M7 1h10v2h3v5h-5V5H7v4H4V3h3z" fill="#293747"/><path d="M8 9h2v2H8zm6 0h2v2h-2z" fill="#293747"/><path d="M10 13h4v1h-4z" fill="#a66561"/><path d="M7 17h10v3h3v7H4v-7h3z" fill="'+color+'"/><path d="M4 21h3v5H4zm13 0h3v5h-3z" fill="#e7b99a"/><path d="M7 26h4v5H7zm6 0h4v5h-4z" fill="#293747"/></g></svg>';
 }
+function clientSiteBanner(project){
+  const card=[...document.querySelectorAll('.project-card')].find(card=>card.querySelector('[data-client]')?.dataset.client===project.id);
+  const original=card?.querySelector('.project-media');
+  if(!original)return '';
+  const banner=original.cloneNode(true);
+  banner.classList.add('client-site-banner');
+  return banner.outerHTML;
+}
 function renderCRM(){
   const grid=$('crm-grid');
   const projects=allProjects();
@@ -423,7 +431,8 @@ function renderCRM(){
     const remote=window.CentroBusinessNeon?.context?.()?.clients?.find(row=>row.repositoryUrl&&row.repositoryUrl===s.repo);
     const pending=remote?Math.max(0,Number(remote.pendingEur)||0):null;
     const money=pending===null?'<p class="client-wallet-note">Liga a carteira em Empresa para consultar valores por receber.</p>':'<p class="client-receivable"><span>Por receber</span><b>'+fmtMoney(pending)+'</b></p>';
-    return '<article class="crm-card" data-client="'+esc(s.id)+'">'+
+    const banner=clientSiteBanner(s);
+    return '<article class="crm-card'+(banner?' has-site-banner':'')+'" data-client="'+esc(s.id)+'">'+banner+
       '<div class="client-world-scene" aria-hidden="true"><span class="client-world-window"></span><span class="client-world-plant"></span><span class="client-world-desk"></span>'+businessSprite(s.id)+'<span class="client-world-tag">'+esc(s.name)+'</span></div>'+
       '<div class="client-world-title"><h3>'+esc(s.name)+'</h3>'+location+'</div>'+money+
       '<div class="field"><label for="crm-stage-'+esc(s.id)+'">Estado do cliente</label><select id="crm-stage-'+esc(s.id)+'" class="client-stage">'+['Por confirmar','Activo','Prospecção','Pausado','Concluído'].map(v=>'<option '+(c.stage===v?'selected':'')+'>'+v+'</option>').join('')+'</select></div>'+
