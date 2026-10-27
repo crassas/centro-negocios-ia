@@ -20,6 +20,17 @@
 .client-world-scene>.business-sprite{position:absolute;left:calc(50% - 24px);bottom:0;z-index:2}
 .client-world-plant{position:absolute;right:20px;top:28px;width:14px;height:15px;background:#54775b;box-shadow:-8px -5px #719269,8px -5px #54775b,0 11px #af8967,0 16px #8c6c50}
 .client-world-tag{position:absolute;left:84px;right:18px;top:16px;text-align:right;font-size:10px;color:#536b58;line-height:1.35;font-weight:600}
+#crm .client-site-banner{position:relative;display:block;height:144px;margin:0 -18px;overflow:hidden;background:#e8ede0;border-bottom:1px solid var(--world-line);color:inherit}
+#crm .client-site-banner img{display:block;width:100%;height:100%;object-fit:cover;transition:transform .2s ease}
+#crm .client-site-banner:hover img{transform:scale(1.025)}
+#crm .client-site-banner .project-status{font-size:11px;line-height:1.3;padding:5px 9px;letter-spacing:0}
+#crm .client-site-banner.beatriz-visual{display:grid;place-items:center}
+#crm .has-site-banner .client-world-scene{height:60px}
+#crm .has-site-banner .client-world-scene:before{height:35px}
+#crm .has-site-banner .client-world-window,#crm .has-site-banner .client-world-plant,#crm .has-site-banner .client-world-tag{display:none}
+#crm .has-site-banner .client-world-scene>.business-sprite{width:36px;height:48px;left:calc(50% - 18px)}
+#crm .has-site-banner .client-world-desk{width:82px;height:18px;left:calc(50% - 41px);bottom:16px}
+#crm .has-site-banner .client-world-desk:before{display:none}
 #crm .client-world-title h3{font:650 18px/1.4 system-ui!important;letter-spacing:-.3px;color:var(--world-ink)!important;margin:0 0 3px}
 #crm .client-world-title>a{display:inline-flex;align-items:center;min-height:44px;font-size:13px!important;color:var(--world-muted)!important;word-break:normal;overflow-wrap:anywhere;text-decoration:underline;text-underline-offset:3px}
 #crm .client-wallet-note{font-size:12px;line-height:1.6;color:var(--world-muted);margin:0 0 18px}
@@ -92,6 +103,7 @@
   #crm .crm-grid{grid-template-columns:minmax(0,1fr);gap:24px}
   #crm .crm-card{padding:0 20px 20px!important}
   .client-world-scene{height:136px;margin:0 -20px 20px}
+  #crm .client-site-banner{height:160px;margin:0 -20px}
   #crm .client-world-title h3{font-size:20px!important}
   #crm .client-stage,#crm .client-note,#empresa input,#empresa select,#empresa textarea{font-size:16px!important}
   #empresa .company-command{grid-template-columns:minmax(0,1fr) 84px;gap:16px;padding-bottom:20px;margin-bottom:20px}
