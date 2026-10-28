@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-28T07:25:09.281Z",
+  "generatedAt": "2026-10-28T14:12:55.286Z",
   "source": "github-actions",
   "intervalMinutes": 15,
   "sites": [
@@ -8,10 +8,10 @@
       "name": "Pentehouse",
       "url": "https://pentehouse.pt/",
       "area": "Marquês / Constituição",
-      "checkedAt": "2026-10-28T07:25:09.281Z",
+      "checkedAt": "2026-10-28T14:12:55.286Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 353,
+      "responseTimeMs": 393,
       "renderMode": "html",
       "finalUrl": "https://pentehouse.pt/",
       "title": "Barbearia no Marquês, Porto | Pentehouse",
@@ -59,10 +59,10 @@
       "name": "Best Pizza & Kebab",
       "url": "https://bestpizzaandkebab.pt/",
       "area": "Campanhã / São Roque",
-      "checkedAt": "2026-10-28T07:25:09.281Z",
+      "checkedAt": "2026-10-28T14:12:55.286Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 3064,
+      "responseTimeMs": 389,
       "renderMode": "browser",
       "finalUrl": "https://bestpizzaandkebab.pt/",
       "title": "Kebab em Campanhã, Porto | Pizza e Takeaway | Best Pizza & Kebab",
@@ -95,16 +95,12 @@
         {
           "level": "warn",
           "message": "A versão HTTP não consolidou automaticamente na versão HTTPS."
-        },
-        {
-          "level": "warn",
-          "message": "Resposta do servidor acima de 3 s (3064 ms)."
         }
       ],
       "seoSignals": [],
-      "contentHash": "96baf0db1470b4986da1b23ba42e896b51d22111d926295fe7c24d4b06f2f808",
+      "contentHash": "a8ebae2fc206b7c40dfd83d7d8b5b2c6f781ebac5d9e9218d90143db622c2011",
       "changed": true,
-      "changedAt": "2026-10-28T07:25:09.281Z",
+      "changedAt": "2026-10-28T14:12:55.286Z",
       "robotsStatus": 200,
       "sitemapStatus": 200
     },
@@ -113,10 +109,10 @@
       "name": "Restaurante 2 Irmãos",
       "url": "https://restaurantedoisirmaos.pt/",
       "area": "Campanhã / São Roque",
-      "checkedAt": "2026-10-28T07:25:09.281Z",
+      "checkedAt": "2026-10-28T14:12:55.286Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 154,
+      "responseTimeMs": 331,
       "renderMode": "html",
       "finalUrl": "https://restaurantedoisirmaos.pt/",
       "title": "Restaurante em Campanhã, Porto | Comida Caseira · 2 Irmãos",
@@ -163,10 +159,10 @@
       "name": "Engomadoria Beatriz",
       "url": "https://engomadoriabeatriz.pt/",
       "area": "Porto",
-      "checkedAt": "2026-10-28T07:25:09.281Z",
+      "checkedAt": "2026-10-28T14:12:55.286Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 131,
+      "responseTimeMs": 449,
       "renderMode": "html",
       "finalUrl": "https://engomadoriabeatriz.pt/",
       "title": "Engomadoria no Porto | Praça das Flores e recolha | Beatriz",
@@ -213,20 +209,20 @@
       "name": "TUNNEL BarberClub",
       "url": "https://tunnel-barberclub.vercel.app/",
       "area": "Porto / Avenida Fernão de Magalhães",
-      "checkedAt": "2026-10-28T07:25:09.281Z",
+      "checkedAt": "2026-10-28T14:12:55.286Z",
       "online": true,
       "status": 200,
-      "responseTimeMs": 34,
+      "responseTimeMs": 355,
       "renderMode": "html",
       "finalUrl": "https://tunnel-barberclub.vercel.app/",
-      "title": "TUNNEL® BarberClub",
-      "description": "TUNNEL® BarberClub — Avenida Fernão de Magalhães 652, 4050-150 Porto.",
+      "title": "TUNNEL BarberClub | Barbearia no Bonfim, Porto",
+      "description": "Barbearia no Porto, na Avenida Fernão de Magalhães 652. Cortes de cabelo, barba e coloração. Escolhe o serviço e marca online na TUNNEL BarberClub.",
       "h1Count": 1,
       "firstH1": "",
-      "canonical": "",
+      "canonical": "https://tunnel-barberclub.vercel.app/",
       "robotsMeta": "",
-      "schemaCount": 0,
-      "sitemapUrls": null,
+      "schemaCount": 1,
+      "sitemapUrls": 2,
       "httpVariant": {
         "requestedUrl": "http://tunnel-barberclub.vercel.app/",
         "status": 200,
@@ -239,36 +235,25 @@
         "title": true,
         "description": true,
         "h1": true,
-        "canonical": false,
-        "canonicalSelf": false,
-        "robots": false,
-        "sitemap": false,
-        "schema": false
+        "canonical": true,
+        "canonicalSelf": true,
+        "robots": true,
+        "sitemap": true,
+        "schema": true
       },
-      "issues": [
+      "issues": [],
+      "seoSignals": [
         {
-          "level": "warn",
-          "message": "Canonical em falta na homepage."
-        },
-        {
-          "level": "warn",
-          "message": "robots.txt não respondeu com sucesso."
-        },
-        {
-          "level": "warn",
-          "message": "sitemap.xml não respondeu com sucesso."
-        },
-        {
-          "level": "warn",
-          "message": "JSON-LD não detectado na homepage."
+          "level": "good",
+          "code": "http-duplicate-consolidated",
+          "message": "HTTP duplicado → HTTPS canonical correcto → sem intervenção necessária."
         }
       ],
-      "seoSignals": [],
-      "contentHash": "c49f7731ee42c5f2da9bf7679e1eef11028c3fcb3aa7c5065e29024fd3536a6e",
-      "changed": false,
-      "changedAt": "2026-10-27T13:10:03.263Z",
-      "robotsStatus": 404,
-      "sitemapStatus": 404
+      "contentHash": "28688f558d83d4788155ff729e5acccb71e028e7913a8b72cbf664ec45af019b",
+      "changed": true,
+      "changedAt": "2026-10-28T14:12:55.286Z",
+      "robotsStatus": 200,
+      "sitemapStatus": 200
     }
   ]
 }
