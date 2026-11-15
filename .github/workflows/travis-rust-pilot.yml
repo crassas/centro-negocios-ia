@@ -1,0 +1,95 @@
+name: Travis Rust Pilot
+
+on:
+  push:
+    branches: ["rust/travis-memory-pilot"]
+    paths:
+      - "rust/travis-memory/**"
+      - "operit-agent/travis_rust_memory*.py"
+      - "operit-agent/travis_github_feed*.py"
+      - "operit-agent/travis_github_runtime*.py"
+      - "operit-agent/jarvis_local.py"
+      - "operit-agent/centro_station.py"
+      - "operit-agent/install_jarvis_local.sh"
+      - "docs/TRAVIS_GITHUB_FEED.md"
+      - "docs/TRAVIS_RUST_TRANSITION.md"
+      - "scripts/travis-rust-oppo.sh"
+      - "scripts/travis-rust-oppo-preflight.py"
+      - "scripts/travis-rust-oppo-activate*.py"
+      - "scripts/travis-oppo-audit-readonly.py"
+      - "scripts/travis-oppo-errors-readonly.py"
+      - "scripts/travis-oppo-live-safe.py"
+      - "scripts/travis-oppo-ui-get-readonly.py"
+      - ".github/workflows/travis-rust-pilot.yml"
+  pull_request:
+    paths:
+      - "rust/travis-memory/**"
+      - "operit-agent/travis_rust_memory*.py"
+      - "operit-agent/travis_github_feed*.py"
+      - "operit-agent/travis_github_runtime*.py"
+      - "operit-agent/jarvis_local.py"
+      - "operit-agent/centro_station.py"
+      - "operit-agent/install_jarvis_local.sh"
+      - "docs/TRAVIS_GITHUB_FEED.md"
+      - "docs/TRAVIS_RUST_TRANSITION.md"
+      - "scripts/travis-rust-oppo.sh"
+      - "scripts/travis-rust-oppo-preflight.py"
+      - "scripts/travis-rust-oppo-activate*.py"
+      - "scripts/travis-oppo-audit-readonly.py"
+      - "scripts/travis-oppo-errors-readonly.py"
+      - "scripts/travis-oppo-live-safe.py"
+      - "scripts/travis-oppo-ui-get-readonly.py"
+      - ".github/workflows/travis-rust-pilot.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust-memory-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: OPPO installer syntax and harmless status
+        run: |
+          bash -n scripts/travis-rust-oppo.sh
+          bash scripts/travis-rust-oppo.sh status
+          python3 -m py_compile scripts/travis-rust-oppo-preflight.py
+          python3 -m py_compile scripts/travis-oppo-audit-readonly.py
+          python3 -m py_compile scripts/travis-oppo-errors-readonly.py
+          python3 -m py_compile scripts/travis-oppo-live-safe.py
+          python3 -m py_compile scripts/travis-oppo-ui-get-readonly.py
+          python3 -m py_compile scripts/travis-rust-oppo-activate.py
+          python3 -m py_compile scripts/travis-rust-oppo-activate-selftest.py
+      - name: OPPO surgical activation and rollback dry-run
+        run: python3 scripts/travis-rust-oppo-activate-selftest.py
+      - name: Toolchain
+        run: rustc --version && cargo --version && python3 --version
+      - name: Rust tests
+        run: cargo test --manifest-path rust/travis-memory/Cargo.toml
+      - name: Build optimised native library
+        run: cargo build --release --manifest-path rust/travis-memory/Cargo.toml
+      - name: Python/Rust parity and bounds
+        env:
+          PYTHONPATH: operit-agent
+          TRAVIS_RUST_MEMORY_LIB: ./rust/travis-memory/target/release/libtravis_memory.so
+        run: python3 operit-agent/travis_rust_memory_selftest.py -v
+      - name: Synthetic microbenchmark (informational only)
+        env:
+          PYTHONPATH: operit-agent
+          TRAVIS_RUST_MEMORY_LIB: ./rust/travis-memory/target/release/libtravis_memory.so
+        run: python3 operit-agent/travis_rust_memory_benchmark.py --records 500 --repeats 40
+
+      - name: GitHub knowledge feed (offline tests)
+        env:
+          PYTHONPATH: operit-agent
+        run: |
+          python3 operit-agent/travis_github_feed_selftest.py -v
+          python3 operit-agent/travis_github_runtime_selftest.py -v
+      - name: Live approved public GitHub read-and-recall
+        if: github.event_name == 'push'
+        env:
+          PYTHONPATH: operit-agent
+          TRAVIS_RUST_MEMORY_LIB: ./rust/travis-memory/target/release/libtravis_memory.so
+        run: python3 operit-agent/travis_github_live_selftest.py
